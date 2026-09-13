@@ -1,0 +1,11 @@
+crewai
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+requests>=2.32.0
+python-dotenv>=1.0.1
+playwright>=1.40.0
+python-telegram-bot>=21.0
+apscheduler
+langchain-community
+langchain-ollama
+requests>=2.31.0

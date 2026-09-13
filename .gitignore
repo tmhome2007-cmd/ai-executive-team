@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+executive-dashboard/node_modules/
+executive-dashboard/.next/
+memory/*.db
