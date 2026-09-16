@@ -5,3 +5,5 @@ __pycache__/
 executive-dashboard/node_modules/
 executive-dashboard/.next/
 memory/*.db
+.DS_Store
+Bewaarde terminaluitvoer.txt
