@@ -15,9 +15,16 @@ from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from memory.database import init_db, get_recent_decisions, log_decision
+from memory.database import (
+    init_db,
+    get_recent_decisions,
+    log_decision,
+    get_pending_actions,
+    update_action_status,
+)
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
+from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification
 from config import config
 
@@ -322,6 +329,75 @@ def favicon():
     """Vangt favicon-verzoeken op om 404-fouten in de serverlogs te voorkomen."""
     return Response(status_code=204)
 
+# ===================================================================
+# ACTION APPROVAL QUEUE ENDPOINTS
+# ===================================================================
+
+@app.get(
+    "/actions/pending",
+    summary="Get Pending Action Proposals",
+    description="Haalt alle voorgestelde acties op die wachten op menselijke goedkeuring.",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_pending_actions():
+    """Retourneert een lijst van alle acties met status 'pending'."""
+    return get_pending_actions()
+
+
+@app.post(
+    "/actions/{action_id}/approve",
+    summary="Approve Action Proposal",
+    description="Keurt een voorgestelde actie goed op basis van het ID.",
+    dependencies=[Depends(verify_api_key)],
+)
+def approve_action(action_id: int):
+    """Markeert een voorgestelde actie als 'approved'."""
+    success = update_action_status(action_id, "approved")
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Action proposal with ID {action_id} not found."
+        )
+    return {"action_id": action_id, "status": "approved"}
+
+
+@app.post(
+    "/actions/{action_id}/reject",
+    summary="Reject Action Proposal",
+    description="Wijst een voorgestelde actie af op basis van het ID.",
+    dependencies=[Depends(verify_api_key)],
+)
+def reject_action(action_id: int):
+    """Markeert een voorgestelde actie als 'rejected'."""
+    success = update_action_status(action_id, "rejected")
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Action proposal with ID {action_id} not found."
+        )
+    return {"action_id": action_id, "status": "rejected"}
+@app.post(
+    "/actions/{action_id}/execute",
+    summary="Execute Approved Action",
+    dependencies=[Depends(verify_api_key)],
+)
+def execute_approved_action(action_id: int):
+    """Voert een reeds goedgekeurde actie uit via het action_id."""
+    result = execute_action(action_id)
+    
+    if not result.get("success", False):
+        error_msg = result.get("error", "Execution failed")
+        if error_msg == "Action not found":
+            raise HTTPException(
+                status_code=404,
+                detail=error_msg
+            )
+        raise HTTPException(
+            status_code=400,
+            detail=error_msg
+        )
+        
+    return result
 
 if __name__ == "__main__":
     import uvicorn

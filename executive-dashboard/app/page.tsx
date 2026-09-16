@@ -31,6 +31,16 @@ interface DecisionResponse {
   individual_outputs?: Record<string, string>;
 }
 
+interface PendingAction {
+  id: number;
+  timestamp: string;
+  proposed_by: string;
+  action_description: string;
+  action_detail: string;
+  status: string;
+  reviewed_at: string | null;
+}
+
 const AGENT_OPTIONS: { key: string; label: string }[] = [
   { key: "ceo", label: "CEO" },
   { key: "cfo", label: "CFO" },
@@ -69,8 +79,34 @@ export default function DashboardPage() {
   // --- Dashboard data state ---
   const [status, setStatus] = useState<DailyResearchStatus | null>(null);
   const [history, setHistory] = useState<DecisionHistoryItem[]>([]);
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+  const [actionErrors, setActionErrors] = useState<Record<number, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<number>>(new Set());
+
+  const fetchPendingActions = useCallback(async (currentKey: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/actions/pending`, {
+        headers: {
+          "X-API-Key": currentKey,
+        },
+      });
+
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error("Kon afwachtende acties niet ophalen.");
+      }
+
+      const data: PendingAction[] = await res.json();
+      setPendingActions(data);
+    } catch (err: any) {
+      console.error("Fout bij ophalen van pending actions:", err);
+    }
+  }, []);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -92,8 +128,48 @@ export default function DashboardPage() {
   useEffect(() => {
     if (apiKey !== null) {
       fetchDashboardData();
+      fetchPendingActions(apiKey);
     }
-  }, [apiKey, fetchDashboardData]);
+  }, [apiKey, fetchDashboardData, fetchPendingActions]);
+
+  const handleActionDecision = async (id: number, type: "approve" | "reject") => {
+    // Optimistische update: Verwijder direct uit de zichtbare lijst
+    setPendingActions((prev) => prev.filter((action) => action.id !== id));
+    setActionErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
+    });
+
+    try {
+      const response = await fetch(`${API_BASE}/actions/${id}/${type}`, {
+        method: "POST",
+        headers: {
+          "X-API-Key": apiKey || "",
+        },
+      });
+
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || `Fout bij ${type === "approve" ? "goedkeuren" : "afwijzen"}`);
+      }
+
+      // Refresh gegevens na succesvolle verwerking
+      if (apiKey) fetchPendingActions(apiKey);
+    } catch (err: any) {
+      // Bij een fout herstellen we de actie-status door opnieuw te synchroniseren en tonen we de foutmelding
+      if (apiKey) fetchPendingActions(apiKey);
+      setActionErrors((prev) => ({
+        ...prev,
+        [id]: err.message || "Er is een fout opgetreden bij het verwerken van deze actie.",
+      }));
+    }
+  };
 
   const toggleHistoryExpand = (id: number) => {
     setExpandedHistoryIds((prev) => {
@@ -162,6 +238,7 @@ export default function DashboardPage() {
       const data: DecisionResponse = await response.json();
       setResult(data);
       fetchDashboardData(); // refresh history so the new entry shows up
+      if (apiKey) fetchPendingActions(apiKey); // refresh pending actions if any action proposal was generated
     } catch (err: any) {
       setError(err.message || "Er is een onbekende fout opgetreden.");
     } finally {
@@ -250,6 +327,64 @@ export default function DashboardPage() {
               <p className="text-gray-200">{status?.message || "No run yet."}</p>
             </div>
           </div>
+        </div>
+
+        {/* Pending Actions section */}
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">
+              Acties ter Goedkeuring ({pendingActions.length})
+            </h2>
+          </div>
+
+          {pendingActions.length === 0 ? (
+            <p className="text-gray-500 text-sm">Geen acties in afwachting.</p>
+          ) : (
+            <div className="space-y-4">
+              {pendingActions.map((action) => (
+                <div
+                  key={action.id}
+                  className="bg-gray-950 border border-gray-800 rounded-md p-4 space-y-3"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="inline-block bg-blue-900/60 border border-blue-700 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded uppercase tracking-wider">
+                      {action.proposed_by}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(action.timestamp).toLocaleString("nl-BE")}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-gray-200">{action.action_description}</p>
+
+                  <div className="bg-gray-900 border border-gray-800 rounded p-3 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
+                    {action.action_detail}
+                  </div>
+
+                  {actionErrors[action.id] && (
+                    <div className="p-2 bg-red-950/80 border border-red-800 text-red-300 text-xs rounded">
+                      {actionErrors[action.id]}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => handleActionDecision(action.id, "approve")}
+                      className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors"
+                    >
+                      Goedkeuren
+                    </button>
+                    <button
+                      onClick={() => handleActionDecision(action.id, "reject")}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
+                    >
+                      Afwijzen
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Ad-hoc decision trigger form */}
