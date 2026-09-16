@@ -4,7 +4,7 @@ agents/executive_agents.py
 Module die de LLM-instantie en alle 10 Executive Agenten definieert voor de CrewAI workflows.
 Exposeert de 'EXECUTIVE_AGENTS' dictionary met sleutels voor elke bestuursrol.
 """
-
+from tools.action_proposal_tool import ProposeActionTool
 from crewai import Agent, LLM
 from config import config
 
@@ -117,6 +117,7 @@ coo_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    tools=[ProposeActionTool(role="COO")],
 )
 
 # CMO — Zoe Nakamura
@@ -187,6 +188,22 @@ chro_cco_agent = Agent(
     allow_delegation=False,
 )
 
+cto_agent = Agent(
+    role="Chief Technology Officer (CTO)",
+    goal="Own technical architecture decisions, engineering feasibility, and technology risk across the business.",
+    backstory=(
+        "Priya Raman evaluates initiatives through technical feasibility, system architecture impact, and engineering resourcing. "
+        "Priya focuses specifically on whether a proposal is buildable with current infrastructure, what technical debt or scalability risk it introduces, and how it affects the engineering roadmap — distinct from CPO's user-facing product lens or CCO's compliance/security lens. "
+        "Mental Checklist:\n"
+        "- Is this technically feasible with our current architecture and engineering capacity?\n"
+        "- What technical debt, scalability, or infrastructure risk does this introduce?\n"
+        "- How does this affect the engineering roadmap and technical priorities?"
+    ),
+    llm=llm,
+    verbose=True,
+    allow_delegation=False,
+)
+
 # 3. Centrale Dictionary met alle 10 Executive Agenten
 EXECUTIVE_AGENTS = {
     "ceo": ceo_agent,
@@ -194,7 +211,7 @@ EXECUTIVE_AGENTS = {
     "coo": coo_agent,
     "cso": cso_agent,
     "cmo": cmo_agent,
-    "cto": cpo_agent,  # Gehouden voor compatibiliteit
+    "cto": cto_agent,  
     "cpo": cpo_agent,
     "chro": chro_agent,
     "general_counsel": general_counsel_agent,
