@@ -157,7 +157,7 @@ def get_pending_actions() -> list[dict]:
         cursor.execute("""
             SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at
             FROM action_queue
-            WHERE status = 'pending'
+            WHERE status IN ('pending', 'approved')
             ORDER BY timestamp DESC
         """)
         

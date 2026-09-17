@@ -247,6 +247,89 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 6: STATIC CHECK — Danger pattern blocklist hasn't silently gone empty
+# -------------------------------------------------------------------
+# The single most dangerous silent failure for this whole pipeline would be
+# DANGEROUS_PATTERNS quietly becoming an empty list during some future edit —
+# execution would then run completely unguarded with no error or warning.
+try:
+    from workflows.action_executor import DANGEROUS_PATTERNS, is_dangerous_command
+
+    if not DANGEROUS_PATTERNS or len(DANGEROUS_PATTERNS) < 5:
+        log_fail(
+            "action_executor.py danger pattern blocklist",
+            f"Expected at least 5 dangerous patterns, found {len(DANGEROUS_PATTERNS)}. "
+            "This list may have been accidentally emptied or truncated."
+        )
+    else:
+        # Confirm it actually catches a known-bad command, not just that the
+        # list is non-empty (a list of harmless/wrong patterns would still
+        # pass a bare length check).
+        test_result = is_dangerous_command("rm -rf /")
+        if test_result:
+            log_pass(f"action_executor.py blocklist has {len(DANGEROUS_PATTERNS)} patterns and correctly flags 'rm -rf /'")
+        else:
+            log_fail(
+                "action_executor.py danger pattern blocklist",
+                "'rm -rf /' was NOT flagged as dangerous — patterns may be broken or too narrow."
+            )
+except Exception as e:
+    log_fail("Danger pattern blocklist check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 7: STATIC CHECK — Workspace confinement actually blocks out-of-bounds paths
+# -------------------------------------------------------------------
+try:
+    from workflows.action_executor import check_workspace_confinement
+
+    outside_path_result = check_workspace_confinement("cat ../../../../etc/passwd")
+    inside_path_result = check_workspace_confinement("echo hello > notes.txt")
+
+    if outside_path_result and inside_path_result is None:
+        log_pass("workspace confinement correctly blocks paths outside WORKSPACE_ROOT while allowing paths inside it")
+    elif not outside_path_result:
+        log_fail(
+            "workspace confinement check",
+            "A path traversal to /etc/passwd was NOT blocked — confinement logic may be broken."
+        )
+    else:
+        log_fail(
+            "workspace confinement check",
+            f"A harmless relative path inside the workspace was incorrectly blocked: {inside_path_result}"
+        )
+except Exception as e:
+    log_fail("Workspace confinement check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 8: STATIC CHECK — /actions/execute is auth-protected
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content = f.read()
+
+    match = re.search(r'"/actions/\{action_id\}/execute"', main_content)
+    if not match:
+        log_fail("main.py /actions/execute endpoint check", "Route '/actions/{action_id}/execute' not found in main.py at all.")
+    else:
+        start_pos = match.start()
+        def_match = re.search(r"\n\s*(async def|def)\s", main_content[start_pos:])
+        end_pos = start_pos + def_match.start() if def_match else start_pos + 500
+        block = main_content[start_pos:end_pos]
+
+        if "Depends(verify_api_key)" in block:
+            log_pass("main.py POST /actions/{action_id}/execute is correctly auth-protected")
+        else:
+            log_fail(
+                "main.py /actions/execute endpoint check",
+                "POST /actions/{action_id}/execute is MISSING Depends(verify_api_key) — this endpoint can run real commands and must be protected."
+            )
+except Exception as e:
+    log_fail("/actions/execute auth check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)

@@ -41,6 +41,16 @@ interface PendingAction {
   reviewed_at: string | null;
 }
 
+interface ExecutionResult {
+  success: boolean;
+  mode: string;
+  action_id: number;
+  detail?: string;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+}
+
 const AGENT_OPTIONS: { key: string; label: string }[] = [
   { key: "ceo", label: "CEO" },
   { key: "cfo", label: "CFO" },
@@ -76,11 +86,32 @@ export default function DashboardPage() {
     setKeyInput("");
   };
 
+  // --- Sandbox state ---
+  const [sandboxMode, setSandboxMode] = useState<boolean | null>(null);
+
+  const fetchSandboxStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/system/sandbox-status`);
+      if (res.ok) {
+        const data = await res.json();
+        setSandboxMode(data.sandbox_mode);
+      }
+    } catch (err) {
+      console.error("Fout bij ophalen van sandbox status:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSandboxStatus();
+  }, [fetchSandboxStatus]);
+
   // --- Dashboard data state ---
   const [status, setStatus] = useState<DailyResearchStatus | null>(null);
   const [history, setHistory] = useState<DecisionHistoryItem[]>([]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const [actionErrors, setActionErrors] = useState<Record<number, string>>({});
+  const [executionResults, setExecutionResults] = useState<Record<number, ExecutionResult>>({});
+  const [executingIds, setExecutingIds] = useState<Set<number>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<number>>(new Set());
 
@@ -102,7 +133,22 @@ export default function DashboardPage() {
       }
 
       const data: PendingAction[] = await res.json();
-      setPendingActions(data);
+
+      // Defensive merge: never let an action that's already been approved or
+      // executed on this screen silently vanish just because a re-fetch
+      // happened to not include it (e.g. a backend still filtering strictly
+      // on status = 'pending'). A card should only disappear because it was
+      // rejected, never because a background refresh raced past its update.
+      setPendingActions((prev) => {
+        const fetchedIds = new Set(data.map((a) => a.id));
+        const preserved = prev.filter(
+          (a) =>
+            !fetchedIds.has(a.id) &&
+            a.status !== "pending" &&
+            a.status !== "rejected"
+        );
+        return [...data, ...preserved];
+      });
     } catch (err: any) {
       console.error("Fout bij ophalen van pending actions:", err);
     }
@@ -133,8 +179,16 @@ export default function DashboardPage() {
   }, [apiKey, fetchDashboardData, fetchPendingActions]);
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
-    // Optimistische update: Verwijder direct uit de zichtbare lijst
-    setPendingActions((prev) => prev.filter((action) => action.id !== id));
+    if (type === "approve") {
+      // Bij goedkeuren updaten we lokaal de status naar 'approved'
+      setPendingActions((prev) =>
+        prev.map((act) => (act.id === id ? { ...act, status: "approved" } : act))
+      );
+    } else {
+      // Bij afwijzen verwijderen we het kaartje
+      setPendingActions((prev) => prev.filter((action) => action.id !== id));
+    }
+
     setActionErrors((prev) => {
       const newErrors = { ...prev };
       delete newErrors[id];
@@ -159,15 +213,70 @@ export default function DashboardPage() {
         throw new Error(detail?.detail || `Fout bij ${type === "approve" ? "goedkeuren" : "afwijzen"}`);
       }
 
-      // Refresh gegevens na succesvolle verwerking
       if (apiKey) fetchPendingActions(apiKey);
     } catch (err: any) {
-      // Bij een fout herstellen we de actie-status door opnieuw te synchroniseren en tonen we de foutmelding
       if (apiKey) fetchPendingActions(apiKey);
       setActionErrors((prev) => ({
         ...prev,
         [id]: err.message || "Er is een fout opgetreden bij het verwerken van deze actie.",
       }));
+    }
+  };
+
+  const handleExecuteAction = async (action: PendingAction) => {
+    // Bevestigingsvenster in Live Mode
+    if (sandboxMode === false) {
+      const confirmed = window.confirm(
+        "Dit voert een echt commando uit op deze machine. Weet je het zeker?"
+      );
+      if (!confirmed) return;
+    }
+
+    setExecutingIds((prev) => new Set(prev).add(action.id));
+    setActionErrors((prev) => {
+      const copy = { ...prev };
+      delete copy[action.id];
+      return copy;
+    });
+
+    try {
+      const response = await fetch(`${API_BASE}/actions/${action.id}/execute`, {
+        method: "POST",
+        headers: {
+          "X-API-Key": apiKey || "",
+        },
+      });
+
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+
+      const data: ExecutionResult = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Uitvoering mislukt.");
+      }
+
+      // Sla het resultaat op om inline te tonen
+      setExecutionResults((prev) => ({ ...prev, [action.id]: data }));
+
+      // Update de zichtbare status van de actie op de kaart
+      const newStatus = data.mode === "dry_run" ? "executed_dry_run" : "executed";
+      setPendingActions((prev) =>
+        prev.map((act) => (act.id === action.id ? { ...act, status: newStatus } : act))
+      );
+    } catch (err: any) {
+      setActionErrors((prev) => ({
+        ...prev,
+        [action.id]: err.message || "Fout bij uitvoeren van actie.",
+      }));
+    } finally {
+      setExecutingIds((prev) => {
+        const copy = new Set(prev);
+        copy.delete(action.id);
+        return copy;
+      });
     }
   };
 
@@ -237,8 +346,8 @@ export default function DashboardPage() {
 
       const data: DecisionResponse = await response.json();
       setResult(data);
-      fetchDashboardData(); // refresh history so the new entry shows up
-      if (apiKey) fetchPendingActions(apiKey); // refresh pending actions if any action proposal was generated
+      fetchDashboardData();
+      if (apiKey) fetchPendingActions(apiKey);
     } catch (err: any) {
       setError(err.message || "Er is een onbekende fout opgetreden.");
     } finally {
@@ -277,6 +386,21 @@ export default function DashboardPage() {
   // --- Main dashboard ---
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
+      {/* Persistent Banner top of page */}
+      {sandboxMode !== null && (
+        <div
+          className={`w-full py-2.5 px-4 text-center font-medium text-sm border-b shadow-sm ${
+            sandboxMode
+              ? "bg-blue-950/80 border-blue-800 text-blue-200"
+              : "bg-red-900 border-red-700 text-white font-bold"
+          }`}
+        >
+          {sandboxMode
+            ? "🧪 SANDBOX MODE — executions are simulated, nothing real happens."
+            : "🔴 LIVE MODE — approved actions WILL run for real on this machine."}
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto p-6 space-y-8">
         <div>
           <h1 className="text-3xl font-bold">AI Executive Team Dashboard</h1>
@@ -341,48 +465,100 @@ export default function DashboardPage() {
             <p className="text-gray-500 text-sm">Geen acties in afwachting.</p>
           ) : (
             <div className="space-y-4">
-              {pendingActions.map((action) => (
-                <div
-                  key={action.id}
-                  className="bg-gray-950 border border-gray-800 rounded-md p-4 space-y-3"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="inline-block bg-blue-900/60 border border-blue-700 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded uppercase tracking-wider">
-                      {action.proposed_by}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {new Date(action.timestamp).toLocaleString("nl-BE")}
-                    </span>
-                  </div>
+              {pendingActions.map((action) => {
+                const isApproved = action.status === "approved";
+                const isExecuting = executingIds.has(action.id);
+                const execResult = executionResults[action.id];
 
-                  <p className="text-sm text-gray-200">{action.action_description}</p>
-
-                  <div className="bg-gray-900 border border-gray-800 rounded p-3 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
-                    {action.action_detail}
-                  </div>
-
-                  {actionErrors[action.id] && (
-                    <div className="p-2 bg-red-950/80 border border-red-800 text-red-300 text-xs rounded">
-                      {actionErrors[action.id]}
+                return (
+                  <div
+                    key={action.id}
+                    className="bg-gray-950 border border-gray-800 rounded-md p-4 space-y-3"
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block bg-blue-900/60 border border-blue-700 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded uppercase tracking-wider">
+                          {action.proposed_by}
+                        </span>
+                        <span className="text-xs bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-mono">
+                          Status: {action.status}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {new Date(action.timestamp).toLocaleString("nl-BE")}
+                      </span>
                     </div>
-                  )}
 
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => handleActionDecision(action.id, "approve")}
-                      className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors"
-                    >
-                      Goedkeuren
-                    </button>
-                    <button
-                      onClick={() => handleActionDecision(action.id, "reject")}
-                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
-                    >
-                      Afwijzen
-                    </button>
+                    <p className="text-sm text-gray-200">{action.action_description}</p>
+
+                    <div className="bg-gray-900 border border-gray-800 rounded p-3 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
+                      {action.action_detail}
+                    </div>
+
+                    {/* Foutmelding bij actie */}
+                    {actionErrors[action.id] && (
+                      <div className="p-2 bg-red-950/80 border border-red-800 text-red-300 text-xs rounded">
+                        {actionErrors[action.id]}
+                      </div>
+                    )}
+
+                    {/* Inline resultaat van uitvoering */}
+                    {execResult && (
+                      <div className="p-3 bg-gray-900 border border-blue-900 rounded text-xs space-y-1">
+                        <div className="font-semibold text-blue-400">
+                          Uitvoeringsresultaat ({execResult.mode}):
+                        </div>
+                        {execResult.detail && (
+                          <p className="text-gray-300 font-mono">{execResult.detail}</p>
+                        )}
+                        {execResult.stdout && (
+                          <div>
+                            <span className="text-gray-500">stdout:</span>
+                            <pre className="text-green-300 bg-black/40 p-1.5 rounded mt-0.5 overflow-x-auto">
+                              {execResult.stdout}
+                            </pre>
+                          </div>
+                        )}
+                        {execResult.stderr && (
+                          <div>
+                            <span className="text-gray-500">stderr:</span>
+                            <pre className="text-red-300 bg-black/40 p-1.5 rounded mt-0.5 overflow-x-auto">
+                              {execResult.stderr}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => handleActionDecision(action.id, "approve")}
+                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors"
+                      >
+                        Goedkeuren
+                      </button>
+                      <button
+                        onClick={() => handleActionDecision(action.id, "reject")}
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
+                      >
+                        Afwijzen
+                      </button>
+                      <button
+                        onClick={() => handleExecuteAction(action)}
+                        disabled={!isApproved || isExecuting}
+                        title={!isApproved ? "Eerst goedkeuren" : "Voer actie uit"}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                          isApproved && !isExecuting
+                            ? "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+                            : "bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed opacity-60"
+                        }`}
+                      >
+                        {isExecuting ? "Uitvoeren..." : "Uitvoeren"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

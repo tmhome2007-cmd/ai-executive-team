@@ -330,6 +330,19 @@ def favicon():
     return Response(status_code=204)
 
 # ===================================================================
+# SYSTEM ENDPOINTS
+# ===================================================================
+
+@app.get(
+    "/system/sandbox-status",
+    summary="Get Sandbox Mode Status",
+    description="Retourneert de huidige sandbox-modus status van het systeem.",
+)
+def get_sandbox_status():
+    """Geeft aan of het systeem in Sandbox Mode of Live Mode draait."""
+    return {"sandbox_mode": config.SANDBOX_MODE}
+
+# ===================================================================
 # ACTION APPROVAL QUEUE ENDPOINTS
 # ===================================================================
 

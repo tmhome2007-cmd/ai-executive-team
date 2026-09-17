@@ -2,21 +2,188 @@
 workflows/action_executor.py
 
 Module voor het veilig uitvoeren van goedgekeurde acties uit de action_queue.
-Ondersteunt zowel een live-uitvoering via subprocess als een veilige dry-run modus.
+Ondersteunt patrooncontroles voor gevaarlijke commando's, een echte confinement-
+check die elk pad-achtig token in het commando herleidt tot een absoluut pad en
+blokkeert als dat buiten WORKSPACE_ROOT valt, een live-uitvoering via subprocess,
+en een veilige dry-run modus.
 """
 
+import os
+import re
+import shlex
 import subprocess
 from memory.database import get_action_by_id, update_action_status
 from notifications.telegram_bot import send_notification
 from config import config
+
+# ------------------------------------------------------------------
+# WORKSPACE CONFINEMENT
+# ------------------------------------------------------------------
+# BELANGRIJK: cwd=... in subprocess.run() zet alleen de START-directory —
+# het beperkt op geen enkele manier welke paden een commando daadwerkelijk
+# mag aanraken. Een commando als "rm /Users/alpha/Documents/iets" of
+# "cat ../../../etc/passwd" zou zonder deze check gewoon buiten de workspace
+# kunnen werken, ongeacht cwd. Deze functie herleidt elk pad-achtig token in
+# het commando naar een absoluut, symlink-opgelost pad en wijst het commando
+# af zodra ook maar één zo'n pad buiten WORKSPACE_ROOT valt.
+
+# Shell metakarakters die het commando in losse deelcommando's opsplitsen
+_SHELL_CHAIN_SPLIT = re.compile(r"&&|\|\||;|\|")
+
+
+def _get_workspace_root() -> str:
+    """Retourneert het absolute, symlink-opgeloste WORKSPACE_ROOT pad, en
+    zorgt dat de map bestaat zodat cwd= en de confinement-check altijd een
+    concrete, echte directory hebben om tegen te vergelijken."""
+    raw = config.WORKSPACE_ROOT or "./workspace"
+    expanded = os.path.expanduser(raw)
+    absolute = os.path.abspath(expanded)
+    os.makedirs(absolute, exist_ok=True)
+    return os.path.realpath(absolute)
+
+
+def _looks_like_path(token: str) -> bool:
+    """Heuristiek: is dit token vermoedelijk een bestands-/mappad, in
+    plaats van een losse vlag (-rf) of commandonaam (echo, ls)?"""
+    if not token or token.startswith("-"):
+        return False
+    return "/" in token or token in (".", "..") or token.startswith("~") or token.startswith(".")
+
+
+def check_workspace_confinement(command: str) -> str | None:
+    """
+    Controleert of ELK pad-achtig token in het commando, na resolutie,
+    binnen WORKSPACE_ROOT valt. Retourneert een reden-string zodra iets
+    buiten de workspace valt of niet statisch te analyseren is, anders None.
+    """
+    # Command substitution (`...` of $(...)) kan een pad verbergen dat
+    # statisch niet te herleiden is — dit blokkeren we bij voorbaat in
+    # plaats van te doen alsof we het veilig kunnen controleren.
+    if "`" in command or "$(" in command:
+        return "Command substitution (` or $(...)) detected — cannot statically verify target paths, blocked for safety"
+
+    workspace_root = _get_workspace_root()
+
+    # Splits op shell-verbindingstekens zodat elk deelcommando apart
+    # gecontroleerd wordt (anders zou "cd /safe && rm -rf /" de eerste,
+    # onschuldige helft laten "meeliften" met de tweede).
+    segments = [seg.strip() for seg in _SHELL_CHAIN_SPLIT.split(command) if seg.strip()]
+
+    for segment in segments:
+        try:
+            tokens = shlex.split(segment)
+        except ValueError:
+            # Onbalans in aanhalingstekens o.i.d. — niet veilig te parsen.
+            return f"Command segment could not be safely parsed: '{segment}'"
+
+        for token in tokens:
+            if not _looks_like_path(token):
+                continue
+
+            expanded = os.path.expanduser(token)
+            if not os.path.isabs(expanded):
+                expanded = os.path.join(workspace_root, expanded)
+            resolved = os.path.realpath(expanded)
+
+            # os.path.commonpath vergelijkt echte pad-prefixen (geen simpele
+            # string-vergelijking, die "workspace2" zou laten matchen op
+            # "workspace" als we alleen startswith() zouden gebruiken).
+            try:
+                if os.path.commonpath([resolved, workspace_root]) != workspace_root:
+                    return (
+                        f"Path '{token}' resolves to '{resolved}', which is outside "
+                        f"the allowed workspace directory '{workspace_root}'"
+                    )
+            except ValueError:
+                # Gebeurt op sommige platforms als paden op andere "drives"/
+                # roots staan — per definitie dus buiten de workspace.
+                return f"Path '{token}' resolves outside the allowed workspace directory '{workspace_root}'"
+
+    return None
+
+
+# ------------------------------------------------------------------
+# DANGEROUS COMMAND PATTERNS
+# ------------------------------------------------------------------
+DANGEROUS_PATTERNS: list[tuple[str, str]] = [
+    # Recursive/forced deletion of root, home, wildcards, or parent paths
+    (
+        r"rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(/\s*|~|/root|\*|\.\.)",
+        "Forced recursive deletion of root, home, parent, or wildcard path detected"
+    ),
+    (
+        r"rm\s+-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*\s+(/\s*|~|/root|\*|\.\.)",
+        "Forced recursive deletion of root, home, parent, or wildcard path detected"
+    ),
+    # Disk-level destructive commands
+    (
+        r"\bdd\s+if=",
+        "Low-level disk writing/formatting command (dd) detected"
+    ),
+    (
+        r"\bmkfs",
+        "Filesystem creation/formatting command (mkfs) detected"
+    ),
+    (
+        r"\bdiskutil\s+erasedisk\b",
+        "Disk erasure command (diskutil erasedisk) detected"
+    ),
+    # Piping remote downloads directly into shell interpreters
+    (
+        r"curl.*\|\s*(sh|bash|zsh)",
+        "Piping remote download (curl) directly into shell execution detected"
+    ),
+    (
+        r"wget.*\|\s*(sh|bash|zsh)",
+        "Piping remote download (wget) directly into shell execution detected"
+    ),
+    # Fork bombs
+    (
+        r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:",
+        "Fork bomb pattern detected"
+    ),
+    # Privilege escalation
+    (
+        r"\bsudo\b",
+        "Privilege escalation attempt using 'sudo' detected"
+    ),
+    (
+        r"\bsu\s+-",
+        "Privilege escalation attempt using 'su -' detected"
+    ),
+    # macOS system-critical paths
+    (
+        r"/(System|Library)(/|\s|$)",
+        "Access or modification attempt on macOS system-critical path (/System/ or /Library/) detected"
+    ),
+    # Overwriting shell history or configuration files
+    (
+        r">\s*~/\.(bash_history|zsh_history|bashrc|zshrc|profile)",
+        "Attempt to overwrite shell history or configuration files detected"
+    )
+]
+
+
+def is_dangerous_command(command: str) -> str | None:
+    """
+    Controleert de commandoreeks tegen alle patronen in DANGEROUS_PATTERNS.
+    Retourneert de beschrijving/reden van het EERSTE overeenkomende patroon, 
+    of None als er geen enkel risico gedetecteerd wordt.
+    """
+    for pattern, reason in DANGEROUS_PATTERNS:
+        if re.search(pattern, command, flags=re.IGNORECASE):
+            return reason
+    return None
 
 
 def execute_action(action_id: int) -> dict:
     """
     Voert een goedgekeurde actie uit op basis van het action_id.
     
-    Als config.SANDBOX_MODE True is, wordt er een dry-run uitgevoerd.
-    Als config.SANDBOX_MODE False is, wordt het commando daadwerkelijk gestart.
+    1. Controleert of de actie bestaat en de status 'approved' heeft.
+    2. Controleert op gevaarlijke patronen en blokkeert zo nodig vóór sandbox/live branching.
+    3. Als config.SANDBOX_MODE True is, wordt er een dry-run uitgevoerd.
+    4. Als config.SANDBOX_MODE False is, wordt het commando daadwerkelijk gestart.
     """
     # 1. Haal de actie op uit de database
     action = get_action_by_id(action_id)
@@ -33,16 +200,45 @@ def execute_action(action_id: int) -> dict:
 
     action_detail = action.get("action_detail", "")
 
-    # 3. SANDBOX / DRY RUN MODUS
+    # 3. SAFETY GUARD CHECKS (vóór sandbox/live modus keuzes)
+    # (a) Bekende gevaarlijke commandopatronen
+    danger_reason = is_dangerous_command(action_detail)
+    # (b) Echte confinement-check: raakt dit commando iets buiten WORKSPACE_ROOT?
+    confinement_reason = None if danger_reason else check_workspace_confinement(action_detail)
+    block_reason = danger_reason or confinement_reason
+
+    if block_reason:
+        update_action_status(action_id, "blocked_dangerous")
+
+        try:
+            notification_text = (
+                f"🚫 **EXECUTION BLOCKED — dangerous command detected**\n\n"
+                f"**Action ID:** #{action_id}\n"
+                f"**Command:** `{action_detail}`\n"
+                f"**Reason:** {block_reason}"
+            )
+            send_notification(notification_text)
+        except Exception as e:
+            print(f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}")
+
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": f"Blocked: {block_reason}",
+            "blocked": True
+        }
+
+    # 4. SANDBOX / DRY RUN MODUS
     if config.SANDBOX_MODE:
         print(f"[DRY RUN] Would execute: {action_detail}")
         update_action_status(action_id, "executed_dry_run")
 
         try:
             notification_text = (
-                f"🧪 **DRY RUN — no real action was taken**\n\n"
+                f"🧪 **DRY RUN EXECUTED**\n\n"
                 f"**Action ID:** #{action_id}\n"
-                f"**Command:** `{action_detail}`"
+                f"**Command:** `{action_detail}`\n"
+                f"**Mode:** Sandbox (Dry-Run)"
             )
             send_notification(notification_text)
         except Exception as e:
@@ -52,33 +248,33 @@ def execute_action(action_id: int) -> dict:
             "success": True,
             "mode": "dry_run",
             "action_id": action_id,
-            "detail": action_detail,
+            "detail": f"[DRY RUN] Command simulated: {action_detail}",
         }
 
-    # 4. LIVE UITVOERING (SANDBOX_MODE == False)
+    # 5. LIVE EXECUTIE MODUS (Inclusief Time-out & Subprocess error handling)
     try:
         completed_process = subprocess.run(
             action_detail,
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=30,  # 30 seconden time-out ter beveiliging
+            cwd=_get_workspace_root()
         )
 
-        # Succesvolle uitvoering (exit code 0)
         if completed_process.returncode == 0:
             update_action_status(action_id, "executed")
 
             try:
                 notification_text = (
-                    f"✅ **ACTION EXECUTED**\n\n"
+                    f"⚡ **LIVE EXECUTION SUCCESSFUL**\n\n"
                     f"**Action ID:** #{action_id}\n"
                     f"**Command:** `{action_detail}`\n"
-                    f"**Output:**\n```\n{completed_process.stdout}\n```"
+                    f"**Output:**\n{completed_process.stdout[:500] if completed_process.stdout else '(no output)'}"
                 )
                 send_notification(notification_text)
             except Exception as e:
-                print(f"Warning: Failed to send Telegram execution notification: {e}")
+                print(f"Warning: Failed to send Telegram success notification for action #{action_id}: {e}")
 
             return {
                 "success": True,
@@ -87,45 +283,64 @@ def execute_action(action_id: int) -> dict:
                 "stdout": completed_process.stdout,
                 "stderr": completed_process.stderr,
             }
-
-        # Mislukte uitvoering (non-zero exit code)
         else:
             update_action_status(action_id, "execution_failed")
-            error_msg = completed_process.stderr or f"Process failed with return code {completed_process.returncode}"
+            error_msg = completed_process.stderr or f"Command exited with return code {completed_process.returncode}"
 
             try:
                 notification_text = (
                     f"❌ **EXECUTION FAILED**\n\n"
                     f"**Action ID:** #{action_id}\n"
                     f"**Command:** `{action_detail}`\n"
-                    f"**Error:**\n```\n{error_msg}\n```"
+                    f"**Error:**\n{error_msg[:500]}"
                 )
                 send_notification(notification_text)
             except Exception as e:
-                print(f"Warning: Failed to send Telegram failure notification: {e}")
+                print(f"Warning: Failed to send Telegram failure notification for action #{action_id}: {e}")
 
             return {
                 "success": False,
                 "mode": "live",
                 "action_id": action_id,
                 "error": error_msg,
+                "stdout": completed_process.stdout,
+                "stderr": completed_process.stderr,
             }
 
-    except Exception as e:
-        # Afvangen van uitzonderingen zoals subprocess.TimeoutExpired
+    except subprocess.TimeoutExpired:
         update_action_status(action_id, "execution_failed")
-        error_msg = str(e)
+        error_msg = "Command timed out after 30 seconds."
 
         try:
-            notification_text = (
-                f"❌ **EXECUTION FAILED (EXCEPTION)**\n\n"
+            send_notification(
+                f"❌ **EXECUTION FAILED (TIMEOUT)**\n\n"
                 f"**Action ID:** #{action_id}\n"
                 f"**Command:** `{action_detail}`\n"
-                f"**Exception:** {error_msg}"
+                f"**Error:** {error_msg}"
             )
-            send_notification(notification_text)
+        except Exception as e:
+            print(f"Warning: Failed to send Telegram timeout notification for action #{action_id}: {e}")
+
+        return {
+            "success": False,
+            "mode": "live",
+            "action_id": action_id,
+            "error": error_msg,
+        }
+
+    except Exception as e:
+        update_action_status(action_id, "execution_failed")
+        error_msg = f"Unexpected error during execution: {e}"
+
+        try:
+            send_notification(
+                f"❌ **EXECUTION FAILED (UNEXPECTED ERROR)**\n\n"
+                f"**Action ID:** #{action_id}\n"
+                f"**Command:** `{action_detail}`\n"
+                f"**Error:** {error_msg}"
+            )
         except Exception as notify_err:
-            print(f"Warning: Failed to send Telegram exception notification: {notify_err}")
+            print(f"Warning: Failed to send Telegram error notification for action #{action_id}: {notify_err}")
 
         return {
             "success": False,
