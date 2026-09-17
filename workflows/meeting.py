@@ -18,6 +18,7 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from agents.executive_agents import EXECUTIVE_AGENTS
+from workflows.execution_lock import EXECUTION_LOCK
 
 
 def run_executive_meeting(
@@ -107,7 +108,12 @@ def run_executive_meeting(
         verbose=True
     )
 
-    crew_result = crew.kickoff()
+    # De daadwerkelijke kickoff is de zware, CPU/GPU-intensieve stap — deze
+    # loopt altijd binnen EXECUTION_LOCK, zodat hij nooit gelijktijdig draait
+    # met bijvoorbeeld de geplande dagelijkse research (die anders de
+    # belasting simpelweg zou optellen in plaats van serialiseren).
+    with EXECUTION_LOCK:
+        crew_result = crew.kickoff()
 
     # 4. Verzamel de individuele output per taak/agent
     individual_outputs: Dict[str, str] = {}

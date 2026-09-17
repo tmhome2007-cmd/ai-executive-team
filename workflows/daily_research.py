@@ -24,8 +24,9 @@ from crewai import Crew, Process, Task
 from agents.executive_agents import EXECUTIVE_AGENTS
 from tools.research_tool import PageReaderTool, reset_call_count, get_call_count
 from workflows.meeting import run_executive_meeting
+from workflows.execution_lock import acquire_execution_lock_async, release_execution_lock
 from memory.database import log_decision
-from notifications.telegram_bot import send_notification_async, escape_html
+from notifications.telegram_bot import send_notification_async
 from config import config
 
 RESEARCH_SOURCES = [
@@ -69,7 +70,15 @@ async def _run_research_crew_once() -> str:
         verbose=True,
     )
 
-    result = await crew.kickoff_async()
+    # Ook deze async kickoff is een zware, CPU/GPU-intensieve stap — dezelfde
+    # EXECUTION_LOCK als in meeting.py zorgt dat deze nooit gelijktijdig
+    # draait met een ad-hoc /decisions/trigger meeting. We gebruiken hier de
+    # async-veilige acquire-helper zodat het wachten de event loop niet blokkeert.
+    await acquire_execution_lock_async()
+    try:
+        result = await crew.kickoff_async()
+    finally:
+        release_execution_lock()
     return str(result)
 
 
@@ -108,7 +117,7 @@ async def run_daily_research() -> dict:
             )
             try:
                 await send_notification_async(
-                    "⚠️ <b>Daily Research FAILED</b>\n\nCSO could not verifiably complete "
+                    "⚠️ *Daily Research FAILED*\n\nCSO could not verifiably complete "
                     "the research tool calls after 3 attempts. No meeting was held."
                 )
             except Exception as notify_err:
@@ -145,7 +154,7 @@ async def run_daily_research() -> dict:
         try:
             snippet = meeting_result["final_decision"][:300]
             await send_notification_async(
-                f"📊 <b>Daily Research Findings</b>\n\n{escape_html(snippet)}..."
+                f"📊 *Daily Research Findings*\n\n{snippet}..."
             )
         except Exception as notify_err:
             print(f"Warning: failed to send success notification: {notify_err}")

@@ -20,6 +20,7 @@ from memory.database import (
     get_recent_decisions,
     log_decision,
     get_pending_actions,
+    get_action_history,
     update_action_status,
 )
 from workflows.daily_research import run_daily_research
@@ -355,6 +356,18 @@ def get_sandbox_status():
 def read_pending_actions():
     """Retourneert een lijst van alle acties met status 'pending'."""
     return get_pending_actions()
+
+
+@app.get(
+    "/actions/history",
+    summary="Get Full Action History",
+    description="Haalt de meest recente acties op UIT ALLE statussen (inclusief afgehandelde/geblokkeerde), voor een volledig audit-overzicht — in tegenstelling tot /actions/pending, dat alleen nog-actiegevende items toont.",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_action_history(limit: int = 20):
+    """Retourneert een lijst van de meest recente acties, ongeacht status."""
+    limit = max(1, min(limit, 100))
+    return get_action_history(limit)
 
 
 @app.post(

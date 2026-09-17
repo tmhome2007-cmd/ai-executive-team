@@ -195,9 +195,31 @@ def get_action_by_id(action_id: int) -> dict | None:
             FROM action_queue
             WHERE id = ?
         """, (action_id,))
-        
+
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def get_action_history(limit: int = 20) -> list[dict]:
+    """
+    Haalt de meest recente acties op UIT ALLE STATUSSEN (pending, approved,
+    rejected, executed, executed_dry_run, blocked_dangerous, execution_failed) —
+    in tegenstelling tot get_pending_actions(), die alleen nog-actiegevende
+    items toont. Dit geeft dezelfde audit-trail-volledigheid als
+    get_recent_decisions() al biedt voor beslissingen: eenmaal afgehandeld
+    verdwijnt een actie hier nooit, hij blijft zichtbaar in de geschiedenis.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at
+            FROM action_queue
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (limit,))
+
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 # ===================================================================
