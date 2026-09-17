@@ -25,7 +25,7 @@ from memory.database import (
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
 from workflows.action_executor import execute_action
-from notifications.telegram_bot import send_notification
+from notifications.telegram_bot import send_notification, escape_html
 from config import config
 
 
@@ -290,7 +290,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
 
     try:
         snippet = final_decision[:200]
-        message = f"📌 **Ad-Hoc Decision Triggered**\n\n**Topic:** {request.topic}\n\n**Decision Snippet:**\n{snippet}..."
+        message = f"📌 <b>Ad-Hoc Decision Triggered</b>\n\n<b>Topic:</b> {escape_html(request.topic)}\n\n<b>Decision Snippet:</b>\n{escape_html(snippet)}..."
         send_notification(message)
     except Exception as notify_err:
         print(f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}")

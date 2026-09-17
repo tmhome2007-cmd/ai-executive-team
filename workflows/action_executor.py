@@ -13,7 +13,7 @@ import re
 import shlex
 import subprocess
 from memory.database import get_action_by_id, update_action_status
-from notifications.telegram_bot import send_notification
+from notifications.telegram_bot import send_notification, escape_html
 from config import config
 
 # ------------------------------------------------------------------
@@ -212,10 +212,10 @@ def execute_action(action_id: int) -> dict:
 
         try:
             notification_text = (
-                f"🚫 **EXECUTION BLOCKED — dangerous command detected**\n\n"
-                f"**Action ID:** #{action_id}\n"
-                f"**Command:** `{action_detail}`\n"
-                f"**Reason:** {block_reason}"
+                f"🚫 <b>EXECUTION BLOCKED — dangerous command detected</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                f"<b>Reason:</b> {escape_html(block_reason)}"
             )
             send_notification(notification_text)
         except Exception as e:
@@ -235,10 +235,10 @@ def execute_action(action_id: int) -> dict:
 
         try:
             notification_text = (
-                f"🧪 **DRY RUN EXECUTED**\n\n"
-                f"**Action ID:** #{action_id}\n"
-                f"**Command:** `{action_detail}`\n"
-                f"**Mode:** Sandbox (Dry-Run)"
+                f"🧪 <b>DRY RUN EXECUTED</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                f"<b>Mode:</b> Sandbox (Dry-Run)"
             )
             send_notification(notification_text)
         except Exception as e:
@@ -267,10 +267,10 @@ def execute_action(action_id: int) -> dict:
 
             try:
                 notification_text = (
-                    f"⚡ **LIVE EXECUTION SUCCESSFUL**\n\n"
-                    f"**Action ID:** #{action_id}\n"
-                    f"**Command:** `{action_detail}`\n"
-                    f"**Output:**\n{completed_process.stdout[:500] if completed_process.stdout else '(no output)'}"
+                    f"⚡ <b>LIVE EXECUTION SUCCESSFUL</b>\n\n"
+                    f"<b>Action ID:</b> #{action_id}\n"
+                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                    f"<b>Output:</b>\n{escape_html(completed_process.stdout[:500]) if completed_process.stdout else '(no output)'}"
                 )
                 send_notification(notification_text)
             except Exception as e:
@@ -289,10 +289,10 @@ def execute_action(action_id: int) -> dict:
 
             try:
                 notification_text = (
-                    f"❌ **EXECUTION FAILED**\n\n"
-                    f"**Action ID:** #{action_id}\n"
-                    f"**Command:** `{action_detail}`\n"
-                    f"**Error:**\n{error_msg[:500]}"
+                    f"❌ <b>EXECUTION FAILED</b>\n\n"
+                    f"<b>Action ID:</b> #{action_id}\n"
+                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                    f"<b>Error:</b>\n{escape_html(error_msg[:500])}"
                 )
                 send_notification(notification_text)
             except Exception as e:
@@ -313,10 +313,10 @@ def execute_action(action_id: int) -> dict:
 
         try:
             send_notification(
-                f"❌ **EXECUTION FAILED (TIMEOUT)**\n\n"
-                f"**Action ID:** #{action_id}\n"
-                f"**Command:** `{action_detail}`\n"
-                f"**Error:** {error_msg}"
+                f"❌ <b>EXECUTION FAILED (TIMEOUT)</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                f"<b>Error:</b> {escape_html(error_msg)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram timeout notification for action #{action_id}: {e}")
@@ -334,10 +334,10 @@ def execute_action(action_id: int) -> dict:
 
         try:
             send_notification(
-                f"❌ **EXECUTION FAILED (UNEXPECTED ERROR)**\n\n"
-                f"**Action ID:** #{action_id}\n"
-                f"**Command:** `{action_detail}`\n"
-                f"**Error:** {error_msg}"
+                f"❌ <b>EXECUTION FAILED (UNEXPECTED ERROR)</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                f"<b>Error:</b> {escape_html(error_msg)}"
             )
         except Exception as notify_err:
             print(f"Warning: Failed to send Telegram error notification for action #{action_id}: {notify_err}")

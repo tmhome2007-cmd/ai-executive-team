@@ -3,6 +3,16 @@ notifications/telegram_bot.py
 
 Module voor het versturen van Telegram-notificaties vanuit het AI Executive Team systeem.
 Gebruikt de moderne asynchrone API van python-telegram-bot met een synchrone wrapper.
+
+BELANGRIJK — parse_mode="HTML", niet "Markdown":
+Legacy Telegram "Markdown" parse mode is erg fragiel: het begrijpt alleen
+*enkele* sterretjes voor vet, en breekt zodra tekst dubbele sterretjes
+("**vet**"), losse onderstrepingstekens, of andere markdown-achtige tekens
+bevat — wat onvermijdelijk gebeurt zodra we vrije tekst van een LLM-agent of
+een bestandspad in een bericht plakken. HTML mode is veel toleranter: alleen
+&, < en > moeten worden ge-escaped in dynamische inhoud (zie escape_html()),
+en onze eigen opmaak gebruikt expliciete tags (<b>, <code>) in plaats van
+sterretjes, dus er is geen dubbelzinnigheid meer over waar opmaak begint/eindigt.
 """
 
 import asyncio
@@ -16,6 +26,18 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from config import config
+
+
+def escape_html(text: str) -> str:
+    """
+    Escaped &, < en > in willekeurige dynamische tekst (bestandspaden,
+    agent-output, shell-commando's) voordat die in een HTML-bericht wordt
+    geplakt. Gebruik dit ALTIJD voor dynamische inhoud — nooit voor je eigen
+    letterlijke <b>/<code> tags in het bericht-template zelf.
+    """
+    if not isinstance(text, str):
+        text = str(text)
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 async def send_notification_async(message: str) -> None:
@@ -39,7 +61,7 @@ async def send_notification_async(message: str) -> None:
         await bot.send_message(
             chat_id=chat_id,
             text=message,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
         print("Telegram notificatie succesvol verzonden!")
     except Exception as e:
@@ -61,11 +83,11 @@ if __name__ == "__main__":
     print("=" * 60)
     print("TELEGRAM NOTIFICATION TEST")
     print("=" * 60)
-    
+
     test_message = (
-        "✅ *Test message from the AI Executive Team system.*\n\n"
+        "✅ <b>Test message from the AI Executive Team system.</b>\n\n"
         "If you see this, notifications are working correctly!"
     )
-    
+
     send_notification(test_message)
     print("=" * 60)
