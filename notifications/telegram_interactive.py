@@ -1,0 +1,261 @@
+"""
+notifications/telegram_interactive.py
+
+Maakt Telegram-notificaties over voorgestelde acties interactief: elk bericht
+krijgt echte, aantikbare Approve / Reject / Execute knoppen, die rechtstreeks
+dezelfde onderliggende functies aanroepen die de dashboard-knoppen ook
+gebruiken (update_action_status, execute_action) — geen aparte, afwijkende
+logica, gewoon een ander aanroeppunt voor exact hetzelfde gedrag, inclusief
+alle veiligheidscontroles (danger patterns, workspace confinement) uit
+workflows/action_executor.py.
+
+BELANGRIJK — eigen thread, eigen event loop:
+python-telegram-bot's Application (polling) wil zijn eigen event loop
+beheren. Dit project draait al een event loop via uvicorn/FastAPI
+(en de AsyncIOScheduler daarbinnen), dus de listener hier draait bewust in
+een aparte OS-thread met een eigen, nieuw aangemaakte asyncio event loop —
+zo kunnen de twee elkaar nooit in de weg zitten.
+"""
+
+import asyncio
+import threading
+import sys
+from pathlib import Path
+from typing import Optional
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CallbackQueryHandler, ContextTypes
+
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from config import config
+from notifications.telegram_bot import send_notification_with_keyboard, escape_html
+from memory.database import get_action_by_id, update_action_status
+from workflows.action_executor import execute_action
+
+# ------------------------------------------------------------------
+# GEDEELDE STATE VOOR DE ACHTERGROND-THREAD
+# ------------------------------------------------------------------
+# Eén dictionary in plaats van losse globals, zodat start/stop elkaar netjes
+# kunnen vinden zonder rommelige module-level `global` statements overal.
+_state: dict = {
+    "thread": None,
+    "loop": None,
+    "application": None,
+    "stop_event": None,  # een asyncio.Event, aangemaakt BINNEN de eigen loop
+}
+
+
+# ------------------------------------------------------------------
+# BERICHT- EN TOETSENBORD-OPBOUW
+# ------------------------------------------------------------------
+def build_action_keyboard(action_id: int, status: str) -> Optional[InlineKeyboardMarkup]:
+    """
+    Bouwt de juiste set knoppen voor de huidige status van een actie.
+    - pending    -> Approve / Reject
+    - approved   -> Execute / Reject
+    - alles anders (rejected/executed/blocked/...) -> geen knoppen (eindstatus)
+    """
+    if status == "pending":
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Approve", callback_data=f"approve:{action_id}"),
+            InlineKeyboardButton("❌ Reject", callback_data=f"reject:{action_id}"),
+        ]])
+    elif status == "approved":
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("⚡ Execute", callback_data=f"execute:{action_id}"),
+            InlineKeyboardButton("❌ Reject", callback_data=f"reject:{action_id}"),
+        ]])
+    return None
+
+
+def format_action_message(action: dict, footer: str = "") -> str:
+    """
+    Bouwt de HTML-tekst van het bericht op vanuit de actuele database-rij —
+    ALTIJD opnieuw opgebouwd vanuit de database, nooit door de vorige
+    berichttekst te 'parsen'. Dat maakt het bericht na een knop-tap altijd
+    correct, ongeacht eventuele race conditions tussen meerdere taps.
+    """
+    text = (
+        f"⏳ <b>ACTION PROPOSAL #{action['id']}</b>\n\n"
+        f"<b>Proposed By:</b> {escape_html(action['proposed_by'])}\n"
+        f"<b>Description:</b> {escape_html(action['action_description'])}\n"
+        f"<b>Detail:</b> <code>{escape_html(action['action_detail'])}</code>\n"
+        f"<b>Status:</b> {escape_html(action['status'])}"
+    )
+    if footer:
+        text += f"\n\n{footer}"
+    return text
+
+
+def send_proposal_notification(
+    action_id: int, proposed_by: str, action_description: str, action_detail: str
+) -> None:
+    """
+    Verstuurt de initiële voorstel-notificatie MET Approve/Reject knoppen.
+    Wordt aangeroepen vanuit tools/action_proposal_tool.py in plaats van de
+    oude platte send_notification() aanroep.
+    """
+    action = {
+        "id": action_id,
+        "proposed_by": proposed_by,
+        "action_description": action_description,
+        "action_detail": action_detail,
+        "status": "pending",
+    }
+    message = format_action_message(action)
+    keyboard = build_action_keyboard(action_id, "pending")
+    send_notification_with_keyboard(message, keyboard)
+
+
+# ------------------------------------------------------------------
+# KNOP-CALLBACK HANDLER
+# ------------------------------------------------------------------
+async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+
+    try:
+        action_type, action_id_str = query.data.split(":")
+        action_id = int(action_id_str)
+    except (ValueError, AttributeError):
+        await query.answer("Invalid button data.", show_alert=True)
+        return
+
+    # Haal de ACTUELE status uit de database op — nooit vertrouwen op wat er
+    # toevallig in het bericht stond, voor het geval iemand al eerder op een
+    # andere knop heeft getikt (of via de dashboard al iets heeft gedaan).
+    action = get_action_by_id(action_id)
+    if action is None:
+        await query.answer("This action no longer exists.", show_alert=True)
+        return
+
+    current_status = action["status"]
+
+    # ---- APPROVE ----
+    if action_type == "approve":
+        if current_status != "pending":
+            await query.answer(f"Already '{current_status}' — cannot approve again.", show_alert=True)
+            return
+        update_action_status(action_id, "approved")
+        await query.answer("Approved ✅")
+        action["status"] = "approved"
+        new_text = format_action_message(action, footer="✅ <b>APPROVED</b> via Telegram.")
+        new_keyboard = build_action_keyboard(action_id, "approved")
+
+    # ---- REJECT ----
+    elif action_type == "reject":
+        if current_status not in ("pending", "approved"):
+            await query.answer(f"Already '{current_status}' — cannot reject now.", show_alert=True)
+            return
+        update_action_status(action_id, "rejected")
+        await query.answer("Rejected ❌")
+        action["status"] = "rejected"
+        new_text = format_action_message(action, footer="❌ <b>REJECTED</b> via Telegram.")
+        new_keyboard = None
+
+    # ---- EXECUTE ----
+    elif action_type == "execute":
+        if current_status != "approved":
+            await query.answer(f"Must be 'approved' first (currently '{current_status}').", show_alert=True)
+            return
+        await query.answer("Executing...")
+        # execute_action() is sync and may run a real subprocess (up to the
+        # existing 30s timeout) — run it in a worker thread so this callback
+        # handler never blocks the bot's own event loop while it waits.
+        result = await asyncio.to_thread(execute_action, action_id)
+
+        refreshed = get_action_by_id(action_id) or action
+        if result.get("blocked"):
+            footer = f"🚫 <b>BLOCKED</b>: {escape_html(result.get('error', 'Unknown reason'))}"
+        elif result.get("success") and result.get("mode") == "dry_run":
+            footer = f"🧪 <b>EXECUTED (DRY RUN)</b>\n{escape_html(result.get('detail', ''))}"
+        elif result.get("success"):
+            stdout = escape_html((result.get("stdout") or "")[:300]) or "(no output)"
+            footer = f"⚡ <b>EXECUTED SUCCESSFULLY</b>\n{stdout}"
+        else:
+            footer = f"❌ <b>EXECUTION FAILED</b>: {escape_html(result.get('error', 'Unknown error'))}"
+
+        new_text = format_action_message(refreshed, footer=footer)
+        new_keyboard = None
+
+    else:
+        await query.answer("Unknown action.", show_alert=True)
+        return
+
+    try:
+        await query.edit_message_text(text=new_text, parse_mode="HTML", reply_markup=new_keyboard)
+    except Exception as e:
+        # Bewerken kan falen als het bericht al identiek is, of te oud is —
+        # dit mag de bot nooit laten crashen.
+        print(f"Warning: could not edit Telegram message after button tap: {e}")
+
+
+# ------------------------------------------------------------------
+# START / STOP VAN DE ACHTERGROND-LISTENER
+# ------------------------------------------------------------------
+def _run_listener_in_thread() -> None:
+    """Draait in een eigen OS-thread met een eigen, nieuwe event loop."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    _state["loop"] = loop
+
+    async def _main() -> None:
+        stop_event = asyncio.Event()
+        _state["stop_event"] = stop_event
+
+        application = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+        application.add_handler(CallbackQueryHandler(handle_button_callback))
+        _state["application"] = application
+
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(drop_pending_updates=True)
+        print("Telegram interactive listener started (polling for button taps).")
+
+        await stop_event.wait()
+
+        print("Telegram interactive listener shutting down...")
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+
+    try:
+        loop.run_until_complete(_main())
+    finally:
+        loop.close()
+
+
+def start_telegram_listener() -> None:
+    """
+    Start de interactieve listener in een achtergrond-thread. Doet niets
+    (met een duidelijke waarschuwing) als er geen bot token is geconfigureerd,
+    zodat het systeem prima blijft werken zonder Telegram als dat gewenst is.
+    """
+    if not getattr(config, "TELEGRAM_BOT_TOKEN", "").strip():
+        print("Telegram interactive listener NOT started: TELEGRAM_BOT_TOKEN is not set.")
+        return
+
+    if _state["thread"] is not None and _state["thread"].is_alive():
+        print("Telegram interactive listener is already running.")
+        return
+
+    thread = threading.Thread(target=_run_listener_in_thread, daemon=True, name="telegram-listener")
+    _state["thread"] = thread
+    thread.start()
+
+
+def stop_telegram_listener() -> None:
+    """Signaleert de achtergrond-thread om netjes te stoppen, en wacht erop."""
+    loop = _state.get("loop")
+    stop_event = _state.get("stop_event")
+
+    if loop is None or stop_event is None:
+        return  # was nooit (succesvol) gestart
+
+    loop.call_soon_threadsafe(stop_event.set)
+
+    thread = _state.get("thread")
+    if thread is not None:
+        thread.join(timeout=10)

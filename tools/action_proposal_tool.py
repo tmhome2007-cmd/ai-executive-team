@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 
 from memory.database import propose_action
-from notifications.telegram_bot import send_notification
+from notifications.telegram_interactive import send_proposal_notification
+from tools._dedupe_guard import check_and_register_proposal
 
 
 class ActionProposalInput(BaseModel):
@@ -42,6 +43,13 @@ class ProposeActionTool(BaseTool):
         super().__init__(role=role, **data)
 
     def _run(self, action_description: str, action_detail: str) -> str:
+        # Breekt een runaway herhaal-loop: dezelfde (rol + actie) binnen het
+        # dedupe-venster wordt niet opnieuw gelogd of genotificeerd.
+        dedupe_key = f"action:{self.role}:{action_detail}"
+        duplicate_message = check_and_register_proposal(dedupe_key)
+        if duplicate_message:
+            return duplicate_message
+
         # 1. Sla het voorstel op in de database
         action_id = propose_action(
             proposed_by=self.role,
@@ -49,17 +57,14 @@ class ProposeActionTool(BaseTool):
             action_detail=action_detail
         )
 
-        # 2. Verstuur Telegram notificatie
-        notification_text = (
-            f"⏳ **NEW ACTION PROPOSAL — needs your approval**\n\n"
-            f"**ID:** #{action_id}\n"
-            f"**Proposed By:** {self.role}\n"
-            f"**Description:** {action_description}\n"
-            f"**Detail:** `{action_detail}`"
-        )
-        
+        # 2. Verstuur interactieve Telegram notificatie met Approve/Reject knoppen
         try:
-            send_notification(notification_text)
+            send_proposal_notification(
+                action_id=action_id,
+                proposed_by=self.role,
+                action_description=action_description,
+                action_detail=action_detail,
+            )
         except Exception as e:
             print(f"Warning: Failed to send Telegram notification for action proposal #{action_id}: {e}")
 

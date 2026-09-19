@@ -2,8 +2,8 @@
 
 A local-first multi-agent system where AI "executives" (CEO, CFO, COO, CSO, CMO,
 CTO, CHRO, General Counsel, CPO, Board Director, CCO) research real information,
-hold structured meetings, and log decisions — with human oversight via Telegram
-and a web dashboard.
+hold structured meetings, and — with human approval — take real actions on your
+machine: running commands, editing files, and navigating web pages.
 
 This repo only contains source code. `venv/`, `node_modules/`, and `.env` are
 intentionally excluded (see `.gitignore`) — follow the steps below to rebuild
@@ -19,7 +19,11 @@ them on any machine.
   ollama pull llama3.1
   ```
   Do NOT use plain `llama3` — it does not reliably support tool-calling,
-  which the CSO's research tool depends on.
+  which the CSO's research tool and every action-proposal tool depend on.
+- **Playwright browsers** (for browser actions):
+  ```bash
+  playwright install chromium
+  ```
 - A **Telegram bot token** and your **chat ID** (see "Getting a Telegram bot"
   below if starting fresh)
 
@@ -40,8 +44,6 @@ pip install -r requirements.txt
 
 ### Configure secrets
 
-Copy the example env file and fill in real values:
-
 ```bash
 cp .env.example .env
 ```
@@ -53,9 +55,11 @@ Edit `.env` and set:
 | `OLLAMA_MODEL` | `llama3.1` |
 | `TELEGRAM_BOT_TOKEN` | From @BotFather on Telegram |
 | `TELEGRAM_CHAT_ID` | Your personal chat ID (see `getUpdates` method) |
-| `API_SECRET_KEY` | Any long random string — generate one with `openssl rand -hex 32`. Required for `/decisions/trigger` and `/workflows/daily-research/trigger`. |
+| `API_SECRET_KEY` | Any long random string — generate one with `openssl rand -hex 32`. Required for every mutating API endpoint. |
 | `OPENAI_API_KEY` | Any non-empty placeholder string, e.g. `ollama-local-not-a-real-key` — required by CrewAI's OpenAI-compatible client even though Ollama never checks it |
-| `SANDBOX_MODE` | `True` (keep this until you deliberately want real-world actions) |
+| `SANDBOX_MODE` | `True` to start. Can also be toggled live from the dashboard (see below) — no manual editing needed after initial setup. |
+| `WORKSPACE_ROOT` | `./workspace` by default. Every file operation and shell command touching a path is confined here — see Safety Architecture below. |
+| `ALLOWED_BROWSER_DOMAINS` | Optional. Comma-separated domain allowlist for browser actions (e.g. `wikipedia.org,github.com`). Empty = any http/https domain allowed. |
 
 ### Verify the setup
 
@@ -64,9 +68,11 @@ python test_config.py
 python verify_system.py
 ```
 
-`verify_system.py` should show all static checks passing before you trust
-anything else works. If Ollama isn't running yet, start it separately
-(`ollama serve`, or just open the Ollama app) before testing further.
+`verify_system.py` runs 10+ checks covering agent roster integrity, endpoint
+auth, the danger-pattern blocklist, workspace confinement, URL safety, and
+more. Run this after *any* code change, especially AI-generated ones — it has
+repeatedly caught real regressions during development that looked fine at a
+glance.
 
 ### Run the backend
 
@@ -74,11 +80,11 @@ anything else works. If Ollama isn't running yet, start it separately
 python main.py
 ```
 
-Runs on `http://localhost:8000`. On startup, it will automatically check
-whether daily research has already run today and catch up if not — no exact
-wake time needed, works across machines as long as the SQLite database
-(`memory/executive_team.db`, not tracked in git) travels with you or the app
-runs at least once a day on whichever machine is open.
+Runs on `http://localhost:8000`. On startup it:
+- Checks whether daily research has already run today and catches up if not
+  (no exact wake time needed — works across machines, whichever one is open
+  first after 9 AM runs it)
+- Starts the interactive Telegram listener (see below)
 
 ## Frontend setup
 
@@ -89,8 +95,11 @@ npm run dev
 ```
 
 Open `http://localhost:3000`. You'll be prompted for the `API_SECRET_KEY`
-from your `.env` — this is stored only in the browser's `sessionStorage` for
-that tab, not persisted anywhere.
+from your `.env` — stored only in that browser tab's `sessionStorage`.
+
+The dashboard shows: daily research status, a live Sandbox/Live mode toggle,
+pending actions (approve/reject/execute), full action history, an ad-hoc
+decision form (pick any subset of the 11 agents), and decision history.
 
 ## Getting a Telegram bot (first-time only)
 
@@ -99,18 +108,84 @@ that tab, not persisted anywhere.
 3. Visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser —
    your chat ID appears in the JSON response.
 
+Once running, action proposals arrive as interactive Telegram messages with
+real **Approve / Reject / Execute** buttons — no need to open the dashboard
+for routine approvals.
+
+## What the executive team can actually do
+
+Beyond discussing and deciding, agents can **propose real actions**, which
+require your explicit approval before anything happens:
+
+| Capability | Tool | Who has it | What it does |
+|---|---|---|---|
+| Shell commands | `propose_action` | COO, CTO | Runs a shell command via `subprocess` |
+| File read/write/append | `propose_file_operation` | COO, CFO, CTO, General Counsel | Structured file I/O — no shell involved, safer than a raw command |
+| Browser navigate + click | `propose_browser_action` | COO | Navigates to a URL and optionally clicks one element, screenshots the result |
+
+Every proposal is logged to the database and sent via Telegram (with
+buttons) regardless of mode. **Nothing executes until a human approves it.**
+
+## Safety architecture
+
+This is the part worth understanding before flipping to Live mode:
+
+- **Sandbox mode (default)**: approving and "executing" an action never
+  touches your real filesystem, shell, or browser — it logs what *would*
+  happen and notifies you. Toggle to Live mode from the dashboard banner
+  (requires confirmation) when you're ready for real execution.
+- **Danger-pattern blocklist**: known catastrophic commands (`rm -rf /`,
+  fork bombs, `curl | bash`, `sudo`, etc.) are blocked outright, in both
+  sandbox and live mode.
+- **Workspace confinement**: every path-like token in a shell command or
+  file operation is resolved to an absolute path and checked against
+  `WORKSPACE_ROOT`. A command referencing anything outside it — via an
+  absolute path or `../` traversal — is blocked before execution, not just
+  the ones that look obviously dangerous.
+- **URL safety**: browser actions can only navigate to `http`/`https` URLs.
+  `javascript:`, `file:`, and `data:` schemes are blocked outright. An
+  optional domain allowlist can restrict navigation further.
+- **Execution lock**: only one heavy CrewAI run (a meeting or research cycle)
+  executes at a time, system-wide — prevents a scheduled run and a manual
+  one from overlapping and doubling CPU/heat load.
+- **Duplicate-proposal guard**: if an agent calls the same proposal tool
+  with the same arguments repeatedly within 90 seconds (a known local-LLM
+  failure mode — one incident produced 13 identical proposals before this
+  existed), only the first call creates a proposal; the rest are rejected
+  and the agent is told to stop.
+- **`max_iter=5`** on every agent: a hard cap on reasoning/tool-call
+  iterations per task, independent of the guard above.
+- **Daily research runs with tool-less agents**: the automated daily
+  research meeting uses `EXECUTIVE_AGENTS_NO_TOOLS` — genuine tool-less
+  clones of CFO/General Counsel/COO — so routine research can never
+  spontaneously generate action proposals, regardless of what the prompt
+  says. Ad-hoc decisions you trigger yourself still get full-tooled agents.
+- **In-progress guard**: daily research cannot run twice concurrently, even
+  if two triggers land close together (a real race condition this project
+  hit once, now structurally prevented).
+- **Auth**: every mutating endpoint requires `X-API-Key`. Read-only
+  endpoints (`/decisions/history`, `/workflows/daily-research/status`) are
+  intentionally left open.
+
 ## Project structure
 
 ```
-agents/executive_agents.py     — the 11 executive agent definitions
-workflows/meeting.py           — multi-agent sequential meeting logic (CEO always synthesizes last)
-workflows/daily_research.py    — research → verify → meeting → log → notify pipeline (async)
-tools/research_tool.py         — web page reading tool (requests + BeautifulSoup)
-memory/database.py             — SQLite decision audit trail
-notifications/telegram_bot.py  — Telegram notifications
-main.py                        — FastAPI backend, scheduling, auth
-verify_system.py               — smoke test for core invariants — run after any code change
-executive-dashboard/           — Next.js dashboard (separate npm project)
+agents/executive_agents.py       — 11 executive agent definitions, plus tool-less clones for daily research
+workflows/meeting.py             — multi-agent sequential meeting logic (CEO always synthesizes last)
+workflows/daily_research.py      — research → verify → meeting → log → notify pipeline (async)
+workflows/action_executor.py     — executes approved actions: shell, file operations, browser actions — with all safety guards
+workflows/execution_lock.py      — system-wide lock preventing overlapping heavy runs
+tools/research_tool.py           — web page reading tool (requests + BeautifulSoup)
+tools/action_proposal_tool.py    — propose_action (shell commands)
+tools/file_operation_tool.py     — propose_file_operation (read/write/append)
+tools/browser_action_tool.py     — propose_browser_action (navigate + click)
+tools/_dedupe_guard.py           — shared duplicate-call protection for all propose_* tools
+memory/database.py               — SQLite: decisions, action queue, full action history
+notifications/telegram_bot.py    — Telegram notifications (HTML parse mode)
+notifications/telegram_interactive.py — interactive Approve/Reject/Execute buttons
+main.py                          — FastAPI backend, scheduling, auth, sandbox toggle
+verify_system.py                 — smoke test for core invariants — run after any code change
+executive-dashboard/             — Next.js dashboard (separate npm project)
 ```
 
 ## Known limitations
@@ -121,9 +196,18 @@ executive-dashboard/           — Next.js dashboard (separate npm project)
   the tool. If it fails all 3 attempts, it logs an honest failure rather than
   fake research.
 - Scheduling requires the laptop to actually be running — there's no
-  wake-from-sleep. The catch-up check (see `main.py`) means whichever
-  machine you open first after the scheduled time will run it, but two
-  machines with separate local databases won't know what the other already did.
+  wake-from-sleep. The catch-up check means whichever machine you open first
+  after 9 AM runs it, but two machines with separate local databases won't
+  know what the other already did (occasional duplicate research on days you
+  switch machines — a minor inefficiency, not a bug).
+- Browser actions support navigate + click only — no form-filling. Typing
+  into a field (e.g. a login form) is a meaningfully bigger trust question
+  than clicking a public button, and was deliberately left out of scope.
 - Fine-tuning (originally planned) requires an NVIDIA GPU and hasn't been
   pursued given Apple Silicon hardware — current quality relies on
-  prompt/backstory engineering instead (see agent backstories).
+  prompt/backstory engineering and `max_iter` tuning instead.
+- The workspace-confinement path check is heuristic shell-string parsing,
+  not a full sandbox — a genuinely adversarial, obfuscated command could
+  potentially find an edge case. "Don't approve what you haven't read"
+  remains the primary safety net; the automated guards are defense in depth
+  on top of that, not a replacement for it.

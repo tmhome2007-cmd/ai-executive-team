@@ -21,7 +21,7 @@ import asyncio
 
 from crewai import Crew, Process, Task
 
-from agents.executive_agents import EXECUTIVE_AGENTS
+from agents.executive_agents import EXECUTIVE_AGENTS, EXECUTIVE_AGENTS_NO_TOOLS
 from tools.research_tool import PageReaderTool, reset_call_count, get_call_count
 from workflows.meeting import run_executive_meeting
 from workflows.execution_lock import acquire_execution_lock_async, release_execution_lock
@@ -82,6 +82,9 @@ async def _run_research_crew_once() -> str:
     return str(result)
 
 
+_research_in_progress = False
+
+
 async def run_daily_research() -> dict:
     """
     Voert de volledige dagelijkse workflow uit:
@@ -90,7 +93,29 @@ async def run_daily_research() -> dict:
     Retourneert altijd een dict met minimaal "success" en "database_id",
     en raist NOOIT een exception (wordt intern afgevangen), omdat dit ook
     vanuit een achtergrond-scheduler wordt aangeroepen.
+
+    BELANGRIJK — dubbele uitvoering voorkomen:
+    has_run_today() in main.py controleert de database, maar die krijgt pas
+    een rij ZODRA deze hele functie klaar is (na enkele minuten). Als de
+    15-minuten catch-up check toevallig tikt terwijl een eerdere aanroep nog
+    bezig is, zou hij "nog niet gelogd vandaag" zien en een TWEEDE volledige
+    cyclus starten — EXECUTION_LOCK serialiseert dan alleen de losse
+    kickoff-aanroepen, niet de hele pipeline, dus je krijgt gewoon twee volle
+    cycli na elkaar. Deze simpele in-memory vlag maakt dat structureel
+    onmogelijk: een tweede aanroep terwijl de eerste nog loopt, wordt meteen
+    en netjes overgeslagen.
     """
+    global _research_in_progress
+
+    if _research_in_progress:
+        print("Daily research already in progress — skipping duplicate trigger.")
+        return {
+            "success": False,
+            "database_id": None,
+            "error": "Daily research was already running; this duplicate trigger was skipped.",
+        }
+
+    _research_in_progress = True
     try:
         research_summary = None
 
@@ -131,16 +156,21 @@ async def run_daily_research() -> dict:
 
         # Research succeeded — run the executive meeting.
         # run_executive_meeting is sync, so it runs in a worker thread to avoid
-        # nested-event-loop conflicts.
+        # nested-event-loop conflicts. We pass EXECUTIVE_AGENTS_NO_TOOLS here —
+        # not EXECUTIVE_AGENTS — because a prompt-level "don't use your tools"
+        # instruction proved unreliable in practice (some agents ignored it).
+        # Agents that genuinely don't have the tool object attached cannot
+        # call it, regardless of what the prompt says.
         meeting_result = await asyncio.to_thread(
             run_executive_meeting,
             topic="Daily Research Findings",
             task_description=(
                 f"Our CSO just completed daily market research and found the "
-                f"following: {research_summary}. Discuss what — if anything — "
-                f"we should act on based on these findings."
+                f"following: {research_summary}. Provide your written "
+                f"recommendation and reasoning in your response text."
             ),
             agent_keys=MEETING_AGENT_KEYS,
+            agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
         )
 
         db_id = log_decision(
@@ -173,6 +203,9 @@ async def run_daily_research() -> dict:
             "database_id": None,
             "error": f"Unexpected crash: {e}",
         }
+
+    finally:
+        _research_in_progress = False
 
 
 if __name__ == "__main__":

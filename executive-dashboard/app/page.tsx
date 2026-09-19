@@ -39,6 +39,7 @@ interface PendingAction {
   action_detail: string;
   status: string;
   reviewed_at: string | null;
+  action_type?: string;
 }
 
 interface ExecutionResult {
@@ -63,6 +64,72 @@ const AGENT_OPTIONS: { key: string; label: string }[] = [
   { key: "cpo", label: "CPO" },
   { key: "board_director", label: "Board Director" },
 ];
+
+// Human-readable labels + colors for every possible action status, used by
+// both the Pending Actions cards and the new Action History list.
+const STATUS_STYLES: Record<string, { label: string; className: string }> = {
+  pending: { label: "Pending", className: "bg-gray-800 text-gray-300 border-gray-700" },
+  approved: { label: "Approved", className: "bg-blue-900/60 text-blue-300 border-blue-700" },
+  rejected: { label: "Rejected", className: "bg-red-900/60 text-red-300 border-red-700" },
+  executed: { label: "Executed", className: "bg-green-900/60 text-green-300 border-green-700" },
+  executed_dry_run: { label: "Executed (Dry Run)", className: "bg-purple-900/60 text-purple-300 border-purple-700" },
+  blocked_dangerous: { label: "Blocked (Dangerous)", className: "bg-orange-900/60 text-orange-300 border-orange-700" },
+  execution_failed: { label: "Execution Failed", className: "bg-red-900/60 text-red-300 border-red-700" },
+};
+
+function statusBadge(status: string) {
+  const style = STATUS_STYLES[status] || {
+    label: status,
+    className: "bg-gray-800 text-gray-400 border-gray-700",
+  };
+  return (
+    <span className={`text-xs border px-2 py-0.5 rounded font-mono ${style.className}`}>
+      {style.label}
+    </span>
+  );
+}
+
+// Renders action_detail appropriately depending on action_type: a raw shell
+// string stays as-is (monospace), while a file_operation's JSON gets parsed
+// into a friendly "📄 write notes.txt" summary instead of showing raw JSON.
+function renderActionDetail(actionType: string | undefined, actionDetail: string) {
+  if (actionType === "file_operation") {
+    try {
+      const parsed = JSON.parse(actionDetail);
+      const icon = parsed.operation === "read" ? "📖" : "📄";
+      return (
+        <div>
+          <span className="text-blue-300">
+            {icon} {parsed.operation} → {parsed.file_path}
+          </span>
+          {parsed.content && (
+            <pre className="mt-1 text-gray-400 whitespace-pre-wrap">{parsed.content}</pre>
+          )}
+        </div>
+      );
+    } catch {
+      // Fall through to raw rendering below if JSON parsing ever fails
+    }
+  }
+
+  if (actionType === "browser_action") {
+    try {
+      const parsed = JSON.parse(actionDetail);
+      return (
+        <div>
+          <span className="text-blue-300">🌐 navigate → {parsed.url}</span>
+          {parsed.click_selector && (
+            <div className="text-gray-400 mt-1">🖱️ click → <code>{parsed.click_selector}</code></div>
+          )}
+        </div>
+      );
+    } catch {
+      // Fall through to raw rendering below if JSON parsing ever fails
+    }
+  }
+
+  return <>{actionDetail}</>;
+}
 
 export default function DashboardPage() {
   // --- Auth gate state ---
@@ -97,7 +164,7 @@ export default function DashboardPage() {
         setSandboxMode(data.sandbox_mode);
       }
     } catch (err) {
-      console.error("Fout bij ophalen van sandbox status:", err);
+      console.error("Error fetching sandbox status:", err);
     }
   }, []);
 
@@ -105,15 +172,65 @@ export default function DashboardPage() {
     fetchSandboxStatus();
   }, [fetchSandboxStatus]);
 
+  const [togglingSandbox, setTogglingSandbox] = useState(false);
+  const [sandboxToggleError, setSandboxToggleError] = useState<string | null>(null);
+
+  const handleToggleSandboxMode = async () => {
+    if (sandboxMode === null || apiKey === null) return;
+    const switchingToLive = sandboxMode === true; // currently sandbox -> would become live
+
+    // Switching TO live mode is the dangerous direction — require an explicit
+    // confirmation. Switching back to sandbox is always safe, no gate needed.
+    if (switchingToLive) {
+      const confirmed = window.confirm(
+        "This will switch the system to LIVE MODE. Approved actions will run for real on this machine from now on. Are you sure?"
+      );
+      if (!confirmed) return;
+    }
+
+    setTogglingSandbox(true);
+    setSandboxToggleError(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/system/sandbox-mode`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({ enabled: !sandboxMode }),
+      });
+
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || "Failed to switch mode.");
+      }
+
+      const data = await response.json();
+      setSandboxMode(data.sandbox_mode);
+    } catch (err: any) {
+      setSandboxToggleError(err.message || "Failed to switch mode.");
+    } finally {
+      setTogglingSandbox(false);
+    }
+  };
+
   // --- Dashboard data state ---
   const [status, setStatus] = useState<DailyResearchStatus | null>(null);
   const [history, setHistory] = useState<DecisionHistoryItem[]>([]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
+  const [actionHistory, setActionHistory] = useState<PendingAction[]>([]);
   const [actionErrors, setActionErrors] = useState<Record<number, string>>({});
   const [executionResults, setExecutionResults] = useState<Record<number, ExecutionResult>>({});
   const [executingIds, setExecutingIds] = useState<Set<number>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<number>>(new Set());
+  const [expandedActionHistoryIds, setExpandedActionHistoryIds] = useState<Set<number>>(new Set());
 
   const fetchPendingActions = useCallback(async (currentKey: string) => {
     try {
@@ -129,7 +246,7 @@ export default function DashboardPage() {
       }
 
       if (!res.ok) {
-        throw new Error("Kon afwachtende acties niet ophalen.");
+        throw new Error("Could not fetch pending actions.");
       }
 
       const data: PendingAction[] = await res.json();
@@ -150,7 +267,31 @@ export default function DashboardPage() {
         return [...data, ...preserved];
       });
     } catch (err: any) {
-      console.error("Fout bij ophalen van pending actions:", err);
+      console.error("Error fetching pending actions:", err);
+    }
+  }, []);
+
+  const fetchActionHistory = useCallback(async (currentKey: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/actions/history?limit=20`, {
+        headers: {
+          "X-API-Key": currentKey,
+        },
+      });
+
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error("Could not fetch action history.");
+      }
+
+      const data: PendingAction[] = await res.json();
+      setActionHistory(data);
+    } catch (err: any) {
+      console.error("Error fetching action history:", err);
     }
   }, []);
 
@@ -161,13 +302,13 @@ export default function DashboardPage() {
         fetch(`${API_BASE}/decisions/history?limit=20`),
       ]);
       if (!statusRes.ok || !historyRes.ok) {
-        throw new Error("Kon geen verbinding maken met de backend.");
+        throw new Error("Could not connect to the backend.");
       }
       setStatus(await statusRes.json());
       setHistory(await historyRes.json());
       setLoadError(null);
     } catch (err: any) {
-      setLoadError(err.message || "Kon geen verbinding maken met de backend.");
+      setLoadError(err.message || "Could not connect to the backend.");
     }
   }, []);
 
@@ -175,17 +316,18 @@ export default function DashboardPage() {
     if (apiKey !== null) {
       fetchDashboardData();
       fetchPendingActions(apiKey);
+      fetchActionHistory(apiKey);
     }
-  }, [apiKey, fetchDashboardData, fetchPendingActions]);
+  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory]);
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
     if (type === "approve") {
-      // Bij goedkeuren updaten we lokaal de status naar 'approved'
+      // Optimistically update the status to 'approved' locally
       setPendingActions((prev) =>
         prev.map((act) => (act.id === id ? { ...act, status: "approved" } : act))
       );
     } else {
-      // Bij afwijzen verwijderen we het kaartje
+      // On reject, remove the card immediately
       setPendingActions((prev) => prev.filter((action) => action.id !== id));
     }
 
@@ -210,24 +352,27 @@ export default function DashboardPage() {
 
       if (!response.ok) {
         const detail = await response.json().catch(() => null);
-        throw new Error(detail?.detail || `Fout bij ${type === "approve" ? "goedkeuren" : "afwijzen"}`);
+        throw new Error(detail?.detail || `Error while ${type === "approve" ? "approving" : "rejecting"}`);
       }
 
-      if (apiKey) fetchPendingActions(apiKey);
+      if (apiKey) {
+        fetchPendingActions(apiKey);
+        fetchActionHistory(apiKey);
+      }
     } catch (err: any) {
       if (apiKey) fetchPendingActions(apiKey);
       setActionErrors((prev) => ({
         ...prev,
-        [id]: err.message || "Er is een fout opgetreden bij het verwerken van deze actie.",
+        [id]: err.message || "An error occurred while processing this action.",
       }));
     }
   };
 
   const handleExecuteAction = async (action: PendingAction) => {
-    // Bevestigingsvenster in Live Mode
+    // Confirmation dialog in Live Mode
     if (sandboxMode === false) {
       const confirmed = window.confirm(
-        "Dit voert een echt commando uit op deze machine. Weet je het zeker?"
+        "This will run a real command on this machine. Are you sure?"
       );
       if (!confirmed) return;
     }
@@ -255,22 +400,25 @@ export default function DashboardPage() {
       const data: ExecutionResult = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Uitvoering mislukt.");
+        throw new Error(data.error || "Execution failed.");
       }
 
-      // Sla het resultaat op om inline te tonen
+      // Store the result to show it inline
       setExecutionResults((prev) => ({ ...prev, [action.id]: data }));
 
-      // Update de zichtbare status van de actie op de kaart
+      // Update the visible status on the card
       const newStatus = data.mode === "dry_run" ? "executed_dry_run" : "executed";
       setPendingActions((prev) =>
         prev.map((act) => (act.id === action.id ? { ...act, status: newStatus } : act))
       );
+
+      if (apiKey) fetchActionHistory(apiKey);
     } catch (err: any) {
       setActionErrors((prev) => ({
         ...prev,
-        [action.id]: err.message || "Fout bij uitvoeren van actie.",
+        [action.id]: err.message || "Error while executing action.",
       }));
+      if (apiKey) fetchActionHistory(apiKey);
     } finally {
       setExecutingIds((prev) => {
         const copy = new Set(prev);
@@ -282,6 +430,15 @@ export default function DashboardPage() {
 
   const toggleHistoryExpand = (id: number) => {
     setExpandedHistoryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleActionHistoryExpand = (id: number) => {
+    setExpandedActionHistoryIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -307,11 +464,11 @@ export default function DashboardPage() {
     e.preventDefault();
 
     if (!topic.trim() || !taskDescription.trim()) {
-      setError("Vul zowel een onderwerp als een taakomschrijving in.");
+      setError("Please fill in both a topic and a task description.");
       return;
     }
     if (selectedAgents.length === 0) {
-      setError("Selecteer minimaal 1 agent.");
+      setError("Select at least 1 agent.");
       return;
     }
 
@@ -335,21 +492,24 @@ export default function DashboardPage() {
 
       if (response.status === 401) {
         handleAuthFailure();
-        setError("Ongeldige sleutel — probeer opnieuw.");
+        setError("Invalid key — please try again.");
         return;
       }
 
       if (!response.ok) {
         const detail = await response.json().catch(() => null);
-        throw new Error(detail?.detail || `Fout: ${response.statusText}`);
+        throw new Error(detail?.detail || `Error: ${response.statusText}`);
       }
 
       const data: DecisionResponse = await response.json();
       setResult(data);
       fetchDashboardData();
-      if (apiKey) fetchPendingActions(apiKey);
+      if (apiKey) {
+        fetchPendingActions(apiKey);
+        fetchActionHistory(apiKey);
+      }
     } catch (err: any) {
-      setError(err.message || "Er is een onbekende fout opgetreden.");
+      setError(err.message || "An unknown error occurred.");
     } finally {
       setLoading(false);
     }
@@ -363,12 +523,12 @@ export default function DashboardPage() {
           onSubmit={handleKeySubmit}
           className="bg-gray-900 p-8 rounded-lg shadow space-y-4 w-full max-w-sm"
         >
-          <h1 className="text-xl font-semibold text-white">Toegang vereist</h1>
+          <h1 className="text-xl font-semibold text-white">Access Required</h1>
           <input
             type="password"
             value={keyInput}
             onChange={(e) => setKeyInput(e.target.value)}
-            placeholder="API-sleutel"
+            placeholder="API Key"
             className="w-full rounded-md border border-gray-700 bg-gray-800 text-white p-2"
             autoFocus
           />
@@ -376,7 +536,7 @@ export default function DashboardPage() {
             type="submit"
             className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            Bevestigen
+            Confirm
           </button>
         </form>
       </div>
@@ -386,18 +546,32 @@ export default function DashboardPage() {
   // --- Main dashboard ---
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      {/* Persistent Banner top of page */}
+      {/* Persistent Banner top of page — now an interactive toggle */}
       {sandboxMode !== null && (
         <div
-          className={`w-full py-2.5 px-4 text-center font-medium text-sm border-b shadow-sm ${
+          className={`w-full border-b shadow-sm ${
             sandboxMode
-              ? "bg-blue-950/80 border-blue-800 text-blue-200"
-              : "bg-red-900 border-red-700 text-white font-bold"
+              ? "bg-blue-950/80 border-blue-800"
+              : "bg-red-900 border-red-700"
           }`}
         >
-          {sandboxMode
-            ? "🧪 SANDBOX MODE — executions are simulated, nothing real happens."
-            : "🔴 LIVE MODE — approved actions WILL run for real on this machine."}
+          <button
+            onClick={handleToggleSandboxMode}
+            disabled={togglingSandbox}
+            className={`w-full py-2.5 px-4 text-center font-medium text-sm transition-colors ${
+              sandboxMode ? "text-blue-200 hover:bg-blue-900/60" : "text-white font-bold hover:bg-red-950"
+            } disabled:opacity-60 disabled:cursor-wait`}
+            title="Click to switch modes"
+          >
+            {togglingSandbox
+              ? "Switching mode..."
+              : sandboxMode
+              ? "🧪 SANDBOX MODE — executions are simulated, nothing real happens. (Click to switch to Live)"
+              : "🔴 LIVE MODE — approved actions WILL run for real on this machine. (Click to switch to Sandbox)"}
+          </button>
+          {sandboxToggleError && (
+            <p className="text-center text-xs text-red-300 pb-2">{sandboxToggleError}</p>
+          )}
         </div>
       )}
 
@@ -405,7 +579,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold">AI Executive Team Dashboard</h1>
           <p className="text-gray-400 mt-1">
-            Overzicht van autonome besluiten en dagelijkse onderzoeksstatus.
+            Overview of autonomous decisions and daily research status.
           </p>
         </div>
 
@@ -418,7 +592,7 @@ export default function DashboardPage() {
         {/* Daily research status card */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
           <div className="flex justify-between items-start">
-            <h2 className="text-lg font-semibold">Dagelijkse Research Status</h2>
+            <h2 className="text-lg font-semibold">Daily Research Status</h2>
             {status && (
               <span
                 className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -430,24 +604,24 @@ export default function DashboardPage() {
                 }`}
               >
                 {status.success === true
-                  ? "Succesvol"
+                  ? "Successful"
                   : status.success === false
-                  ? "Mislukt"
-                  : "Nog niet uitgevoerd"}
+                  ? "Failed"
+                  : "Not run yet"}
               </span>
             )}
           </div>
           <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
             <div>
-              <p className="text-gray-500">Laatste uitvoering:</p>
+              <p className="text-gray-500">Last run:</p>
               <p className="text-gray-200">
                 {status?.last_run_time
-                  ? new Date(status.last_run_time).toLocaleString("nl-BE")
-                  : "Nog niet uitgevoerd"}
+                  ? new Date(status.last_run_time).toLocaleString("en-US")
+                  : "Not run yet"}
               </p>
             </div>
             <div>
-              <p className="text-gray-500">Bericht / Details:</p>
+              <p className="text-gray-500">Message / Details:</p>
               <p className="text-gray-200">{status?.message || "No run yet."}</p>
             </div>
           </div>
@@ -457,12 +631,12 @@ export default function DashboardPage() {
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">
-              Acties ter Goedkeuring ({pendingActions.length})
+              Actions Awaiting Approval ({pendingActions.length})
             </h2>
           </div>
 
           {pendingActions.length === 0 ? (
-            <p className="text-gray-500 text-sm">Geen acties in afwachting.</p>
+            <p className="text-gray-500 text-sm">No actions pending.</p>
           ) : (
             <div className="space-y-4">
               {pendingActions.map((action) => {
@@ -480,33 +654,31 @@ export default function DashboardPage() {
                         <span className="inline-block bg-blue-900/60 border border-blue-700 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded uppercase tracking-wider">
                           {action.proposed_by}
                         </span>
-                        <span className="text-xs bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-mono">
-                          Status: {action.status}
-                        </span>
+                        {statusBadge(action.status)}
                       </div>
                       <span className="text-xs text-gray-500">
-                        {new Date(action.timestamp).toLocaleString("nl-BE")}
+                        {new Date(action.timestamp).toLocaleString("en-US")}
                       </span>
                     </div>
 
                     <p className="text-sm text-gray-200">{action.action_description}</p>
 
                     <div className="bg-gray-900 border border-gray-800 rounded p-3 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
-                      {action.action_detail}
+                      {renderActionDetail(action.action_type, action.action_detail)}
                     </div>
 
-                    {/* Foutmelding bij actie */}
+                    {/* Error message for this action */}
                     {actionErrors[action.id] && (
                       <div className="p-2 bg-red-950/80 border border-red-800 text-red-300 text-xs rounded">
                         {actionErrors[action.id]}
                       </div>
                     )}
 
-                    {/* Inline resultaat van uitvoering */}
+                    {/* Inline execution result */}
                     {execResult && (
                       <div className="p-3 bg-gray-900 border border-blue-900 rounded text-xs space-y-1">
                         <div className="font-semibold text-blue-400">
-                          Uitvoeringsresultaat ({execResult.mode}):
+                          Execution Result ({execResult.mode}):
                         </div>
                         {execResult.detail && (
                           <p className="text-gray-300 font-mono">{execResult.detail}</p>
@@ -535,25 +707,25 @@ export default function DashboardPage() {
                         onClick={() => handleActionDecision(action.id, "approve")}
                         className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors"
                       >
-                        Goedkeuren
+                        Approve
                       </button>
                       <button
                         onClick={() => handleActionDecision(action.id, "reject")}
                         className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
                       >
-                        Afwijzen
+                        Reject
                       </button>
                       <button
                         onClick={() => handleExecuteAction(action)}
                         disabled={!isApproved || isExecuting}
-                        title={!isApproved ? "Eerst goedkeuren" : "Voer actie uit"}
+                        title={!isApproved ? "Approve first" : "Execute action"}
                         className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                           isApproved && !isExecuting
                             ? "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
                             : "bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed opacity-60"
                         }`}
                       >
-                        {isExecuting ? "Uitvoeren..." : "Uitvoeren"}
+                        {isExecuting ? "Executing..." : "Execute"}
                       </button>
                     </div>
                   </div>
@@ -565,7 +737,7 @@ export default function DashboardPage() {
 
         {/* Ad-hoc decision trigger form */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
-          <h2 className="text-lg font-semibold">Nieuw Ad-Hoc Besluit Starten</h2>
+          <h2 className="text-lg font-semibold">Start New Ad-Hoc Decision</h2>
 
           {result && (
             <div className="border border-green-800 bg-green-950/40 rounded-md p-5 space-y-4">
@@ -576,11 +748,11 @@ export default function DashboardPage() {
                 </span>
               </div>
               <p className="text-sm text-green-400">
-                Deelnemers: {result.participants.join(", ")}
+                Participants: {result.participants.join(", ")}
               </p>
 
               <div>
-                <h4 className="font-semibold text-gray-200 mb-1">Eindbesluit:</h4>
+                <h4 className="font-semibold text-gray-200 mb-1">Final Decision:</h4>
                 <div className="bg-gray-950 rounded-md p-4 text-sm text-gray-200 whitespace-pre-wrap border border-gray-800">
                   {result.final_decision}
                 </div>
@@ -590,7 +762,7 @@ export default function DashboardPage() {
                 Object.keys(result.individual_outputs).length > 0 && (
                   <div className="pt-2 border-t border-gray-800 space-y-2">
                     <h4 className="font-semibold text-gray-200">
-                      Individuele Inbreng per Agent:
+                      Individual Input Per Agent:
                     </h4>
                     {Object.entries(result.individual_outputs).map(
                       ([agentKey, outputText]) => (
@@ -624,33 +796,33 @@ export default function DashboardPage() {
           <form onSubmit={handleTriggerDecision} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">
-                Onderwerp (Topic)
+                Topic
               </label>
               <input
                 type="text"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                placeholder="Bijv. Uitbreiding naar de Duitse markt"
+                placeholder="E.g. Expansion into the German market"
                 className="w-full rounded-md border border-gray-700 bg-gray-800 text-gray-100 p-2 placeholder-gray-500"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">
-                Taakbeschrijving
+                Task Description
               </label>
               <textarea
                 value={taskDescription}
                 onChange={(e) => setTaskDescription(e.target.value)}
                 rows={3}
-                placeholder="Geef een gedetailleerde toelichting over de situatie en vraagstelling..."
+                placeholder="Provide a detailed explanation of the situation and question..."
                 className="w-full rounded-md border border-gray-700 bg-gray-800 text-gray-100 p-2 placeholder-gray-500"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                Deelnemende Agents
+                Participating Agents
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {AGENT_OPTIONS.map((agent) => (
@@ -675,17 +847,17 @@ export default function DashboardPage() {
               disabled={loading}
               className="w-full sm:w-auto px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading ? "Bezig met vergaderen... dit kan enkele minuten duren" : "Besluit Starten"}
+              {loading ? "Meeting in progress... this can take a few minutes" : "Start Decision"}
             </button>
           </form>
         </div>
 
         {/* Decision history */}
         <div>
-          <h2 className="text-xl font-bold mb-4">Besluithistorie</h2>
+          <h2 className="text-xl font-bold mb-4">Decision History</h2>
           <div className="space-y-4">
             {history.length === 0 && (
-              <p className="text-gray-500 text-sm">Nog geen besluiten gevonden.</p>
+              <p className="text-gray-500 text-sm">No decisions found yet.</p>
             )}
             {history.map((item) => {
               const isExpanded = expandedHistoryIds.has(item.id);
@@ -702,11 +874,11 @@ export default function DashboardPage() {
                   <div className="flex justify-between items-start">
                     <h3 className="text-blue-400 font-bold text-lg">{item.topic}</h3>
                     <span className="text-xs text-gray-500">
-                      {new Date(item.timestamp).toLocaleString("nl-BE")}
+                      {new Date(item.timestamp).toLocaleString("en-US")}
                     </span>
                   </div>
                   <p className="text-sm text-gray-500 mt-2">
-                    Betrokkenen:{" "}
+                    Participants:{" "}
                     {item.agents_involved.split(",").map((a) => (
                       <span
                         key={a}
@@ -724,8 +896,64 @@ export default function DashboardPage() {
                       onClick={() => toggleHistoryExpand(item.id)}
                       className="text-blue-400 text-sm mt-2 hover:underline"
                     >
-                      {isExpanded ? "▲ Lees minder" : "▼ Lees meer"}
+                      {isExpanded ? "▲ Show less" : "▼ Show more"}
                     </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Action history — full audit trail across every status, unlike
+            Pending Actions above, which only shows still-actionable items */}
+        <div>
+          <h2 className="text-xl font-bold mb-4">Action History</h2>
+          <div className="space-y-4">
+            {actionHistory.length === 0 && (
+              <p className="text-gray-500 text-sm">No actions found yet.</p>
+            )}
+            {actionHistory.map((item) => {
+              const isExpanded = expandedActionHistoryIds.has(item.id);
+              const preview =
+                item.action_detail.length > 150
+                  ? item.action_detail.slice(0, 150) + "..."
+                  : item.action_detail;
+
+              return (
+                <div
+                  key={item.id}
+                  className="bg-gray-900 border border-gray-800 rounded-lg p-5"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block bg-blue-900/60 border border-blue-700 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded uppercase tracking-wider">
+                        {item.proposed_by}
+                      </span>
+                      {statusBadge(item.status)}
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {new Date(item.timestamp).toLocaleString("en-US")}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-300 mt-3">{item.action_description}</p>
+                  <div className="bg-gray-950 border border-gray-800 rounded p-3 mt-2 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
+                    {item.action_type === "file_operation" || item.action_type === "browser_action"
+                      ? renderActionDetail(item.action_type, item.action_detail)
+                      : isExpanded ? item.action_detail : preview}
+                  </div>
+                  {item.action_type !== "file_operation" && item.action_type !== "browser_action" && item.action_detail.length > 150 && (
+                    <button
+                      onClick={() => toggleActionHistoryExpand(item.id)}
+                      className="text-blue-400 text-sm mt-2 hover:underline"
+                    >
+                      {isExpanded ? "▲ Show less" : "▼ Show more"}
+                    </button>
+                  )}
+                  {item.reviewed_at && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      Reviewed: {new Date(item.reviewed_at).toLocaleString("en-US")}
+                    </p>
                   )}
                 </div>
               );

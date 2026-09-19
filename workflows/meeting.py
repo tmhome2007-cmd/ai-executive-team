@@ -24,7 +24,8 @@ from workflows.execution_lock import EXECUTION_LOCK
 def run_executive_meeting(
     topic: str,
     task_description: str,
-    agent_keys: List[str]
+    agent_keys: List[str],
+    agents_source: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -33,22 +34,30 @@ def run_executive_meeting(
         topic (str): Het onderwerp van het overleg.
         task_description (str): De specifieke vraag of beschrijving van de taak.
         agent_keys (List[str]): Lijst van rollen (bijv. ["cfo", "coo", "ceo"]) die deelnemen.
+        agents_source (dict, optioneel): Welke agent-dictionary te gebruiken om
+            de keys op te zoeken. Standaard EXECUTIVE_AGENTS (volledig getoold).
+            Geef bijv. EXECUTIVE_AGENTS_NO_TOOLS mee voor een meeting waar
+            GEEN enkele deelnemer real-world tools mag kunnen aanroepen —
+            zoals de geautomatiseerde dagelijkse research-meeting.
 
     Returns:
         Dict[str, Any]: Een dictionary met 'final_decision', 'participants' en 'individual_outputs'.
     """
     # --- Bestand: workflows/meeting.py ---
 
+    if agents_source is None:
+        agents_source = EXECUTIVE_AGENTS
+
     # 1. Validatie van de input
-    if len(agent_keys) < 2:
+    if len(agent_keys) < 1:
         raise ValueError(
-            f"Een meeting vereist minimaal 2 agents. Ontvangen: {len(agent_keys)}"
+            f"Er moet minimaal 1 agent worden opgegeven. Ontvangen: {len(agent_keys)}"
         )
 
-    missing_keys = [key for key in agent_keys if key not in EXECUTIVE_AGENTS]
+    missing_keys = [key for key in agent_keys if key not in agents_source]
     if missing_keys:
         raise ValueError(
-            f"De volgende agent_keys bestaan niet in EXECUTIVE_AGENTS: {missing_keys}"
+            f"De volgende agent_keys bestaan niet in agents_source: {missing_keys}"
         )
 
     # === NIEUWE LOGICA: Zorg dat de CEO altijd als laatste synthetiseert ===
@@ -63,7 +72,7 @@ def run_executive_meeting(
 
     # 2. Taken opbouwen in sequentiële volgorde
     for index, key in enumerate(agent_keys):
-        agent_obj = EXECUTIVE_AGENTS[key]
+        agent_obj = agents_source[key]
         agent_instances.append(agent_obj)
 
         if index == 0:

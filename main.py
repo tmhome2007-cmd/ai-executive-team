@@ -27,7 +27,8 @@ from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
-from config import config
+from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener
+from config import config, set_sandbox_mode
 
 
 # 1. Globale status dictionary voor het monitoren van de laatste run
@@ -105,6 +106,10 @@ async def lifespan(app: FastAPI):
     # Initialiseer de database
     init_db()
 
+    # Start de interactieve Telegram-listener (Approve/Reject/Execute knoppen)
+    # in zijn eigen achtergrond-thread met een eigen event loop.
+    start_telegram_listener()
+
     # Gebruik AsyncIOScheduler voor asynchrone achtergrondtaken
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
@@ -123,6 +128,9 @@ async def lifespan(app: FastAPI):
 
     # Sluit de scheduler netjes af bij het stoppen van de app
     app.state.scheduler.shutdown()
+
+    # Stop de Telegram-listener netjes (wacht tot de achtergrond-thread eindigt)
+    stop_telegram_listener()
 
 
 # 5. FastAPI App Instantie
@@ -341,6 +349,38 @@ def favicon():
 )
 def get_sandbox_status():
     """Geeft aan of het systeem in Sandbox Mode of Live Mode draait."""
+    return {"sandbox_mode": config.SANDBOX_MODE}
+
+
+class SandboxModeRequest(BaseModel):
+    enabled: bool
+
+
+@app.post(
+    "/system/sandbox-mode",
+    summary="Toggle Sandbox/Live Execution Mode",
+    description=(
+        "Zet SANDBOX_MODE aan of uit. Werkt onmiddellijk (geen herstart nodig) "
+        "en schrijft de wijziging ook weg naar .env, zodat een herstart de "
+        "instelling niet stilzwijgend terugdraait. Vervangt het handmatig "
+        "openen van .env in een editor."
+    ),
+    dependencies=[Depends(verify_api_key)],
+)
+def toggle_sandbox_mode(request: SandboxModeRequest):
+    """Schakelt tussen Sandbox en Live modus, en meldt de wijziging via Telegram."""
+    set_sandbox_mode(request.enabled)
+
+    mode_label = "SANDBOX" if request.enabled else "LIVE"
+    try:
+        if request.enabled:
+            body = "Executions will now be simulated only — nothing real will run."
+        else:
+            body = "⚠️ Approved actions will now run for REAL on this machine."
+        send_notification(f"🔧 <b>Execution mode changed to {mode_label}</b>\n\n{body}")
+    except Exception as e:
+        print(f"Warning: failed to send mode-change notification: {e}")
+
     return {"sandbox_mode": config.SANDBOX_MODE}
 
 # ===================================================================

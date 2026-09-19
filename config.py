@@ -60,10 +60,47 @@ class Config:
     SANDBOX_MODE: bool = field(
         default_factory=lambda: os.getenv("SANDBOX_MODE", "true").lower() in ("true", "1", "yes")
     )
+    # Optionele, komma-gescheiden lijst van toegestane domeinen voor browser_action.
+    # Leeg (standaard) = geen beperking, elk http/https-domein is toegestaan.
+    ALLOWED_BROWSER_DOMAINS: str = field(
+        default_factory=lambda: os.getenv("ALLOWED_BROWSER_DOMAINS", "").strip()
+    )
 
 
 # 2. Centrale instantie
 config = Config()
+
+
+def set_sandbox_mode(enabled: bool) -> None:
+    """
+    Wijzigt SANDBOX_MODE onmiddellijk in het geheugen (elke module die
+    `from config import config` gebruikt, ziet de wijziging meteen — geen
+    herstart nodig, want config is één gedeelde, niet-bevroren instantie)
+    EN schrijft de wijziging weg naar .env, zodat de instelling ook na een
+    herstart behouden blijft. Dit vervangt het handmatig openen van .env in
+    een editor door één functie-aanroep (blootgesteld via
+    POST /system/sandbox-mode in main.py).
+    """
+    config.SANDBOX_MODE = enabled
+
+    new_value = "true" if enabled else "false"
+    lines = []
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    found = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith("SANDBOX_MODE"):
+            lines[i] = f"SANDBOX_MODE={new_value}\n"
+            found = True
+            break
+
+    if not found:
+        lines.append(f"SANDBOX_MODE={new_value}\n")
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
 
 if __name__ == "__main__":
     print("=" * 60)

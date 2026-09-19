@@ -18,7 +18,8 @@ sterretjes, dus er is geen dubbelzinnigheid meer over waar opmaak begint/eindigt
 import asyncio
 import sys
 from pathlib import Path
-from telegram import Bot
+from typing import Optional
+from telegram import Bot, InlineKeyboardMarkup
 
 # Zorg dat de hoofdmap van het project bereikbaar is voor imports
 project_root = Path(__file__).resolve().parent.parent
@@ -77,6 +78,54 @@ def send_notification(message: str) -> None:
         asyncio.run(send_notification_async(message))
     except Exception as e:
         print(f"Error running Telegram notification event loop: {e}")
+
+
+async def send_notification_with_keyboard_async(
+    message: str, reply_markup: Optional[InlineKeyboardMarkup] = None
+) -> Optional[int]:
+    """
+    Zelfde als send_notification_async, maar met optionele inline-keyboard
+    knoppen (bijv. Approve/Reject/Execute op een actievoorstel). Retourneert
+    het message_id van het verzonden bericht (of None bij een fout), zodat de
+    aanroeper dat later eventueel kan bewaren — al gebeurt het bewerken van
+    het bericht na een knop-tap in de praktijk via de callback-context zelf.
+    """
+    token = getattr(config, "TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = getattr(config, "TELEGRAM_CHAT_ID", "").strip()
+
+    if not token or not chat_id:
+        raise ValueError(
+            "CRITICAL ERROR: TELEGRAM_BOT_TOKEN of TELEGRAM_CHAT_ID ontbreekt of is leeg. "
+            "Controleer je .env bestand en zorg dat beide variabelen zijn ingesteld."
+        )
+
+    try:
+        bot = Bot(token=token)
+        sent_message = await bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode="HTML",
+            reply_markup=reply_markup,
+        )
+        print("Telegram notificatie (met knoppen) succesvol verzonden!")
+        return sent_message.message_id
+    except Exception as e:
+        print(f"Failed to send Telegram notification with keyboard: {e}")
+        return None
+
+
+def send_notification_with_keyboard(
+    message: str, reply_markup: Optional[InlineKeyboardMarkup] = None
+) -> Optional[int]:
+    """
+    Synchrone wrapper om send_notification_with_keyboard_async aan te roepen
+    vanuit normale (niet-async) Python-code, zoals tools/action_proposal_tool.py.
+    """
+    try:
+        return asyncio.run(send_notification_with_keyboard_async(message, reply_markup))
+    except Exception as e:
+        print(f"Error running Telegram notification (with keyboard) event loop: {e}")
+        return None
 
 
 if __name__ == "__main__":

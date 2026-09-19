@@ -8,10 +8,12 @@ blokkeert als dat buiten WORKSPACE_ROOT valt, een live-uitvoering via subprocess
 en een veilige dry-run modus.
 """
 
+import json
 import os
 import re
 import shlex
 import subprocess
+from urllib.parse import urlparse
 from memory.database import get_action_by_id, update_action_status
 from notifications.telegram_bot import send_notification, escape_html
 from config import config
@@ -103,6 +105,50 @@ def check_workspace_confinement(command: str) -> str | None:
 
 
 # ------------------------------------------------------------------
+# URL SAFETY CHECK (voor browser_action)
+# ------------------------------------------------------------------
+# Analoog aan check_workspace_confinement, maar voor URLs in plaats van
+# bestandspaden: blokkeert gevaarlijke schema's (javascript:, file:, data:)
+# die browser-navigatie zouden kunnen misbruiken buiten "gewoon een pagina
+# bezoeken", en staat alleen http/https toe.
+_DANGEROUS_URL_SCHEMES = {"javascript", "file", "data", "vbscript", "about"}
+
+
+def check_url_safety(url: str) -> str | None:
+    """
+    Controleert of een URL veilig genoeg is om te navigeren. Retourneert een
+    reden-string als de URL geblokkeerd moet worden, anders None.
+    """
+    try:
+        parsed = urlparse(url.strip())
+    except Exception:
+        return f"Could not parse URL: '{url}'"
+
+    scheme = (parsed.scheme or "").lower()
+
+    if scheme in _DANGEROUS_URL_SCHEMES:
+        return f"URL scheme '{scheme}:' is not allowed — only http/https navigation is permitted"
+
+    if scheme not in ("http", "https"):
+        return f"URL must use http or https (got '{scheme or 'no scheme'}')"
+
+    if not parsed.netloc:
+        return f"URL has no valid domain: '{url}'"
+
+    # Optionele allowlist: als config.ALLOWED_BROWSER_DOMAINS is ingesteld
+    # (komma-gescheiden lijst), mag alleen naar die domeinen genavigeerd
+    # worden. Leeg/niet ingesteld = geen beperking (alle http/https toegestaan).
+    allowlist_raw = getattr(config, "ALLOWED_BROWSER_DOMAINS", "").strip()
+    if allowlist_raw:
+        allowed_domains = [d.strip().lower() for d in allowlist_raw.split(",") if d.strip()]
+        domain = parsed.netloc.lower()
+        if not any(domain == d or domain.endswith("." + d) for d in allowed_domains):
+            return f"Domain '{domain}' is not in the allowed browser domains list: {allowed_domains}"
+
+    return None
+
+
+# ------------------------------------------------------------------
 # DANGEROUS COMMAND PATTERNS
 # ------------------------------------------------------------------
 DANGEROUS_PATTERNS: list[tuple[str, str]] = [
@@ -176,6 +222,237 @@ def is_dangerous_command(command: str) -> str | None:
     return None
 
 
+def _execute_file_operation(action_id: int, action: dict) -> dict:
+    """
+    Voert een gestructureerde bestandsoperatie uit (read/write/append) via
+    gewone Python file I/O — GEEN subprocess, GEEN shell. Gebruikt dezelfde
+    check_workspace_confinement() als shell-commando's, zodat een
+    bestandspad net zo min buiten WORKSPACE_ROOT kan komen.
+    """
+    action_detail_raw = action.get("action_detail", "")
+
+    try:
+        detail = json.loads(action_detail_raw)
+        operation = detail["operation"]
+        file_path = detail["file_path"]
+        content = detail.get("content", "")
+    except (json.JSONDecodeError, KeyError) as e:
+        update_action_status(action_id, "execution_failed")
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": f"Malformed file_operation action_detail: {e}",
+        }
+
+    # Confinement-check op het pad zelf — dezelfde functie als voor shell-
+    # commando's, want die tokenizeert en herleidt elk pad-achtig token toch
+    # al; een kale padstring werkt daar prima als enkel token.
+    confinement_reason = check_workspace_confinement(file_path)
+    if confinement_reason:
+        update_action_status(action_id, "blocked_dangerous")
+        try:
+            send_notification(
+                f"🚫 <b>FILE OPERATION BLOCKED — path outside workspace</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Operation:</b> {escape_html(operation)}\n"
+                f"<b>Path:</b> <code>{escape_html(file_path)}</code>\n"
+                f"<b>Reason:</b> {escape_html(confinement_reason)}"
+            )
+        except Exception as e:
+            print(f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}")
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": f"Blocked: {confinement_reason}",
+            "blocked": True,
+        }
+
+    workspace_root = _get_workspace_root()
+    resolved_path = file_path if os.path.isabs(os.path.expanduser(file_path)) else os.path.join(workspace_root, file_path)
+    resolved_path = os.path.realpath(os.path.expanduser(resolved_path))
+
+    # --- SANDBOX MODE: simuleer, raak het echte bestand niet aan ---
+    if config.SANDBOX_MODE:
+        update_action_status(action_id, "executed_dry_run")
+        preview = f"Would {operation} '{resolved_path}'" + (f" with {len(content)} characters of content" if operation != "read" else "")
+        try:
+            send_notification(
+                f"🧪 <b>DRY RUN — FILE OPERATION</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Detail:</b> {escape_html(preview)}"
+            )
+        except Exception as e:
+            print(f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}")
+        return {"success": True, "mode": "dry_run", "action_id": action_id, "detail": preview}
+
+    # --- LIVE MODE: echte file I/O ---
+    try:
+        if operation == "read":
+            with open(resolved_path, "r", encoding="utf-8") as f:
+                file_content = f.read()
+            update_action_status(action_id, "executed")
+            try:
+                send_notification(
+                    f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
+                    f"<b>Action ID:</b> #{action_id}\n"
+                    f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
+                    f"<b>Content:</b>\n{escape_html(file_content[:500])}"
+                )
+            except Exception as e:
+                print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
+            return {"success": True, "mode": "live", "action_id": action_id, "stdout": file_content}
+
+        elif operation in ("write", "append"):
+            mode = "w" if operation == "write" else "a"
+            with open(resolved_path, mode, encoding="utf-8") as f:
+                f.write(content)
+            update_action_status(action_id, "executed")
+            try:
+                send_notification(
+                    f"⚡ <b>FILE {operation.upper()} SUCCESSFUL</b>\n\n"
+                    f"<b>Action ID:</b> #{action_id}\n"
+                    f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
+                    f"<b>Bytes written:</b> {len(content)}"
+                )
+            except Exception as e:
+                print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
+            return {"success": True, "mode": "live", "action_id": action_id, "stdout": f"Wrote {len(content)} characters to {resolved_path}"}
+
+        else:
+            update_action_status(action_id, "execution_failed")
+            return {"success": False, "action_id": action_id, "error": f"Unknown operation: {operation}"}
+
+    except Exception as e:
+        update_action_status(action_id, "execution_failed")
+        error_msg = f"File operation failed: {e}"
+        try:
+            send_notification(
+                f"❌ <b>FILE OPERATION FAILED</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Error:</b> {escape_html(error_msg)}"
+            )
+        except Exception as notify_err:
+            print(f"Warning: Failed to send Telegram notification for action #{action_id}: {notify_err}")
+        return {"success": False, "mode": "live", "action_id": action_id, "error": error_msg}
+
+
+def _execute_browser_action(action_id: int, action: dict) -> dict:
+    """
+    Voert een gestructureerde browser-actie uit (navigeren + optioneel klikken)
+    via Playwright's SYNCHRONE API. Dit is hier veilig — in tegenstelling tot
+    tools/research_tool.py (dat vanuit async code draait en daarom naar
+    requests+BeautifulSoup is overgestapt) — omdat execute_action() een
+    gewone sync functie is die altijd in een echte worker thread draait
+    (via asyncio.to_thread of FastAPI's threadpool), zonder actieve event loop.
+    """
+    action_detail_raw = action.get("action_detail", "")
+
+    try:
+        detail = json.loads(action_detail_raw)
+        url = detail["url"]
+        click_selector = detail.get("click_selector") or None
+        if click_selector is not None and str(click_selector).strip().lower() in ("null", "none", "n/a"):
+            click_selector = None
+    except (json.JSONDecodeError, KeyError) as e:
+        update_action_status(action_id, "execution_failed")
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": f"Malformed browser_action action_detail: {e}",
+        }
+
+    url_block_reason = check_url_safety(url)
+    if url_block_reason:
+        update_action_status(action_id, "blocked_dangerous")
+        try:
+            send_notification(
+                f"🚫 <b>BROWSER ACTION BLOCKED — unsafe URL</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>URL:</b> <code>{escape_html(url)}</code>\n"
+                f"<b>Reason:</b> {escape_html(url_block_reason)}"
+            )
+        except Exception as e:
+            print(f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}")
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": f"Blocked: {url_block_reason}",
+            "blocked": True,
+        }
+
+    # --- SANDBOX MODE: simuleer, open geen echte browser ---
+    if config.SANDBOX_MODE:
+        update_action_status(action_id, "executed_dry_run")
+        preview = f"Would navigate to '{url}'" + (f" and click '{click_selector}'" if click_selector else "")
+        try:
+            send_notification(
+                f"🧪 <b>DRY RUN — BROWSER ACTION</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Detail:</b> {escape_html(preview)}"
+            )
+        except Exception as e:
+            print(f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}")
+        return {"success": True, "mode": "dry_run", "action_id": action_id, "detail": preview}
+
+    # --- LIVE MODE: echte browser-navigatie via Playwright sync API ---
+    try:
+        from playwright.sync_api import sync_playwright
+
+        workspace_root = _get_workspace_root()
+        screenshots_dir = os.path.join(workspace_root, "screenshots")
+        os.makedirs(screenshots_dir, exist_ok=True)
+        screenshot_path = os.path.join(screenshots_dir, f"action_{action_id}.png")
+
+        page_title = None
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=15000)
+            page_title = page.title()
+
+            if click_selector:
+                page.click(click_selector, timeout=10000)
+                page.wait_for_timeout(1000)  # korte pauze zodat de klik-actie zichtbaar effect heeft voordat de screenshot wordt genomen
+
+            page.screenshot(path=screenshot_path)
+            browser.close()
+
+        update_action_status(action_id, "executed")
+        result_summary = f"Navigated to '{url}' (page title: '{page_title}')" + (
+            f" and clicked '{click_selector}'" if click_selector else ""
+        )
+        try:
+            send_notification(
+                f"⚡ <b>BROWSER ACTION SUCCESSFUL</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Detail:</b> {escape_html(result_summary)}\n"
+                f"<b>Screenshot saved:</b> <code>{escape_html(screenshot_path)}</code>"
+            )
+        except Exception as e:
+            print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
+
+        return {
+            "success": True,
+            "mode": "live",
+            "action_id": action_id,
+            "stdout": result_summary,
+            "screenshot_path": screenshot_path,
+        }
+
+    except Exception as e:
+        update_action_status(action_id, "execution_failed")
+        error_msg = f"Browser action failed: {e}"
+        try:
+            send_notification(
+                f"❌ <b>BROWSER ACTION FAILED</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                f"<b>Error:</b> {escape_html(error_msg)}"
+            )
+        except Exception as notify_err:
+            print(f"Warning: Failed to send Telegram notification for action #{action_id}: {notify_err}")
+        return {"success": False, "mode": "live", "action_id": action_id, "error": error_msg}
+
+
 def execute_action(action_id: int) -> dict:
     """
     Voert een goedgekeurde actie uit op basis van het action_id.
@@ -199,6 +476,16 @@ def execute_action(action_id: int) -> dict:
         }
 
     action_detail = action.get("action_detail", "")
+    action_type = action.get("action_type", "shell")
+
+    # Gestructureerde bestandsoperaties gaan een volledig eigen, veiligere pad
+    # (gewone file I/O, geen shell) — de bestaande shell-logica hieronder
+    # blijft ongewijzigd voor action_type == 'shell' (het standaardgedrag).
+    if action_type == "file_operation":
+        return _execute_file_operation(action_id, action)
+
+    if action_type == "browser_action":
+        return _execute_browser_action(action_id, action)
 
     # 3. SAFETY GUARD CHECKS (vóór sandbox/live modus keuzes)
     # (a) Bekende gevaarlijke commandopatronen

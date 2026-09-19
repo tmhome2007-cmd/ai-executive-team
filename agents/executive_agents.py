@@ -5,6 +5,8 @@ Module die de LLM-instantie en alle 10 Executive Agenten definieert voor de Crew
 Exposeert de 'EXECUTIVE_AGENTS' dictionary met sleutels voor elke bestuursrol.
 """
 from tools.action_proposal_tool import ProposeActionTool
+from tools.file_operation_tool import ProposeFileOperationTool
+from tools.browser_action_tool import ProposeBrowserActionTool
 from crewai import Agent, LLM
 from config import config
 
@@ -32,6 +34,7 @@ ceo_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
 )
 
 # CFO — Maya Chen
@@ -49,6 +52,8 @@ cfo_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeFileOperationTool(role="CFO")],
 )
 
 # CSO — Alex Sterling
@@ -66,6 +71,7 @@ cso_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
 )
 
 # CHRO — Jordan Blake
@@ -83,6 +89,7 @@ chro_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
 )
 
 # General Counsel — Sarah Okonkwo
@@ -100,6 +107,8 @@ general_counsel_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeFileOperationTool(role="General Counsel")],
 )
 
 # COO — Marcus Rivera
@@ -117,7 +126,8 @@ coo_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
-    tools=[ProposeActionTool(role="COO")],
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeActionTool(role="COO"), ProposeFileOperationTool(role="COO"), ProposeBrowserActionTool(role="COO")],
 )
 
 # CMO — Zoe Nakamura
@@ -135,6 +145,7 @@ cmo_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
 )
 
 # CPO — Dev Patel
@@ -152,6 +163,7 @@ cpo_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
 )
 
 # Board Director — Elena Volkov
@@ -169,6 +181,7 @@ board_director_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
 )
 
 # CCO — Brandon Fire
@@ -186,6 +199,7 @@ chro_cco_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
 )
 
 cto_agent = Agent(
@@ -202,6 +216,8 @@ cto_agent = Agent(
     llm=llm,
     verbose=True,
     allow_delegation=False,
+    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeActionTool(role="CTO"), ProposeFileOperationTool(role="CTO")],
 )
 
 # 3. Centrale Dictionary met alle 10 Executive Agenten
@@ -217,6 +233,28 @@ EXECUTIVE_AGENTS = {
     "general_counsel": general_counsel_agent,
     "board_director": board_director_agent,
     "cco": chro_cco_agent,
+}
+
+# 3b. Tool-loze klonen van elke agent, voor gebruik in workflows waar we
+# GEGARANDEERD willen voorkomen dat een agent propose_action/
+# propose_file_operation/propose_browser_action aanroept (zoals de
+# geautomatiseerde dagelijkse research-meeting). Een prompt-instructie
+# "gebruik je tools hier niet" bleek in de praktijk onbetrouwbaar — sommige
+# agents negeerden hem. Een agent die het tool object letterlijk niet heeft,
+# kan het per definitie niet aanroepen, ongeacht wat de prompt zegt.
+# Rol/goal/backstory worden rechtstreeks van de originelen overgenomen, dus
+# er is geen tweede plek waar die tekst onderhouden moet worden.
+EXECUTIVE_AGENTS_NO_TOOLS = {
+    key: Agent(
+        role=agent.role,
+        goal=agent.goal,
+        backstory=agent.backstory,
+        llm=llm,
+        verbose=True,
+        allow_delegation=False,
+        max_iter=5,
+    )
+    for key, agent in EXECUTIVE_AGENTS.items()
 }
 
 # 4. Sanity-check blok om alle agenten te verifiëren

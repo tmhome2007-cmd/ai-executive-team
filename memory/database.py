@@ -58,10 +58,22 @@ def init_db() -> None:
             action_description TEXT NOT NULL,
             action_detail TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
-            reviewed_at TEXT
+            reviewed_at TEXT,
+            action_type TEXT NOT NULL DEFAULT 'shell'
         )
     """)
-    
+
+    # Migratie voor BESTAANDE databases die dateren van vóór action_type:
+    # CREATE TABLE IF NOT EXISTS raakt een reeds bestaande tabel niet aan,
+    # dus voegen we de kolom hier apart toe als hij nog ontbreekt. SQLite
+    # geeft een OperationalError als de kolom al bestaat — dat vangen we
+    # gewoon af, want dan is er niets te doen.
+    try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN action_type TEXT NOT NULL DEFAULT 'shell'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # kolom bestaat al — prima, niets te migreren
+
     conn.commit()
     conn.close()
 
@@ -131,18 +143,23 @@ def get_recent_decisions(limit: int = 10) -> list[dict]:
 # FUNCTIES VOOR ACTIEVOORSTELLEN (ACTION QUEUE)
 # ===================================================================
 
-def propose_action(proposed_by: str, action_description: str, action_detail: str) -> int:
+def propose_action(
+    proposed_by: str, action_description: str, action_detail: str, action_type: str = "shell"
+) -> int:
     """
     Voegt een voorgestelde actie toe aan de action_queue met de status 'pending'.
+    action_type is 'shell' (raw shell-commando, bestaand gedrag) of
+    'file_operation' (gestructureerde read/write/append, veiliger dan een
+    ruwe shell-string omdat er geen shell aan te pas komt).
     Retourneert het gegenereerde rij-ID.
     """
     timestamp = datetime.datetime.now().isoformat()
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO action_queue (timestamp, proposed_by, action_description, action_detail, status)
-            VALUES (?, ?, ?, ?, 'pending')
-        """, (timestamp, proposed_by, action_description, action_detail))
+            INSERT INTO action_queue (timestamp, proposed_by, action_description, action_detail, status, action_type)
+            VALUES (?, ?, ?, ?, 'pending', ?)
+        """, (timestamp, proposed_by, action_description, action_detail, action_type))
         
         conn.commit()
         return cursor.lastrowid
@@ -155,7 +172,7 @@ def get_pending_actions() -> list[dict]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at
+            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type
             FROM action_queue
             WHERE status IN ('pending', 'approved')
             ORDER BY timestamp DESC
@@ -191,7 +208,7 @@ def get_action_by_id(action_id: int) -> dict | None:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at
+            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type
             FROM action_queue
             WHERE id = ?
         """, (action_id,))
@@ -212,7 +229,7 @@ def get_action_history(limit: int = 20) -> list[dict]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at
+            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type
             FROM action_queue
             ORDER BY timestamp DESC
             LIMIT ?
