@@ -191,6 +191,30 @@ def log_decision(
         return cursor.lastrowid
 
 
+def has_daily_research_attempt_on(date_value: datetime.date) -> bool:
+    """
+    Controleert rechtstreeks in SQL of er op deze kalenderdatum al een daily
+    research poging (succes OF failure) is gelogd. Dit mag niet afhangen van
+    een willekeurige 'laatste N beslissingen'-window: veel ad-hoc beslissingen
+    later op dezelfde dag mogen de scheduler niet laten vergeten dat de run
+    al plaatsvond.
+    """
+    date_prefix = date_value.isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT 1
+            FROM decisions
+            WHERE topic LIKE 'Daily Research%'
+              AND substr(timestamp, 1, 10) = ?
+            LIMIT 1
+            """,
+            (date_prefix,),
+        )
+        return cursor.fetchone() is not None
+
+
 def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
     """
     Haalt beslissingen op, gesorteerd op datum (nieuwste eerst), met
