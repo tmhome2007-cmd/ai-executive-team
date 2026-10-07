@@ -40,6 +40,7 @@ from memory.database import (
     transition_decision_approval,
     claim_decision_for_preparation,
     finish_decision_preparation,
+    recover_interrupted_actions,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -120,6 +121,16 @@ async def lifespan(app: FastAPI):
 
     # Initialiseer de database
     init_db()
+
+    # Als een vorige procesrun tijdens een echte actie crashte, is het
+    # real-world resultaat per definitie onzeker. Nooit automatisch retryen:
+    # markeer zulke 'executing' acties als failed voor menselijke review.
+    recovered_actions = recover_interrupted_actions()
+    if recovered_actions:
+        logger.warning(
+            f"Recovered {recovered_actions} interrupted action(s) as execution_failed; "
+            "manual review required because real-world outcome is unknown."
+        )
 
     # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
     # waarschuwingen in plaats van dat het probleem pas bij de eerste
