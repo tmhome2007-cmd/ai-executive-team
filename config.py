@@ -6,6 +6,7 @@ Laadt omgevingsvariabelen uit .env en stelt veilige standaardwaarden in.
 """
 
 import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from dotenv import load_dotenv
@@ -91,7 +92,9 @@ def set_sandbox_mode(enabled: bool) -> None:
 
     found = False
     for i, line in enumerate(lines):
-        if line.strip().startswith("SANDBOX_MODE"):
+        stripped = line.strip()
+        key = stripped.split("=", 1)[0].strip() if "=" in stripped else stripped
+        if key == "SANDBOX_MODE":
             lines[i] = f"SANDBOX_MODE={new_value}\n"
             found = True
             break
@@ -99,8 +102,24 @@ def set_sandbox_mode(enabled: bool) -> None:
     if not found:
         lines.append(f"SANDBOX_MODE={new_value}\n")
 
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
+    # Schrijf atomair: eerst een tijdelijk bestand in dezelfde directory,
+    # daarna os.replace(). Zo kan een crash halverwege .env niet afkappen.
+    env_dir = env_path.parent
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=env_dir,
+        prefix=".env.",
+        suffix=".tmp",
+        delete=False,
+    ) as tmp:
+        tmp.writelines(lines)
+        tmp_path = Path(tmp.name)
+    try:
+        os.replace(tmp_path, env_path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 class ConfigValidationError(Exception):
