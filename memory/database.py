@@ -33,6 +33,8 @@ VALID_ACTION_STATUSES = {
     "execution_failed",
 }
 VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
+VALID_DECISION_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
+VALID_PREPARATION_STATUSES = {"not_started", "in_progress", "completed", "failed"}
 
 _SYNC_TABLE_COLUMNS = {
     "decisions": {
@@ -142,6 +144,28 @@ def init_db() -> None:
         cursor.execute("UPDATE action_queue SET sync_uuid = ? WHERE id = ?", (str(uuid.uuid4()), row_id))
     conn.commit()
 
+    # Tabel 3: expliciete menselijke approval gate voor beslissingen.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS decision_approvals (
+            decision_id INTEGER PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'pending',
+            reviewed_at TEXT,
+            preparation_status TEXT NOT NULL DEFAULT 'not_started',
+            prepared_at TEXT
+        )
+    """)
+
+    # Bestaande beslissingen van vóór Phase 2 krijgen veilig 'pending':
+    # niets uit oude historie wordt stilzwijgend als goedgekeurd behandeld.
+    cursor.execute("""
+        INSERT OR IGNORE INTO decision_approvals (
+            decision_id, status, reviewed_at, preparation_status, prepared_at
+        )
+        SELECT id, 'pending', NULL, 'not_started', NULL
+        FROM decisions
+    """)
+    conn.commit()
+
     conn.commit()
     conn.close()
 
@@ -187,8 +211,109 @@ def log_decision(
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (timestamp, topic, agents_str, task_description, decision_outcome, sandbox_flag, new_sync_uuid))
         
+        decision_id = cursor.lastrowid
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO decision_approvals (
+                decision_id, status, reviewed_at, preparation_status, prepared_at
+            ) VALUES (?, 'pending', NULL, 'not_started', NULL)
+            """,
+            (decision_id,),
+        )
         conn.commit()
-        return cursor.lastrowid
+        return decision_id
+
+
+def get_decision_by_id(decision_id: int) -> dict | None:
+    """Haalt één beslissing op, inclusief approval/preparation status."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                d.id, d.timestamp, d.topic, d.agents_involved,
+                d.task_description, d.decision_outcome, d.sandbox_mode,
+                d.sync_uuid,
+                COALESCE(a.status, 'pending') AS approval_status,
+                a.reviewed_at AS approval_reviewed_at,
+                COALESCE(a.preparation_status, 'not_started') AS preparation_status,
+                a.prepared_at
+            FROM decisions d
+            LEFT JOIN decision_approvals a ON a.decision_id = d.id
+            WHERE d.id = ?
+            """,
+            (decision_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def transition_decision_approval(
+    decision_id: int,
+    new_status: str,
+    allowed_from: tuple[str, ...],
+) -> bool:
+    """Atomische menselijke approval/reject overgang voor een beslissing."""
+    if new_status not in VALID_DECISION_APPROVAL_STATUSES:
+        raise ValueError(f"Unsupported decision approval status: {new_status}")
+    if not allowed_from or any(s not in VALID_DECISION_APPROVAL_STATUSES for s in allowed_from):
+        raise ValueError(f"Invalid decision allowed_from statuses: {allowed_from}")
+
+    now = datetime.datetime.now().isoformat()
+    placeholders = ", ".join("?" for _ in allowed_from)
+    params = (new_status, now, decision_id, *allowed_from)
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            UPDATE decision_approvals
+            SET status = ?, reviewed_at = ?
+            WHERE decision_id = ?
+              AND status IN ({placeholders})
+              AND preparation_status NOT IN ('in_progress', 'completed')
+            """,
+            params,
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def claim_decision_for_preparation(decision_id: int) -> bool:
+    """Reserveert een goedgekeurde beslissing atomair voor één preparation-run."""
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE decision_approvals
+            SET preparation_status = 'in_progress', prepared_at = ?
+            WHERE decision_id = ?
+              AND status = 'approved'
+              AND preparation_status IN ('not_started', 'failed')
+            """,
+            (now, decision_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def finish_decision_preparation(decision_id: int, success: bool) -> bool:
+    """Zet een geclaimde preparation-run atomair naar completed of failed."""
+    target = "completed" if success else "failed"
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE decision_approvals
+            SET preparation_status = ?, prepared_at = ?
+            WHERE decision_id = ? AND preparation_status = 'in_progress'
+            """,
+            (target, now, decision_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
 
 
 def has_daily_research_attempt_on(date_value: datetime.date) -> bool:
@@ -224,9 +349,16 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, topic, agents_involved, task_description, decision_outcome, sandbox_mode, sync_uuid
-            FROM decisions
-            ORDER BY timestamp DESC
+            SELECT
+                d.id, d.timestamp, d.topic, d.agents_involved, d.task_description,
+                d.decision_outcome, d.sandbox_mode, d.sync_uuid,
+                COALESCE(a.status, 'pending') AS approval_status,
+                a.reviewed_at AS approval_reviewed_at,
+                COALESCE(a.preparation_status, 'not_started') AS preparation_status,
+                a.prepared_at
+            FROM decisions d
+            LEFT JOIN decision_approvals a ON a.decision_id = d.id
+            ORDER BY d.timestamp DESC
             LIMIT ? OFFSET ?
         """, (limit, offset))
         
