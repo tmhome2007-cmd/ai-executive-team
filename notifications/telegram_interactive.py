@@ -317,11 +317,22 @@ def stop_telegram_listener() -> None:
     loop = _state.get("loop")
     stop_event = _state.get("stop_event")
 
-    if loop is None or stop_event is None:
-        return  # was nooit (succesvol) gestart
-
-    loop.call_soon_threadsafe(stop_event.set)
-
     thread = _state.get("thread")
+
+    if loop is None or stop_event is None or loop.is_closed():
+        # De listener kan tijdens startup al gefaald en zijn event loop gesloten
+        # hebben. In dat geval is er niets meer te signaleren; alleen eventueel
+        # de thread kort joinen zodat shutdown deterministisch blijft.
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=10)
+        return
+
+    try:
+        loop.call_soon_threadsafe(stop_event.set)
+    except RuntimeError as e:
+        # Race: de listener-thread kan precies tussen de state-read hierboven
+        # en deze call zijn gestopt. Dat mag application shutdown niet breken.
+        logger.warning(f"Telegram listener loop was already closed during shutdown: {e}")
+
     if thread is not None:
         thread.join(timeout=10)
