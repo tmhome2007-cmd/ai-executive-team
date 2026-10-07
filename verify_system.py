@@ -831,6 +831,54 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 32: STATIC/DYNAMIC CHECK — repeated executive analysis is surfaced
+# -------------------------------------------------------------------
+try:
+    from workflows.meeting import find_repeated_analysis
+
+    repeated_sentence = (
+        "This recommendation should not be treated as independent corroboration because it repeats "
+        "the exact same long evidence statement already supplied by another executive."
+    )
+    sample_outputs = {
+        "cfo": repeated_sentence,
+        "coo": repeated_sentence,
+        "ceo": "A distinct synthesis that does not repeat the sentence above verbatim.",
+    }
+    repeated = find_repeated_analysis(sample_outputs, min_chars=80)
+
+    if "coo" in repeated and "cfo" not in repeated:
+        log_pass("meeting quality guard detects repeated long-form analysis across executives")
+    else:
+        log_fail("Repeated executive analysis guard", f"Unexpected result: {repeated}")
+except Exception as e:
+    log_fail("Repeated executive analysis guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 33: STATIC CHECK — CEO has dedicated final-synthesis/approval-gate rules
+# -------------------------------------------------------------------
+try:
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_33 = f.read()
+
+    required_ceo_rules = [
+        "CEO FINAL-SYNTHESIS RULES",
+        "Do not copy or concatenate previous executives' answers",
+        "Approval Gate",
+        "recommend the next research/validation step instead of pretending the decision is ready",
+    ]
+    missing = [p for p in required_ceo_rules if p not in meeting_content_33]
+
+    if not missing:
+        log_pass("CEO meeting task has dedicated synthesis, evidence-gap, and human approval-gate rules")
+    else:
+        log_fail("CEO final-synthesis rules check", f"Missing: {missing}")
+except Exception as e:
+    log_fail("CEO final-synthesis rules check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
