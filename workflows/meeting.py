@@ -166,11 +166,18 @@ def run_executive_meeting(
     if agents_source is None:
         agents_source = EXECUTIVE_AGENTS
 
+    # Werk op een lokale kopie zodat CEO-reordering nooit de lijst van de
+    # aanroeper (bijv. Pydantic request state) in-place verandert.
+    agent_keys = list(agent_keys)
+
     # 1. Validatie van de input
     if len(agent_keys) < 1:
         raise ValueError(
             f"Er moet minimaal 1 agent worden opgegeven. Ontvangen: {len(agent_keys)}"
         )
+
+    if len(set(agent_keys)) != len(agent_keys):
+        raise ValueError("agent_keys contains duplicate executive roles")
 
     missing_keys = [key for key in agent_keys if key not in agents_source]
     if missing_keys:
