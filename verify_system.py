@@ -1382,7 +1382,7 @@ try:
         main_content_54 = f.read()
 
     phase2_routes = [
-        '"/decisions/{decision_id}"',
+        '"/decisions/detail/{decision_id}"',
         '"/decisions/{decision_id}/approve"',
         '"/decisions/{decision_id}/reject"',
         '"/decisions/{decision_id}/prepare"',
@@ -1637,6 +1637,26 @@ try:
         log_fail("Phase 2 dashboard controls", f"Missing: {missing}")
 except Exception as e:
     log_fail("Phase 2 dashboard controls check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 63: STATIC CHECK — decision detail route cannot shadow /decisions/history
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_63 = f.read()
+
+    ambiguous_detail = '@app.get(\n    "/decisions/{decision_id}"' in main_content_63
+    safe_detail = '"/decisions/detail/{decision_id}"' in main_content_63
+    if safe_detail and not ambiguous_detail:
+        log_pass("decision detail route is namespaced and cannot shadow /decisions/history")
+    else:
+        log_fail(
+            "Decision route ambiguity",
+            f"safe_detail={safe_detail}, ambiguous_detail={ambiguous_detail}",
+        )
+except Exception as e:
+    log_fail("Decision route ambiguity check crashed", str(e))
 
 
 # -------------------------------------------------------------------
