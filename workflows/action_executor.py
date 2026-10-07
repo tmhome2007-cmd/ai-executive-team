@@ -91,11 +91,18 @@ def _get_workspace_root() -> str:
 
 
 def _looks_like_path(token: str) -> bool:
-    """Heuristiek: is dit token vermoedelijk een bestands-/mappad, in
-    plaats van een losse vlag (-rf) of commandonaam (echo, ls)?"""
+    """Conservatieve pad-detectie voor shellargumenten.
+
+    Ook een kaal relatief token zoals notes.txt of outside kan een
+    bestand/symlink in WORKSPACE_ROOT zijn. De oude heuristiek controleerde
+    alleen tokens met slash, tilde of punt, waardoor een symlink met een
+    simpele naam naar buiten de workspace confinement kon omzeilen.
+    """
     if not token or token.startswith("-"):
         return False
-    return "/" in token or token in (".", "..") or token.startswith("~") or token.startswith(".")
+    if token in {">", ">>", "<", "<<", "2>", "2>>", "2>&1"}:
+        return False
+    return True
 
 
 def check_workspace_confinement(command: str) -> str | None:
