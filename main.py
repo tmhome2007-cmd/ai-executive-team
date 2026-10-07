@@ -36,13 +36,22 @@ from memory.database import (
     get_system_stats,
     backup_database,
     has_daily_research_attempt_on,
+    recover_interrupted_states,
+    get_decision_by_id,
+    transition_decision_approval,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
+from workflows.preparation import run_decision_preparation
 from agents.executive_agents import EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
-from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
+from notifications.telegram_interactive import (
+    start_telegram_listener,
+    stop_telegram_listener,
+    is_telegram_listener_alive,
+    send_decision_notification,
+)
 from config import config, set_sandbox_mode, validate_config, ConfigValidationError
 from system_checks import check_ollama_reachable, check_database_writable, check_telegram_configured, check_playwright_browser_installed, run_startup_checks, get_uptime_seconds
 
@@ -116,6 +125,14 @@ async def lifespan(app: FastAPI):
 
     # Initialiseer de database
     init_db()
+
+    recovered = recover_interrupted_states()
+    if recovered["actions"] or recovered["preparations"]:
+        logger.warning(
+            "Recovered interrupted runtime state after restart: "
+            f"{recovered['actions']} action(s), "
+            f"{recovered['preparations']} preparation(s)."
+        )
 
     # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
     # waarschuwingen in plaats van dat het probleem pas bij de eerste
@@ -225,6 +242,19 @@ class DecisionResponse(BaseModel):
     participants: list[str]
     individual_outputs: dict[str, str]
     quality_warnings: dict = Field(default_factory=dict)
+    approval_status: str = "pending"
+
+
+class DecisionReviewRequest(BaseModel):
+    feedback: Optional[str] = Field(default=None, max_length=4000)
+
+
+class PreparationResponse(BaseModel):
+    success: bool
+    decision_id: Optional[int] = None
+    preparation_summary: Optional[str] = None
+    error: Optional[str] = None
+    meeting_result: Optional[dict] = None
 
 
 # --- API Key Beveiliging ---
@@ -390,11 +420,13 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     )
 
     try:
-        snippet = final_decision[:200]
-        message = f"📌 <b>Ad-Hoc Decision Triggered</b>\n\n<b>Topic:</b> {escape_html(request.topic)}\n\n<b>Decision Snippet:</b>\n{escape_html(snippet)}..."
-        send_notification(message)
+        send_decision_notification(
+            decision_id=db_id,
+            topic=request.topic,
+            final_decision=final_decision,
+        )
     except Exception as notify_err:
-        print(f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}")
+        logger.warning(f"Decision review Telegram notification failed: {notify_err}")
 
     return DecisionResponse(
         database_id=db_id,
@@ -403,7 +435,104 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         participants=participants,
         individual_outputs=meeting_result.get("individual_outputs", {}),
         quality_warnings=meeting_result.get("quality_warnings", {}),
+        approval_status="pending",
     )
+
+
+@app.get(
+    "/decisions/detail/{decision_id}",
+    summary="Get Decision Detail",
+    dependencies=[Depends(verify_api_key)],
+)
+def get_decision_detail(decision_id: int):
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    return decision
+
+
+@app.post(
+    "/decisions/{decision_id}/approve",
+    summary="Owner Approves Executive Decision",
+    dependencies=[Depends(verify_api_key)],
+)
+def approve_decision(decision_id: int, request: DecisionReviewRequest):
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+
+    if not transition_decision_approval(
+        decision_id,
+        "approved",
+        ("pending",),
+        owner_feedback=request.feedback,
+    ):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision cannot be approved from status "
+                f"'{current.get('approval_status') if current else 'unknown'}'."
+            ),
+        )
+
+    return {
+        "decision_id": decision_id,
+        "approval_status": "approved",
+        "owner_feedback": request.feedback,
+    }
+
+
+@app.post(
+    "/decisions/{decision_id}/reject",
+    summary="Owner Rejects Executive Decision",
+    dependencies=[Depends(verify_api_key)],
+)
+def reject_decision(decision_id: int, request: DecisionReviewRequest):
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+
+    if not transition_decision_approval(
+        decision_id,
+        "rejected",
+        ("pending",),
+        owner_feedback=request.feedback,
+    ):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision cannot be rejected from status "
+                f"'{current.get('approval_status') if current else 'unknown'}'."
+            ),
+        )
+
+    return {
+        "decision_id": decision_id,
+        "approval_status": "rejected",
+        "owner_feedback": request.feedback,
+    }
+
+
+@app.post(
+    "/decisions/{decision_id}/prepare",
+    response_model=PreparationResponse,
+    summary="Prepare an Owner-Approved Decision",
+    dependencies=[Depends(verify_api_key)],
+)
+def prepare_approved_decision(decision_id: int):
+    result = run_decision_preparation(decision_id)
+
+    if not result.get("success"):
+        error = result.get("error", "Preparation failed")
+        if error == "Decision not found":
+            raise HTTPException(status_code=404, detail=error)
+        if "must be 'approved'" in error or "could not be claimed" in error:
+            raise HTTPException(status_code=409, detail=error)
+        raise HTTPException(status_code=502, detail=error)
+
+    return PreparationResponse(**result)
 
 
 @app.get(
@@ -653,5 +782,6 @@ if __name__ == "__main__":
     bind_host = os.getenv("BIND_HOST", "127.0.0.1")
     # Stable single-process default. For active development, run
     # "uvicorn main:app --reload" explicitly instead. Auto-reload can briefly
-    # overlap workers, which is unsafe for the single Telegram poller.
+    # overlap workers, which is unsafe for the single Telegram poller and
+    # process-restart recovery logic.
     uvicorn.run("main:app", host=bind_host, port=8000, reload=False)
