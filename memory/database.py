@@ -364,6 +364,35 @@ def record_execution_result(action_id: int, result_detail_json: str) -> bool:
         conn.commit()
         return cursor.rowcount > 0
 
+def recover_interrupted_actions() -> int:
+    """
+    Mark actions left in 'executing' after a process crash as failed. The
+    real-world outcome is unknown, so automatic retry would be unsafe.
+    """
+    reviewed_at = datetime.datetime.now().isoformat()
+    result_detail = json.dumps({
+        "error": (
+            "Execution was interrupted by a process shutdown/crash while the "
+            "action was marked 'executing'. Real-world outcome is unknown; "
+            "manual review is required before proposing any retry."
+        )
+    })
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'execution_failed',
+                reviewed_at = ?,
+                result_detail = ?
+            WHERE status = 'executing'
+            """,
+            (reviewed_at, result_detail),
+        )
+        conn.commit()
+        return cursor.rowcount
+
+
 def get_action_by_id(action_id: int) -> dict | None:
     """
     Haalt één specifieke actie op uit de action_queue op basis van het ID.
