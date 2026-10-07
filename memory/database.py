@@ -34,14 +34,20 @@ VALID_ACTION_STATUSES = {
 }
 VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
 
+VALID_DECISION_APPROVAL_STATUSES = {"legacy", "pending", "approved", "rejected", "not_applicable"}
+VALID_PREPARATION_STATUSES = {"not_started", "preparing", "prepared", "preparation_failed"}
+
 _SYNC_TABLE_COLUMNS = {
     "decisions": {
         "timestamp", "topic", "agents_involved", "task_description",
-        "decision_outcome", "sandbox_mode", "sync_uuid",
+        "decision_outcome", "sandbox_mode", "sync_uuid", "approval_status",
+        "decision_reviewed_at", "owner_feedback", "preparation_status",
+        "preparation_summary",
     },
     "action_queue": {
         "timestamp", "proposed_by", "action_description", "action_detail",
         "status", "reviewed_at", "action_type", "result_detail", "sync_uuid",
+        "decision_id", "decision_sync_uuid",
     },
 }
 
@@ -72,7 +78,12 @@ def init_db() -> None:
             task_description TEXT NOT NULL,
             decision_outcome TEXT NOT NULL,
             sandbox_mode INTEGER NOT NULL,
-            sync_uuid TEXT
+            sync_uuid TEXT,
+            approval_status TEXT NOT NULL DEFAULT 'legacy',
+            decision_reviewed_at TEXT,
+            owner_feedback TEXT,
+            preparation_status TEXT NOT NULL DEFAULT 'not_started',
+            preparation_summary TEXT
         )
     """)
 
@@ -87,6 +98,21 @@ def init_db() -> None:
         conn.commit()
     except sqlite3.OperationalError:
         pass
+
+    # Decision lifecycle migration (Phase 2): bestaande historische rijen
+    # worden 'legacy'; alleen nieuwe beslissingen gaan expliciet naar pending.
+    for statement in (
+        "ALTER TABLE decisions ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'legacy'",
+        "ALTER TABLE decisions ADD COLUMN decision_reviewed_at TEXT",
+        "ALTER TABLE decisions ADD COLUMN owner_feedback TEXT",
+        "ALTER TABLE decisions ADD COLUMN preparation_status TEXT NOT NULL DEFAULT 'not_started'",
+        "ALTER TABLE decisions ADD COLUMN preparation_summary TEXT",
+    ):
+        try:
+            cursor.execute(statement)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     cursor.execute("SELECT id FROM decisions WHERE sync_uuid IS NULL")
     for (row_id,) in cursor.fetchall():
@@ -104,7 +130,9 @@ def init_db() -> None:
             status TEXT NOT NULL DEFAULT 'pending',
             reviewed_at TEXT,
             action_type TEXT NOT NULL DEFAULT 'shell',
-            result_detail TEXT
+            result_detail TEXT,
+            decision_id INTEGER,
+            decision_sync_uuid TEXT
         )
     """)
 
@@ -132,6 +160,33 @@ def init_db() -> None:
         pass  # kolom bestaat al — prima, niets te migreren
 
     try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN decision_id INTEGER")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN decision_sync_uuid TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    # Backfill stable decision provenance for any already-linked local rows.
+    cursor.execute(
+        """
+        UPDATE action_queue
+        SET decision_sync_uuid = (
+            SELECT decisions.sync_uuid
+            FROM decisions
+            WHERE decisions.id = action_queue.decision_id
+        )
+        WHERE decision_id IS NOT NULL
+          AND decision_sync_uuid IS NULL
+        """
+    )
+    conn.commit()
+
+    try:
         cursor.execute("ALTER TABLE action_queue ADD COLUMN sync_uuid TEXT")
         conn.commit()
     except sqlite3.OperationalError:
@@ -144,6 +199,59 @@ def init_db() -> None:
 
     conn.commit()
     conn.close()
+
+
+def recover_interrupted_states() -> dict:
+    """
+    Herstelt process-crash/restart states conservatief.
+
+    Een 'executing' actie kan al gedeeltelijke real-world side effects hebben
+    gehad vóór de crash, dus we voeren hem NOOIT automatisch opnieuw uit.
+    We markeren hem failed + audit warning. Een 'preparing' decision heeft nog
+    geen directe side effects (alleen proposal-creatie), en wordt retrybaar
+    gemaakt als preparation_failed.
+    """
+    action_warning = json.dumps({
+        "error": (
+            "Execution was interrupted by a process restart. Real-world side "
+            "effects may be partially complete or unknown. Manual review is "
+            "required before proposing/retrying any equivalent action."
+        )
+    })
+    preparation_warning = (
+        "Preparation was interrupted by a process restart. Existing linked "
+        "action proposals remain in their current states; review them before retrying preparation."
+    )
+    reviewed_at = datetime.datetime.now().isoformat()
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'execution_failed', reviewed_at = ?, result_detail = ?
+            WHERE status = 'executing'
+            """,
+            (reviewed_at, action_warning),
+        )
+        recovered_actions = cursor.rowcount
+
+        cursor.execute(
+            """
+            UPDATE decisions
+            SET preparation_status = 'preparation_failed',
+                preparation_summary = ?
+            WHERE preparation_status = 'preparing'
+            """,
+            (preparation_warning,),
+        )
+        recovered_preparations = cursor.rowcount
+        conn.commit()
+
+    return {
+        "actions": recovered_actions,
+        "preparations": recovered_preparations,
+    }
 
 
 @contextmanager
@@ -169,11 +277,15 @@ def log_decision(
     agents_involved: list[str],
     task_description: str,
     decision_outcome: str,
-    sandbox_mode: bool = True
+    sandbox_mode: bool = True,
+    approval_status: str = "pending",
 ) -> int:
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
     """
+    if approval_status not in VALID_DECISION_APPROVAL_STATUSES:
+        raise ValueError(f"Unsupported decision approval status: {approval_status}")
+
     timestamp = datetime.datetime.now().isoformat()
     agents_str = ",".join(agents_involved)
     sandbox_flag = 1 if sandbox_mode else 0
@@ -183,9 +295,13 @@ def log_decision(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO decisions (
-                timestamp, topic, agents_involved, task_description, decision_outcome, sandbox_mode, sync_uuid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (timestamp, topic, agents_str, task_description, decision_outcome, sandbox_flag, new_sync_uuid))
+                timestamp, topic, agents_involved, task_description, decision_outcome,
+                sandbox_mode, sync_uuid, approval_status, preparation_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'not_started')
+        """, (
+            timestamp, topic, agents_str, task_description, decision_outcome,
+            sandbox_flag, new_sync_uuid, approval_status
+        ))
         
         conn.commit()
         return cursor.lastrowid
@@ -224,7 +340,7 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, topic, agents_involved, task_description, decision_outcome, sandbox_mode, sync_uuid
+            SELECT id, timestamp, topic, agents_involved, task_description, decision_outcome, sandbox_mode, sync_uuid, approval_status, decision_reviewed_at, owner_feedback, preparation_status, preparation_summary
             FROM decisions
             ORDER BY timestamp DESC
             LIMIT ? OFFSET ?
@@ -234,12 +350,131 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
         return [dict(row) for row in rows]
 
 
+def get_decision_by_id(decision_id: int) -> dict | None:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, timestamp, topic, agents_involved, task_description,
+                   decision_outcome, sandbox_mode, sync_uuid, approval_status,
+                   decision_reviewed_at, owner_feedback, preparation_status,
+                   preparation_summary
+            FROM decisions
+            WHERE id = ?
+            """,
+            (decision_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def transition_decision_approval(
+    decision_id: int,
+    new_status: str,
+    allowed_from: tuple[str, ...],
+    owner_feedback: str | None = None,
+) -> bool:
+    if new_status not in VALID_DECISION_APPROVAL_STATUSES:
+        raise ValueError(f"Unsupported decision approval status: {new_status}")
+    if not allowed_from or any(s not in VALID_DECISION_APPROVAL_STATUSES for s in allowed_from):
+        raise ValueError(f"Invalid decision allowed_from statuses: {allowed_from}")
+
+    reviewed_at = datetime.datetime.now().isoformat()
+    placeholders = ", ".join("?" for _ in allowed_from)
+    params = (new_status, reviewed_at, owner_feedback, decision_id, *allowed_from)
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            UPDATE decisions
+            SET approval_status = ?, decision_reviewed_at = ?, owner_feedback = ?
+            WHERE id = ? AND approval_status IN ({placeholders})
+            """,
+            params,
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def claim_decision_for_preparation(decision_id: int) -> bool:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE decisions
+            SET preparation_status = 'preparing'
+            WHERE id = ?
+              AND approval_status = 'approved'
+              AND preparation_status IN ('not_started', 'preparation_failed')
+            """,
+            (decision_id,),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def finalize_decision_preparation(
+    decision_id: int,
+    status: str,
+    summary: str,
+) -> bool:
+    if status not in {"prepared", "preparation_failed"}:
+        raise ValueError(f"Unsupported preparation terminal status: {status}")
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE decisions
+            SET preparation_status = ?, preparation_summary = ?
+            WHERE id = ? AND preparation_status = 'preparing'
+            """,
+            (status, summary, decision_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
 # ===================================================================
 # FUNCTIES VOOR ACTIEVOORSTELLEN (ACTION QUEUE)
 # ===================================================================
 
+def find_existing_decision_action(
+    decision_id: int,
+    proposed_by: str,
+    action_type: str,
+    action_detail: str,
+) -> dict | None:
+    """
+    Finds an exact action already proposed for the same approved decision.
+    Used by preparation tools to keep retries idempotent without re-sending a
+    misleading "new pending proposal" notification for an old action.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, timestamp, proposed_by, action_description, action_detail,
+                   status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
+            FROM action_queue
+            WHERE decision_id = ?
+              AND proposed_by = ?
+              AND action_type = ?
+              AND action_detail = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (decision_id, proposed_by, action_type, action_detail),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
 def propose_action(
-    proposed_by: str, action_description: str, action_detail: str, action_type: str = "shell"
+    proposed_by: str,
+    action_description: str,
+    action_detail: str,
+    action_type: str = "shell",
+    decision_id: int | None = None,
 ) -> int:
     """
     Voegt een voorgestelde actie toe aan de action_queue met de status 'pending'.
@@ -257,10 +492,49 @@ def propose_action(
     new_sync_uuid = str(uuid.uuid4())
     with get_connection() as conn:
         cursor = conn.cursor()
+
+        decision_sync_uuid = None
+        if decision_id is not None:
+            cursor.execute(
+                "SELECT sync_uuid FROM decisions WHERE id = ?",
+                (decision_id,),
+            )
+            decision_row = cursor.fetchone()
+            if decision_row is None:
+                raise ValueError(f"Decision {decision_id} does not exist")
+            decision_sync_uuid = decision_row["sync_uuid"]
+
+        # Preparation retries must be idempotent. If this exact proposal was
+        # already created for the same approved decision, return its existing
+        # ID instead of creating another action row.
+        if decision_id is not None:
+            cursor.execute(
+                """
+                SELECT id
+                FROM action_queue
+                WHERE decision_id = ?
+                  AND proposed_by = ?
+                  AND action_type = ?
+                  AND action_detail = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (decision_id, proposed_by, action_type, action_detail),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                return existing["id"]
+
         cursor.execute("""
-            INSERT INTO action_queue (timestamp, proposed_by, action_description, action_detail, status, action_type, sync_uuid)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?)
-        """, (timestamp, proposed_by, action_description, action_detail, action_type, new_sync_uuid))
+            INSERT INTO action_queue (
+                timestamp, proposed_by, action_description, action_detail,
+                status, action_type, sync_uuid, decision_id, decision_sync_uuid
+            )
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+        """, (
+            timestamp, proposed_by, action_description, action_detail,
+            action_type, new_sync_uuid, decision_id, decision_sync_uuid
+        ))
         
         conn.commit()
         return cursor.lastrowid
@@ -273,7 +547,7 @@ def get_pending_actions() -> list[dict]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid
+            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
             FROM action_queue
             WHERE status IN ('pending', 'approved', 'executing')
             ORDER BY timestamp DESC
@@ -372,7 +646,7 @@ def get_action_by_id(action_id: int) -> dict | None:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid
+            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
             FROM action_queue
             WHERE id = ?
         """, (action_id,))
@@ -398,7 +672,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
         cursor = conn.cursor()
         if status_filter:
             cursor.execute("""
-                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid
+                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
                 FROM action_queue
                 WHERE status = ?
                 ORDER BY timestamp DESC
@@ -406,7 +680,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
             """, (status_filter, limit, offset))
         else:
             cursor.execute("""
-                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid
+                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
                 FROM action_queue
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
@@ -502,6 +776,14 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     skipped += 1
                     continue
 
+                if table == "decisions":
+                    if row.get("approval_status", "legacy") not in VALID_DECISION_APPROVAL_STATUSES:
+                        skipped += 1
+                        continue
+                    if row.get("preparation_status", "not_started") not in VALID_PREPARATION_STATUSES:
+                        skipped += 1
+                        continue
+
                 if table == "action_queue":
                     if row.get("status") not in VALID_ACTION_STATUSES:
                         skipped += 1
@@ -509,6 +791,23 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row.get("action_type") not in VALID_ACTION_TYPES:
                         skipped += 1
                         continue
+
+                    # Local integer decision IDs are not portable across
+                    # machines. Resolve provenance from the stable decision
+                    # sync UUID; old exports without it are imported unlinked
+                    # rather than risking a link to the wrong local decision.
+                    decision_sync_uuid = row.get("decision_sync_uuid")
+                    if decision_sync_uuid:
+                        cursor.execute(
+                            "SELECT id FROM decisions WHERE sync_uuid = ?",
+                            (decision_sync_uuid,),
+                        )
+                        linked_decision = cursor.fetchone()
+                        row["decision_id"] = (
+                            linked_decision["id"] if linked_decision else None
+                        )
+                    else:
+                        row["decision_id"] = None
 
                 cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
                 if cursor.fetchone():
@@ -613,6 +912,20 @@ def get_system_stats() -> dict:
         cursor.execute("SELECT status, COUNT(*) as count FROM action_queue GROUP BY status")
         actions_by_status = {row["status"]: row["count"] for row in cursor.fetchall()}
 
+        cursor.execute(
+            "SELECT approval_status, COUNT(*) as count FROM decisions GROUP BY approval_status"
+        )
+        decisions_by_approval_status = {
+            row["approval_status"]: row["count"] for row in cursor.fetchall()
+        }
+
+        cursor.execute(
+            "SELECT preparation_status, COUNT(*) as count FROM decisions GROUP BY preparation_status"
+        )
+        decisions_by_preparation_status = {
+            row["preparation_status"]: row["count"] for row in cursor.fetchall()
+        }
+
         cursor.execute("SELECT COUNT(*) as count FROM decisions WHERE topic = 'Daily Research Findings'")
         research_success_count = cursor.fetchone()["count"]
 
@@ -628,6 +941,8 @@ def get_system_stats() -> dict:
         "total_decisions": total_decisions,
         "total_actions": total_actions,
         "actions_by_status": actions_by_status,
+        "decisions_by_approval_status": decisions_by_approval_status,
+        "decisions_by_preparation_status": decisions_by_preparation_status,
         "daily_research_success_count": research_success_count,
         "daily_research_failed_count": research_failed_count,
         "daily_research_success_rate_percent": research_success_rate,
