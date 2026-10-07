@@ -60,7 +60,7 @@ class ProposeBrowserActionTool(BaseTool):
         if click_selector is not None and click_selector.strip().lower() in ("null", "none", "n/a", ""):
             click_selector = None
 
-        dedupe_key = f"browser_action:{self.role}:{url}:{click_selector}"
+        dedupe_key = f"browser_action:{self.decision_id}:{self.role}:{url}:{click_selector}"
         duplicate_message = check_and_register_proposal(dedupe_key)
         if duplicate_message:
             return duplicate_message
