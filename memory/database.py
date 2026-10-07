@@ -636,6 +636,14 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     skipped += 1
                     continue
 
+                if table == "decisions":
+                    if row.get("approval_status", "legacy") not in VALID_DECISION_APPROVAL_STATUSES:
+                        skipped += 1
+                        continue
+                    if row.get("preparation_status", "not_started") not in VALID_PREPARATION_STATUSES:
+                        skipped += 1
+                        continue
+
                 if table == "action_queue":
                     if row.get("status") not in VALID_ACTION_STATUSES:
                         skipped += 1
