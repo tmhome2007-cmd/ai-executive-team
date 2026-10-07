@@ -136,6 +136,13 @@ async def lifespan(app: FastAPI):
         trigger=IntervalTrigger(minutes=15),
         id="daily_research_interval_job",
         replace_existing=True,
+        # Run the catch-up check as soon as the scheduler starts, but do it as
+        # a scheduler job instead of awaiting the full research pipeline inside
+        # FastAPI lifespan. This keeps API startup fast even when research +
+        # meetings take several minutes.
+        next_run_time=datetime.datetime.now(),
+        max_instances=1,
+        coalesce=True,
     )
     scheduler.add_job(
         lambda: backup_database(keep_last=7),
@@ -145,10 +152,7 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     app.state.scheduler = scheduler
-    logger.info("Scheduler started: daily research catch-up (15 min interval) + daily DB backup (24h interval).")
-
-    # Voer direct bij het opstarten één check/catch-up uit (asynchroon)
-    await scheduled_research_job()
+    logger.info("Scheduler started: immediate daily-research catch-up check + 15 min interval + daily DB backup (24h interval).")
 
     # Eén backup bij het opstarten, zodat je niet 24 uur moet wachten op de
     # eerste veiligheidskopie na een verse installatie.
