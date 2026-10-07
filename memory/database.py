@@ -415,6 +415,37 @@ def finalize_decision_preparation(
 # FUNCTIES VOOR ACTIEVOORSTELLEN (ACTION QUEUE)
 # ===================================================================
 
+def find_existing_decision_action(
+    decision_id: int,
+    proposed_by: str,
+    action_type: str,
+    action_detail: str,
+) -> dict | None:
+    """
+    Finds an exact action already proposed for the same approved decision.
+    Used by preparation tools to keep retries idempotent without re-sending a
+    misleading "new pending proposal" notification for an old action.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, timestamp, proposed_by, action_description, action_detail,
+                   status, reviewed_at, action_type, result_detail, sync_uuid, decision_id
+            FROM action_queue
+            WHERE decision_id = ?
+              AND proposed_by = ?
+              AND action_type = ?
+              AND action_detail = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (decision_id, proposed_by, action_type, action_detail),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
 def propose_action(
     proposed_by: str,
     action_description: str,
