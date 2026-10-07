@@ -278,16 +278,27 @@ def run_executive_meeting(
     # blijft hangen.
     MEETING_TIMEOUT_SECONDS = 600  # 10 minuten
 
-    with EXECUTION_LOCK:
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(crew.kickoff)
-            try:
-                crew_result = future.result(timeout=MEETING_TIMEOUT_SECONDS)
-            except FutureTimeoutError:
-                raise TimeoutError(
-                    f"Meeting execution exceeded the {MEETING_TIMEOUT_SECONDS}s timeout — "
-                    f"Ollama may be unresponsive or the model is taking unusually long."
-                )
+    def _kickoff_under_execution_lock():
+        # De worker zelf houdt de globale lock vast. Als de HTTP-aanroeper na
+        # de timeout terugkeert terwijl CrewAI intern nog doorloopt, blijft de
+        # lock dus bezet tot die echte run klaar is en kan geen tweede zware
+        # crew-run er bovenop starten.
+        with EXECUTION_LOCK:
+            return crew.kickoff()
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(_kickoff_under_execution_lock)
+    try:
+        crew_result = future.result(timeout=MEETING_TIMEOUT_SECONDS)
+    except FutureTimeoutError:
+        future.cancel()  # werkt alleen als de worker nog niet begonnen is
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise TimeoutError(
+            f"Meeting execution exceeded the {MEETING_TIMEOUT_SECONDS}s timeout — "
+            f"Ollama may be unresponsive or the model is taking unusually long."
+        )
+    else:
+        executor.shutdown(wait=True)
 
     # 4. Verzamel de individuele output per taak/agent
     individual_outputs: Dict[str, str] = {}
