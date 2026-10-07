@@ -46,7 +46,8 @@ _SYNC_TABLE_COLUMNS = {
     },
     "action_queue": {
         "timestamp", "proposed_by", "action_description", "action_detail",
-        "status", "reviewed_at", "action_type", "result_detail", "sync_uuid", "decision_id",
+        "status", "reviewed_at", "action_type", "result_detail", "sync_uuid",
+        "decision_id", "decision_sync_uuid",
     },
 }
 
@@ -130,7 +131,8 @@ def init_db() -> None:
             reviewed_at TEXT,
             action_type TEXT NOT NULL DEFAULT 'shell',
             result_detail TEXT,
-            decision_id INTEGER
+            decision_id INTEGER,
+            decision_sync_uuid TEXT
         )
     """)
 
@@ -162,6 +164,27 @@ def init_db() -> None:
         conn.commit()
     except sqlite3.OperationalError:
         pass
+
+    try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN decision_sync_uuid TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    # Backfill stable decision provenance for any already-linked local rows.
+    cursor.execute(
+        """
+        UPDATE action_queue
+        SET decision_sync_uuid = (
+            SELECT decisions.sync_uuid
+            FROM decisions
+            WHERE decisions.id = action_queue.decision_id
+        )
+        WHERE decision_id IS NOT NULL
+          AND decision_sync_uuid IS NULL
+        """
+    )
+    conn.commit()
 
     try:
         cursor.execute("ALTER TABLE action_queue ADD COLUMN sync_uuid TEXT")
@@ -431,7 +454,7 @@ def find_existing_decision_action(
         cursor.execute(
             """
             SELECT id, timestamp, proposed_by, action_description, action_detail,
-                   status, reviewed_at, action_type, result_detail, sync_uuid, decision_id
+                   status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
             FROM action_queue
             WHERE decision_id = ?
               AND proposed_by = ?
@@ -470,6 +493,17 @@ def propose_action(
     with get_connection() as conn:
         cursor = conn.cursor()
 
+        decision_sync_uuid = None
+        if decision_id is not None:
+            cursor.execute(
+                "SELECT sync_uuid FROM decisions WHERE id = ?",
+                (decision_id,),
+            )
+            decision_row = cursor.fetchone()
+            if decision_row is None:
+                raise ValueError(f"Decision {decision_id} does not exist")
+            decision_sync_uuid = decision_row["sync_uuid"]
+
         # Preparation retries must be idempotent. If this exact proposal was
         # already created for the same approved decision, return its existing
         # ID instead of creating another action row.
@@ -494,12 +528,12 @@ def propose_action(
         cursor.execute("""
             INSERT INTO action_queue (
                 timestamp, proposed_by, action_description, action_detail,
-                status, action_type, sync_uuid, decision_id
+                status, action_type, sync_uuid, decision_id, decision_sync_uuid
             )
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
         """, (
             timestamp, proposed_by, action_description, action_detail,
-            action_type, new_sync_uuid, decision_id
+            action_type, new_sync_uuid, decision_id, decision_sync_uuid
         ))
         
         conn.commit()
@@ -513,7 +547,7 @@ def get_pending_actions() -> list[dict]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id
+            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
             FROM action_queue
             WHERE status IN ('pending', 'approved', 'executing')
             ORDER BY timestamp DESC
@@ -612,7 +646,7 @@ def get_action_by_id(action_id: int) -> dict | None:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id
+            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
             FROM action_queue
             WHERE id = ?
         """, (action_id,))
@@ -638,7 +672,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
         cursor = conn.cursor()
         if status_filter:
             cursor.execute("""
-                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id
+                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
                 FROM action_queue
                 WHERE status = ?
                 ORDER BY timestamp DESC
@@ -646,7 +680,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
             """, (status_filter, limit, offset))
         else:
             cursor.execute("""
-                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id
+                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid, decision_id, decision_sync_uuid
                 FROM action_queue
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
@@ -757,6 +791,23 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row.get("action_type") not in VALID_ACTION_TYPES:
                         skipped += 1
                         continue
+
+                    # Local integer decision IDs are not portable across
+                    # machines. Resolve provenance from the stable decision
+                    # sync UUID; old exports without it are imported unlinked
+                    # rather than risking a link to the wrong local decision.
+                    decision_sync_uuid = row.get("decision_sync_uuid")
+                    if decision_sync_uuid:
+                        cursor.execute(
+                            "SELECT id FROM decisions WHERE sync_uuid = ?",
+                            (decision_sync_uuid,),
+                        )
+                        linked_decision = cursor.fetchone()
+                        row["decision_id"] = (
+                            linked_decision["id"] if linked_decision else None
+                        )
+                    else:
+                        row["decision_id"] = None
 
                 cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
                 if cursor.fetchone():
