@@ -8,6 +8,8 @@ Controleert de belangrijkste systeemvoorwaarden (static checks & optionele live 
 import os
 import sys
 import re
+import tempfile
+import json
 
 # ANSI Kleurcodes voor nette terminal output
 GREEN = "\033[92m"
@@ -925,6 +927,236 @@ try:
         )
 except Exception as e:
     log_fail("Reasoning-only decision meeting check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 36: DYNAMIC CHECK — action state transitions are atomic and non-replayable
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config
+    from memory.database import (
+        init_db as _verify_init_db,
+        propose_action as _verify_propose_action,
+        transition_action_status as _verify_transition_action_status,
+        claim_action_for_execution as _verify_claim_action_for_execution,
+        get_action_by_id as _verify_get_action_by_id,
+        update_action_status as _verify_update_action_status,
+    )
+
+    original_db_path = _verify_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config.DATABASE_PATH = os.path.join(temp_dir, "state_machine.db")
+            _verify_init_db()
+            test_id = _verify_propose_action("CFO", "state test", "echo ok", "shell")
+
+            first_approve = _verify_transition_action_status(test_id, "approved", ("pending",))
+            second_approve = _verify_transition_action_status(test_id, "approved", ("pending",))
+            first_claim = _verify_claim_action_for_execution(test_id)
+            second_claim = _verify_claim_action_for_execution(test_id)
+            reject_while_executing = _verify_transition_action_status(
+                test_id, "rejected", ("pending", "approved")
+            )
+            _verify_update_action_status(test_id, "executed")
+            revive_executed = _verify_transition_action_status(
+                test_id, "approved", ("pending",)
+            )
+            final_status = _verify_get_action_by_id(test_id)["status"]
+
+            if (
+                first_approve
+                and not second_approve
+                and first_claim
+                and not second_claim
+                and not reject_while_executing
+                and not revive_executed
+                and final_status == "executed"
+            ):
+                log_pass("action state machine prevents duplicate approval/execution and terminal-status revival")
+            else:
+                log_fail(
+                    "Action state machine",
+                    "Atomic transition expectations failed: "
+                    f"approve=({first_approve},{second_approve}), "
+                    f"claim=({first_claim},{second_claim}), "
+                    f"reject_executing={reject_while_executing}, "
+                    f"revive={revive_executed}, final={final_status}",
+                )
+    finally:
+        _verify_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Action state machine check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 37: STATIC CHECK — sync import uses fixed table/column whitelists
+# -------------------------------------------------------------------
+try:
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content_37 = f.read()
+
+    required_sync_guards = [
+        "_SYNC_TABLE_COLUMNS",
+        "table not in _SYNC_TABLE_COLUMNS",
+        "any(column not in allowed_columns for column in row)",
+    ]
+    missing = [p for p in required_sync_guards if p not in db_content_37]
+    if not missing:
+        log_pass("JSONL sync import whitelists table and column identifiers before SQL interpolation")
+    else:
+        log_fail("Sync import SQL identifier guard", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Sync import SQL identifier guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 38: DYNAMIC CHECK — nested interpreter shell bypasses stay blocked
+# -------------------------------------------------------------------
+try:
+    from workflows.action_executor import is_dangerous_command
+
+    bypasses = [
+        "bash -c 'cat /etc/passwd'",
+        "python3 -c \"open('/etc/passwd').read()\"",
+        "eval 'rm -rf something'",
+    ]
+    missed = [cmd for cmd in bypasses if not is_dangerous_command(cmd)]
+    if not missed:
+        log_pass("nested shell/interpreter/eval commands are blocked from bypassing static command analysis")
+    else:
+        log_fail("Nested interpreter safety guard", f"Not blocked: {missed}")
+except Exception as e:
+    log_fail("Nested interpreter safety guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 39: DYNAMIC CHECK — browser URLs cannot target local/private services
+# -------------------------------------------------------------------
+try:
+    from workflows.action_executor import check_url_safety
+
+    local_urls = [
+        "http://127.0.0.1:8000/system/health",
+        "http://localhost:11434/api/tags",
+        "http://169.254.169.254/latest/meta-data/",
+    ]
+    missed = [url for url in local_urls if not check_url_safety(url)]
+    if not missed:
+        log_pass("browser URL guard blocks loopback, localhost, and link-local/internal targets")
+    else:
+        log_fail("Browser internal-network guard", f"Not blocked: {missed}")
+except Exception as e:
+    log_fail("Browser internal-network guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 40: STATIC CHECK — research redirects are revalidated
+# -------------------------------------------------------------------
+try:
+    with open("tools/research_tool.py", "r", encoding="utf-8") as f:
+        research_content_40 = f.read()
+
+    has_manual_redirects = "allow_redirects=False" in research_content_40
+    has_redirect_revalidation = (
+        "def _get_safe_response" in research_content_40
+        and "_is_safe_research_url(current_url)" in research_content_40
+    )
+    has_all_address_resolution = "socket.getaddrinfo" in research_content_40
+
+    if has_manual_redirects and has_redirect_revalidation and has_all_address_resolution:
+        log_pass("research requests revalidate every redirect and inspect IPv4/IPv6 addresses")
+    else:
+        log_fail(
+            "Research redirect SSRF guard",
+            f"manual_redirects={has_manual_redirects}, "
+            f"revalidation={has_redirect_revalidation}, all_addresses={has_all_address_resolution}",
+        )
+except Exception as e:
+    log_fail("Research redirect SSRF guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 41: STATIC CHECK — live DB backups use SQLite's online backup API
+# -------------------------------------------------------------------
+try:
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content_41 = f.read()
+
+    if "source.backup(destination)" in db_content_41 and "shutil.copy2(db_path, backup_path)" not in db_content_41:
+        log_pass("database backups use SQLite online backup API instead of raw live-file copies")
+    else:
+        log_fail("Database backup consistency check", "Expected sqlite3 source.backup(destination) without shutil.copy2")
+except Exception as e:
+    log_fail("Database backup consistency check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 42: STATIC CHECK — meeting timeout does not wait on executor shutdown
+# -------------------------------------------------------------------
+try:
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_42 = f.read()
+
+    has_worker_lock = "def _kickoff_under_execution_lock" in meeting_content_42
+    has_nonwaiting_shutdown = "executor.shutdown(wait=False, cancel_futures=True)" in meeting_content_42
+    old_blocking_context = "with ThreadPoolExecutor(max_workers=1) as executor:" in meeting_content_42
+
+    if has_worker_lock and has_nonwaiting_shutdown and not old_blocking_context:
+        log_pass("meeting timeout returns without blocking executor shutdown while worker retains global lock")
+    else:
+        log_fail(
+            "Meeting timeout semantics",
+            f"worker_lock={has_worker_lock}, nonwaiting_shutdown={has_nonwaiting_shutdown}, "
+            f"old_blocking_context={old_blocking_context}",
+        )
+except Exception as e:
+    log_fail("Meeting timeout semantics check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 43: STATIC CHECK — daily-run detection is not limited to recent rows
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_43 = f.read()
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content_43 = f.read()
+
+    uses_direct_query = "has_daily_research_attempt_on(datetime.date.today())" in main_content_43
+    has_sql_date_query = "def has_daily_research_attempt_on" in db_content_43 and "topic LIKE 'Daily Research%'" in db_content_43
+
+    if uses_direct_query and has_sql_date_query:
+        log_pass("daily scheduler checks the full database for today's research attempt instead of only the latest rows")
+    else:
+        log_fail(
+            "Daily research duplicate-run guard",
+            f"uses_direct_query={uses_direct_query}, has_sql_date_query={has_sql_date_query}",
+        )
+except Exception as e:
+    log_fail("Daily research duplicate-run guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 44: STATIC CHECK — Telegram partial startup always cleans resources
+# -------------------------------------------------------------------
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        telegram_content_44 = f.read()
+
+    required_cleanup = [
+        "initialized = False",
+        "started = False",
+        "polling_started = False",
+        "await application.shutdown()",
+        "finally:",
+    ]
+    missing = [p for p in required_cleanup if p not in telegram_content_44]
+    if not missing:
+        log_pass("Telegram listener cleans initialized/started resources even when polling startup fails")
+    else:
+        log_fail("Telegram partial-start cleanup", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Telegram partial-start cleanup check crashed", str(e))
 
 
 # -------------------------------------------------------------------
