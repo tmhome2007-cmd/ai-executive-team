@@ -126,6 +126,13 @@ def build_decision_keyboard(decision_id: int, status: str) -> Optional[InlineKey
                 callback_data=f"decision_reject:{decision_id}",
             ),
         ]])
+    if status == "approved":
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "🧰 Prepare Decision",
+                callback_data=f"decision_prepare:{decision_id}",
+            ),
+        ]])
     return None
 
 
@@ -200,6 +207,73 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer("Invalid button data.", show_alert=True)
         return
 
+    if action_type == "decision_prepare":
+        decision = get_decision_by_id(action_id)
+        if decision is None:
+            await query.answer("This decision no longer exists.", show_alert=True)
+            return
+        if decision.get("approval_status") != "approved":
+            await query.answer("Decision must be approved first.", show_alert=True)
+            return
+        if decision.get("preparation_status") not in ("not_started", "preparation_failed"):
+            await query.answer(
+                f"Preparation is already '{decision.get('preparation_status')}'.",
+                show_alert=True,
+            )
+            return
+
+        await query.answer("Preparation started 🧰")
+        try:
+            await query.edit_message_text(
+                text=(
+                    f"🧭 <b>EXECUTIVE DECISION #{action_id}</b>\n\n"
+                    f"<b>Topic:</b> {escape_html(decision['topic'])}\n\n"
+                    "🧰 <b>PREPARATION IN PROGRESS</b>\n"
+                    "Concrete actions will still require separate approval."
+                ),
+                parse_mode="HTML",
+                reply_markup=None,
+            )
+        except Exception as e:
+            logger.warning(f"Could not mark Telegram decision as preparing: {e}")
+
+        # Local import avoids a module-import cycle:
+        # preparation -> agents -> proposal tools -> telegram_interactive.
+        from workflows.preparation import run_decision_preparation
+
+        result = await asyncio.to_thread(run_decision_preparation, action_id)
+        refreshed = get_decision_by_id(action_id) or decision
+
+        if result.get("success"):
+            final_text = (
+                f"🧭 <b>EXECUTIVE DECISION #{action_id}</b>\n\n"
+                f"<b>Topic:</b> {escape_html(refreshed['topic'])}\n\n"
+                "✅ <b>PREPARATION COMPLETE</b>\n"
+                "Any concrete actions proposed by the team are waiting in the "
+                "separate action approval queue."
+            )
+        else:
+            final_text = (
+                f"🧭 <b>EXECUTIVE DECISION #{action_id}</b>\n\n"
+                f"<b>Topic:</b> {escape_html(refreshed['topic'])}\n\n"
+                "❌ <b>PREPARATION FAILED</b>\n"
+                f"{escape_html(result.get('error', 'Unknown preparation error'))}"
+            )
+
+        try:
+            await query.edit_message_text(
+                text=final_text,
+                parse_mode="HTML",
+                reply_markup=(
+                    build_decision_keyboard(action_id, "approved")
+                    if not result.get("success")
+                    else None
+                ),
+            )
+        except Exception as e:
+            logger.warning(f"Could not edit Telegram preparation result: {e}")
+        return
+
     # Decision-level owner approval uses its own callback namespace. This
     # changes only the strategic decision state; preparation/action execution
     # remain separate phases.
@@ -248,7 +322,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await query.edit_message_text(
                 text=updated_text,
                 parse_mode="HTML",
-                reply_markup=None,
+                reply_markup=build_decision_keyboard(action_id, target_status),
             )
         except Exception as e:
             logger.warning(f"Could not edit decision Telegram message: {e}")
