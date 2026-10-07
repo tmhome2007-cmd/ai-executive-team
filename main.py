@@ -36,6 +36,7 @@ from memory.database import (
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
+from agents.executive_agents import EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
 from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
@@ -379,6 +380,9 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             topic=request.topic,
             task_description=request.task_description,
             agent_keys=request.agent_keys,
+            # Decision meetings are reasoning-only. Tool-capable agents belong
+            # in the separate preparation/execution phase after human approval.
+            agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
         )
     except Exception as e:
         raise HTTPException(
