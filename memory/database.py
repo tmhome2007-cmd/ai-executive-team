@@ -479,11 +479,20 @@ def import_history_from_jsonl(import_path: str) -> dict:
         cursor = conn.cursor()
 
         with open(import_path, "r", encoding="utf-8") as f:
-            for line in f:
+            for line_number, line in enumerate(f, start=1):
                 line = line.strip()
                 if not line:
                     continue
-                row = json.loads(line)
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    skipped += 1
+                    continue
+
+                if not isinstance(row, dict):
+                    skipped += 1
+                    continue
+
                 table = row.pop("_table", None)
                 sync_uuid_value = row.get("sync_uuid")
 
@@ -498,7 +507,22 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 row.pop("id", None)
 
                 allowed_columns = _SYNC_TABLE_COLUMNS[table]
-                if not row or any(column not in allowed_columns for column in row):
+                required_columns = {
+                    "decisions": {
+                        "timestamp", "topic", "agents_involved", "task_description",
+                        "decision_outcome", "sandbox_mode", "sync_uuid",
+                    },
+                    "action_queue": {
+                        "timestamp", "proposed_by", "action_description", "action_detail",
+                        "status", "action_type", "sync_uuid",
+                    },
+                }[table]
+
+                if (
+                    not row
+                    or any(column not in allowed_columns for column in row)
+                    or not required_columns.issubset(row.keys())
+                ):
                     skipped += 1
                     continue
 
@@ -519,10 +543,16 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 # whitelists hierboven, niet uit onbetrouwbare input.
                 columns = ", ".join(row.keys())
                 placeholders = ", ".join(["?"] * len(row))
-                cursor.execute(
-                    f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
-                    tuple(row.values())
-                )
+                try:
+                    cursor.execute(
+                        f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
+                        tuple(row.values())
+                    )
+                except (sqlite3.IntegrityError, sqlite3.OperationalError):
+                    # Eén beschadigde/onvolledige regel mag een volledige
+                    # geschiedenis-import niet afbreken.
+                    skipped += 1
+                    continue
 
                 if table == "decisions":
                     imported_decisions += 1
