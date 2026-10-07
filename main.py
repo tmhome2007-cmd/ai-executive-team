@@ -31,6 +31,8 @@ from memory.database import (
     get_pending_actions,
     get_action_history,
     update_action_status,
+    transition_action_status,
+    get_action_by_id,
     get_system_stats,
     backup_database,
 )
@@ -597,11 +599,17 @@ def read_action_history(limit: int = 20, offset: int = 0, status: Optional[str] 
 )
 def approve_action(action_id: int):
     """Markeert een voorgestelde actie als 'approved'."""
-    success = update_action_status(action_id, "approved")
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
+
+    success = transition_action_status(action_id, "approved", ("pending",))
     if not success:
+        current = get_action_by_id(action_id)
+        current_status = current["status"] if current else "unknown"
         raise HTTPException(
-            status_code=404,
-            detail=f"Action proposal with ID {action_id} not found."
+            status_code=409,
+            detail=f"Action cannot be approved from status '{current_status}'.",
         )
     return {"action_id": action_id, "status": "approved"}
 
@@ -614,11 +622,17 @@ def approve_action(action_id: int):
 )
 def reject_action(action_id: int):
     """Markeert een voorgestelde actie als 'rejected'."""
-    success = update_action_status(action_id, "rejected")
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
+
+    success = transition_action_status(action_id, "rejected", ("pending", "approved"))
     if not success:
+        current = get_action_by_id(action_id)
+        current_status = current["status"] if current else "unknown"
         raise HTTPException(
-            status_code=404,
-            detail=f"Action proposal with ID {action_id} not found."
+            status_code=409,
+            detail=f"Action cannot be rejected from status '{current_status}'.",
         )
     return {"action_id": action_id, "status": "rejected"}
 @app.post(
