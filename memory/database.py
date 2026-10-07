@@ -511,6 +511,38 @@ def record_execution_result(action_id: int, result_detail_json: str) -> bool:
         conn.commit()
         return cursor.rowcount > 0
 
+def recover_interrupted_actions() -> int:
+    """
+    Markeer acties die na een procesherstart nog op 'executing' staan als
+    execution_failed. We weten na een crash NIET of het echte effect volledig,
+    gedeeltelijk of helemaal niet heeft plaatsgevonden, dus automatisch opnieuw
+    uitvoeren zou gevaarlijk zijn. De actie blijft in de audit trail voor
+    menselijke beoordeling.
+    """
+    reviewed_at = datetime.datetime.now().isoformat()
+    result_detail = json.dumps({
+        "error": (
+            "Execution was interrupted by a process shutdown/crash while the "
+            "action was marked 'executing'. Real-world outcome is unknown; "
+            "manual review is required before proposing any retry."
+        )
+    })
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'execution_failed',
+                reviewed_at = ?,
+                result_detail = ?
+            WHERE status = 'executing'
+            """,
+            (reviewed_at, result_detail),
+        )
+        conn.commit()
+        return cursor.rowcount
+
+
 def get_action_by_id(action_id: int) -> dict | None:
     """
     Haalt één specifieke actie op uit de action_queue op basis van het ID.
@@ -703,6 +735,16 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
                 if table == "decisions":
                     imported_decisions += 1
+                    imported_decision_id = cursor.lastrowid
+                    cursor.execute(
+                        """
+                        INSERT OR IGNORE INTO decision_approvals (
+                            decision_id, status, reviewed_at,
+                            preparation_status, prepared_at, preparation_outcome
+                        ) VALUES (?, 'pending', NULL, 'not_started', NULL, NULL)
+                        """,
+                        (imported_decision_id,),
+                    )
                 else:
                     imported_actions += 1
 
