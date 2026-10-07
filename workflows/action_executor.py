@@ -517,6 +517,20 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
+
+            # Revalidate every navigation request, including redirects. Without
+            # this, an initially-safe public URL could redirect Chromium to a
+            # localhost/private-network target after the preflight check.
+            def _guard_navigation(route):
+                request = route.request
+                if request.is_navigation_request():
+                    reason = check_url_safety(request.url)
+                    if reason:
+                        route.abort()
+                        return
+                route.continue_()
+
+            page.route("**/*", _guard_navigation)
             page.goto(url, timeout=15000)
             page_title = page.title()
 
