@@ -419,18 +419,18 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
 # ===================================================================
 # CROSS-MACHINE SYNC (export/import als JSON Lines)
 # ===================================================================
-# SQLite zelf blijft bewust buiten git (binair, merget niet netjes). In
-# plaats daarvan: exporteer beide tabellen als JSON Lines (één JSON-object
-# per regel — merget WEL netjes via git, want elke regel is onafhankelijk)
-# naar een git-getrackt bestand. sync_uuid is de stabiele identiteit van elke
-# rij over machines heen — de lokale autoincrement 'id' verschilt per
+# SQLite zelf blijft bewust buiten git (binair, merget niet netjes).
+# JSONL export/import blijft beschikbaar als HANDMATIGE data-overdracht, maar
+# exports bevatten besluit- en actiegeschiedenis en zijn daarom bewust
+# gitignored. Deel/verplaats zo'n bestand alleen via een vertrouwd kanaal en
+# verwijder het wanneer de import klaar is. sync_uuid is de stabiele identiteit
+# van elke rij over machines heen — de lokale autoincrement 'id' verschilt per
 # database en mag NOOIT gebruikt worden om te bepalen of een rij al bestaat.
 #
-# Gebruik (handmatig, bewust geen automatische git push):
-#   Op laptop A: python -c "from memory.database import export_history_to_jsonl; export_history_to_jsonl('sync/history_export.jsonl')"
-#                git add sync/history_export.jsonl && git commit -m "Sync export" && git push
-#   Op laptop B: git pull
-#                python -c "from memory.database import import_history_from_jsonl; import_history_from_jsonl('sync/history_export.jsonl')"
+# Gebruik:
+#   Export: python -c "from memory.database import export_history_to_jsonl; export_history_to_jsonl('sync/history_export.jsonl')"
+#   Verplaats dat bestand via een vertrouwd privé-kanaal naar de andere machine.
+#   Import: python -c "from memory.database import import_history_from_jsonl; import_history_from_jsonl('sync/history_export.jsonl')"
 
 def export_history_to_jsonl(export_path: str) -> dict:
     """
