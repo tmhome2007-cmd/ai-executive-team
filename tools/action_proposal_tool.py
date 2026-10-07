@@ -46,7 +46,7 @@ class ProposeActionTool(BaseTool):
     def _run(self, action_description: str, action_detail: str) -> str:
         # Breekt een runaway herhaal-loop: dezelfde (rol + actie) binnen het
         # dedupe-venster wordt niet opnieuw gelogd of genotificeerd.
-        dedupe_key = f"action:{self.role}:{action_detail}"
+        dedupe_key = f"action:{self.decision_id}:{self.role}:{action_detail}"
         duplicate_message = check_and_register_proposal(dedupe_key)
         if duplicate_message:
             return duplicate_message
