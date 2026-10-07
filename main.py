@@ -372,6 +372,11 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             # in the separate preparation/execution phase after human approval.
             agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
         )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid meeting request: {e}",
+        )
     except Exception as e:
         raise HTTPException(
             status_code=502,
