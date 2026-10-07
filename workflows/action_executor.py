@@ -8,10 +8,12 @@ blokkeert als dat buiten WORKSPACE_ROOT valt, een live-uitvoering via subprocess
 en een veilige dry-run modus.
 """
 
+import ipaddress
 import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 
 try:
@@ -189,8 +191,37 @@ def check_url_safety(url: str) -> str | None:
     if scheme not in ("http", "https"):
         return f"URL must use http or https (got '{scheme or 'no scheme'}')"
 
-    if not parsed.netloc:
+    if not parsed.hostname:
         return f"URL has no valid domain: '{url}'"
+
+    hostname = parsed.hostname.lower()
+    if hostname == "localhost" or hostname.endswith(".localhost") or hostname.endswith(".local"):
+        return f"Local/internal hostname '{hostname}' is not allowed"
+
+    try:
+        resolved_addresses = {
+            info[4][0]
+            for info in socket.getaddrinfo(hostname, parsed.port or (443 if scheme == "https" else 80))
+        }
+    except socket.gaierror as e:
+        return f"Could not resolve hostname '{hostname}': {e}"
+
+    for resolved_ip in resolved_addresses:
+        try:
+            ip_obj = ipaddress.ip_address(resolved_ip)
+        except ValueError:
+            return f"Could not validate resolved address '{resolved_ip}' for '{hostname}'"
+        if (
+            ip_obj.is_loopback
+            or ip_obj.is_private
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return (
+                f"URL resolves to a loopback/private/internal address ({resolved_ip}) — "
+                "browser action blocked from reaching internal services"
+            )
 
     # Optionele allowlist: als config.ALLOWED_BROWSER_DOMAINS is ingesteld
     # (komma-gescheiden lijst), mag alleen naar die domeinen genavigeerd
@@ -198,7 +229,7 @@ def check_url_safety(url: str) -> str | None:
     allowlist_raw = getattr(config, "ALLOWED_BROWSER_DOMAINS", "").strip()
     if allowlist_raw:
         allowed_domains = [d.strip().lower() for d in allowlist_raw.split(",") if d.strip()]
-        domain = parsed.netloc.lower()
+        domain = hostname
         if not any(domain == d or domain.endswith("." + d) for d in allowed_domains):
             return f"Domain '{domain}' is not in the allowed browser domains list: {allowed_domains}"
 
@@ -209,6 +240,18 @@ def check_url_safety(url: str) -> str | None:
 # DANGEROUS COMMAND PATTERNS
 # ------------------------------------------------------------------
 DANGEROUS_PATTERNS: list[tuple[str, str]] = [
+    (
+        r"\b(?:bash|zsh|sh)\s+-c\b",
+        "Nested shell interpreter (-c) can hide commands from static safety analysis"
+    ),
+    (
+        r"\b(?:python(?:3)?|perl|ruby|node)\s+-(?:c|e)\b",
+        "Inline interpreter code can hide filesystem/system actions from static safety analysis"
+    ),
+    (
+        r"\beval\b",
+        "Shell eval can dynamically construct commands that bypass static safety analysis"
+    ),
     # Recursive/forced deletion of root, home, wildcards, or parent paths
     (
         r"rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(/\s*|~|/root|\*|\.\.)",
