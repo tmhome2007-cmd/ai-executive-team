@@ -14,6 +14,11 @@ interface DecisionHistoryItem {
   task_description: string;
   decision_outcome: string;
   sandbox_mode: number;
+  approval_status?: "pending" | "approved" | "rejected";
+  approval_reviewed_at?: string | null;
+  preparation_status?: "not_started" | "in_progress" | "completed" | "failed";
+  prepared_at?: string | null;
+  preparation_outcome?: string | null;
 }
 
 interface DailyResearchStatus {
@@ -292,6 +297,9 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<number>>(new Set());
   const [expandedActionHistoryIds, setExpandedActionHistoryIds] = useState<Set<number>>(new Set());
+  const [decisionErrors, setDecisionErrors] = useState<Record<number, string>>({});
+  const [preparingDecisionIds, setPreparingDecisionIds] = useState<Set<number>>(new Set());
+  const [preparationResults, setPreparationResults] = useState<Record<number, string>>({});
 
   const fetchPendingActions = useCallback(async (currentKey: string) => {
     try {
@@ -481,6 +489,89 @@ export default function DashboardPage() {
         const copy = new Set(prev);
         copy.delete(action.id);
         return copy;
+      });
+    }
+  };
+
+  const handleDecisionReview = async (id: number, type: "approve" | "reject") => {
+    setDecisionErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`${API_BASE}/decisions/${id}/${type}`, {
+        method: "POST",
+        headers: { "X-API-Key": apiKey || "" },
+      });
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || `Could not ${type} decision.`);
+      }
+      await fetchDashboardData();
+    } catch (err: any) {
+      setDecisionErrors((prev) => ({
+        ...prev,
+        [id]: err.message || "Could not update decision approval.",
+      }));
+    }
+  };
+
+  const handlePrepareDecision = async (id: number) => {
+    const confirmed = window.confirm(
+      "Start Phase 2 preparation? Tool-capable executives may create concrete action proposals, but nothing will execute without separate action approval."
+    );
+    if (!confirmed) return;
+
+    setPreparingDecisionIds((prev) => new Set(prev).add(id));
+    setDecisionErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`${API_BASE}/decisions/${id}/prepare`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey || "",
+        },
+        body: JSON.stringify({ agent_keys: ["coo", "cto", "ceo"] }),
+      });
+
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Preparation failed.");
+      }
+
+      setPreparationResults((prev) => ({ ...prev, [id]: data.final_plan }));
+      await fetchDashboardData();
+      if (apiKey) {
+        fetchPendingActions(apiKey);
+        fetchActionHistory(apiKey);
+      }
+    } catch (err: any) {
+      setDecisionErrors((prev) => ({
+        ...prev,
+        [id]: err.message || "Preparation failed.",
+      }));
+      await fetchDashboardData();
+    } finally {
+      setPreparingDecisionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
       });
     }
   };
@@ -955,13 +1046,29 @@ export default function DashboardPage() {
                   ? item.decision_outcome.slice(0, 150) + "..."
                   : item.decision_outcome;
 
+              const approval = item.approval_status || "pending";
+              const preparation = item.preparation_status || "not_started";
+              const isPreparing = preparingDecisionIds.has(item.id);
+              const shownPreparation =
+                preparationResults[item.id] || item.preparation_outcome || null;
+
               return (
                 <div
                   key={item.id}
                   className="bg-gray-900 border border-gray-800 rounded-lg p-5"
                 >
-                  <div className="flex justify-between items-start">
-                    <h3 className="text-blue-400 font-bold text-lg">{item.topic}</h3>
+                  <div className="flex justify-between items-start gap-3">
+                    <div>
+                      <h3 className="text-blue-400 font-bold text-lg">{item.topic}</h3>
+                      <div className="flex gap-2 mt-2 text-xs">
+                        <span className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5">
+                          Decision: {approval}
+                        </span>
+                        <span className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5">
+                          Preparation: {preparation}
+                        </span>
+                      </div>
+                    </div>
                     <span className="text-xs text-gray-500">
                       {new Date(item.timestamp).toLocaleString("en-US")}
                     </span>
@@ -987,6 +1094,55 @@ export default function DashboardPage() {
                     >
                       {isExpanded ? "▲ Show less" : "▼ Show more"}
                     </button>
+                  )}
+
+                  {decisionErrors[item.id] && (
+                    <div className="mt-3 p-2 bg-red-950 border border-red-800 text-red-300 text-xs rounded">
+                      {decisionErrors[item.id]}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <button
+                      onClick={() => handleDecisionReview(item.id, "approve")}
+                      disabled={approval !== "pending" || isPreparing}
+                      className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Approve Direction
+                    </button>
+                    <button
+                      onClick={() => handleDecisionReview(item.id, "reject")}
+                      disabled={
+                        !["pending", "approved"].includes(approval) ||
+                        ["in_progress", "completed"].includes(preparation) ||
+                        isPreparing
+                      }
+                      className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Reject Direction
+                    </button>
+                    <button
+                      onClick={() => handlePrepareDecision(item.id)}
+                      disabled={
+                        approval !== "approved" ||
+                        !["not_started", "failed"].includes(preparation) ||
+                        isPreparing
+                      }
+                      className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isPreparing ? "Preparing..." : "Start Phase 2 Preparation"}
+                    </button>
+                  </div>
+
+                  {shownPreparation && (
+                    <details className="mt-4 border border-purple-900 rounded bg-gray-950">
+                      <summary className="cursor-pointer p-3 text-sm font-semibold text-purple-300">
+                        Preparation Plan
+                      </summary>
+                      <pre className="p-3 border-t border-purple-900 whitespace-pre-wrap text-xs text-gray-300 font-sans">
+                        {shownPreparation}
+                      </pre>
+                    </details>
                   )}
                 </div>
               );
