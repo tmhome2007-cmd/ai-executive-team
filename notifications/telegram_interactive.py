@@ -109,6 +109,8 @@ def format_action_message(action: dict, footer: str = "") -> str:
         f"<b>Detail:</b> <code>{escape_html(action['action_detail'])}</code>\n"
         f"<b>Status:</b> {escape_html(action['status'])}"
     )
+    if action.get("decision_id") is not None:
+        text += f"\n<b>Source Decision:</b> #{action['decision_id']}"
     if footer:
         text += f"\n\n{footer}"
     return text
@@ -163,13 +165,18 @@ def send_proposal_notification(
     Wordt aangeroepen vanuit tools/action_proposal_tool.py in plaats van de
     oude platte send_notification() aanroep.
     """
-    action = {
+    stored_action = get_action_by_id(action_id)
+    action = stored_action or {
         "id": action_id,
         "proposed_by": proposed_by,
         "action_description": action_description,
         "action_detail": action_detail,
         "status": "pending",
+        "decision_id": None,
     }
+    # Keep the concise human-facing detail supplied by the tool while using
+    # the database row for status + decision provenance.
+    action["action_detail"] = action_detail
     message = format_action_message(action)
     keyboard = build_action_keyboard(action_id, "pending")
     send_notification_with_keyboard(message, keyboard)
