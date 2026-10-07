@@ -33,7 +33,12 @@ if str(project_root) not in sys.path:
 
 from config import config
 from notifications.telegram_bot import send_notification_with_keyboard, escape_html
-from memory.database import get_action_by_id, transition_action_status
+from memory.database import (
+    get_action_by_id,
+    transition_action_status,
+    get_decision_by_id,
+    transition_decision_approval,
+)
 from workflows.action_executor import execute_action
 from logging_config import get_logger
 
@@ -104,9 +109,52 @@ def format_action_message(action: dict, footer: str = "") -> str:
         f"<b>Detail:</b> <code>{escape_html(action['action_detail'])}</code>\n"
         f"<b>Status:</b> {escape_html(action['status'])}"
     )
+    if action.get("decision_id") is not None:
+        text += f"\n<b>Source Decision:</b> #{action['decision_id']}"
     if footer:
         text += f"\n\n{footer}"
     return text
+
+
+def build_decision_keyboard(decision_id: int, status: str) -> Optional[InlineKeyboardMarkup]:
+    if status == "pending":
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "✅ Approve Decision",
+                callback_data=f"decision_approve:{decision_id}",
+            ),
+            InlineKeyboardButton(
+                "❌ Reject Decision",
+                callback_data=f"decision_reject:{decision_id}",
+            ),
+        ]])
+    if status == "approved":
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "🧰 Prepare Decision",
+                callback_data=f"decision_prepare:{decision_id}",
+            ),
+        ]])
+    return None
+
+
+def send_decision_notification(decision_id: int, topic: str, final_decision: str) -> None:
+    """
+    Stuurt een owner-review bericht voor een executive decision. De knoppen
+    wijzigen alleen de decision approval status; ze voeren geen acties uit.
+    """
+    snippet = final_decision[:1200]
+    message = (
+        f"🧭 <b>EXECUTIVE DECISION #{decision_id}</b>\n\n"
+        f"<b>Topic:</b> {escape_html(topic)}\n\n"
+        f"<b>CEO / Final Decision:</b>\n{escape_html(snippet)}"
+        + ("..." if len(final_decision) > len(snippet) else "")
+        + "\n\n<b>Status:</b> pending owner approval"
+    )
+    send_notification_with_keyboard(
+        message,
+        build_decision_keyboard(decision_id, "pending"),
+    )
 
 
 def send_proposal_notification(
@@ -117,13 +165,18 @@ def send_proposal_notification(
     Wordt aangeroepen vanuit tools/action_proposal_tool.py in plaats van de
     oude platte send_notification() aanroep.
     """
-    action = {
+    stored_action = get_action_by_id(action_id)
+    action = stored_action or {
         "id": action_id,
         "proposed_by": proposed_by,
         "action_description": action_description,
         "action_detail": action_detail,
         "status": "pending",
+        "decision_id": None,
     }
+    # Keep the concise human-facing detail supplied by the tool while using
+    # the database row for status + decision provenance.
+    action["action_detail"] = action_detail
     message = format_action_message(action)
     keyboard = build_action_keyboard(action_id, "pending")
     send_notification_with_keyboard(message, keyboard)
@@ -159,6 +212,127 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         action_id = int(action_id_str)
     except (ValueError, AttributeError):
         await query.answer("Invalid button data.", show_alert=True)
+        return
+
+    if action_type == "decision_prepare":
+        decision = get_decision_by_id(action_id)
+        if decision is None:
+            await query.answer("This decision no longer exists.", show_alert=True)
+            return
+        if decision.get("approval_status") != "approved":
+            await query.answer("Decision must be approved first.", show_alert=True)
+            return
+        if decision.get("preparation_status") not in ("not_started", "preparation_failed"):
+            await query.answer(
+                f"Preparation is already '{decision.get('preparation_status')}'.",
+                show_alert=True,
+            )
+            return
+
+        await query.answer("Preparation started 🧰")
+        try:
+            await query.edit_message_text(
+                text=(
+                    f"🧭 <b>EXECUTIVE DECISION #{action_id}</b>\n\n"
+                    f"<b>Topic:</b> {escape_html(decision['topic'])}\n\n"
+                    "🧰 <b>PREPARATION IN PROGRESS</b>\n"
+                    "Concrete actions will still require separate approval."
+                ),
+                parse_mode="HTML",
+                reply_markup=None,
+            )
+        except Exception as e:
+            logger.warning(f"Could not mark Telegram decision as preparing: {e}")
+
+        # Local import avoids a module-import cycle:
+        # preparation -> agents -> proposal tools -> telegram_interactive.
+        from workflows.preparation import run_decision_preparation
+
+        result = await asyncio.to_thread(run_decision_preparation, action_id)
+        refreshed = get_decision_by_id(action_id) or decision
+
+        if result.get("success"):
+            final_text = (
+                f"🧭 <b>EXECUTIVE DECISION #{action_id}</b>\n\n"
+                f"<b>Topic:</b> {escape_html(refreshed['topic'])}\n\n"
+                "✅ <b>PREPARATION COMPLETE</b>\n"
+                "Any concrete actions proposed by the team are waiting in the "
+                "separate action approval queue."
+            )
+        else:
+            final_text = (
+                f"🧭 <b>EXECUTIVE DECISION #{action_id}</b>\n\n"
+                f"<b>Topic:</b> {escape_html(refreshed['topic'])}\n\n"
+                "❌ <b>PREPARATION FAILED</b>\n"
+                f"{escape_html(result.get('error', 'Unknown preparation error'))}"
+            )
+
+        try:
+            await query.edit_message_text(
+                text=final_text,
+                parse_mode="HTML",
+                reply_markup=(
+                    build_decision_keyboard(action_id, "approved")
+                    if not result.get("success")
+                    else None
+                ),
+            )
+        except Exception as e:
+            logger.warning(f"Could not edit Telegram preparation result: {e}")
+        return
+
+    # Decision-level owner approval uses its own callback namespace. This
+    # changes only the strategic decision state; preparation/action execution
+    # remain separate phases.
+    if action_type in ("decision_approve", "decision_reject"):
+        decision = get_decision_by_id(action_id)
+        if decision is None:
+            await query.answer("This decision no longer exists.", show_alert=True)
+            return
+
+        if decision.get("approval_status") != "pending":
+            await query.answer(
+                f"Decision is already '{decision.get('approval_status')}'.",
+                show_alert=True,
+            )
+            return
+
+        target_status = "approved" if action_type == "decision_approve" else "rejected"
+        if not transition_decision_approval(
+            action_id,
+            target_status,
+            ("pending",),
+            owner_feedback="Reviewed via Telegram",
+        ):
+            refreshed = get_decision_by_id(action_id)
+            await query.answer(
+                f"Decision status changed to '{refreshed.get('approval_status') if refreshed else 'unknown'}'.",
+                show_alert=True,
+            )
+            return
+
+        await query.answer(
+            "Decision approved ✅" if target_status == "approved" else "Decision rejected ❌"
+        )
+        refreshed = get_decision_by_id(action_id) or decision
+        status_text = (
+            "✅ <b>APPROVED</b> — preparation is now unlocked."
+            if target_status == "approved"
+            else "❌ <b>REJECTED</b> — no preparation is allowed."
+        )
+        updated_text = (
+            f"🧭 <b>EXECUTIVE DECISION #{action_id}</b>\n\n"
+            f"<b>Topic:</b> {escape_html(refreshed['topic'])}\n\n"
+            f"{status_text}"
+        )
+        try:
+            await query.edit_message_text(
+                text=updated_text,
+                parse_mode="HTML",
+                reply_markup=build_decision_keyboard(action_id, target_status),
+            )
+        except Exception as e:
+            logger.warning(f"Could not edit decision Telegram message: {e}")
         return
 
     # Haal de ACTUELE status uit de database op — nooit vertrouwen op wat er
