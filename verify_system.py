@@ -1481,6 +1481,165 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 58: DYNAMIC CHECK — decision-scoped proposals are idempotent but isolated
+# -------------------------------------------------------------------
+try:
+    from config import config as _phase2_dedupe_config
+    from memory.database import (
+        init_db as _phase2_dedupe_init_db,
+        propose_action as _phase2_dedupe_propose,
+    )
+
+    original_db_path = _phase2_dedupe_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _phase2_dedupe_config.DATABASE_PATH = os.path.join(temp_dir, "phase2_dedupe.db")
+            _phase2_dedupe_init_db()
+            first = _phase2_dedupe_propose("CTO", "x", "echo same", "shell", decision_id=10)
+            retry = _phase2_dedupe_propose("CTO", "x", "echo same", "shell", decision_id=10)
+            different_decision = _phase2_dedupe_propose(
+                "CTO", "x", "echo same", "shell", decision_id=11
+            )
+            if first == retry and different_decision != first:
+                log_pass("preparation retry reuses exact same decision action without suppressing other decisions")
+            else:
+                log_fail(
+                    "Decision-scoped proposal idempotency",
+                    f"first={first}, retry={retry}, different_decision={different_decision}",
+                )
+    finally:
+        _phase2_dedupe_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Decision-scoped proposal idempotency check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 59: DYNAMIC CHECK — interrupted runtime states recover conservatively
+# -------------------------------------------------------------------
+try:
+    from config import config as _recover_config
+    from memory.database import (
+        init_db as _recover_init_db,
+        log_decision as _recover_log_decision,
+        transition_decision_approval as _recover_approve,
+        claim_decision_for_preparation as _recover_claim_prep,
+        propose_action as _recover_propose_action,
+        transition_action_status as _recover_action_status,
+        claim_action_for_execution as _recover_claim_action,
+        recover_interrupted_states as _recover_states,
+        get_action_by_id as _recover_get_action,
+        get_decision_by_id as _recover_get_decision,
+    )
+
+    original_db_path = _recover_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _recover_config.DATABASE_PATH = os.path.join(temp_dir, "recover.db")
+            _recover_init_db()
+
+            decision_id = _recover_log_decision("recover", ["CEO"], "x", "y")
+            _recover_approve(decision_id, "approved", ("pending",))
+            _recover_claim_prep(decision_id)
+
+            action_id = _recover_propose_action("CTO", "recover", "echo x", "shell", decision_id)
+            _recover_action_status(action_id, "approved", ("pending",))
+            _recover_claim_action(action_id)
+
+            recovered = _recover_states()
+            action = _recover_get_action(action_id)
+            decision = _recover_get_decision(decision_id)
+
+            if (
+                recovered == {"actions": 1, "preparations": 1}
+                and action["status"] == "execution_failed"
+                and "process restart" in (action["result_detail"] or "")
+                and decision["preparation_status"] == "preparation_failed"
+                and "process restart" in (decision["preparation_summary"] or "")
+            ):
+                log_pass("restart recovery marks interrupted execution/preparation for manual-safe review")
+            else:
+                log_fail(
+                    "Interrupted state recovery",
+                    f"recovered={recovered}, action={action}, decision={decision}",
+                )
+    finally:
+        _recover_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Interrupted state recovery check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 60: STATIC CHECK — Telegram has owner-level decision review controls
+# -------------------------------------------------------------------
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        telegram_content_60 = f.read()
+
+    required = [
+        "def build_decision_keyboard",
+        "decision_approve:",
+        "decision_reject:",
+        "transition_decision_approval",
+        "preparation is now unlocked",
+    ]
+    missing = [item for item in required if item not in telegram_content_60]
+    if not missing:
+        log_pass("Telegram supports owner approve/reject for executive decisions without executing actions")
+    else:
+        log_fail("Telegram decision owner gate", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Telegram decision owner gate check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 61: STATIC CHECK — research success counter increments after valid content
+# -------------------------------------------------------------------
+try:
+    with open("tools/research_tool.py", "r", encoding="utf-8") as f:
+        research_content_61 = f.read()
+
+    success_increment = research_content_61.find("_CALL_COUNT += 1")
+    status_check = research_content_61.find("if response.status_code != 200")
+    empty_check = research_content_61.find("if not full_text")
+    if (
+        success_increment > status_check
+        and success_increment > empty_check
+        and "Error: No textual paragraph content found on page." in research_content_61
+    ):
+        log_pass("daily research verification counts only successful, non-empty source reads")
+    else:
+        log_fail(
+            "Research success counter placement",
+            f"increment={success_increment}, status_check={status_check}, empty_check={empty_check}",
+        )
+except Exception as e:
+    log_fail("Research success counter placement check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 62: STATIC CHECK — dashboard exposes owner decision lifecycle
+# -------------------------------------------------------------------
+try:
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_62 = f.read()
+
+    required = [
+        "Approve Decision",
+        "Reject Decision",
+        "Prepare Approved Decision",
+        "Source decision #",
+        "preparation_status",
+    ]
+    missing = [item for item in required if item not in dashboard_content_62]
+    if not missing:
+        log_pass("dashboard exposes decision review, preparation, and action provenance")
+    else:
+        log_fail("Phase 2 dashboard controls", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Phase 2 dashboard controls check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
