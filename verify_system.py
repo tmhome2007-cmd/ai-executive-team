@@ -739,6 +739,98 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 28: STATIC/DYNAMIC CHECK — meeting evidence guard rejects invented figures
+# -------------------------------------------------------------------
+try:
+    from workflows.meeting import find_unsupported_quantitative_claims
+
+    source = "The supplied evidence says the pilot budget is €500 and the target margin is 20%."
+    clean_output = "Use the €500 pilot budget and evaluate whether the 20% target margin is realistic."
+    bad_output = "We project $10 million revenue, 200% ROI, and a 1.5 years payback period."
+
+    clean_claims = find_unsupported_quantitative_claims(source, clean_output)
+    bad_claims = find_unsupported_quantitative_claims(source, bad_output)
+
+    if not clean_claims and len(bad_claims) == 3:
+        log_pass("meeting evidence guard allows supplied figures and flags newly invented quantitative claims")
+    else:
+        log_fail(
+            "Meeting quantitative evidence guard",
+            f"Expected 0 supported-claim warnings and 3 invented-claim warnings; got clean={clean_claims}, bad={bad_claims}"
+        )
+except Exception as e:
+    log_fail("Meeting quantitative evidence guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 29: STATIC CHECK — executive meeting prompts enforce evidence discipline
+# -------------------------------------------------------------------
+try:
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_29 = f.read()
+
+    required_evidence_phrases = [
+        "Unknown — evidence required",
+        "Never invent or present as factual",
+        "Do not inherit an unsupported claim",
+        "Evidence needed before committing money or taking real-world action",
+    ]
+    missing = [p for p in required_evidence_phrases if p not in meeting_content_29]
+
+    if not missing:
+        log_pass("executive meeting prompts enforce evidence/assumption separation and reject inherited unsupported claims")
+    else:
+        log_fail("Meeting evidence-discipline prompt check", f"Missing required guardrail text: {missing}")
+except Exception as e:
+    log_fail("Meeting evidence-discipline prompt check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 30: STATIC CHECK — API exposes decision-quality warnings
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_30 = f.read()
+
+    has_model_field = "quality_warnings: dict = Field(default_factory=dict)" in main_content_30
+    has_response_mapping = 'quality_warnings=meeting_result.get("quality_warnings", {})' in main_content_30
+
+    if has_model_field and has_response_mapping:
+        log_pass("ad-hoc decision API exposes meeting quality warnings to callers")
+    else:
+        missing = []
+        if not has_model_field:
+            missing.append("DecisionResponse.quality_warnings field")
+        if not has_response_mapping:
+            missing.append("quality_warnings response mapping")
+        log_fail("Decision quality warning API check", f"Missing: {', '.join(missing)}")
+except Exception as e:
+    log_fail("Decision quality warning API check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 31: STATIC CHECK — CFO/COO/CEO role prompts no longer force invented business facts
+# -------------------------------------------------------------------
+try:
+    with open("agents/executive_agents.py", "r", encoding="utf-8") as f:
+        agents_content_31 = f.read()
+
+    required_role_guards = [
+        "Unknown — evidence required; never invent figures",
+        "do not invent operational infrastructure",
+        "Do not inherit unsupported facts or figures from another executive",
+    ]
+    missing = [p for p in required_role_guards if p not in agents_content_31]
+
+    if not missing:
+        log_pass("CFO/COO/CEO prompts explicitly reject invented figures and unsupported company assumptions")
+    else:
+        log_fail("Executive role evidence guard check", f"Missing role guard(s): {missing}")
+except Exception as e:
+    log_fail("Executive role evidence guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
