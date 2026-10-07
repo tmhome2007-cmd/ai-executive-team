@@ -15,7 +15,7 @@ from typing import Type, Optional
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 
-from memory.database import propose_action
+from memory.database import propose_action, find_existing_decision_action
 from notifications.telegram_interactive import send_proposal_notification
 from tools._dedupe_guard import check_and_register_proposal
 
@@ -47,9 +47,10 @@ class ProposeBrowserActionTool(BaseTool):
     args_schema: Type[BaseModel] = BrowserActionInput
 
     role: str
+    decision_id: int | None = None
 
-    def __init__(self, role: str, **data):
-        super().__init__(role=role, **data)
+    def __init__(self, role: str, decision_id: int | None = None, **data):
+        super().__init__(role=role, decision_id=decision_id, **data)
 
     def _run(self, url: str, reason: str, click_selector: Optional[str] = None) -> str:
         # LLMs frequently write the literal string "null" (or "none", "n/a",
@@ -59,7 +60,7 @@ class ProposeBrowserActionTool(BaseTool):
         if click_selector is not None and click_selector.strip().lower() in ("null", "none", "n/a", ""):
             click_selector = None
 
-        dedupe_key = f"browser_action:{self.role}:{url}:{click_selector}"
+        dedupe_key = f"browser_action:{self.decision_id}:{self.role}:{url}:{click_selector}"
         duplicate_message = check_and_register_proposal(dedupe_key)
         if duplicate_message:
             return duplicate_message
@@ -72,11 +73,25 @@ class ProposeBrowserActionTool(BaseTool):
 
         description = f"Navigate to '{url}'" + (f" and click '{click_selector}'" if click_selector else "") + f": {reason}"
 
+        if self.decision_id is not None:
+            existing = find_existing_decision_action(
+                self.decision_id,
+                self.role,
+                "browser_action",
+                action_detail_json,
+            )
+            if existing:
+                return (
+                    f"Existing decision-linked browser action #{existing['id']} already represents "
+                    f"this exact proposal (status: {existing['status']}). Do not create it again."
+                )
+
         action_id = propose_action(
             proposed_by=self.role,
             action_description=description,
             action_detail=action_detail_json,
             action_type="browser_action",
+            decision_id=self.decision_id,
         )
 
         summary = f"[navigate] {url}" + (f"\n[click] {click_selector}" if click_selector else "")
