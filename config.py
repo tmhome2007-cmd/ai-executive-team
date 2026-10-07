@@ -82,8 +82,6 @@ def set_sandbox_mode(enabled: bool) -> None:
     een editor door één functie-aanroep (blootgesteld via
     POST /system/sandbox-mode in main.py).
     """
-    config.SANDBOX_MODE = enabled
-
     new_value = "true" if enabled else "false"
     lines = []
     if env_path.exists():
@@ -121,6 +119,10 @@ def set_sandbox_mode(enabled: bool) -> None:
         tmp_path = Path(tmp.name)
     try:
         os.replace(tmp_path, env_path)
+        # Pas NADAT de persistente wijziging succesvol is, de live config
+        # omzetten. Zo kan een filesystem-fout nooit een half-toegepaste
+        # toestand opleveren waarin de API faalt maar execution mode al wijzigde.
+        config.SANDBOX_MODE = enabled
     finally:
         if tmp_path.exists():
             tmp_path.unlink()
