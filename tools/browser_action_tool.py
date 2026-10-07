@@ -47,9 +47,10 @@ class ProposeBrowserActionTool(BaseTool):
     args_schema: Type[BaseModel] = BrowserActionInput
 
     role: str
+    decision_id: int | None = None
 
-    def __init__(self, role: str, **data):
-        super().__init__(role=role, **data)
+    def __init__(self, role: str, decision_id: int | None = None, **data):
+        super().__init__(role=role, decision_id=decision_id, **data)
 
     def _run(self, url: str, reason: str, click_selector: Optional[str] = None) -> str:
         # LLMs frequently write the literal string "null" (or "none", "n/a",
@@ -77,6 +78,7 @@ class ProposeBrowserActionTool(BaseTool):
             action_description=description,
             action_detail=action_detail_json,
             action_type="browser_action",
+            decision_id=self.decision_id,
         )
 
         summary = f"[navigate] {url}" + (f"\n[click] {click_selector}" if click_selector else "")
