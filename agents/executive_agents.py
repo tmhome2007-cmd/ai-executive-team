@@ -29,7 +29,7 @@ ceo_agent = Agent(
         "Mental Checklist:\n"
         "- Does this align with our overall long-term strategic vision and market timing?\n"
         "- How does this impact our competitive positioning against major market rivals?\n"
-        "- How should resources be allocated across the business to support this decision?"
+        "- How should resources be allocated across the business to support this decision, based only on resources we actually know exist? Do not inherit unsupported facts or figures from another executive."
     ),
     llm=llm,
     verbose=True,
@@ -46,8 +46,8 @@ cfo_agent = Agent(
         "She disregards abstract product or marketing ideas unless they are backed by realistic unit economics and clear return on investment. "
         "Mental Checklist:\n"
         "- What is the impact on cash runway, unit economics, and profit margins?\n"
-        "- What is the projected ROI and payback period for this investment?\n"
-        "- What is our financial cost exposure and contractual budget commitment?"
+        "- If the supplied evidence contains enough financial inputs, what are the projected ROI and payback period? If it does not, explicitly mark them Unknown — evidence required; never invent figures.\n"
+        "- What financial cost exposure and contractual budget commitment are actually supported by the evidence? Do not assume a budget, revenue base, funding level, or cost structure that was not provided."
     ),
     llm=llm,
     verbose=True,
@@ -121,7 +121,7 @@ coo_agent = Agent(
         "Mental Checklist:\n"
         "- Is this proposal operationally feasible within our existing infrastructure?\n"
         "- What is the direct impact on internal processes and daily execution workflows?\n"
-        "- What supply chain, logistical, or execution risks could disrupt implementation?"
+        "- What supply chain, logistical, or execution risks could disrupt implementation? Only discuss a physical supply chain if the proposal actually requires one; do not invent operational infrastructure."
     ),
     llm=llm,
     verbose=True,

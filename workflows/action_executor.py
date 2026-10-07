@@ -8,10 +8,12 @@ blokkeert als dat buiten WORKSPACE_ROOT valt, een live-uitvoering via subprocess
 en een veilige dry-run modus.
 """
 
+import ipaddress
 import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 
 try:
@@ -20,7 +22,13 @@ try:
 except ImportError:
     _RESOURCE_MODULE_AVAILABLE = False
 from urllib.parse import urlparse
-from memory.database import get_action_by_id, update_action_status, record_execution_result
+from memory.database import (
+    get_action_by_id,
+    update_action_status,
+    record_execution_result,
+    claim_action_for_execution,
+    VALID_ACTION_TYPES,
+)
 from notifications.telegram_bot import send_notification, escape_html
 from config import config
 
@@ -83,11 +91,18 @@ def _get_workspace_root() -> str:
 
 
 def _looks_like_path(token: str) -> bool:
-    """Heuristiek: is dit token vermoedelijk een bestands-/mappad, in
-    plaats van een losse vlag (-rf) of commandonaam (echo, ls)?"""
+    """Conservatieve pad-detectie voor shellargumenten.
+
+    Ook een kaal relatief token zoals notes.txt of outside kan een
+    bestand/symlink in WORKSPACE_ROOT zijn. De oude heuristiek controleerde
+    alleen tokens met slash, tilde of punt, waardoor een symlink met een
+    simpele naam naar buiten de workspace confinement kon omzeilen.
+    """
     if not token or token.startswith("-"):
         return False
-    return "/" in token or token in (".", "..") or token.startswith("~") or token.startswith(".")
+    if token in {">", ">>", "<", "<<", "2>", "2>>", "2>&1"}:
+        return False
+    return True
 
 
 def check_workspace_confinement(command: str) -> str | None:
@@ -183,8 +198,37 @@ def check_url_safety(url: str) -> str | None:
     if scheme not in ("http", "https"):
         return f"URL must use http or https (got '{scheme or 'no scheme'}')"
 
-    if not parsed.netloc:
+    if not parsed.hostname:
         return f"URL has no valid domain: '{url}'"
+
+    hostname = parsed.hostname.lower()
+    if hostname == "localhost" or hostname.endswith(".localhost") or hostname.endswith(".local"):
+        return f"Local/internal hostname '{hostname}' is not allowed"
+
+    try:
+        resolved_addresses = {
+            info[4][0]
+            for info in socket.getaddrinfo(hostname, parsed.port or (443 if scheme == "https" else 80))
+        }
+    except socket.gaierror as e:
+        return f"Could not resolve hostname '{hostname}': {e}"
+
+    for resolved_ip in resolved_addresses:
+        try:
+            ip_obj = ipaddress.ip_address(resolved_ip)
+        except ValueError:
+            return f"Could not validate resolved address '{resolved_ip}' for '{hostname}'"
+        if (
+            ip_obj.is_loopback
+            or ip_obj.is_private
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return (
+                f"URL resolves to a loopback/private/internal address ({resolved_ip}) — "
+                "browser action blocked from reaching internal services"
+            )
 
     # Optionele allowlist: als config.ALLOWED_BROWSER_DOMAINS is ingesteld
     # (komma-gescheiden lijst), mag alleen naar die domeinen genavigeerd
@@ -192,7 +236,7 @@ def check_url_safety(url: str) -> str | None:
     allowlist_raw = getattr(config, "ALLOWED_BROWSER_DOMAINS", "").strip()
     if allowlist_raw:
         allowed_domains = [d.strip().lower() for d in allowlist_raw.split(",") if d.strip()]
-        domain = parsed.netloc.lower()
+        domain = hostname
         if not any(domain == d or domain.endswith("." + d) for d in allowed_domains):
             return f"Domain '{domain}' is not in the allowed browser domains list: {allowed_domains}"
 
@@ -203,6 +247,18 @@ def check_url_safety(url: str) -> str | None:
 # DANGEROUS COMMAND PATTERNS
 # ------------------------------------------------------------------
 DANGEROUS_PATTERNS: list[tuple[str, str]] = [
+    (
+        r"\b(?:bash|zsh|sh)\s+-c\b",
+        "Nested shell interpreter (-c) can hide commands from static safety analysis"
+    ),
+    (
+        r"\b(?:python(?:3)?|perl|ruby|node)\s+-(?:c|e)\b",
+        "Inline interpreter code can hide filesystem/system actions from static safety analysis"
+    ),
+    (
+        r"\beval\b",
+        "Shell eval can dynamically construct commands that bypass static safety analysis"
+    ),
     # Recursive/forced deletion of root, home, wildcards, or parent paths
     (
         r"rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(/\s*|~|/root|\*|\.\.)",
@@ -284,16 +340,26 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
 
     try:
         detail = json.loads(action_detail_raw)
+        if not isinstance(detail, dict):
+            raise ValueError("action_detail must be a JSON object")
         operation = detail["operation"]
         file_path = detail["file_path"]
         content = detail.get("content", "")
-    except (json.JSONDecodeError, KeyError) as e:
+
+        if operation not in ("read", "write", "append"):
+            raise ValueError(f"unsupported file operation: {operation!r}")
+        if not isinstance(file_path, str) or not file_path.strip():
+            raise ValueError("file_path must be a non-empty string")
+        if not isinstance(content, str):
+            raise ValueError("content must be a string")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
         update_action_status(action_id, "execution_failed")
-        record_execution_result(action_id, json.dumps({"error": f"Malformed file_operation action_detail: {e}"}))
+        error_msg = f"Malformed file_operation action_detail: {e}"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
         return {
             "success": False,
             "action_id": action_id,
-            "error": f"Malformed file_operation action_detail: {e}",
+            "error": error_msg,
         }
 
     # Confinement-check op het pad zelf — dezelfde functie als voor shell-
@@ -328,6 +394,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
     if config.SANDBOX_MODE:
         update_action_status(action_id, "executed_dry_run")
         preview = f"Would {operation} '{resolved_path}'" + (f" with {len(content)} characters of content" if operation != "read" else "")
+        record_execution_result(action_id, json.dumps({"detail": preview, "mode": "dry_run"}))
         try:
             send_notification(
                 f"🧪 <b>DRY RUN — FILE OPERATION</b>\n\n"
@@ -406,17 +473,25 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
 
     try:
         detail = json.loads(action_detail_raw)
+        if not isinstance(detail, dict):
+            raise ValueError("action_detail must be a JSON object")
         url = detail["url"]
         click_selector = detail.get("click_selector") or None
-        if click_selector is not None and str(click_selector).strip().lower() in ("null", "none", "n/a"):
+
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("url must be a non-empty string")
+        if click_selector is not None and not isinstance(click_selector, str):
+            raise ValueError("click_selector must be a string or null")
+        if click_selector is not None and click_selector.strip().lower() in ("null", "none", "n/a", ""):
             click_selector = None
-    except (json.JSONDecodeError, KeyError) as e:
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
         update_action_status(action_id, "execution_failed")
-        record_execution_result(action_id, json.dumps({"error": f"Malformed browser_action action_detail: {e}"}))
+        error_msg = f"Malformed browser_action action_detail: {e}"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
         return {
             "success": False,
             "action_id": action_id,
-            "error": f"Malformed browser_action action_detail: {e}",
+            "error": error_msg,
         }
 
     url_block_reason = check_url_safety(url)
@@ -443,6 +518,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
     if config.SANDBOX_MODE:
         update_action_status(action_id, "executed_dry_run")
         preview = f"Would navigate to '{url}'" + (f" and click '{click_selector}'" if click_selector else "")
+        record_execution_result(action_id, json.dumps({"detail": preview, "mode": "dry_run"}))
         try:
             send_notification(
                 f"🧪 <b>DRY RUN — BROWSER ACTION</b>\n\n"
@@ -466,6 +542,20 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
+
+            # Revalidate every navigation request, including redirects. Without
+            # this, an initially-safe public URL could redirect Chromium to a
+            # localhost/private-network target after the preflight check.
+            def _guard_navigation(route):
+                request = route.request
+                if request.is_navigation_request():
+                    reason = check_url_safety(request.url)
+                    if reason:
+                        route.abort()
+                        return
+                route.continue_()
+
+            page.route("**/*", _guard_navigation)
             page.goto(url, timeout=15000)
             page_title = page.title()
 
@@ -531,16 +621,28 @@ def execute_action(action_id: int) -> dict:
     if not action:
         return {"success": False, "error": "Action not found"}
 
-    # 2. Controleer of de status op 'approved' staat
+    # 2. Reserveer de actie atomair voor precies één executor.
     status = action.get("status")
     if status != "approved":
         return {
-            "success": False, 
+            "success": False,
             "error": f"Action status is '{status}', must be 'approved' to execute."
+        }
+    if not claim_action_for_execution(action_id):
+        current = get_action_by_id(action_id)
+        current_status = current.get("status") if current else "unknown"
+        return {
+            "success": False,
+            "error": f"Action could not be claimed for execution; current status is '{current_status}'.",
         }
 
     action_detail = action.get("action_detail", "")
     action_type = action.get("action_type", "shell")
+    if action_type not in VALID_ACTION_TYPES:
+        update_action_status(action_id, "execution_failed")
+        error_msg = f"Unsupported action_type '{action_type}'"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
+        return {"success": False, "action_id": action_id, "error": error_msg}
 
     # Gestructureerde bestandsoperaties gaan een volledig eigen, veiligere pad
     # (gewone file I/O, geen shell) — de bestaande shell-logica hieronder
@@ -584,6 +686,10 @@ def execute_action(action_id: int) -> dict:
     if config.SANDBOX_MODE:
         print(f"[DRY RUN] Would execute: {action_detail}")
         update_action_status(action_id, "executed_dry_run")
+        record_execution_result(
+            action_id,
+            json.dumps({"detail": f"[DRY RUN] Command simulated: {action_detail}", "mode": "dry_run"}),
+        )
 
         try:
             notification_text = (

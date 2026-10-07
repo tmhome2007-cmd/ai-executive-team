@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 // --- Types ---
 
@@ -29,6 +29,11 @@ interface DecisionResponse {
   final_decision: string;
   participants: string[];
   individual_outputs?: Record<string, string>;
+  quality_warnings?: {
+    unsupported_quantitative_claims?: string[];
+    individual_outputs?: Record<string, string[]>;
+    repeated_analysis?: Record<string, string[]>;
+  };
 }
 
 interface PendingAction {
@@ -72,6 +77,7 @@ const AGENT_OPTIONS: { key: string; label: string }[] = [
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-gray-800 text-gray-300 border-gray-700" },
   approved: { label: "Approved", className: "bg-blue-900/60 text-blue-300 border-blue-700" },
+  executing: { label: "Executing", className: "bg-yellow-900/60 text-yellow-300 border-yellow-700" },
   rejected: { label: "Rejected", className: "bg-red-900/60 text-red-300 border-red-700" },
   executed: { label: "Executed", className: "bg-green-900/60 text-green-300 border-green-700" },
   executed_dry_run: { label: "Executed (Dry Run)", className: "bg-purple-900/60 text-purple-300 border-purple-700" },
@@ -195,18 +201,25 @@ export default function DashboardPage() {
     setApiKey(keyInput);
   };
 
-  const handleAuthFailure = () => {
+  const handleAuthFailure = useCallback(() => {
     sessionStorage.removeItem("dashboard_api_key");
     setApiKey(null);
     setKeyInput("");
-  };
+  }, []);
 
   // --- Sandbox state ---
   const [sandboxMode, setSandboxMode] = useState<boolean | null>(null);
 
   const fetchSandboxStatus = useCallback(async () => {
+    if (!apiKey) return;
     try {
-      const res = await fetch(`${API_BASE}/system/sandbox-status`);
+      const res = await fetch(`${API_BASE}/system/sandbox-status`, {
+        headers: { "X-API-Key": apiKey },
+      });
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setSandboxMode(data.sandbox_mode);
@@ -214,7 +227,7 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Error fetching sandbox status:", err);
     }
-  }, []);
+  }, [apiKey, handleAuthFailure]);
 
   useEffect(() => {
     fetchSandboxStatus();
@@ -299,25 +312,13 @@ export default function DashboardPage() {
 
       const data: PendingAction[] = await res.json();
 
-      // Defensive merge: never let an action that's already been approved or
-      // executed on this screen silently vanish just because a re-fetch
-      // happened to not include it (e.g. a backend still filtering strictly
-      // on status = 'pending'). A card should only disappear because it was
-      // rejected, never because a background refresh raced past its update.
-      setPendingActions((prev) => {
-        const fetchedIds = new Set(data.map((a) => a.id));
-        const preserved = prev.filter(
-          (a) =>
-            !fetchedIds.has(a.id) &&
-            a.status !== "pending" &&
-            a.status !== "rejected"
-        );
-        return [...data, ...preserved];
-      });
+      // Backend returns all active states: pending, approved, executing.
+      // Terminal actions belong only in Action History.
+      setPendingActions(data);
     } catch (err: any) {
       console.error("Error fetching pending actions:", err);
     }
-  }, []);
+  }, [handleAuthFailure]);
 
   const fetchActionHistory = useCallback(async (currentKey: string) => {
     try {
@@ -341,7 +342,7 @@ export default function DashboardPage() {
     } catch (err: any) {
       console.error("Error fetching action history:", err);
     }
-  }, []);
+  }, [handleAuthFailure]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -366,7 +367,7 @@ export default function DashboardPage() {
     } catch (err: any) {
       setLoadError(err.message || "Could not connect to the backend.");
     }
-  }, [apiKey]);
+  }, [apiKey, handleAuthFailure]);
 
   useEffect(() => {
     if (apiKey !== null) {
@@ -453,22 +454,22 @@ export default function DashboardPage() {
         return;
       }
 
-      const data: ExecutionResult = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Execution failed.");
+        throw new Error(data.detail || data.error || "Execution failed.");
       }
 
-      // Store the result to show it inline
-      setExecutionResults((prev) => ({ ...prev, [action.id]: data }));
+      const executionData = data as ExecutionResult;
+      setExecutionResults((prev) => ({ ...prev, [action.id]: executionData }));
 
-      // Update the visible status on the card
-      const newStatus = data.mode === "dry_run" ? "executed_dry_run" : "executed";
-      setPendingActions((prev) =>
-        prev.map((act) => (act.id === action.id ? { ...act, status: newStatus } : act))
-      );
+      // Terminal actions leave the active queue; their result remains in history.
+      setPendingActions((prev) => prev.filter((act) => act.id !== action.id));
 
-      if (apiKey) fetchActionHistory(apiKey);
+      if (apiKey) {
+        fetchPendingActions(apiKey);
+        fetchActionHistory(apiKey);
+      }
     } catch (err: any) {
       setActionErrors((prev) => ({
         ...prev,
@@ -696,8 +697,9 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-4">
               {pendingActions.map((action) => {
+                const isPending = action.status === "pending";
                 const isApproved = action.status === "approved";
-                const isExecuting = executingIds.has(action.id);
+                const isExecuting = action.status === "executing" || executingIds.has(action.id);
                 const execResult = executionResults[action.id];
 
                 return (
@@ -770,13 +772,15 @@ export default function DashboardPage() {
                     <div className="flex gap-2 pt-1">
                       <button
                         onClick={() => handleActionDecision(action.id, "approve")}
-                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors"
+                        disabled={!isPending || isExecuting}
+                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => handleActionDecision(action.id, "reject")}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
+                        disabled={(!isPending && !isApproved) || isExecuting}
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Reject
                       </button>
@@ -815,6 +819,26 @@ export default function DashboardPage() {
               <p className="text-sm text-green-400">
                 Participants: {result.participants.join(", ")}
               </p>
+
+              {result.quality_warnings &&
+                ((result.quality_warnings.unsupported_quantitative_claims?.length || 0) > 0 ||
+                  Object.keys(result.quality_warnings.repeated_analysis || {}).length > 0) && (
+                  <div className="border border-yellow-800 bg-yellow-950/40 rounded p-3 text-sm text-yellow-200 space-y-2">
+                    <div className="font-semibold">Decision Quality Warnings</div>
+                    {(result.quality_warnings.unsupported_quantitative_claims?.length || 0) > 0 && (
+                      <p>
+                        Unsupported quantitative claims:{" "}
+                        {result.quality_warnings.unsupported_quantitative_claims!.join(", ")}
+                      </p>
+                    )}
+                    {Object.keys(result.quality_warnings.repeated_analysis || {}).length > 0 && (
+                      <p>
+                        Repeated analysis detected from:{" "}
+                        {Object.keys(result.quality_warnings.repeated_analysis || {}).join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
 
               <div>
                 <h4 className="font-semibold text-gray-200 mb-1">Final Decision:</h4>
@@ -1025,6 +1049,9 @@ export default function DashboardPage() {
                           </div>
                           {parsedResult.error && (
                             <pre className="text-red-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.error}</pre>
+                          )}
+                          {parsedResult.detail && (
+                            <pre className="text-gray-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.detail}</pre>
                           )}
                           {parsedResult.stdout && (
                             <pre className="text-green-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.stdout}</pre>

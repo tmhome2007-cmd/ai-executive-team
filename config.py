@@ -6,6 +6,7 @@ Laadt omgevingsvariabelen uit .env en stelt veilige standaardwaarden in.
 """
 
 import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from dotenv import load_dotenv
@@ -81,8 +82,6 @@ def set_sandbox_mode(enabled: bool) -> None:
     een editor door één functie-aanroep (blootgesteld via
     POST /system/sandbox-mode in main.py).
     """
-    config.SANDBOX_MODE = enabled
-
     new_value = "true" if enabled else "false"
     lines = []
     if env_path.exists():
@@ -91,16 +90,42 @@ def set_sandbox_mode(enabled: bool) -> None:
 
     found = False
     for i, line in enumerate(lines):
-        if line.strip().startswith("SANDBOX_MODE"):
+        stripped = line.strip()
+        key = stripped.split("=", 1)[0].strip() if "=" in stripped else stripped
+        if key == "SANDBOX_MODE":
             lines[i] = f"SANDBOX_MODE={new_value}\n"
             found = True
             break
 
     if not found:
+        # Als de bestaande .env geen trailing newline heeft, zou writelines()
+        # anders "LAST_KEY=valueSANDBOX_MODE=..." aan elkaar plakken.
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
         lines.append(f"SANDBOX_MODE={new_value}\n")
 
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
+    # Schrijf atomair: eerst een tijdelijk bestand in dezelfde directory,
+    # daarna os.replace(). Zo kan een crash halverwege .env niet afkappen.
+    env_dir = env_path.parent
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=env_dir,
+        prefix=".env.",
+        suffix=".tmp",
+        delete=False,
+    ) as tmp:
+        tmp.writelines(lines)
+        tmp_path = Path(tmp.name)
+    try:
+        os.replace(tmp_path, env_path)
+        # Pas NADAT de persistente wijziging succesvol is, de live config
+        # omzetten. Zo kan een filesystem-fout nooit een half-toegepaste
+        # toestand opleveren waarin de API faalt maar execution mode al wijzigde.
+        config.SANDBOX_MODE = enabled
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 class ConfigValidationError(Exception):

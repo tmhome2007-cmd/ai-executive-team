@@ -22,17 +22,17 @@ class ActionProposalInput(BaseModel):
     )
     action_detail: str = Field(
         ..., 
-        description="The specific technical detail of the action (e.g., shell command string, file path + operation)."
+        description="A concrete shell command string to propose. For file changes use propose_file_operation; for web navigation use propose_browser_action."
     )
 
 
 class ProposeActionTool(BaseTool):
     name: str = "propose_action"
     description: str = (
-        "Use this to propose a real-world action (like running a command, modifying a file, "
-        "or making a change outside this conversation) for human review. This does NOT execute "
-        "anything — it only logs the proposal for a human to approve or reject later. "
-        "You should use this instead of claiming you performed an action directly."
+        "Use this ONLY to propose a concrete shell command for human review. "
+        "Do not use it for file reads/writes or browser navigation; use the dedicated "
+        "propose_file_operation / propose_browser_action tools for those. This does NOT execute "
+        "anything — it only logs the command for a human to approve or reject later."
     )
     args_schema: Type[BaseModel] = ActionProposalInput
     

@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 import os
 import re
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -31,11 +31,16 @@ from memory.database import (
     get_pending_actions,
     get_action_history,
     update_action_status,
+    transition_action_status,
+    get_action_by_id,
     get_system_stats,
     backup_database,
+    has_daily_research_attempt_on,
+    recover_interrupted_actions,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
+from agents.executive_agents import EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
 from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
@@ -55,22 +60,7 @@ LAST_RUN_STATUS = {
 # 2. Hulpfunctie om te controleren of de taak vandaag al gedraaid heeft
 def has_run_today() -> bool:
     """Controleert in de database of er vandaag al een daily research poging is vastgelegd."""
-    recent_decisions = get_recent_decisions(limit=5)
-    today_date = datetime.date.today()
-
-    for decision in recent_decisions:
-        topic = decision.get("topic", "")
-        timestamp_str = decision.get("timestamp")
-
-        if topic.startswith("Daily Research") and timestamp_str:
-            try:
-                decision_date = datetime.datetime.fromisoformat(timestamp_str).date()
-                if decision_date == today_date:
-                    return True
-            except (ValueError, TypeError):
-                continue
-
-    return False
+    return has_daily_research_attempt_on(datetime.date.today())
 
 
 # 3. Asynchrone Achtergrondtaak met Catch-up Logica
@@ -128,6 +118,13 @@ async def lifespan(app: FastAPI):
     # Initialiseer de database
     init_db()
 
+    recovered_actions = recover_interrupted_actions()
+    if recovered_actions:
+        logger.warning(
+            f"Recovered {recovered_actions} interrupted action(s) as execution_failed; "
+            "manual review required because real-world outcome is unknown."
+        )
+
     # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
     # waarschuwingen in plaats van dat het probleem pas bij de eerste
     # crew-aanroep, verwarrend, aan het licht komt.
@@ -147,6 +144,13 @@ async def lifespan(app: FastAPI):
         trigger=IntervalTrigger(minutes=15),
         id="daily_research_interval_job",
         replace_existing=True,
+        # Run the catch-up check as soon as the scheduler starts, but do it as
+        # a scheduler job instead of awaiting the full research pipeline inside
+        # FastAPI lifespan. This keeps API startup fast even when research +
+        # meetings take several minutes.
+        next_run_time=datetime.datetime.now(),
+        max_instances=1,
+        coalesce=True,
     )
     scheduler.add_job(
         lambda: backup_database(keep_last=7),
@@ -156,10 +160,7 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     app.state.scheduler = scheduler
-    logger.info("Scheduler started: daily research catch-up (15 min interval) + daily DB backup (24h interval).")
-
-    # Voer direct bij het opstarten één check/catch-up uit (asynchroon)
-    await scheduled_research_job()
+    logger.info("Scheduler started: immediate daily-research catch-up check + 15 min interval + daily DB backup (24h interval).")
 
     # Eén backup bij het opstarten, zodat je niet 24 uur moet wachten op de
     # eerste veiligheidskopie na een verse installatie.
@@ -195,7 +196,7 @@ app = FastAPI(
 # 5.1 CORS Middleware configuratie voor Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -224,9 +225,9 @@ class DailyResearchResponse(BaseModel):
 
 
 class DecisionRequest(BaseModel):
-    topic: str
-    task_description: str
-    agent_keys: list[str] = ["cfo", "ceo"]
+    topic: str = Field(min_length=1, max_length=200)
+    task_description: str = Field(min_length=1, max_length=12000)
+    agent_keys: list[str] = Field(default_factory=lambda: ["cfo", "ceo"], min_length=1, max_length=11)
 
 
 class DecisionResponse(BaseModel):
@@ -235,6 +236,7 @@ class DecisionResponse(BaseModel):
     final_decision: str
     participants: list[str]
     individual_outputs: dict[str, str]
+    quality_warnings: dict = Field(default_factory=dict)
 
 
 # --- API Key Beveiliging ---
@@ -378,6 +380,14 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             topic=request.topic,
             task_description=request.task_description,
             agent_keys=request.agent_keys,
+            # Decision meetings are reasoning-only. Tool-capable agents belong
+            # in the separate preparation/execution phase after human approval.
+            agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid meeting request: {e}",
         )
     except Exception as e:
         raise HTTPException(
@@ -390,7 +400,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
 
     db_id = log_decision(
         topic=request.topic,
-        agents_involved=request.agent_keys,
+        agents_involved=participants,
         task_description=request.task_description,
         decision_outcome=final_decision,
         sandbox_mode=config.SANDBOX_MODE,
@@ -408,7 +418,8 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         topic=request.topic,
         final_decision=final_decision,
         participants=participants,
-        individual_outputs=meeting_result.get("individual_outputs", {}),  # <-- NIEUWE REGEL
+        individual_outputs=meeting_result.get("individual_outputs", {}),
+        quality_warnings=meeting_result.get("quality_warnings", {}),
     )
 
 
@@ -446,6 +457,7 @@ def favicon():
     "/system/sandbox-status",
     summary="Get Sandbox Mode Status",
     description="Retourneert de huidige sandbox-modus status van het systeem.",
+    dependencies=[Depends(verify_api_key)],
 )
 def get_sandbox_status():
     """Geeft aan of het systeem in Sandbox Mode of Live Mode draait."""
@@ -576,10 +588,19 @@ def read_pending_actions():
     description="Haalt de meest recente acties op UIT ALLE statussen (inclusief afgehandelde/geblokkeerde), voor een volledig audit-overzicht — in tegenstelling tot /actions/pending, dat alleen nog-actiegevende items toont.",
     dependencies=[Depends(verify_api_key)],
 )
-def read_action_history(limit: int = 20, offset: int = 0, status: Optional[str] = None):
+def read_action_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: Optional[str] = None,
+):
     """Retourneert een lijst van de meest recente acties, ongeacht status (tenzij gefilterd)."""
-    limit = max(1, min(limit, 100))
-    offset = max(0, offset)
+    if status is not None:
+        from memory.database import VALID_ACTION_STATUSES
+        if status not in VALID_ACTION_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid action status filter '{status}'.",
+            )
     return get_action_history(limit, offset, status)
 
 
@@ -591,11 +612,17 @@ def read_action_history(limit: int = 20, offset: int = 0, status: Optional[str] 
 )
 def approve_action(action_id: int):
     """Markeert een voorgestelde actie als 'approved'."""
-    success = update_action_status(action_id, "approved")
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
+
+    success = transition_action_status(action_id, "approved", ("pending",))
     if not success:
+        current = get_action_by_id(action_id)
+        current_status = current["status"] if current else "unknown"
         raise HTTPException(
-            status_code=404,
-            detail=f"Action proposal with ID {action_id} not found."
+            status_code=409,
+            detail=f"Action cannot be approved from status '{current_status}'.",
         )
     return {"action_id": action_id, "status": "approved"}
 
@@ -608,11 +635,17 @@ def approve_action(action_id: int):
 )
 def reject_action(action_id: int):
     """Markeert een voorgestelde actie als 'rejected'."""
-    success = update_action_status(action_id, "rejected")
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
+
+    success = transition_action_status(action_id, "rejected", ("pending", "approved"))
     if not success:
+        current = get_action_by_id(action_id)
+        current_status = current["status"] if current else "unknown"
         raise HTTPException(
-            status_code=404,
-            detail=f"Action proposal with ID {action_id} not found."
+            status_code=409,
+            detail=f"Action cannot be rejected from status '{current_status}'.",
         )
     return {"action_id": action_id, "status": "rejected"}
 @app.post(
@@ -627,14 +660,10 @@ def execute_approved_action(action_id: int):
     if not result.get("success", False):
         error_msg = result.get("error", "Execution failed")
         if error_msg == "Action not found":
-            raise HTTPException(
-                status_code=404,
-                detail=error_msg
-            )
-        raise HTTPException(
-            status_code=400,
-            detail=error_msg
-        )
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "must be 'approved'" in error_msg or "could not be claimed for execution" in error_msg:
+            raise HTTPException(status_code=409, detail=error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
         
     return result
 
@@ -648,4 +677,7 @@ if __name__ == "__main__":
     # via BIND_HOST in .env als je écht vanaf een ander apparaat op hetzelfde
     # netwerk bij het dashboard moet kunnen (en dan met extra voorzichtigheid).
     bind_host = os.getenv("BIND_HOST", "127.0.0.1")
-    uvicorn.run("main:app", host=bind_host, port=8000, reload=True)
+    # Stable single-process default. For active development, run
+    # "uvicorn main:app --reload" explicitly instead. Auto-reload can briefly
+    # overlap workers, which is unsafe for the single Telegram poller.
+    uvicorn.run("main:app", host=bind_host, port=8000, reload=False)

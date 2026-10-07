@@ -16,7 +16,7 @@ if str(project_root) not in sys.path:
 from agents.executive_agents import EXECUTIVE_AGENTS
 from config import config
 from memory.database import init_db, log_decision
-from notifications.telegram_bot import send_notification
+from notifications.telegram_bot import send_notification, escape_html
 
 # 1. Haal de CEO en CFO agenten op uit de geladen dictionary
 ceo_agent = EXECUTIVE_AGENTS.get("ceo")
@@ -84,11 +84,11 @@ if __name__ == "__main__":
         # Stap 4: Stuur een Telegram-notificatie
         print("📱 [3/3] Telegram notificatie versturen...")
         telegram_message = (
-            f"🏛 *AI Executive Team Decision*\n\n"
-            f"*Topic:* {topic_title}\n"
-            f"*Record ID:* #{record_id}\n"
-            f"*Agents Involved:* CEO, CFO\n\n"
-            f"*Outcome:*\n{result_str}"
+            f"🏛 <b>AI Executive Team Decision</b>\n\n"
+            f"<b>Topic:</b> {escape_html(topic_title)}\n"
+            f"<b>Record ID:</b> #{record_id}\n"
+            f"<b>Agents Involved:</b> CEO, CFO\n\n"
+            f"<b>Outcome:</b>\n{escape_html(result_str)}"
         )
         send_notification(telegram_message)
         print("✅ Workflow succesvol afgerond!")
