@@ -312,21 +312,9 @@ export default function DashboardPage() {
 
       const data: PendingAction[] = await res.json();
 
-      // Defensive merge: never let an action that's already been approved or
-      // executed on this screen silently vanish just because a re-fetch
-      // happened to not include it (e.g. a backend still filtering strictly
-      // on status = 'pending'). A card should only disappear because it was
-      // rejected, never because a background refresh raced past its update.
-      setPendingActions((prev) => {
-        const fetchedIds = new Set(data.map((a) => a.id));
-        const preserved = prev.filter(
-          (a) =>
-            !fetchedIds.has(a.id) &&
-            a.status !== "pending" &&
-            a.status !== "rejected"
-        );
-        return [...data, ...preserved];
-      });
+      // Backend returns all active states: pending, approved, executing.
+      // Terminal actions belong only in Action History.
+      setPendingActions(data);
     } catch (err: any) {
       console.error("Error fetching pending actions:", err);
     }
@@ -466,22 +454,22 @@ export default function DashboardPage() {
         return;
       }
 
-      const data: ExecutionResult = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Execution failed.");
+        throw new Error(data.detail || data.error || "Execution failed.");
       }
 
-      // Store the result to show it inline
-      setExecutionResults((prev) => ({ ...prev, [action.id]: data }));
+      const executionData = data as ExecutionResult;
+      setExecutionResults((prev) => ({ ...prev, [action.id]: executionData }));
 
-      // Update the visible status on the card
-      const newStatus = data.mode === "dry_run" ? "executed_dry_run" : "executed";
-      setPendingActions((prev) =>
-        prev.map((act) => (act.id === action.id ? { ...act, status: newStatus } : act))
-      );
+      // Terminal actions leave the active queue; their result remains in history.
+      setPendingActions((prev) => prev.filter((act) => act.id !== action.id));
 
-      if (apiKey) fetchActionHistory(apiKey);
+      if (apiKey) {
+        fetchPendingActions(apiKey);
+        fetchActionHistory(apiKey);
+      }
     } catch (err: any) {
       setActionErrors((prev) => ({
         ...prev,
