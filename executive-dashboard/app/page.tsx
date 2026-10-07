@@ -697,8 +697,9 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-4">
               {pendingActions.map((action) => {
+                const isPending = action.status === "pending";
                 const isApproved = action.status === "approved";
-                const isExecuting = executingIds.has(action.id);
+                const isExecuting = action.status === "executing" || executingIds.has(action.id);
                 const execResult = executionResults[action.id];
 
                 return (
@@ -771,13 +772,15 @@ export default function DashboardPage() {
                     <div className="flex gap-2 pt-1">
                       <button
                         onClick={() => handleActionDecision(action.id, "approve")}
-                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors"
+                        disabled={!isPending || isExecuting}
+                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => handleActionDecision(action.id, "reject")}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
+                        disabled={(!isPending && !isApproved) || isExecuting}
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Reject
                       </button>
@@ -1046,6 +1049,9 @@ export default function DashboardPage() {
                           </div>
                           {parsedResult.error && (
                             <pre className="text-red-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.error}</pre>
+                          )}
+                          {parsedResult.detail && (
+                            <pre className="text-gray-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.detail}</pre>
                           )}
                           {parsedResult.stdout && (
                             <pre className="text-green-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.stdout}</pre>
