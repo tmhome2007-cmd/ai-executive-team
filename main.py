@@ -35,6 +35,7 @@ from memory.database import (
     get_action_by_id,
     get_system_stats,
     backup_database,
+    has_daily_research_attempt_on,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -58,22 +59,7 @@ LAST_RUN_STATUS = {
 # 2. Hulpfunctie om te controleren of de taak vandaag al gedraaid heeft
 def has_run_today() -> bool:
     """Controleert in de database of er vandaag al een daily research poging is vastgelegd."""
-    recent_decisions = get_recent_decisions(limit=5)
-    today_date = datetime.date.today()
-
-    for decision in recent_decisions:
-        topic = decision.get("topic", "")
-        timestamp_str = decision.get("timestamp")
-
-        if topic.startswith("Daily Research") and timestamp_str:
-            try:
-                decision_date = datetime.datetime.fromisoformat(timestamp_str).date()
-                if decision_date == today_date:
-                    return True
-            except (ValueError, TypeError):
-                continue
-
-    return False
+    return has_daily_research_attempt_on(datetime.date.today())
 
 
 # 3. Asynchrone Achtergrondtaak met Catch-up Logica
