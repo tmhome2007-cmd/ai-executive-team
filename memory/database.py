@@ -363,7 +363,11 @@ def finalize_decision_preparation(
 # ===================================================================
 
 def propose_action(
-    proposed_by: str, action_description: str, action_detail: str, action_type: str = "shell"
+    proposed_by: str,
+    action_description: str,
+    action_detail: str,
+    action_type: str = "shell",
+    decision_id: int | None = None,
 ) -> int:
     """
     Voegt een voorgestelde actie toe aan de action_queue met de status 'pending'.
