@@ -100,6 +100,10 @@ def set_sandbox_mode(enabled: bool) -> None:
             break
 
     if not found:
+        # Als de bestaande .env geen trailing newline heeft, zou writelines()
+        # anders "LAST_KEY=valueSANDBOX_MODE=..." aan elkaar plakken.
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
         lines.append(f"SANDBOX_MODE={new_value}\n")
 
     # Schrijf atomair: eerst een tijdelijk bestand in dezelfde directory,
