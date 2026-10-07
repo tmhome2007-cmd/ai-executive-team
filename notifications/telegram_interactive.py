@@ -286,6 +286,10 @@ def _run_listener_in_thread() -> None:
         _state["last_error"] = f"Listener thread crashed: {e}"
         logger.error(f"Telegram listener thread crashed unexpectedly: {e}", exc_info=True)
     finally:
+        _state["started_successfully"] = False
+        _state["application"] = None
+        _state["stop_event"] = None
+        _state["loop"] = None
         loop.close()
 
 
