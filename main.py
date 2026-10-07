@@ -41,6 +41,8 @@ from memory.database import (
     claim_decision_for_preparation,
     finish_decision_preparation,
     recover_interrupted_actions,
+    get_latest_action_id,
+    get_actions_after_id,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -561,13 +563,18 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         "Identify required resources, access, credentials, plugins, data, files, "
         "browser steps, or commands. If a concrete action is genuinely needed and "
         "your role has an appropriate propose_* tool, you MAY propose it for human "
-        "review. Never claim a proposed action has executed. Never invent access or "
+        "review. IMPORTANT: if you decide a proposal is needed, CALL the actual tool. "
+        "Do not print, imitate, or describe a JSON/function-call payload in your answer. "
+        "A textual pseudo-call is invalid and will fail preparation verification. "
+        "Never claim a proposed action has executed. Never invent access or "
         "credentials we do not have. Missing capabilities must be listed explicitly "
         "as resource/access requests. Minimize actions: do not propose anything that "
         "is not necessary to prepare the approved direction."
     )
 
     try:
+        action_snapshot_id = get_latest_action_id()
+
         meeting_result = run_executive_meeting(
             topic=f"Preparation for Decision #{decision_id}",
             task_description=preparation_prompt,
@@ -580,6 +587,38 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
         participants = meeting_result.get("participants", [])
         final_plan = meeting_result.get("final_decision", "")
+        new_actions = get_actions_after_id(action_snapshot_id)
+
+        # Some local models occasionally PRINT a function-call-shaped JSON
+        # object instead of actually invoking the CrewAI tool. That must never
+        # count as a successful preparation run: no DB action means no proposal
+        # was really created and therefore no human approval gate exists.
+        pseudo_tool_call = bool(
+            re.search(
+                r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action)"|'
+                r'\bpropose_(?:action|file_operation|browser_action)\s*\()',
+                final_plan,
+            )
+        )
+        if pseudo_tool_call and not new_actions:
+            finish_decision_preparation(
+                decision_id,
+                False,
+                (
+                    "Preparation failed verification: an executive printed a "
+                    "tool-call imitation but no action proposal was actually "
+                    "created in action_queue. Retry preparation."
+                ),
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Preparation agent described/printed a propose_* tool call "
+                    "without actually invoking the tool. No action proposal was "
+                    "created, so preparation was marked failed and is safe to retry."
+                ),
+            )
+
         finish_decision_preparation(decision_id, True, final_plan)
     except ValueError as e:
         finish_decision_preparation(decision_id, False, None)
