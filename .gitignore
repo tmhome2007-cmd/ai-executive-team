@@ -10,3 +10,4 @@ Bewaarde terminaluitvoer.txt
 backups/
 logs/
 workspace/
+sync/*.jsonl
