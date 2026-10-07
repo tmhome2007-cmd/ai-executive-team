@@ -145,6 +145,7 @@ def run_executive_meeting(
     task_description: str,
     agent_keys: List[str],
     agents_source: Dict[str, Any] = None,
+    evidence_text: str | None = None,
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -155,9 +156,10 @@ def run_executive_meeting(
         agent_keys (List[str]): Lijst van rollen (bijv. ["cfo", "coo", "ceo"]) die deelnemen.
         agents_source (dict, optioneel): Welke agent-dictionary te gebruiken om
             de keys op te zoeken. Standaard EXECUTIVE_AGENTS (volledig getoold).
-            Geef bijv. EXECUTIVE_AGENTS_NO_TOOLS mee voor een meeting waar
-            GEEN enkele deelnemer real-world tools mag kunnen aanroepen —
-            zoals de geautomatiseerde dagelijkse research-meeting.
+        evidence_text (str, optioneel): bron waarop de deterministische
+            kwantitatieve guard claims valideert. Standaard task_description.
+            Hiermee kan een preparation prompt een eerder besluit tonen zonder
+            dat cijfers uit dat besluit automatisch als bewezen evidence gelden.
 
     Returns:
         Dict[str, Any]: Een dictionary met 'final_decision', 'participants' en 'individual_outputs'.
@@ -318,15 +320,16 @@ def run_executive_meeting(
             individual_outputs[key] = "Geen individuele output beschikbaar."
 
     raw_final_decision = str(crew_result)
+    guard_source = evidence_text if evidence_text is not None else task_description
     guarded_final_decision, quality_warnings = _apply_evidence_guard(
-        task_description,
+        guard_source,
         raw_final_decision,
     )
 
     guarded_individual_outputs: Dict[str, str] = {}
     individual_quality_warnings: Dict[str, List[str]] = {}
     for key, raw_output in individual_outputs.items():
-        guarded_output, warnings = _apply_evidence_guard(task_description, raw_output)
+        guarded_output, warnings = _apply_evidence_guard(guard_source, raw_output)
         guarded_individual_outputs[key] = guarded_output
         if warnings:
             individual_quality_warnings[key] = warnings

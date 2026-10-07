@@ -36,11 +36,17 @@ from memory.database import (
     get_system_stats,
     backup_database,
     has_daily_research_attempt_on,
+    get_decision_by_id,
+    transition_decision_approval,
+    claim_decision_for_preparation,
+    finish_decision_preparation,
     recover_interrupted_actions,
+    get_latest_action_id,
+    get_actions_after_id,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
-from agents.executive_agents import EXECUTIVE_AGENTS_NO_TOOLS
+from agents.executive_agents import EXECUTIVE_AGENTS, EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
 from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
@@ -118,6 +124,9 @@ async def lifespan(app: FastAPI):
     # Initialiseer de database
     init_db()
 
+    # Als een vorige procesrun tijdens een echte actie crashte, is het
+    # real-world resultaat per definitie onzeker. Nooit automatisch retryen:
+    # markeer zulke 'executing' acties als failed voor menselijke review.
     recovered_actions = recover_interrupted_actions()
     if recovered_actions:
         logger.warning(
@@ -234,6 +243,22 @@ class DecisionResponse(BaseModel):
     database_id: int
     topic: str
     final_decision: str
+    participants: list[str]
+    individual_outputs: dict[str, str]
+    quality_warnings: dict = Field(default_factory=dict)
+
+
+class PreparationRequest(BaseModel):
+    agent_keys: list[str] = Field(
+        default_factory=lambda: ["coo", "cto", "ceo"],
+        min_length=1,
+        max_length=11,
+    )
+
+
+class PreparationResponse(BaseModel):
+    source_decision_id: int
+    final_plan: str
     participants: list[str]
     individual_outputs: dict[str, str]
     quality_warnings: dict = Field(default_factory=dict)
@@ -417,6 +442,208 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         database_id=db_id,
         topic=request.topic,
         final_decision=final_decision,
+        participants=participants,
+        individual_outputs=meeting_result.get("individual_outputs", {}),
+        quality_warnings=meeting_result.get("quality_warnings", {}),
+    )
+
+
+@app.post(
+    "/decisions/{decision_id}/approve",
+    summary="Approve Executive Decision Direction",
+    dependencies=[Depends(verify_api_key)],
+)
+def approve_decision(decision_id: int):
+    """Human approval gate voor de strategische richting van een beslissing."""
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+
+    if not transition_decision_approval(decision_id, "approved", ("pending",)):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision cannot be approved from its current state "
+                f"(approval={current.get('approval_status') if current else 'unknown'}, "
+                f"preparation={current.get('preparation_status') if current else 'unknown'})."
+            ),
+        )
+
+    try:
+        send_notification(
+            f"✅ <b>DECISION APPROVED</b>\n\n"
+            f"<b>Decision ID:</b> #{decision_id}\n"
+            f"<b>Topic:</b> {escape_html(decision['topic'])}\n\n"
+            "The decision is now eligible for the separate preparation phase."
+        )
+    except Exception as notify_err:
+        logger.warning(f"Decision approval notification failed: {notify_err}")
+
+    return {
+        "decision_id": decision_id,
+        "approval_status": "approved",
+        "preparation_status": "not_started",
+    }
+
+
+@app.post(
+    "/decisions/{decision_id}/reject",
+    summary="Reject Executive Decision Direction",
+    dependencies=[Depends(verify_api_key)],
+)
+def reject_decision(decision_id: int):
+    """Reject een beslissing voordat preparation is gestart/voltooid."""
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+
+    if not transition_decision_approval(decision_id, "rejected", ("pending", "approved")):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision cannot be rejected from its current state "
+                f"(approval={current.get('approval_status') if current else 'unknown'}, "
+                f"preparation={current.get('preparation_status') if current else 'unknown'})."
+            ),
+        )
+
+    try:
+        send_notification(
+            f"❌ <b>DECISION REJECTED</b>\n\n"
+            f"<b>Decision ID:</b> #{decision_id}\n"
+            f"<b>Topic:</b> {escape_html(decision['topic'])}"
+        )
+    except Exception as notify_err:
+        logger.warning(f"Decision rejection notification failed: {notify_err}")
+
+    return {"decision_id": decision_id, "approval_status": "rejected"}
+
+
+@app.post(
+    "/decisions/{decision_id}/prepare",
+    response_model=PreparationResponse,
+    summary="Prepare an Approved Decision for Execution",
+    dependencies=[Depends(verify_api_key)],
+)
+def prepare_approved_decision(decision_id: int, request: PreparationRequest):
+    """
+    Phase 2: laat tool-capable executives een GOEDGEKEURDE strategische
+    beslissing vertalen naar concrete voorbereiding/action proposals.
+    De tools voeren niets direct uit: elk voorstel blijft in action_queue en
+    vereist daarna nog steeds afzonderlijke menselijke Approve + Execute.
+    """
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+    if decision["approval_status"] != "approved":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Decision must be approved before preparation (currently '{decision['approval_status']}').",
+        )
+
+    if not claim_decision_for_preparation(decision_id):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision preparation could not be claimed "
+                f"(current preparation status: '{current.get('preparation_status') if current else 'unknown'}')."
+            ),
+        )
+
+    preparation_prompt = (
+        f"PHASE 2 — PREPARATION FOR APPROVED DECISION #{decision_id}\n\n"
+        f"Original topic: {decision['topic']}\n\n"
+        f"Original evidence/task:\n{decision['task_description']}\n\n"
+        f"Human-approved strategic direction:\n{decision['decision_outcome']}\n\n"
+        "Your job is NOT to re-decide whether the direction should happen. "
+        "Translate the approved direction into a concrete, safe preparation plan. "
+        "Identify required resources, access, credentials, plugins, data, files, "
+        "browser steps, or commands. If a concrete action is genuinely needed and "
+        "your role has an appropriate propose_* tool, you MAY propose it for human "
+        "review. IMPORTANT: if you decide a proposal is needed, CALL the actual tool. "
+        "Do not print, imitate, or describe a JSON/function-call payload in your answer. "
+        "A textual pseudo-call is invalid and will fail preparation verification. "
+        "Never claim a proposed action has executed. Never invent access or "
+        "credentials we do not have. Missing capabilities must be listed explicitly "
+        "as resource/access requests. Minimize actions: do not propose anything that "
+        "is not necessary to prepare the approved direction."
+    )
+
+    try:
+        action_snapshot_id = get_latest_action_id()
+
+        meeting_result = run_executive_meeting(
+            topic=f"Preparation for Decision #{decision_id}",
+            task_description=preparation_prompt,
+            agent_keys=request.agent_keys,
+            agents_source=EXECUTIVE_AGENTS,
+            # Only the ORIGINAL task/evidence is evidence for quantitative
+            # validation. The approved recommendation is direction, not proof.
+            evidence_text=decision["task_description"],
+        )
+
+        participants = meeting_result.get("participants", [])
+        final_plan = meeting_result.get("final_decision", "")
+        new_actions = get_actions_after_id(action_snapshot_id)
+
+        # Some local models occasionally PRINT a function-call-shaped JSON
+        # object instead of actually invoking the CrewAI tool. That must never
+        # count as a successful preparation run: no DB action means no proposal
+        # was really created and therefore no human approval gate exists.
+        pseudo_tool_call = bool(
+            re.search(
+                r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action)"|'
+                r'\bpropose_(?:action|file_operation|browser_action)\s*\()',
+                final_plan,
+            )
+        )
+        if pseudo_tool_call and not new_actions:
+            finish_decision_preparation(
+                decision_id,
+                False,
+                (
+                    "Preparation failed verification: an executive printed a "
+                    "tool-call imitation but no action proposal was actually "
+                    "created in action_queue. Retry preparation."
+                ),
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Preparation agent described/printed a propose_* tool call "
+                    "without actually invoking the tool. No action proposal was "
+                    "created, so preparation was marked failed and is safe to retry."
+                ),
+            )
+
+        finish_decision_preparation(decision_id, True, final_plan)
+    except HTTPException:
+        # Deliberate verification/API errors above already persisted the
+        # appropriate preparation state and should keep their exact status/detail.
+        raise
+    except ValueError as e:
+        finish_decision_preparation(decision_id, False, None)
+        raise HTTPException(status_code=400, detail=f"Invalid preparation request: {e}")
+    except Exception as e:
+        finish_decision_preparation(decision_id, False, None)
+        raise HTTPException(status_code=502, detail=f"Preparation meeting failed: {e}")
+
+    try:
+        send_notification(
+            f"🧭 <b>PREPARATION COMPLETE</b>\n\n"
+            f"<b>Source decision:</b> #{decision_id}\n\n"
+            "Any concrete actions proposed by executives are still waiting in "
+            "the normal action approval queue."
+        )
+    except Exception as notify_err:
+        logger.warning(f"Preparation completion notification failed: {notify_err}")
+
+    return PreparationResponse(
+        source_decision_id=decision_id,
+        final_plan=final_plan,
         participants=participants,
         individual_outputs=meeting_result.get("individual_outputs", {}),
         quality_warnings=meeting_result.get("quality_warnings", {}),

@@ -1524,29 +1524,280 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
-# CHECK 63: DYNAMIC CHECK — interrupted executing actions fail closed after restart
+# CHECK 63: DYNAMIC CHECK — decision approval/preparation lifecycle is atomic
 # -------------------------------------------------------------------
 try:
     from config import config as _verify_config_63
     from memory.database import (
         init_db as _init_db_63,
-        propose_action as _propose_63,
-        transition_action_status as _transition_63,
-        claim_action_for_execution as _claim_63,
-        recover_interrupted_actions as _recover_63,
-        get_action_by_id as _get_action_63,
+        log_decision as _log_decision_63,
+        get_decision_by_id as _get_decision_63,
+        transition_decision_approval as _transition_decision_63,
+        claim_decision_for_preparation as _claim_prep_63,
+        finish_decision_preparation as _finish_prep_63,
     )
 
     original_db_63 = _verify_config_63.DATABASE_PATH
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            _verify_config_63.DATABASE_PATH = os.path.join(temp_dir, "recovery.db")
+            _verify_config_63.DATABASE_PATH = os.path.join(temp_dir, "phase2.db")
             _init_db_63()
-            action_id = _propose_63("COO", "interrupted action", "echo hello", "shell")
-            _transition_63(action_id, "approved", ("pending",))
-            claimed = _claim_63(action_id)
-            recovered_count = _recover_63()
-            recovered = _get_action_63(action_id)
+
+            decision_id = _log_decision_63(
+                "Phase 2 lifecycle test",
+                ["cfo"],
+                "Test evidence",
+                "Test recommendation",
+                True,
+            )
+            initial = _get_decision_63(decision_id)
+            preapproval_claim = _claim_prep_63(decision_id)
+
+            first_approve = _transition_decision_63(decision_id, "approved", ("pending",))
+            second_approve = _transition_decision_63(decision_id, "approved", ("pending",))
+
+            first_claim = _claim_prep_63(decision_id)
+            second_claim = _claim_prep_63(decision_id)
+            reject_during_prep = _transition_decision_63(
+                decision_id, "rejected", ("pending", "approved")
+            )
+
+            finish_ok = _finish_prep_63(decision_id, True, "Prepared safely")
+            reclaim_completed = _claim_prep_63(decision_id)
+            final = _get_decision_63(decision_id)
+
+            if (
+                initial["approval_status"] == "pending"
+                and initial["preparation_status"] == "not_started"
+                and not preapproval_claim
+                and first_approve
+                and not second_approve
+                and first_claim
+                and not second_claim
+                and not reject_during_prep
+                and finish_ok
+                and not reclaim_completed
+                and final["approval_status"] == "approved"
+                and final["preparation_status"] == "completed"
+                and final["preparation_outcome"] == "Prepared safely"
+            ):
+                log_pass("decision approval/preparation state machine enforces the human gate and prevents duplicate preparation")
+            else:
+                log_fail(
+                    "Decision approval/preparation lifecycle",
+                    f"initial={initial}, preapproval_claim={preapproval_claim}, "
+                    f"approve=({first_approve},{second_approve}), "
+                    f"claim=({first_claim},{second_claim}), reject_during={reject_during_prep}, "
+                    f"finish={finish_ok}, reclaim={reclaim_completed}, final={final}",
+                )
+    finally:
+        _verify_config_63.DATABASE_PATH = original_db_63
+except Exception as e:
+    log_fail("Decision approval/preparation lifecycle check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 64: DYNAMIC CHECK — rejected decisions can never enter preparation
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_64
+    from memory.database import (
+        init_db as _init_db_64,
+        log_decision as _log_decision_64,
+        transition_decision_approval as _transition_decision_64,
+        claim_decision_for_preparation as _claim_prep_64,
+        get_decision_by_id as _get_decision_64,
+    )
+
+    original_db_64 = _verify_config_64.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_64.DATABASE_PATH = os.path.join(temp_dir, "rejected.db")
+            _init_db_64()
+            decision_id = _log_decision_64(
+                "Rejected direction test", ["ceo"], "Evidence", "Direction", True
+            )
+            rejected = _transition_decision_64(decision_id, "rejected", ("pending",))
+            claimed = _claim_prep_64(decision_id)
+            row = _get_decision_64(decision_id)
+
+            if rejected and not claimed and row["preparation_status"] == "not_started":
+                log_pass("rejected decisions cannot be claimed for Phase 2 preparation")
+            else:
+                log_fail(
+                    "Rejected decision preparation gate",
+                    f"rejected={rejected}, claimed={claimed}, row={row}",
+                )
+    finally:
+        _verify_config_64.DATABASE_PATH = original_db_64
+except Exception as e:
+    log_fail("Rejected decision preparation gate check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 65: STATIC CHECK — reasoning and preparation use different agent capabilities
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_65 = f.read()
+
+    reasoning_match = re.search(
+        r"def trigger_ad_hoc_decision.*?(?=\n\n@app\.|\Z)",
+        main_content_65,
+        re.DOTALL,
+    )
+    preparation_match = re.search(
+        r"def prepare_approved_decision.*?(?=\n\n@app\.|\Z)",
+        main_content_65,
+        re.DOTALL,
+    )
+    reasoning_block = reasoning_match.group(0) if reasoning_match else ""
+    preparation_block = preparation_match.group(0) if preparation_match else ""
+
+    reasoning_safe = "agents_source=EXECUTIVE_AGENTS_NO_TOOLS" in reasoning_block
+    preparation_capable = "agents_source=EXECUTIVE_AGENTS" in preparation_block
+    preserves_evidence = 'evidence_text=decision["task_description"]' in preparation_block
+
+    if reasoning_safe and preparation_capable and preserves_evidence:
+        log_pass("reasoning is tool-free while only approved preparation uses tool-capable agents without laundering recommendation text into evidence")
+    else:
+        log_fail(
+            "Phase 2 agent capability separation",
+            f"reasoning_safe={reasoning_safe}, preparation_capable={preparation_capable}, preserves_evidence={preserves_evidence}",
+        )
+except Exception as e:
+    log_fail("Phase 2 agent capability separation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 66: STATIC CHECK — Phase 2 API requires explicit approval before preparation
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_66 = f.read()
+
+    has_approve = '"/decisions/{decision_id}/approve"' in main_content_66
+    has_reject = '"/decisions/{decision_id}/reject"' in main_content_66
+    has_prepare = '"/decisions/{decision_id}/prepare"' in main_content_66
+    has_approved_guard = 'decision["approval_status"] != "approved"' in main_content_66
+    has_atomic_claim = "claim_decision_for_preparation(decision_id)" in main_content_66
+
+    if has_approve and has_reject and has_prepare and has_approved_guard and has_atomic_claim:
+        log_pass("Phase 2 API exposes approve/reject/prepare endpoints with an explicit approved-state gate")
+    else:
+        log_fail(
+            "Phase 2 API gate",
+            f"approve={has_approve}, reject={has_reject}, prepare={has_prepare}, "
+            f"approved_guard={has_approved_guard}, atomic_claim={has_atomic_claim}",
+        )
+except Exception as e:
+    log_fail("Phase 2 API gate check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 67: STATIC CHECK — dashboard exposes human direction gate and preparation
+# -------------------------------------------------------------------
+try:
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_67 = f.read()
+
+    required_controls = [
+        "Approve Direction",
+        "Reject Direction",
+        "Start Phase 2 Preparation",
+        "handleDecisionReview",
+        "handlePrepareDecision",
+        "Preparation Plan",
+    ]
+    missing = [p for p in required_controls if p not in dashboard_content_67]
+
+    if not missing:
+        log_pass("dashboard exposes the human decision gate and approved Phase 2 preparation workflow")
+    else:
+        log_fail("Phase 2 dashboard controls", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Phase 2 dashboard controls check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 68: DYNAMIC CHECK — imported decisions receive real approval rows
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_68
+    from memory.database import (
+        init_db as _init_db_68,
+        import_history_from_jsonl as _import_68,
+        get_recent_decisions as _recent_68,
+        transition_decision_approval as _transition_68,
+    )
+
+    original_db_68 = _verify_config_68.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_68.DATABASE_PATH = os.path.join(temp_dir, "import.db")
+            _init_db_68()
+            export_path = os.path.join(temp_dir, "import.jsonl")
+            imported_row = {
+                "_table": "decisions",
+                "timestamp": "2026-10-07T12:00:00",
+                "topic": "Imported decision",
+                "agents_involved": "cfo",
+                "task_description": "Imported evidence",
+                "decision_outcome": "Imported recommendation",
+                "sandbox_mode": 1,
+                "sync_uuid": "verify-imported-decision-68",
+            }
+            with open(export_path, "w", encoding="utf-8") as f:
+                f.write(json.dumps(imported_row) + "\n")
+
+            summary = _import_68(export_path)
+            imported = next(
+                row for row in _recent_68(limit=10)
+                if row["sync_uuid"] == "verify-imported-decision-68"
+            )
+            approval_worked = _transition_68(imported["id"], "approved", ("pending",))
+
+            if (
+                summary.get("decisions_imported") == 1
+                and imported["approval_status"] == "pending"
+                and approval_worked
+            ):
+                log_pass("imported decisions get a persisted pending approval row and can pass the human gate")
+            else:
+                log_fail(
+                    "Imported decision approval row",
+                    f"summary={summary}, imported={imported}, approval_worked={approval_worked}",
+                )
+    finally:
+        _verify_config_68.DATABASE_PATH = original_db_68
+except Exception as e:
+    log_fail("Imported decision approval row check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 69: DYNAMIC CHECK — interrupted executing actions fail closed after restart
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_69
+    from memory.database import (
+        init_db as _init_db_69,
+        propose_action as _propose_69,
+        transition_action_status as _transition_69,
+        claim_action_for_execution as _claim_69,
+        recover_interrupted_actions as _recover_69,
+        get_action_by_id as _get_action_69,
+    )
+
+    original_db_69 = _verify_config_69.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_69.DATABASE_PATH = os.path.join(temp_dir, "recovery.db")
+            _init_db_69()
+            action_id = _propose_69("COO", "interrupted action", "echo hello", "shell")
+            _transition_69(action_id, "approved", ("pending",))
+            claimed = _claim_69(action_id)
+            recovered_count = _recover_69()
+            recovered = _get_action_69(action_id)
             detail = json.loads(recovered["result_detail"])
 
             if (
@@ -1555,27 +1806,27 @@ try:
                 and recovered["status"] == "execution_failed"
                 and "outcome is unknown" in detail.get("error", "").lower()
             ):
-                log_pass("startup recovery marks interrupted executions failed instead of retrying uncertain real-world effects")
+                log_pass("startup recovery marks interrupted executions failed with unknown-outcome warning instead of retrying")
             else:
                 log_fail(
                     "Interrupted execution recovery",
                     f"claimed={claimed}, recovered_count={recovered_count}, recovered={recovered}",
                 )
     finally:
-        _verify_config_63.DATABASE_PATH = original_db_63
+        _verify_config_69.DATABASE_PATH = original_db_69
 except Exception as e:
     log_fail("Interrupted execution recovery check crashed", str(e))
 
 
 # -------------------------------------------------------------------
-# CHECK 64: STATIC CHECK — sandbox mode updates memory only after persistence
+# CHECK 70: STATIC CHECK — sandbox mode updates memory only after persistence
 # -------------------------------------------------------------------
 try:
     with open("config.py", "r", encoding="utf-8") as f:
-        config_content_64 = f.read()
+        config_content_70 = f.read()
 
-    replace_pos = config_content_64.find("os.replace(tmp_path, env_path)")
-    memory_pos = config_content_64.find("config.SANDBOX_MODE = enabled")
+    replace_pos = config_content_70.find("os.replace(tmp_path, env_path)")
+    memory_pos = config_content_70.find("config.SANDBOX_MODE = enabled")
 
     if replace_pos != -1 and memory_pos > replace_pos:
         log_pass("sandbox mode updates live memory only after the atomic .env write succeeds")
@@ -1586,6 +1837,30 @@ try:
         )
 except Exception as e:
     log_fail("Transactional sandbox mode persistence check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 71: STATIC CHECK — Phase 2 rejects fake textual tool calls
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_71 = f.read()
+
+    required = [
+        "get_latest_action_id()",
+        "get_actions_after_id(action_snapshot_id)",
+        "pseudo_tool_call = bool(",
+        "tool-call imitation",
+        "Preparation agent described/printed a propose_* tool call",
+    ]
+    missing = [p for p in required if p not in main_content_71]
+
+    if not missing:
+        log_pass("Phase 2 verifies that printed propose_* pseudo-calls created a real action_queue proposal")
+    else:
+        log_fail("Phase 2 fake-tool-call guard", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Phase 2 fake-tool-call guard check crashed", str(e))
 
 
 # -------------------------------------------------------------------
