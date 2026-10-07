@@ -29,6 +29,11 @@ interface DecisionResponse {
   final_decision: string;
   participants: string[];
   individual_outputs?: Record<string, string>;
+  quality_warnings?: {
+    unsupported_quantitative_claims?: string[];
+    individual_outputs?: Record<string, string[]>;
+    repeated_analysis?: Record<string, string[]>;
+  };
 }
 
 interface PendingAction {
@@ -72,6 +77,7 @@ const AGENT_OPTIONS: { key: string; label: string }[] = [
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   pending: { label: "Pending", className: "bg-gray-800 text-gray-300 border-gray-700" },
   approved: { label: "Approved", className: "bg-blue-900/60 text-blue-300 border-blue-700" },
+  executing: { label: "Executing", className: "bg-yellow-900/60 text-yellow-300 border-yellow-700" },
   rejected: { label: "Rejected", className: "bg-red-900/60 text-red-300 border-red-700" },
   executed: { label: "Executed", className: "bg-green-900/60 text-green-300 border-green-700" },
   executed_dry_run: { label: "Executed (Dry Run)", className: "bg-purple-900/60 text-purple-300 border-purple-700" },
@@ -195,11 +201,11 @@ export default function DashboardPage() {
     setApiKey(keyInput);
   };
 
-  const handleAuthFailure = () => {
+  const handleAuthFailure = useCallback(() => {
     sessionStorage.removeItem("dashboard_api_key");
     setApiKey(null);
     setKeyInput("");
-  };
+  }, []);
 
   // --- Sandbox state ---
   const [sandboxMode, setSandboxMode] = useState<boolean | null>(null);
