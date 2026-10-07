@@ -257,6 +257,44 @@ EXECUTIVE_AGENTS_NO_TOOLS = {
     for key, agent in EXECUTIVE_AGENTS.items()
 }
 
+def build_preparation_agents(decision_id: int) -> dict[str, Agent]:
+    """
+    Bouwt decision-scoped executive agents voor de PREPARATION phase.
+    Alleen rollen die concrete acties mogen voorbereiden krijgen proposal
+    tools, en elke proposal wordt teruggekoppeld naar decision_id.
+    Deze tools voeren nog steeds niets direct uit.
+    """
+    tool_map = {
+        "cfo": [ProposeFileOperationTool(role="CFO", decision_id=decision_id)],
+        "general_counsel": [
+            ProposeFileOperationTool(role="General Counsel", decision_id=decision_id)
+        ],
+        "coo": [
+            ProposeActionTool(role="COO", decision_id=decision_id),
+            ProposeFileOperationTool(role="COO", decision_id=decision_id),
+            ProposeBrowserActionTool(role="COO", decision_id=decision_id),
+        ],
+        "cto": [
+            ProposeActionTool(role="CTO", decision_id=decision_id),
+            ProposeFileOperationTool(role="CTO", decision_id=decision_id),
+        ],
+    }
+
+    scoped_agents: dict[str, Agent] = {}
+    for key, source_agent in EXECUTIVE_AGENTS.items():
+        scoped_agents[key] = Agent(
+            role=source_agent.role,
+            goal=source_agent.goal,
+            backstory=source_agent.backstory,
+            llm=llm,
+            verbose=True,
+            allow_delegation=False,
+            max_iter=5,
+            tools=tool_map.get(key, []),
+        )
+    return scoped_agents
+
+
 # 4. Sanity-check blok om alle agenten te verifiëren
 if __name__ == "__main__":
     print("=" * 60)
