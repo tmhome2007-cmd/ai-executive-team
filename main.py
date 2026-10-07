@@ -440,7 +440,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
 
 
 @app.get(
-    "/decisions/{decision_id}",
+    "/decisions/detail/{decision_id}",
     summary="Get Decision Detail",
     dependencies=[Depends(verify_api_key)],
 )
