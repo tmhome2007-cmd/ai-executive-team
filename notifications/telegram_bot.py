@@ -66,18 +66,15 @@ async def send_notification_async(message: str) -> None:
         )
         print("Telegram notificatie succesvol verzonden!")
     except Exception as e:
-        # Vang eventuele fouten op zonder de applicatie te laten crashen
         print(f"Failed to send Telegram notification: {e}")
+        raise
 
 
 def send_notification(message: str) -> None:
     """
     Synchrone wrapper om send_notification_async aan te roepen vanuit normale Python-code.
     """
-    try:
-        asyncio.run(send_notification_async(message))
-    except Exception as e:
-        print(f"Error running Telegram notification event loop: {e}")
+    asyncio.run(send_notification_async(message))
 
 
 async def send_notification_with_keyboard_async(
@@ -111,7 +108,7 @@ async def send_notification_with_keyboard_async(
         return sent_message.message_id
     except Exception as e:
         print(f"Failed to send Telegram notification with keyboard: {e}")
-        return None
+        raise
 
 
 def send_notification_with_keyboard(
@@ -121,11 +118,7 @@ def send_notification_with_keyboard(
     Synchrone wrapper om send_notification_with_keyboard_async aan te roepen
     vanuit normale (niet-async) Python-code, zoals tools/action_proposal_tool.py.
     """
-    try:
-        return asyncio.run(send_notification_with_keyboard_async(message, reply_markup))
-    except Exception as e:
-        print(f"Error running Telegram notification (with keyboard) event loop: {e}")
-        return None
+    return asyncio.run(send_notification_with_keyboard_async(message, reply_markup))
 
 
 if __name__ == "__main__":
