@@ -129,8 +129,6 @@ class PageReaderTool(BaseTool):
         if block_reason:
             return f"Error: URL blocked for safety — {block_reason}"
 
-        _CALL_COUNT += 1
-        
         try:
             # Stel een User-Agent in om te voorkomen dat Wikipedia/servers het verzoek blokkeren (HTTP 403)
             headers = {
@@ -147,10 +145,18 @@ class PageReaderTool(BaseTool):
             # Structureer de HTML-tekst met BeautifulSoup
             soup = BeautifulSoup(response.text, "html.parser")
             paragraphs = [p.get_text() for p in soup.find_all("p")]
-            full_text = " ".join(paragraphs)
+            full_text = " ".join(paragraphs).strip()
+
+            if not full_text:
+                return "Error: No textual paragraph content found on page."
+
+            # Alleen een ECHT succesvolle bron-read telt mee voor de workflow-
+            # verificatie. Netwerkfouten/HTTP-fouten/lege pagina's mogen nooit
+            # de 3/3 gate laten slagen.
+            _CALL_COUNT += 1
 
             # Beperk de tekstlengte om de contextruimte van het model te besparen
-            return full_text[:2000] if full_text else "No content found on page."
+            return full_text[:2000]
             
         except Exception as err:
             return f"Error reading page {url}: {str(err)}"
