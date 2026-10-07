@@ -75,8 +75,9 @@ def check_playwright_browser_installed() -> tuple[bool, str]:
     daadwerkelijk aanwezig is (gokken op een bestandspad is onbetrouwbaar
     gebleken: we hebben zelf gezien dat het pakket build '1243' verwachtte
     terwijl alleen '1234' gedownload was). Dit is een EENMALIGE check bij het
-    opstarten, vóór de server verzoeken aanneemt — een synchrone, blokkerende
-    aanroep hier is veilig, in tegenstelling tot tijdens een live request.
+    opstarten. Omdat deze functie de synchrone Playwright API gebruikt, moet
+    de async FastAPI lifespan haar via asyncio.to_thread() uitvoeren; gewone
+    synchrone routes mogen haar rechtstreeks aanroepen via FastAPI's threadpool.
     """
     try:
         from playwright.sync_api import sync_playwright
