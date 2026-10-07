@@ -1313,6 +1313,121 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 54: STATIC CHECK — private sync exports are not tracked by future commits
+# -------------------------------------------------------------------
+try:
+    with open(".gitignore", "r", encoding="utf-8") as f:
+        gitignore_content_54 = f.read()
+    if "sync/*.jsonl" in gitignore_content_54:
+        log_pass("decision/action JSONL exports are gitignored as private runtime data")
+    else:
+        log_fail("Private sync export gitignore", "Missing sync/*.jsonl in .gitignore")
+except Exception as e:
+    log_fail("Private sync export gitignore check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 55: STATIC CHECK — ad-hoc meeting validation errors are client errors
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_55 = f.read()
+    trigger_match = re.search(r"def trigger_ad_hoc_decision.*?(?=\n\n@app\.|\Z)", main_content_55, re.DOTALL)
+    block = trigger_match.group(0) if trigger_match else ""
+    if "except ValueError as e:" in block and "status_code=400" in block:
+        log_pass("invalid/duplicate executive keys return HTTP 400 instead of a false backend 502")
+    else:
+        log_fail("Meeting input error mapping", "Expected ValueError -> HTTP 400 in trigger_ad_hoc_decision")
+except Exception as e:
+    log_fail("Meeting input error mapping check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 56: STATIC CHECK — decision audit logs actual participant order
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_56 = f.read()
+    trigger_match = re.search(r"def trigger_ad_hoc_decision.*?(?=\n\n@app\.|\Z)", main_content_56, re.DOTALL)
+    block = trigger_match.group(0) if trigger_match else ""
+    if "agents_involved=participants" in block:
+        log_pass("decision history records the actual meeting participant order after CEO reordering")
+    else:
+        log_fail("Decision participant audit", "Expected agents_involved=participants")
+except Exception as e:
+    log_fail("Decision participant audit check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 57: STATIC CHECK — malformed sync records cannot abort whole import
+# -------------------------------------------------------------------
+try:
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content_57 = f.read()
+    required = [
+        "except json.JSONDecodeError",
+        "if not isinstance(row, dict)",
+        "required_columns =",
+        "except (sqlite3.IntegrityError, sqlite3.OperationalError)",
+    ]
+    missing = [p for p in required if p not in db_content_57]
+    if not missing:
+        log_pass("history import skips malformed/incomplete records instead of aborting the full import")
+    else:
+        log_fail("Resilient history import", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Resilient history import check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 58: STATIC CHECK — API startup does not await full research pipeline
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_58 = f.read()
+    lifespan_match = re.search(
+        r"async def lifespan\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
+        main_content_58,
+        re.DOTALL,
+    )
+    block = lifespan_match.group(0) if lifespan_match else ""
+    has_immediate_scheduler_run = "next_run_time=datetime.datetime.now()" in block
+    blocks_on_research = "await scheduled_research_job()" in block
+    if has_immediate_scheduler_run and not blocks_on_research:
+        log_pass("startup schedules immediate catch-up research without blocking FastAPI readiness")
+    else:
+        log_fail(
+            "Non-blocking startup research",
+            f"immediate_scheduler={has_immediate_scheduler_run}, blocking_await={blocks_on_research}",
+        )
+except Exception as e:
+    log_fail("Non-blocking startup research check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 59: STATIC CHECK — local dashboard/backend origins are consistent
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_59 = f.read()
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_59 = f.read()
+
+    allows_localhost = "http://localhost:3000" in main_content_59
+    allows_loopback = "http://127.0.0.1:3000" in main_content_59
+    configurable_api = "NEXT_PUBLIC_API_BASE" in dashboard_content_59
+    if allows_localhost and allows_loopback and configurable_api:
+        log_pass("dashboard API base is configurable and both common local origins pass CORS")
+    else:
+        log_fail(
+            "Dashboard/backend local origin compatibility",
+            f"localhost={allows_localhost}, loopback={allows_loopback}, configurable={configurable_api}",
+        )
+except Exception as e:
+    log_fail("Dashboard/backend local origin compatibility check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
