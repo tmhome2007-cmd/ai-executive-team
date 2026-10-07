@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 import os
 import re
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -235,7 +235,7 @@ class DecisionResponse(BaseModel):
     final_decision: str
     participants: list[str]
     individual_outputs: dict[str, str]
-    quality_warnings: dict = {}
+    quality_warnings: dict = Field(default_factory=dict)
 
 
 # --- API Key Beveiliging ---
