@@ -817,6 +817,26 @@ export default function DashboardPage() {
                 Participants: {result.participants.join(", ")}
               </p>
 
+              {result.quality_warnings &&
+                ((result.quality_warnings.unsupported_quantitative_claims?.length || 0) > 0 ||
+                  Object.keys(result.quality_warnings.repeated_analysis || {}).length > 0) && (
+                  <div className="border border-yellow-800 bg-yellow-950/40 rounded p-3 text-sm text-yellow-200 space-y-2">
+                    <div className="font-semibold">Decision Quality Warnings</div>
+                    {(result.quality_warnings.unsupported_quantitative_claims?.length || 0) > 0 && (
+                      <p>
+                        Unsupported quantitative claims:{" "}
+                        {result.quality_warnings.unsupported_quantitative_claims!.join(", ")}
+                      </p>
+                    )}
+                    {Object.keys(result.quality_warnings.repeated_analysis || {}).length > 0 && (
+                      <p>
+                        Repeated analysis detected from:{" "}
+                        {Object.keys(result.quality_warnings.repeated_analysis || {}).join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
               <div>
                 <h4 className="font-semibold text-gray-200 mb-1">Final Decision:</h4>
                 <div className="bg-gray-950 rounded-md p-4 text-sm text-gray-200 whitespace-pre-wrap border border-gray-800">
