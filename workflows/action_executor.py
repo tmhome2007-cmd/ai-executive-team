@@ -340,16 +340,26 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
 
     try:
         detail = json.loads(action_detail_raw)
+        if not isinstance(detail, dict):
+            raise ValueError("action_detail must be a JSON object")
         operation = detail["operation"]
         file_path = detail["file_path"]
         content = detail.get("content", "")
-    except (json.JSONDecodeError, KeyError) as e:
+
+        if operation not in ("read", "write", "append"):
+            raise ValueError(f"unsupported file operation: {operation!r}")
+        if not isinstance(file_path, str) or not file_path.strip():
+            raise ValueError("file_path must be a non-empty string")
+        if not isinstance(content, str):
+            raise ValueError("content must be a string")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
         update_action_status(action_id, "execution_failed")
-        record_execution_result(action_id, json.dumps({"error": f"Malformed file_operation action_detail: {e}"}))
+        error_msg = f"Malformed file_operation action_detail: {e}"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
         return {
             "success": False,
             "action_id": action_id,
-            "error": f"Malformed file_operation action_detail: {e}",
+            "error": error_msg,
         }
 
     # Confinement-check op het pad zelf — dezelfde functie als voor shell-
