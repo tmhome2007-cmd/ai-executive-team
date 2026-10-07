@@ -36,9 +36,12 @@ from memory.database import (
     get_system_stats,
     backup_database,
     has_daily_research_attempt_on,
+    get_decision_by_id,
+    transition_decision_approval,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
+from workflows.preparation import run_decision_preparation
 from agents.executive_agents import EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
@@ -227,6 +230,18 @@ class DecisionResponse(BaseModel):
     quality_warnings: dict = Field(default_factory=dict)
 
 
+class DecisionReviewRequest(BaseModel):
+    feedback: Optional[str] = Field(default=None, max_length=4000)
+
+
+class PreparationResponse(BaseModel):
+    success: bool
+    decision_id: Optional[int] = None
+    preparation_summary: Optional[str] = None
+    error: Optional[str] = None
+    meeting_result: Optional[dict] = None
+
+
 # --- API Key Beveiliging ---
 
 # Bijhouden van gefaalde pogingen per client-IP, puur in-memory (dit draait
@@ -404,6 +419,102 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         individual_outputs=meeting_result.get("individual_outputs", {}),
         quality_warnings=meeting_result.get("quality_warnings", {}),
     )
+
+
+@app.get(
+    "/decisions/{decision_id}",
+    summary="Get Decision Detail",
+    dependencies=[Depends(verify_api_key)],
+)
+def get_decision_detail(decision_id: int):
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    return decision
+
+
+@app.post(
+    "/decisions/{decision_id}/approve",
+    summary="Owner Approves Executive Decision",
+    dependencies=[Depends(verify_api_key)],
+)
+def approve_decision(decision_id: int, request: DecisionReviewRequest):
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+
+    if not transition_decision_approval(
+        decision_id,
+        "approved",
+        ("pending",),
+        owner_feedback=request.feedback,
+    ):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision cannot be approved from status "
+                f"'{current.get('approval_status') if current else 'unknown'}'."
+            ),
+        )
+
+    return {
+        "decision_id": decision_id,
+        "approval_status": "approved",
+        "owner_feedback": request.feedback,
+    }
+
+
+@app.post(
+    "/decisions/{decision_id}/reject",
+    summary="Owner Rejects Executive Decision",
+    dependencies=[Depends(verify_api_key)],
+)
+def reject_decision(decision_id: int, request: DecisionReviewRequest):
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+
+    if not transition_decision_approval(
+        decision_id,
+        "rejected",
+        ("pending",),
+        owner_feedback=request.feedback,
+    ):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision cannot be rejected from status "
+                f"'{current.get('approval_status') if current else 'unknown'}'."
+            ),
+        )
+
+    return {
+        "decision_id": decision_id,
+        "approval_status": "rejected",
+        "owner_feedback": request.feedback,
+    }
+
+
+@app.post(
+    "/decisions/{decision_id}/prepare",
+    response_model=PreparationResponse,
+    summary="Prepare an Owner-Approved Decision",
+    dependencies=[Depends(verify_api_key)],
+)
+def prepare_approved_decision(decision_id: int):
+    result = run_decision_preparation(decision_id)
+
+    if not result.get("success"):
+        error = result.get("error", "Preparation failed")
+        if error == "Decision not found":
+            raise HTTPException(status_code=404, detail=error)
+        if "must be 'approved'" in error or "could not be claimed" in error:
+            raise HTTPException(status_code=409, detail=error)
+        raise HTTPException(status_code=502, detail=error)
+
+    return PreparationResponse(**result)
 
 
 @app.get(
