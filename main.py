@@ -245,7 +245,6 @@ class PreparationRequest(BaseModel):
 
 class PreparationResponse(BaseModel):
     source_decision_id: int
-    preparation_decision_id: int
     final_plan: str
     participants: list[str]
     individual_outputs: dict[str, str]
@@ -570,26 +569,18 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
         participants = meeting_result.get("participants", [])
         final_plan = meeting_result.get("final_decision", "")
-        prep_id = log_decision(
-            topic=f"Preparation Plan for Decision #{decision_id}",
-            agents_involved=participants,
-            task_description=preparation_prompt,
-            decision_outcome=final_plan,
-            sandbox_mode=config.SANDBOX_MODE,
-        )
-        finish_decision_preparation(decision_id, True)
+        finish_decision_preparation(decision_id, True, final_plan)
     except ValueError as e:
-        finish_decision_preparation(decision_id, False)
+        finish_decision_preparation(decision_id, False, None)
         raise HTTPException(status_code=400, detail=f"Invalid preparation request: {e}")
     except Exception as e:
-        finish_decision_preparation(decision_id, False)
+        finish_decision_preparation(decision_id, False, None)
         raise HTTPException(status_code=502, detail=f"Preparation meeting failed: {e}")
 
     try:
         send_notification(
             f"🧭 <b>PREPARATION COMPLETE</b>\n\n"
-            f"<b>Source decision:</b> #{decision_id}\n"
-            f"<b>Preparation record:</b> #{prep_id}\n\n"
+            f"<b>Source decision:</b> #{decision_id}\n\n"
             "Any concrete actions proposed by executives are still waiting in "
             "the normal action approval queue."
         )
@@ -598,7 +589,6 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
     return PreparationResponse(
         source_decision_id=decision_id,
-        preparation_decision_id=prep_id,
         final_plan=final_plan,
         participants=participants,
         individual_outputs=meeting_result.get("individual_outputs", {}),
