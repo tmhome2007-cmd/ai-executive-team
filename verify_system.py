@@ -1273,6 +1273,46 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 52: STATIC CHECK — research counter counts only successful content
+# -------------------------------------------------------------------
+try:
+    with open("tools/research_tool.py", "r", encoding="utf-8") as f:
+        research_content_52 = f.read()
+
+    success_increment = research_content_52.find("_CALL_COUNT += 1")
+    status_check = research_content_52.find("if response.status_code != 200")
+    empty_check = research_content_52.find("if not full_text")
+    if (
+        success_increment > status_check
+        and success_increment > empty_check
+        and "Error: No textual paragraph content found on page." in research_content_52
+    ):
+        log_pass("daily research verification counts only successful, non-empty source reads")
+    else:
+        log_fail(
+            "Research success counter placement",
+            f"increment={success_increment}, status_check={status_check}, empty_check={empty_check}",
+        )
+except Exception as e:
+    log_fail("Research success counter placement check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 53: STATIC CHECK — normal server entrypoint is single-process
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_53 = f.read()
+
+    if 'uvicorn.run("main:app", host=bind_host, port=8000, reload=False)' in main_content_53:
+        log_pass("normal python main.py entrypoint disables auto-reload worker overlap")
+    else:
+        log_fail("Stable Uvicorn runtime", "Expected reload=False in normal main.py entrypoint")
+except Exception as e:
+    log_fail("Stable Uvicorn runtime check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
