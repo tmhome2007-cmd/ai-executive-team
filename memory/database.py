@@ -532,7 +532,6 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     sync; dit is puur "een reddingslijn als de database zelf corrupt raakt of
     per ongeluk verwijderd wordt"). Retourneert het pad van de nieuwe backup.
     """
-    import shutil
     import datetime as _dt
 
     os.makedirs(backup_dir, exist_ok=True)
@@ -541,7 +540,18 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     backup_filename = f"executive_team_backup_{timestamp}.db"
     backup_path = os.path.join(backup_dir, backup_filename)
 
-    shutil.copy2(db_path, backup_path)
+    # Gebruik SQLite's eigen online-backup API in plaats van shutil.copy2().
+    # Een rauwe bestandscopy kan midden in een actieve write/transactie een
+    # inconsistente snapshot opleveren. sqlite3.Connection.backup() neemt een
+    # transaction-consistente snapshot terwijl de bron-DB live mag blijven.
+    source = sqlite3.connect(db_path, timeout=5.0)
+    destination = sqlite3.connect(backup_path, timeout=5.0)
+    try:
+        source.backup(destination)
+        destination.commit()
+    finally:
+        destination.close()
+        source.close()
 
     existing_backups = sorted(
         [f for f in os.listdir(backup_dir) if f.startswith("executive_team_backup_") and f.endswith(".db")]
