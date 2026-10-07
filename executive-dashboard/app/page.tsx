@@ -14,6 +14,11 @@ interface DecisionHistoryItem {
   task_description: string;
   decision_outcome: string;
   sandbox_mode: number;
+  approval_status?: string;
+  decision_reviewed_at?: string | null;
+  owner_feedback?: string | null;
+  preparation_status?: string;
+  preparation_summary?: string | null;
 }
 
 interface DailyResearchStatus {
@@ -46,6 +51,7 @@ interface PendingAction {
   reviewed_at: string | null;
   action_type?: string;
   result_detail?: string | null;
+  decision_id?: number | null;
 }
 
 interface ExecutionResult {
@@ -292,6 +298,8 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<number>>(new Set());
   const [expandedActionHistoryIds, setExpandedActionHistoryIds] = useState<Set<number>>(new Set());
+  const [decisionErrors, setDecisionErrors] = useState<Record<number, string>>({});
+  const [preparingDecisionIds, setPreparingDecisionIds] = useState<Set<number>>(new Set());
 
   const fetchPendingActions = useCallback(async (currentKey: string) => {
     try {
@@ -481,6 +489,91 @@ export default function DashboardPage() {
         const copy = new Set(prev);
         copy.delete(action.id);
         return copy;
+      });
+    }
+  };
+
+  const handleDecisionReview = async (id: number, type: "approve" | "reject") => {
+    if (!apiKey) return;
+
+    const feedback = window.prompt(
+      type === "approve"
+        ? "Optional feedback/instructions for the preparation phase:"
+        : "Optional reason for rejecting this decision:",
+      ""
+    );
+    if (feedback === null) return;
+
+    setDecisionErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`${API_BASE}/decisions/${id}/${type}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({ feedback: feedback.trim() || null }),
+      });
+
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.detail || `Could not ${type} decision.`);
+      }
+      await fetchDashboardData();
+    } catch (err: any) {
+      setDecisionErrors((prev) => ({
+        ...prev,
+        [id]: err.message || "Decision review failed.",
+      }));
+    }
+  };
+
+  const handlePrepareDecision = async (id: number) => {
+    if (!apiKey) return;
+    setPreparingDecisionIds((prev) => new Set(prev).add(id));
+    setDecisionErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`${API_BASE}/decisions/${id}/prepare`, {
+        method: "POST",
+        headers: { "X-API-Key": apiKey },
+      });
+
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.detail || "Preparation failed.");
+      }
+
+      await fetchDashboardData();
+      await fetchPendingActions(apiKey);
+      await fetchActionHistory(apiKey);
+    } catch (err: any) {
+      setDecisionErrors((prev) => ({
+        ...prev,
+        [id]: err.message || "Preparation failed.",
+      }));
+    } finally {
+      setPreparingDecisionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
       });
     }
   };
@@ -720,6 +813,11 @@ export default function DashboardPage() {
                     </div>
 
                     <p className="text-sm text-gray-200">{action.action_description}</p>
+                    {action.decision_id && (
+                      <p className="text-xs text-gray-500">
+                        Source decision #{action.decision_id}
+                      </p>
+                    )}
 
                     <div className="bg-gray-900 border border-gray-800 rounded p-3 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
                       {renderActionDetail(action.action_type, action.action_detail)}
@@ -980,6 +1078,77 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-300 mt-3 whitespace-pre-wrap">
                     {isExpanded ? item.decision_outcome : preview}
                   </p>
+
+                  {item.approval_status && item.approval_status !== "legacy" && item.approval_status !== "not_applicable" && (
+                    <div className="mt-3 border-t border-gray-800 pt-3 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-gray-500">Owner decision:</span>
+                        <span className="border border-gray-700 bg-gray-800 rounded px-2 py-0.5 uppercase">
+                          {item.approval_status}
+                        </span>
+                        <span className="text-gray-500">Preparation:</span>
+                        <span className="border border-gray-700 bg-gray-800 rounded px-2 py-0.5 uppercase">
+                          {item.preparation_status || "not_started"}
+                        </span>
+                      </div>
+
+                      {item.owner_feedback && (
+                        <p className="text-xs text-gray-400 whitespace-pre-wrap">
+                          Owner feedback: {item.owner_feedback}
+                        </p>
+                      )}
+
+                      {item.preparation_summary && (
+                        <details className="text-xs">
+                          <summary className="text-blue-400 cursor-pointer">
+                            Preparation summary
+                          </summary>
+                          <div className="mt-2 bg-gray-950 border border-gray-800 rounded p-3 whitespace-pre-wrap text-gray-300">
+                            {item.preparation_summary}
+                          </div>
+                        </details>
+                      )}
+
+                      {decisionErrors[item.id] && (
+                        <div className="text-xs text-red-300 bg-red-950/50 border border-red-900 rounded p-2">
+                          {decisionErrors[item.id]}
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        {item.approval_status === "pending" && (
+                          <>
+                            <button
+                              onClick={() => handleDecisionReview(item.id, "approve")}
+                              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs text-white"
+                            >
+                              Approve Decision
+                            </button>
+                            <button
+                              onClick={() => handleDecisionReview(item.id, "reject")}
+                              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-xs text-white"
+                            >
+                              Reject Decision
+                            </button>
+                          </>
+                        )}
+
+                        {item.approval_status === "approved" &&
+                          (item.preparation_status === "not_started" ||
+                            item.preparation_status === "preparation_failed") && (
+                            <button
+                              onClick={() => handlePrepareDecision(item.id)}
+                              disabled={preparingDecisionIds.has(item.id)}
+                              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs text-white disabled:opacity-50"
+                            >
+                              {preparingDecisionIds.has(item.id)
+                                ? "Preparing..."
+                                : "Prepare Approved Decision"}
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                  )}
                   {item.decision_outcome.length > 150 && (
                     <button
                       onClick={() => toggleHistoryExpand(item.id)}
@@ -1026,6 +1195,11 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <p className="text-sm text-gray-300 mt-3">{item.action_description}</p>
+                  {item.decision_id && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Approved decision #{item.decision_id}
+                    </p>
+                  )}
                   <div className="bg-gray-950 border border-gray-800 rounded p-3 mt-2 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
                     {item.action_type === "file_operation" || item.action_type === "browser_action"
                       ? renderActionDetail(item.action_type, item.action_detail)
