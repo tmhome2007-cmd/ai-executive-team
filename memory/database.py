@@ -22,6 +22,30 @@ if str(project_root) not in sys.path:
 from config import config
 
 
+VALID_ACTION_STATUSES = {
+    "pending",
+    "approved",
+    "rejected",
+    "executing",
+    "executed",
+    "executed_dry_run",
+    "blocked_dangerous",
+    "execution_failed",
+}
+VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
+
+_SYNC_TABLE_COLUMNS = {
+    "decisions": {
+        "timestamp", "topic", "agents_involved", "task_description",
+        "decision_outcome", "sandbox_mode", "sync_uuid",
+    },
+    "action_queue": {
+        "timestamp", "proposed_by", "action_description", "action_detail",
+        "status", "reviewed_at", "action_type", "result_detail", "sync_uuid",
+    },
+}
+
+
 def init_db() -> None:
     """
     Initialiseert de SQLite-database.
@@ -200,6 +224,11 @@ def propose_action(
     ruwe shell-string omdat er geen shell aan te pas komt).
     Retourneert het gegenereerde rij-ID.
     """
+    if action_type not in VALID_ACTION_TYPES:
+        raise ValueError(
+            f"Unsupported action_type '{action_type}'. Allowed: {sorted(VALID_ACTION_TYPES)}"
+        )
+
     timestamp = datetime.datetime.now().isoformat()
     new_sync_uuid = str(uuid.uuid4())
     with get_connection() as conn:
@@ -232,10 +261,14 @@ def get_pending_actions() -> list[dict]:
 
 def update_action_status(action_id: int, new_status: str) -> bool:
     """
-    Werkt de status van een actie bij (bijv. 'approved', 'rejected', 'executed')
-    en zet reviewed_at op het huidige tijdstip.
-    Retourneert True als de rij succesvol is bijgewerkt, anders False.
+    Interne status-update voor terminal execution paths. Valideert altijd dat
+    de doelstatus een bekende status is. User-facing transitions gebruiken
+    transition_action_status() zodat de verwachte bronstatus atomair wordt
+    afgedwongen.
     """
+    if new_status not in VALID_ACTION_STATUSES:
+        raise ValueError(f"Unsupported action status: {new_status}")
+
     reviewed_at = datetime.datetime.now().isoformat()
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -244,9 +277,47 @@ def update_action_status(action_id: int, new_status: str) -> bool:
             SET status = ?, reviewed_at = ?
             WHERE id = ?
         """, (new_status, reviewed_at, action_id))
-        
+
         conn.commit()
         return cursor.rowcount > 0
+
+
+def transition_action_status(
+    action_id: int,
+    new_status: str,
+    allowed_from: tuple[str, ...],
+) -> bool:
+    """
+    Atomische compare-and-set statusovergang. De UPDATE slaagt alleen wanneer
+    de rij op het moment van schrijven nog in één van allowed_from staat.
+    Dit sluit races tussen dashboard/Telegram-knoppen en dubbele requests.
+    """
+    if new_status not in VALID_ACTION_STATUSES:
+        raise ValueError(f"Unsupported action status: {new_status}")
+    if not allowed_from or any(s not in VALID_ACTION_STATUSES for s in allowed_from):
+        raise ValueError(f"Invalid allowed_from statuses: {allowed_from}")
+
+    reviewed_at = datetime.datetime.now().isoformat()
+    placeholders = ", ".join("?" for _ in allowed_from)
+    params = (new_status, reviewed_at, action_id, *allowed_from)
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            UPDATE action_queue
+            SET status = ?, reviewed_at = ?
+            WHERE id = ? AND status IN ({placeholders})
+            """,
+            params,
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def claim_action_for_execution(action_id: int) -> bool:
+    """Reserveert een approved actie atomair voor exact één executor."""
+    return transition_action_status(action_id, "executing", ("approved",))
 
 
 def record_execution_result(action_id: int, result_detail_json: str) -> bool:
@@ -392,20 +463,36 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 table = row.pop("_table", None)
                 sync_uuid_value = row.get("sync_uuid")
 
-                if not table or not sync_uuid_value:
+                # Nooit tabel-/kolomnamen uit een JSONL-bestand rechtstreeks in
+                # SQL interpoleren. Alleen de twee bekende schemas zijn geldig.
+                if table not in _SYNC_TABLE_COLUMNS or not sync_uuid_value:
                     skipped += 1
                     continue
+
+                # Verwijder het lokale 'id' veld uit de import — een nieuwe
+                # autoincrement id wordt toegekend door DEZE database.
+                row.pop("id", None)
+
+                allowed_columns = _SYNC_TABLE_COLUMNS[table]
+                if not row or any(column not in allowed_columns for column in row):
+                    skipped += 1
+                    continue
+
+                if table == "action_queue":
+                    if row.get("status") not in VALID_ACTION_STATUSES:
+                        skipped += 1
+                        continue
+                    if row.get("action_type") not in VALID_ACTION_TYPES:
+                        skipped += 1
+                        continue
 
                 cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
                 if cursor.fetchone():
                     skipped += 1
                     continue
 
-                # Verwijder het lokale 'id' veld uit de import — een nieuwe
-                # autoincrement id wordt toegekend door DEZE database;
-                # sync_uuid blijft de echte, cross-machine identiteit.
-                row.pop("id", None)
-
+                # table en columns komen vanaf hier uitsluitend uit vaste
+                # whitelists hierboven, niet uit onbetrouwbare input.
                 columns = ", ".join(row.keys())
                 placeholders = ", ".join(["?"] * len(row))
                 cursor.execute(
