@@ -36,6 +36,7 @@ from memory.database import (
     get_system_stats,
     backup_database,
     has_daily_research_attempt_on,
+    recover_interrupted_states,
     get_decision_by_id,
     transition_decision_approval,
 )
@@ -124,6 +125,14 @@ async def lifespan(app: FastAPI):
 
     # Initialiseer de database
     init_db()
+
+    recovered = recover_interrupted_states()
+    if recovered["actions"] or recovered["preparations"]:
+        logger.warning(
+            "Recovered interrupted runtime state after restart: "
+            f"{recovered['actions']} action(s), "
+            f"{recovered['preparations']} preparation(s)."
+        )
 
     # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
     # waarschuwingen in plaats van dat het probleem pas bij de eerste
