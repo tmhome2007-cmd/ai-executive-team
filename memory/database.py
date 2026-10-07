@@ -777,6 +777,20 @@ def get_system_stats() -> dict:
         cursor.execute("SELECT status, COUNT(*) as count FROM action_queue GROUP BY status")
         actions_by_status = {row["status"]: row["count"] for row in cursor.fetchall()}
 
+        cursor.execute(
+            "SELECT approval_status, COUNT(*) as count FROM decisions GROUP BY approval_status"
+        )
+        decisions_by_approval_status = {
+            row["approval_status"]: row["count"] for row in cursor.fetchall()
+        }
+
+        cursor.execute(
+            "SELECT preparation_status, COUNT(*) as count FROM decisions GROUP BY preparation_status"
+        )
+        decisions_by_preparation_status = {
+            row["preparation_status"]: row["count"] for row in cursor.fetchall()
+        }
+
         cursor.execute("SELECT COUNT(*) as count FROM decisions WHERE topic = 'Daily Research Findings'")
         research_success_count = cursor.fetchone()["count"]
 
@@ -792,6 +806,8 @@ def get_system_stats() -> dict:
         "total_decisions": total_decisions,
         "total_actions": total_actions,
         "actions_by_status": actions_by_status,
+        "decisions_by_approval_status": decisions_by_approval_status,
+        "decisions_by_preparation_status": decisions_by_preparation_status,
         "daily_research_success_count": research_success_count,
         "daily_research_failed_count": research_failed_count,
         "daily_research_success_rate_percent": research_success_rate,
