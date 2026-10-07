@@ -53,17 +53,34 @@ def _is_safe_research_url(url: str) -> str | None:
         return "URL has no valid hostname"
 
     try:
-        resolved_ip = socket.gethostbyname(parsed.hostname)
-        ip_obj = ipaddress.ip_address(resolved_ip)
-    except (socket.gaierror, ValueError) as e:
+        resolved_addresses = {
+            info[4][0]
+            for info in socket.getaddrinfo(
+                parsed.hostname,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+            )
+        }
+    except socket.gaierror as e:
         return f"Could not resolve hostname '{parsed.hostname}': {e}"
 
-    if ip_obj.is_loopback or ip_obj.is_private or ip_obj.is_link_local or ip_obj.is_reserved:
-        return (
-            f"URL resolves to a loopback/private/internal address ({resolved_ip}) — "
-            f"blocked to prevent the research tool from reaching internal services "
-            f"(e.g. Ollama, the backend API, or anything else on the local network)"
-        )
+    for resolved_ip in resolved_addresses:
+        try:
+            ip_obj = ipaddress.ip_address(resolved_ip)
+        except ValueError:
+            return f"Could not validate resolved address '{resolved_ip}'"
+
+        if (
+            ip_obj.is_loopback
+            or ip_obj.is_private
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return (
+                f"URL resolves to a loopback/private/internal address ({resolved_ip}) — "
+                f"blocked to prevent the research tool from reaching internal services "
+                f"(e.g. Ollama, the backend API, or anything else on the local network)"
+            )
 
     return None
 
