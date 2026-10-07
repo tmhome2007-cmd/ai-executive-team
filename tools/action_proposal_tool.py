@@ -9,7 +9,7 @@ from typing import Type
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 
-from memory.database import propose_action
+from memory.database import propose_action, find_existing_decision_action
 from notifications.telegram_interactive import send_proposal_notification
 from tools._dedupe_guard import check_and_register_proposal
 
@@ -50,6 +50,19 @@ class ProposeActionTool(BaseTool):
         duplicate_message = check_and_register_proposal(dedupe_key)
         if duplicate_message:
             return duplicate_message
+
+        if self.decision_id is not None:
+            existing = find_existing_decision_action(
+                self.decision_id,
+                self.role,
+                "shell",
+                action_detail,
+            )
+            if existing:
+                return (
+                    f"Existing decision-linked action #{existing['id']} already represents "
+                    f"this exact proposal (status: {existing['status']}). Do not create it again."
+                )
 
         # 1. Sla het voorstel op in de database
         action_id = propose_action(
