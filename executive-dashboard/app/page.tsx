@@ -34,6 +34,7 @@ interface DecisionResponse {
   final_decision: string;
   participants: string[];
   individual_outputs?: Record<string, string>;
+  approval_status?: string;
   quality_warnings?: {
     unsupported_quantitative_claims?: string[];
     individual_outputs?: Record<string, string[]>;
@@ -917,6 +918,11 @@ export default function DashboardPage() {
               <p className="text-sm text-green-400">
                 Participants: {result.participants.join(", ")}
               </p>
+              {result.approval_status === "pending" && (
+                <p className="text-sm text-yellow-300">
+                  Awaiting owner approval before preparation can begin.
+                </p>
+              )}
 
               {result.quality_warnings &&
                 ((result.quality_warnings.unsupported_quantitative_claims?.length || 0) > 0 ||
