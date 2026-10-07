@@ -65,7 +65,7 @@ class ProposeFileOperationTool(BaseTool):
         # dit veroorzaakte liet de agent exact dezelfde write herhalen met
         # steeds licht andere reason-tekst, wat een content/reason-gebaseerde
         # sleutel niet zou hebben opgevangen.
-        dedupe_key = f"file_operation:{self.role}:{operation}:{file_path}"
+        dedupe_key = f"file_operation:{self.decision_id}:{self.role}:{operation}:{file_path}"
         duplicate_message = check_and_register_proposal(dedupe_key)
         if duplicate_message:
             return duplicate_message
