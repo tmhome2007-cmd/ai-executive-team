@@ -211,8 +211,15 @@ export default function DashboardPage() {
   const [sandboxMode, setSandboxMode] = useState<boolean | null>(null);
 
   const fetchSandboxStatus = useCallback(async () => {
+    if (!apiKey) return;
     try {
-      const res = await fetch(`${API_BASE}/system/sandbox-status`);
+      const res = await fetch(`${API_BASE}/system/sandbox-status`, {
+        headers: { "X-API-Key": apiKey },
+      });
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setSandboxMode(data.sandbox_mode);
@@ -220,7 +227,7 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Error fetching sandbox status:", err);
     }
-  }, []);
+  }, [apiKey, handleAuthFailure]);
 
   useEffect(() => {
     fetchSandboxStatus();
