@@ -251,42 +251,62 @@ def _run_listener_in_thread() -> None:
         stop_event = asyncio.Event()
         _state["stop_event"] = stop_event
 
+        application = None
+        initialized = False
+        started = False
+        polling_started = False
+
         try:
             application = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
             application.add_handler(CallbackQueryHandler(handle_button_callback))
             _state["application"] = application
 
             await application.initialize()
+            initialized = True
             await application.start()
+            started = True
             await application.updater.start_polling(drop_pending_updates=True)
+            polling_started = True
+
+            _state["started_successfully"] = True
+            _state["last_error"] = None
+            logger.info("Telegram interactive listener started (polling for button taps).")
+
+            await stop_event.wait()
+            logger.info("Telegram interactive listener shutting down...")
+
         except TelegramConflictError as e:
-            # DE meest voorkomende echte oorzaak: een ANDER proces (vaak een
-            # niet volledig afgesloten vorige --reload worker, of een los
-            # testscript) pollt al met dezelfde bot-token. Telegram staat
-            # maar één actieve long-poll per token tegelijk toe.
             _state["last_error"] = (
                 f"Conflict: another process is already polling this bot token. "
                 f"Stop any other running instance of this app (check for zombie "
                 f"processes from a previous --reload restart) before retrying. ({e})"
             )
             logger.error(f"Telegram listener FAILED to start: {_state['last_error']}")
-            return
+
         except Exception as e:
-            _state["last_error"] = f"Unexpected error during startup: {e}"
-            logger.error(f"Telegram listener FAILED to start: {e}", exc_info=True)
-            return
+            _state["last_error"] = f"Unexpected error during startup/runtime: {e}"
+            logger.error(f"Telegram listener FAILED/crashed: {e}", exc_info=True)
 
-        _state["started_successfully"] = True
-        _state["last_error"] = None
-        logger.info("Telegram interactive listener started (polling for button taps).")
-
-        await stop_event.wait()
-
-        logger.info("Telegram interactive listener shutting down...")
-        _state["started_successfully"] = False
-        await application.updater.stop()
-        await application.stop()
-        await application.shutdown()
+        finally:
+            # Ook bij een gedeeltelijke startup (initialize/start gelukt maar
+            # start_polling gefaald) altijd de reeds geopende resources sluiten.
+            _state["started_successfully"] = False
+            if application is not None:
+                if polling_started:
+                    try:
+                        await application.updater.stop()
+                    except Exception as cleanup_err:
+                        logger.warning(f"Telegram updater cleanup failed: {cleanup_err}")
+                if started:
+                    try:
+                        await application.stop()
+                    except Exception as cleanup_err:
+                        logger.warning(f"Telegram application stop failed: {cleanup_err}")
+                if initialized:
+                    try:
+                        await application.shutdown()
+                    except Exception as cleanup_err:
+                        logger.warning(f"Telegram application shutdown failed: {cleanup_err}")
 
     try:
         loop.run_until_complete(_main())
