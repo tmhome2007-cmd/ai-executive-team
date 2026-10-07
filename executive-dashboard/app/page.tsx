@@ -318,7 +318,7 @@ export default function DashboardPage() {
     } catch (err: any) {
       console.error("Error fetching pending actions:", err);
     }
-  }, []);
+  }, [handleAuthFailure]);
 
   const fetchActionHistory = useCallback(async (currentKey: string) => {
     try {
@@ -342,7 +342,7 @@ export default function DashboardPage() {
     } catch (err: any) {
       console.error("Error fetching action history:", err);
     }
-  }, []);
+  }, [handleAuthFailure]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -367,7 +367,7 @@ export default function DashboardPage() {
     } catch (err: any) {
       setLoadError(err.message || "Could not connect to the backend.");
     }
-  }, [apiKey]);
+  }, [apiKey, handleAuthFailure]);
 
   useEffect(() => {
     if (apiKey !== null) {
