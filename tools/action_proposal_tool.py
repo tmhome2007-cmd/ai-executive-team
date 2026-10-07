@@ -9,7 +9,7 @@ from typing import Type
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 
-from memory.database import propose_action
+from memory.database import propose_action, find_existing_decision_action
 from notifications.telegram_interactive import send_proposal_notification
 from tools._dedupe_guard import check_and_register_proposal
 
@@ -38,23 +38,38 @@ class ProposeActionTool(BaseTool):
     
     # De rol van de agent wordt ingesteld bij het aanmaken van de tool-instantie
     role: str
+    decision_id: int | None = None
 
-    def __init__(self, role: str, **data):
-        super().__init__(role=role, **data)
+    def __init__(self, role: str, decision_id: int | None = None, **data):
+        super().__init__(role=role, decision_id=decision_id, **data)
 
     def _run(self, action_description: str, action_detail: str) -> str:
         # Breekt een runaway herhaal-loop: dezelfde (rol + actie) binnen het
         # dedupe-venster wordt niet opnieuw gelogd of genotificeerd.
-        dedupe_key = f"action:{self.role}:{action_detail}"
+        dedupe_key = f"action:{self.decision_id}:{self.role}:{action_detail}"
         duplicate_message = check_and_register_proposal(dedupe_key)
         if duplicate_message:
             return duplicate_message
+
+        if self.decision_id is not None:
+            existing = find_existing_decision_action(
+                self.decision_id,
+                self.role,
+                "shell",
+                action_detail,
+            )
+            if existing:
+                return (
+                    f"Existing decision-linked action #{existing['id']} already represents "
+                    f"this exact proposal (status: {existing['status']}). Do not create it again."
+                )
 
         # 1. Sla het voorstel op in de database
         action_id = propose_action(
             proposed_by=self.role,
             action_description=action_description,
-            action_detail=action_detail
+            action_detail=action_detail,
+            decision_id=self.decision_id,
         )
 
         # 2. Verstuur interactieve Telegram notificatie met Approve/Reject knoppen
