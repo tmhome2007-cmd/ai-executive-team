@@ -27,6 +27,7 @@ from workflows.meeting import run_executive_meeting
 from workflows.execution_lock import acquire_execution_lock_async, release_execution_lock
 from memory.database import log_decision
 from notifications.telegram_bot import send_notification_async, escape_html
+from notifications.telegram_interactive import send_decision_notification
 from config import config
 
 RESEARCH_SOURCES = [
@@ -148,6 +149,7 @@ async def run_daily_research() -> dict:
                 task_description="CSO failed to genuinely invoke the research tool after 3 attempts.",
                 decision_outcome="No meeting was held. Manual review needed.",
                 sandbox_mode=config.SANDBOX_MODE,
+                approval_status="not_applicable",
             )
             try:
                 await send_notification_async(
@@ -191,12 +193,14 @@ async def run_daily_research() -> dict:
         )
 
         try:
-            snippet = meeting_result["final_decision"][:300]
-            await send_notification_async(
-                f"📊 <b>Daily Research Findings</b>\n\n{escape_html(snippet)}..."
+            await asyncio.to_thread(
+                send_decision_notification,
+                db_id,
+                "Daily Research Findings",
+                meeting_result["final_decision"],
             )
         except Exception as notify_err:
-            print(f"Warning: failed to send success notification: {notify_err}")
+            print(f"Warning: failed to send owner-review notification: {notify_err}")
 
         return {
             "success": True,
