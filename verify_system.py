@@ -1660,6 +1660,101 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 64: STATIC CHECK — normal server entrypoint is single-process
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_64 = f.read()
+
+    if 'uvicorn.run("main:app", host=bind_host, port=8000, reload=False)' in main_content_64:
+        log_pass("normal python main.py entrypoint disables auto-reload worker overlap")
+    else:
+        log_fail("Stable Uvicorn runtime", "Expected reload=False in normal main.py entrypoint")
+except Exception as e:
+    log_fail("Stable Uvicorn runtime check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 65: DYNAMIC CHECK — action provenance survives cross-machine ID changes
+# -------------------------------------------------------------------
+try:
+    from config import config as _sync_config
+    from memory.database import (
+        init_db as _sync_init_db,
+        log_decision as _sync_log_decision,
+        propose_action as _sync_propose_action,
+        export_history_to_jsonl as _sync_export,
+        import_history_from_jsonl as _sync_import,
+        get_action_history as _sync_action_history,
+        get_decision_by_id as _sync_get_decision,
+    )
+
+    original_db_path = _sync_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_a = os.path.join(temp_dir, "a.db")
+            db_b = os.path.join(temp_dir, "b.db")
+            export_path = os.path.join(temp_dir, "history.jsonl")
+
+            _sync_config.DATABASE_PATH = db_a
+            _sync_init_db()
+            source_decision_id = _sync_log_decision("sync source", ["CEO"], "x", "y")
+            _sync_propose_action(
+                "CTO", "linked", "echo linked", "shell", decision_id=source_decision_id
+            )
+            source_decision = _sync_get_decision(source_decision_id)
+            _sync_export(export_path)
+
+            _sync_config.DATABASE_PATH = db_b
+            _sync_init_db()
+            # Force different local integer IDs on target machine.
+            _sync_log_decision("local-only", ["CEO"], "a", "b")
+            imported = _sync_import(export_path)
+            imported_actions = _sync_action_history(limit=10)
+            linked_action = next(a for a in imported_actions if a["decision_sync_uuid"] == source_decision["sync_uuid"])
+            linked_decision = _sync_get_decision(linked_action["decision_id"])
+
+            if (
+                imported["actions_imported"] == 1
+                and linked_decision is not None
+                and linked_decision["sync_uuid"] == source_decision["sync_uuid"]
+                and linked_action["decision_id"] != source_decision_id
+            ):
+                log_pass("cross-machine action provenance remaps stable decision UUID to target local ID")
+            else:
+                log_fail(
+                    "Cross-machine decision provenance",
+                    f"imported={imported}, linked_action={linked_action}, linked_decision={linked_decision}",
+                )
+    finally:
+        _sync_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Cross-machine decision provenance check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 66: STATIC CHECK — Telegram approved decision can enter preparation
+# -------------------------------------------------------------------
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        telegram_content_66 = f.read()
+
+    required = [
+        "decision_prepare:",
+        'if action_type == "decision_prepare":',
+        "await asyncio.to_thread(run_decision_preparation, action_id)",
+        "Concrete actions will still require separate approval",
+    ]
+    missing = [item for item in required if item not in telegram_content_66]
+    if not missing:
+        log_pass("Telegram supports explicit prepare-after-approval without bypassing action approval")
+    else:
+        log_fail("Telegram preparation gate", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Telegram preparation gate check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
