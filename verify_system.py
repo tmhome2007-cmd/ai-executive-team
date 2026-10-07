@@ -667,6 +667,78 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 23: STATIC CHECK — blocking startup checks stay off asyncio loop
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_check23 = f.read()
+
+    lifespan_match = re.search(
+        r"async def lifespan\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
+        main_content_check23,
+        re.DOTALL,
+    )
+    if lifespan_match and "await asyncio.to_thread(run_startup_checks)" in lifespan_match.group(0):
+        log_pass("startup checks are offloaded from the asyncio event loop before Playwright sync API runs")
+    else:
+        log_fail(
+            "Async startup blocking-call check",
+            "lifespan() must call 'await asyncio.to_thread(run_startup_checks)' so Playwright sync API does not run inside the asyncio event loop."
+        )
+except Exception as e:
+    log_fail("Async startup blocking-call check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 24: STATIC CHECK — Telegram shutdown handles a closed event loop
+# -------------------------------------------------------------------
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        ti_content_check24 = f.read()
+
+    has_closed_guard = "loop.is_closed()" in ti_content_check24
+    clears_loop_state = '_state["loop"] = None' in ti_content_check24 and '_state["stop_event"] = None' in ti_content_check24
+    handles_shutdown_race = "except RuntimeError" in ti_content_check24
+
+    if has_closed_guard and clears_loop_state and handles_shutdown_race:
+        log_pass("Telegram shutdown safely handles startup failure / already-closed event loop")
+    else:
+        missing = []
+        if not has_closed_guard:
+            missing.append("loop.is_closed() guard")
+        if not clears_loop_state:
+            missing.append("listener loop/stop-event state cleanup")
+        if not handles_shutdown_race:
+            missing.append("RuntimeError shutdown-race handling")
+        log_fail("Telegram closed-loop shutdown check", f"Missing: {', '.join(missing)}")
+except Exception as e:
+    log_fail("Telegram closed-loop shutdown check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 25: STATIC CHECK — database health check tests write capability
+# -------------------------------------------------------------------
+try:
+    with open("system_checks.py", "r", encoding="utf-8") as f:
+        system_checks_content_25 = f.read()
+
+    db_check_match = re.search(
+        r"def check_database_writable.*?(?=\ndef |\Z)",
+        system_checks_content_25,
+        re.DOTALL,
+    )
+    if db_check_match and "BEGIN IMMEDIATE" in db_check_match.group(0) and "rollback()" in db_check_match.group(0):
+        log_pass("database health check verifies real SQLite write access without persisting changes")
+    else:
+        log_fail(
+            "Database write-health check",
+            "check_database_writable() must acquire a write transaction (BEGIN IMMEDIATE) and roll it back; SELECT-only checks can falsely report a read-only DB as writable."
+        )
+except Exception as e:
+    log_fail("Database write-health check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)

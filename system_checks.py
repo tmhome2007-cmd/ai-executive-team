@@ -53,8 +53,15 @@ def check_database_writable() -> tuple[bool, str]:
         db_path = config.DATABASE_PATH
         os.makedirs(os.path.dirname(os.path.abspath(db_path)) or ".", exist_ok=True)
         conn = sqlite3.connect(db_path, timeout=3.0)
-        conn.execute("SELECT 1")
-        conn.close()
+        try:
+            # SELECT 1 bewijst alleen dat de database leesbaar is. BEGIN
+            # IMMEDIATE vraagt SQLite om een echte write-reservering; op een
+            # read-only database faalt dit direct, zonder dat we data hoeven
+            # te wijzigen. Daarna rollen we de lege transactie meteen terug.
+            conn.execute("BEGIN IMMEDIATE")
+            conn.rollback()
+        finally:
+            conn.close()
         return True, "ok"
     except Exception as e:
         return False, f"Database niet beschrijfbaar: {e}"
@@ -75,8 +82,9 @@ def check_playwright_browser_installed() -> tuple[bool, str]:
     daadwerkelijk aanwezig is (gokken op een bestandspad is onbetrouwbaar
     gebleken: we hebben zelf gezien dat het pakket build '1243' verwachtte
     terwijl alleen '1234' gedownload was). Dit is een EENMALIGE check bij het
-    opstarten, vóór de server verzoeken aanneemt — een synchrone, blokkerende
-    aanroep hier is veilig, in tegenstelling tot tijdens een live request.
+    opstarten. Omdat deze functie de synchrone Playwright API gebruikt, moet
+    de async FastAPI lifespan haar via asyncio.to_thread() uitvoeren; gewone
+    synchrone routes mogen haar rechtstreeks aanroepen via FastAPI's threadpool.
     """
     try:
         from playwright.sync_api import sync_playwright
