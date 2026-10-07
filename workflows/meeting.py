@@ -6,6 +6,7 @@ Agents bouwen voort op elkaars antwoorden en leveren zowel een individuele als g
 """
 
 import json
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from pathlib import Path
@@ -20,6 +21,69 @@ if str(project_root) not in sys.path:
 
 from agents.executive_agents import EXECUTIVE_AGENTS
 from workflows.execution_lock import EXECUTION_LOCK
+
+
+EVIDENCE_DISCIPLINE = """
+Evidence discipline (mandatory):
+- Treat only the information explicitly present in the task/context as established evidence.
+- Never invent or present as factual any revenue, cost, ROI, payback period, market share, customer count, budget, headcount, probability, growth rate, or timeline that is not supported by the supplied evidence.
+- If a useful number is missing, say "Unknown — evidence required" and state exactly what data would be needed to estimate it.
+- You may discuss a qualitative scenario or assumption, but label it clearly as an assumption and do not attach a precise number unless that number was supplied in the evidence.
+- Do not assume the company already has customers, revenue, market share, employees, funding, suppliers, infrastructure, or a supply chain unless the task/context says so.
+- Separate evidence-supported conclusions from assumptions and unknowns.
+""".strip()
+
+
+_QUANTITATIVE_CLAIM_PATTERN = re.compile(
+    r"(?:[$€£]\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:million|billion|thousand))?"
+    r"|\b\d+(?:\.\d+)?\s?%"
+    r"|\b\d+(?:\.\d+)?\s*(?:million|billion|thousand)\b"
+    r"|\b\d+(?:\.\d+)?\s*(?:years?|months?)\b)",
+    re.IGNORECASE,
+)
+
+
+def _normalize_quantitative_claim(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
+def find_unsupported_quantitative_claims(source_text: str, output_text: str) -> List[str]:
+    """
+    Detecteert precieze financiële/tijd-claims die in de meeting-output
+    verschijnen maar nergens in het oorspronkelijke evidence/task-pakket
+    voorkwamen. Dit is bewust conservatief: het probeert geen waarheid te
+    bewijzen, alleen te voorkomen dat nieuwe precieze cijfers stil als feiten
+    worden doorgeschoven.
+    """
+    supported = {
+        _normalize_quantitative_claim(match.group(0))
+        for match in _QUANTITATIVE_CLAIM_PATTERN.finditer(source_text or "")
+    }
+
+    unsupported: List[str] = []
+    seen = set()
+    for match in _QUANTITATIVE_CLAIM_PATTERN.finditer(output_text or ""):
+        raw = match.group(0)
+        normalized = _normalize_quantitative_claim(raw)
+        if normalized not in supported and normalized not in seen:
+            unsupported.append(raw)
+            seen.add(normalized)
+    return unsupported
+
+
+def _apply_evidence_guard(source_text: str, output_text: str) -> tuple[str, List[str]]:
+    unsupported = find_unsupported_quantitative_claims(source_text, output_text)
+    if not unsupported:
+        return output_text, []
+
+    warning = (
+        "⚠️ EVIDENCE WARNING — This draft introduced unsupported quantitative "
+        "claim(s) that were not present in the supplied evidence: "
+        + ", ".join(unsupported)
+        + ". Treat these figures as unverified and do not use them for approval "
+          "or execution until evidence is supplied.\n\n"
+    )
+    return warning + output_text, unsupported
 
 
 def run_executive_meeting(
@@ -78,9 +142,18 @@ def run_executive_meeting(
 
         if index == 0:
             # De eerste agent start de discussie
-            description = task_description
+            description = (
+                f"{task_description}\n\n"
+                f"{EVIDENCE_DISCIPLINE}\n\n"
+                "Response structure:\n"
+                "1. Evidence-supported assessment\n"
+                "2. Assumptions / unknowns\n"
+                "3. Recommendation\n"
+                "4. Evidence needed before committing money or taking real-world action"
+            )
             expected_output = (
-                "Your professional assessment of this topic from your role's perspective."
+                "A role-specific assessment that clearly separates evidence, assumptions/unknowns, "
+                "recommendation, and evidence still required. No unsupported precise figures."
             )
             current_task = Task(
                 description=description,
@@ -91,12 +164,16 @@ def run_executive_meeting(
             # Vervolgentaken ontvangen de historie van vorige taken als context
             description = (
                 f"{task_description}\n\n"
+                f"{EVIDENCE_DISCIPLINE}\n\n"
                 "Instruction: Consider the perspectives already shared by your fellow executives above, "
                 "then add your own professional assessment from your role's perspective. "
                 "Do NOT repeat any point, recommendation, or concern already raised by a previous executive above — "
                 "only contribute analysis that comes specifically from your own role's unique lens, as described in your backstory. "
                 "If, after reviewing what's already been said, you genuinely have nothing new to add from your specific perspective, "
-                "say so explicitly in one sentence rather than restating prior points in different words."
+                "say so explicitly in one sentence rather than restating prior points in different words. "
+                "Do not inherit an unsupported claim merely because a previous executive said it. "
+                "If a prior executive introduced an unsupported number or company fact, explicitly reject or label it as unverified. "
+                "Structure your response as: Evidence-supported assessment; Assumptions / unknowns; Recommendation; Evidence needed before action."
             )
             expected_output = (
                 "Your professional assessment building upon or contrasting with prior executive inputs."
@@ -152,10 +229,28 @@ def run_executive_meeting(
         else:
             individual_outputs[key] = "Geen individuele output beschikbaar."
 
+    raw_final_decision = str(crew_result)
+    guarded_final_decision, quality_warnings = _apply_evidence_guard(
+        task_description,
+        raw_final_decision,
+    )
+
+    guarded_individual_outputs: Dict[str, str] = {}
+    individual_quality_warnings: Dict[str, List[str]] = {}
+    for key, raw_output in individual_outputs.items():
+        guarded_output, warnings = _apply_evidence_guard(task_description, raw_output)
+        guarded_individual_outputs[key] = guarded_output
+        if warnings:
+            individual_quality_warnings[key] = warnings
+
     return {
-        "final_decision": str(crew_result),
+        "final_decision": guarded_final_decision,
         "participants": agent_keys,
-        "individual_outputs": individual_outputs
+        "individual_outputs": guarded_individual_outputs,
+        "quality_warnings": {
+            "unsupported_quantitative_claims": quality_warnings,
+            "individual_outputs": individual_quality_warnings,
+        },
     }
 
 
