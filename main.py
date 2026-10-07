@@ -45,7 +45,12 @@ from workflows.preparation import run_decision_preparation
 from agents.executive_agents import EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
-from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
+from notifications.telegram_interactive import (
+    start_telegram_listener,
+    stop_telegram_listener,
+    is_telegram_listener_alive,
+    send_decision_notification,
+)
 from config import config, set_sandbox_mode, validate_config, ConfigValidationError
 from system_checks import check_ollama_reachable, check_database_writable, check_telegram_configured, check_playwright_browser_installed, run_startup_checks, get_uptime_seconds
 
@@ -405,11 +410,13 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     )
 
     try:
-        snippet = final_decision[:200]
-        message = f"📌 <b>Ad-Hoc Decision Triggered</b>\n\n<b>Topic:</b> {escape_html(request.topic)}\n\n<b>Decision Snippet:</b>\n{escape_html(snippet)}..."
-        send_notification(message)
+        send_decision_notification(
+            decision_id=db_id,
+            topic=request.topic,
+            final_decision=final_decision,
+        )
     except Exception as notify_err:
-        print(f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}")
+        logger.warning(f"Decision review Telegram notification failed: {notify_err}")
 
     return DecisionResponse(
         database_id=db_id,
