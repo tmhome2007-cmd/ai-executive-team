@@ -53,9 +53,10 @@ class ProposeFileOperationTool(BaseTool):
 
     # De rol van de agent wordt ingesteld bij het aanmaken van de tool-instantie
     role: str
+    decision_id: int | None = None
 
-    def __init__(self, role: str, **data):
-        super().__init__(role=role, **data)
+    def __init__(self, role: str, decision_id: int | None = None, **data):
+        super().__init__(role=role, decision_id=decision_id, **data)
 
     def _run(self, operation: str, file_path: str, content: str, reason: str) -> str:
         # Breekt een runaway herhaal-loop: dezelfde (rol + operatie + pad)
@@ -86,6 +87,7 @@ class ProposeFileOperationTool(BaseTool):
             action_description=description,
             action_detail=action_detail_json,
             action_type="file_operation",
+            decision_id=self.decision_id,
         )
 
         try:
