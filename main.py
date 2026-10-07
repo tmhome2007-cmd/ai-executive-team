@@ -620,6 +620,10 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             )
 
         finish_decision_preparation(decision_id, True, final_plan)
+    except HTTPException:
+        # Deliberate verification/API errors above already persisted the
+        # appropriate preparation state and should keep their exact status/detail.
+        raise
     except ValueError as e:
         finish_decision_preparation(decision_id, False, None)
         raise HTTPException(status_code=400, detail=f"Invalid preparation request: {e}")
