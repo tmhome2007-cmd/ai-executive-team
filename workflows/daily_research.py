@@ -148,6 +148,7 @@ async def run_daily_research() -> dict:
                 task_description="CSO failed to genuinely invoke the research tool after 3 attempts.",
                 decision_outcome="No meeting was held. Manual review needed.",
                 sandbox_mode=config.SANDBOX_MODE,
+                approval_status="not_applicable",
             )
             try:
                 await send_notification_async(
