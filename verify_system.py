@@ -1428,6 +1428,102 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 60: DYNAMIC CHECK — bare-name symlinks cannot escape workspace
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_60
+    from workflows.action_executor import check_workspace_confinement as _check_confine_60
+
+    original_workspace_60 = _verify_config_60.WORKSPACE_ROOT
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = os.path.join(temp_dir, "workspace")
+            os.makedirs(workspace, exist_ok=True)
+            outside_file = os.path.join(temp_dir, "outside_secret.txt")
+            with open(outside_file, "w", encoding="utf-8") as f:
+                f.write("secret")
+            os.symlink(outside_file, os.path.join(workspace, "outside"))
+
+            _verify_config_60.WORKSPACE_ROOT = workspace
+            reason = _check_confine_60("outside")
+            if reason and "outside" in reason.lower():
+                log_pass("bare-name symlink resolving outside WORKSPACE_ROOT is blocked")
+            else:
+                log_fail("Bare-name symlink confinement", f"Expected block reason, got: {reason}")
+    finally:
+        _verify_config_60.WORKSPACE_ROOT = original_workspace_60
+except Exception as e:
+    log_fail("Bare-name symlink confinement check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 61: DYNAMIC CHECK — malformed structured actions fail terminally
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_61
+    from memory.database import (
+        init_db as _init_db_61,
+        propose_action as _propose_61,
+        transition_action_status as _transition_61,
+        get_action_by_id as _get_action_61,
+    )
+    from workflows.action_executor import execute_action as _execute_61
+
+    original_db_61 = _verify_config_61.DATABASE_PATH
+    original_workspace_61 = _verify_config_61.WORKSPACE_ROOT
+    original_sandbox_61 = _verify_config_61.SANDBOX_MODE
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_61.DATABASE_PATH = os.path.join(temp_dir, "actions.db")
+            _verify_config_61.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
+            _verify_config_61.SANDBOX_MODE = True
+            _init_db_61()
+
+            file_id = _propose_61("CFO", "bad file", '["not", "an", "object"]', "file_operation")
+            _transition_61(file_id, "approved", ("pending",))
+            file_result = _execute_61(file_id)
+            file_status = _get_action_61(file_id)["status"]
+
+            browser_id = _propose_61("COO", "bad browser", '["not", "an", "object"]', "browser_action")
+            _transition_61(browser_id, "approved", ("pending",))
+            browser_result = _execute_61(browser_id)
+            browser_status = _get_action_61(browser_id)["status"]
+
+            if (
+                not file_result.get("success")
+                and file_status == "execution_failed"
+                and not browser_result.get("success")
+                and browser_status == "execution_failed"
+            ):
+                log_pass("malformed file/browser action payloads fail safely instead of staying executing")
+            else:
+                log_fail(
+                    "Structured action payload validation",
+                    f"file=({file_result}, {file_status}), browser=({browser_result}, {browser_status})",
+                )
+    finally:
+        _verify_config_61.DATABASE_PATH = original_db_61
+        _verify_config_61.WORKSPACE_ROOT = original_workspace_61
+        _verify_config_61.SANDBOX_MODE = original_sandbox_61
+except Exception as e:
+    log_fail("Structured action payload validation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 62: STATIC CHECK — adding SANDBOX_MODE cannot corrupt final env line
+# -------------------------------------------------------------------
+try:
+    with open("config.py", "r", encoding="utf-8") as f:
+        config_content_62 = f.read()
+    if 'if lines and not lines[-1].endswith("\\n")' in config_content_62:
+        log_pass("sandbox-mode persistence preserves a missing final newline in .env")
+    else:
+        log_fail("Sandbox env line-boundary check", "Missing final-newline guard before appending SANDBOX_MODE")
+except Exception as e:
+    log_fail("Sandbox env line-boundary check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
