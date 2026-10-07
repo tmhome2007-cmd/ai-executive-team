@@ -71,6 +71,30 @@ def find_unsupported_quantitative_claims(source_text: str, output_text: str) -> 
     return unsupported
 
 
+def find_repeated_analysis(individual_outputs: Dict[str, str], min_chars: int = 120) -> Dict[str, List[str]]:
+    """
+    Markeert lange zinnen die door meerdere executives vrijwel letterlijk
+    worden herhaald. Korte kopjes/standaardzinnen worden bewust genegeerd.
+    Dit is een kwaliteitswaarschuwing, geen semantische waarheidscheck.
+    """
+    first_seen_by: Dict[str, str] = {}
+    repeated: Dict[str, List[str]] = {}
+
+    for role, text in individual_outputs.items():
+        sentences = re.split(r"(?<=[.!?])\s+", text or "")
+        for sentence in sentences:
+            normalized = re.sub(r"\s+", " ", sentence.strip().lower())
+            if len(normalized) < min_chars:
+                continue
+            previous_role = first_seen_by.get(normalized)
+            if previous_role is not None and previous_role != role:
+                repeated.setdefault(role, []).append(sentence.strip())
+            else:
+                first_seen_by[normalized] = role
+
+    return repeated
+
+
 def _apply_evidence_guard(source_text: str, output_text: str) -> tuple[str, List[str]]:
     unsupported = find_unsupported_quantitative_claims(source_text, output_text)
     if not unsupported:
@@ -259,6 +283,16 @@ def run_executive_meeting(
         if warnings:
             individual_quality_warnings[key] = warnings
 
+    repeated_analysis = find_repeated_analysis(individual_outputs)
+    if repeated_analysis:
+        repeated_roles = ", ".join(sorted(repeated_analysis.keys()))
+        guarded_final_decision = (
+            "⚠️ MEETING QUALITY WARNING — Repeated analysis was detected across "
+            f"executive outputs (repeating roles: {repeated_roles}). Treat repeated "
+            "points as one viewpoint, not independent corroboration.\n\n"
+            + guarded_final_decision
+        )
+
     return {
         "final_decision": guarded_final_decision,
         "participants": agent_keys,
@@ -266,6 +300,7 @@ def run_executive_meeting(
         "quality_warnings": {
             "unsupported_quantitative_claims": quality_warnings,
             "individual_outputs": individual_quality_warnings,
+            "repeated_analysis": repeated_analysis,
         },
     }
 
