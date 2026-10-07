@@ -20,7 +20,13 @@ try:
 except ImportError:
     _RESOURCE_MODULE_AVAILABLE = False
 from urllib.parse import urlparse
-from memory.database import get_action_by_id, update_action_status, record_execution_result
+from memory.database import (
+    get_action_by_id,
+    update_action_status,
+    record_execution_result,
+    claim_action_for_execution,
+    VALID_ACTION_TYPES,
+)
 from notifications.telegram_bot import send_notification, escape_html
 from config import config
 
@@ -328,6 +334,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
     if config.SANDBOX_MODE:
         update_action_status(action_id, "executed_dry_run")
         preview = f"Would {operation} '{resolved_path}'" + (f" with {len(content)} characters of content" if operation != "read" else "")
+        record_execution_result(action_id, json.dumps({"detail": preview, "mode": "dry_run"}))
         try:
             send_notification(
                 f"🧪 <b>DRY RUN — FILE OPERATION</b>\n\n"
@@ -443,6 +450,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
     if config.SANDBOX_MODE:
         update_action_status(action_id, "executed_dry_run")
         preview = f"Would navigate to '{url}'" + (f" and click '{click_selector}'" if click_selector else "")
+        record_execution_result(action_id, json.dumps({"detail": preview, "mode": "dry_run"}))
         try:
             send_notification(
                 f"🧪 <b>DRY RUN — BROWSER ACTION</b>\n\n"
@@ -531,16 +539,28 @@ def execute_action(action_id: int) -> dict:
     if not action:
         return {"success": False, "error": "Action not found"}
 
-    # 2. Controleer of de status op 'approved' staat
+    # 2. Reserveer de actie atomair voor precies één executor.
     status = action.get("status")
     if status != "approved":
         return {
-            "success": False, 
+            "success": False,
             "error": f"Action status is '{status}', must be 'approved' to execute."
+        }
+    if not claim_action_for_execution(action_id):
+        current = get_action_by_id(action_id)
+        current_status = current.get("status") if current else "unknown"
+        return {
+            "success": False,
+            "error": f"Action could not be claimed for execution; current status is '{current_status}'.",
         }
 
     action_detail = action.get("action_detail", "")
     action_type = action.get("action_type", "shell")
+    if action_type not in VALID_ACTION_TYPES:
+        update_action_status(action_id, "execution_failed")
+        error_msg = f"Unsupported action_type '{action_type}'"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
+        return {"success": False, "action_id": action_id, "error": error_msg}
 
     # Gestructureerde bestandsoperaties gaan een volledig eigen, veiligere pad
     # (gewone file I/O, geen shell) — de bestaande shell-logica hieronder
@@ -584,6 +604,10 @@ def execute_action(action_id: int) -> dict:
     if config.SANDBOX_MODE:
         print(f"[DRY RUN] Would execute: {action_detail}")
         update_action_status(action_id, "executed_dry_run")
+        record_execution_result(
+            action_id,
+            json.dumps({"detail": f"[DRY RUN] Command simulated: {action_detail}", "mode": "dry_run"}),
+        )
 
         try:
             notification_text = (
