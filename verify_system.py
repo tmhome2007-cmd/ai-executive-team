@@ -1840,6 +1840,30 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 71: STATIC CHECK — Phase 2 rejects fake textual tool calls
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_71 = f.read()
+
+    required = [
+        "get_latest_action_id()",
+        "get_actions_after_id(action_snapshot_id)",
+        "pseudo_tool_call = bool(",
+        "tool-call imitation",
+        "Preparation agent described/printed a propose_* tool call",
+    ]
+    missing = [p for p in required if p not in main_content_71]
+
+    if not missing:
+        log_pass("Phase 2 verifies that printed propose_* pseudo-calls created a real action_queue proposal")
+    else:
+        log_fail("Phase 2 fake-tool-call guard", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Phase 2 fake-tool-call guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
