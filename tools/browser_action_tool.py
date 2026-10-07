@@ -15,7 +15,7 @@ from typing import Type, Optional
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 
-from memory.database import propose_action
+from memory.database import propose_action, find_existing_decision_action
 from notifications.telegram_interactive import send_proposal_notification
 from tools._dedupe_guard import check_and_register_proposal
 
@@ -72,6 +72,19 @@ class ProposeBrowserActionTool(BaseTool):
         action_detail_json = json.dumps(action_detail_dict)
 
         description = f"Navigate to '{url}'" + (f" and click '{click_selector}'" if click_selector else "") + f": {reason}"
+
+        if self.decision_id is not None:
+            existing = find_existing_decision_action(
+                self.decision_id,
+                self.role,
+                "browser_action",
+                action_detail_json,
+            )
+            if existing:
+                return (
+                    f"Existing decision-linked browser action #{existing['id']} already represents "
+                    f"this exact proposal (status: {existing['status']}). Do not create it again."
+                )
 
         action_id = propose_action(
             proposed_by=self.role,
