@@ -1720,6 +1720,105 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 68: DYNAMIC CHECK — imported decisions receive real approval rows
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_68
+    from memory.database import (
+        init_db as _init_db_68,
+        import_history_from_jsonl as _import_68,
+        get_recent_decisions as _recent_68,
+        transition_decision_approval as _transition_68,
+    )
+
+    original_db_68 = _verify_config_68.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_68.DATABASE_PATH = os.path.join(temp_dir, "import.db")
+            _init_db_68()
+            export_path = os.path.join(temp_dir, "import.jsonl")
+            imported_row = {
+                "_table": "decisions",
+                "timestamp": "2026-10-07T12:00:00",
+                "topic": "Imported decision",
+                "agents_involved": "cfo",
+                "task_description": "Imported evidence",
+                "decision_outcome": "Imported recommendation",
+                "sandbox_mode": 1,
+                "sync_uuid": "verify-imported-decision-68",
+            }
+            with open(export_path, "w", encoding="utf-8") as f:
+                f.write(json.dumps(imported_row) + "\n")
+
+            summary = _import_68(export_path)
+            imported = next(
+                row for row in _recent_68(limit=10)
+                if row["sync_uuid"] == "verify-imported-decision-68"
+            )
+            approval_worked = _transition_68(imported["id"], "approved", ("pending",))
+
+            if (
+                summary.get("decisions_imported") == 1
+                and imported["approval_status"] == "pending"
+                and approval_worked
+            ):
+                log_pass("imported decisions get a persisted pending approval row and can pass the human gate")
+            else:
+                log_fail(
+                    "Imported decision approval row",
+                    f"summary={summary}, imported={imported}, approval_worked={approval_worked}",
+                )
+    finally:
+        _verify_config_68.DATABASE_PATH = original_db_68
+except Exception as e:
+    log_fail("Imported decision approval row check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 69: DYNAMIC CHECK — interrupted executing actions fail closed after restart
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_69
+    from memory.database import (
+        init_db as _init_db_69,
+        propose_action as _propose_69,
+        transition_action_status as _transition_69,
+        claim_action_for_execution as _claim_69,
+        recover_interrupted_actions as _recover_69,
+        get_action_by_id as _get_action_69,
+    )
+
+    original_db_69 = _verify_config_69.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_69.DATABASE_PATH = os.path.join(temp_dir, "recovery.db")
+            _init_db_69()
+            action_id = _propose_69("COO", "interrupted action", "echo hello", "shell")
+            _transition_69(action_id, "approved", ("pending",))
+            claimed = _claim_69(action_id)
+            recovered_count = _recover_69()
+            recovered = _get_action_69(action_id)
+            detail = json.loads(recovered["result_detail"])
+
+            if (
+                claimed
+                and recovered_count == 1
+                and recovered["status"] == "execution_failed"
+                and "outcome is unknown" in detail.get("error", "").lower()
+            ):
+                log_pass("startup recovery marks interrupted executions failed with unknown-outcome warning instead of retrying")
+            else:
+                log_fail(
+                    "Interrupted execution recovery",
+                    f"claimed={claimed}, recovered_count={recovered_count}, recovered={recovered}",
+                )
+    finally:
+        _verify_config_69.DATABASE_PATH = original_db_69
+except Exception as e:
+    log_fail("Interrupted execution recovery check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
