@@ -38,9 +38,10 @@ class ProposeActionTool(BaseTool):
     
     # De rol van de agent wordt ingesteld bij het aanmaken van de tool-instantie
     role: str
+    decision_id: int | None = None
 
-    def __init__(self, role: str, **data):
-        super().__init__(role=role, **data)
+    def __init__(self, role: str, decision_id: int | None = None, **data):
+        super().__init__(role=role, decision_id=decision_id, **data)
 
     def _run(self, action_description: str, action_detail: str) -> str:
         # Breekt een runaway herhaal-loop: dezelfde (rol + actie) binnen het
@@ -54,7 +55,8 @@ class ProposeActionTool(BaseTool):
         action_id = propose_action(
             proposed_by=self.role,
             action_description=action_description,
-            action_detail=action_detail
+            action_detail=action_detail,
+            decision_id=self.decision_id,
         )
 
         # 2. Verstuur interactieve Telegram notificatie met Approve/Reject knoppen
