@@ -690,6 +690,32 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 24: STATIC CHECK — Telegram shutdown handles a closed event loop
+# -------------------------------------------------------------------
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        ti_content_check24 = f.read()
+
+    has_closed_guard = "loop.is_closed()" in ti_content_check24
+    clears_loop_state = '_state["loop"] = None' in ti_content_check24 and '_state["stop_event"] = None' in ti_content_check24
+    handles_shutdown_race = "except RuntimeError" in ti_content_check24
+
+    if has_closed_guard and clears_loop_state and handles_shutdown_race:
+        log_pass("Telegram shutdown safely handles startup failure / already-closed event loop")
+    else:
+        missing = []
+        if not has_closed_guard:
+            missing.append("loop.is_closed() guard")
+        if not clears_loop_state:
+            missing.append("listener loop/stop-event state cleanup")
+        if not handles_shutdown_race:
+            missing.append("RuntimeError shutdown-race handling")
+        log_fail("Telegram closed-loop shutdown check", f"Missing: {', '.join(missing)}")
+except Exception as e:
+    log_fail("Telegram closed-loop shutdown check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
