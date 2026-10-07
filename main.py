@@ -36,6 +36,7 @@ from memory.database import (
     get_system_stats,
     backup_database,
     has_daily_research_attempt_on,
+    recover_interrupted_actions,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -116,6 +117,13 @@ async def lifespan(app: FastAPI):
 
     # Initialiseer de database
     init_db()
+
+    recovered_actions = recover_interrupted_actions()
+    if recovered_actions:
+        logger.warning(
+            f"Recovered {recovered_actions} interrupted action(s) as execution_failed; "
+            "manual review required because real-world outcome is unknown."
+        )
 
     # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
     # waarschuwingen in plaats van dat het probleem pas bij de eerste
