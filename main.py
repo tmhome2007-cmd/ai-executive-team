@@ -235,6 +235,7 @@ class DecisionResponse(BaseModel):
     final_decision: str
     participants: list[str]
     individual_outputs: dict[str, str]
+    quality_warnings: dict = {}
 
 
 # --- API Key Beveiliging ---
@@ -408,7 +409,8 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         topic=request.topic,
         final_decision=final_decision,
         participants=participants,
-        individual_outputs=meeting_result.get("individual_outputs", {}),  # <-- NIEUWE REGEL
+        individual_outputs=meeting_result.get("individual_outputs", {}),
+        quality_warnings=meeting_result.get("quality_warnings", {}),
     )
 
 
