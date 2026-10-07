@@ -213,9 +213,9 @@ class DailyResearchResponse(BaseModel):
 
 
 class DecisionRequest(BaseModel):
-    topic: str
-    task_description: str
-    agent_keys: list[str] = ["cfo", "ceo"]
+    topic: str = Field(min_length=1, max_length=200)
+    task_description: str = Field(min_length=1, max_length=12000)
+    agent_keys: list[str] = Field(default_factory=lambda: ["cfo", "ceo"], min_length=1, max_length=11)
 
 
 class DecisionResponse(BaseModel):
@@ -440,6 +440,7 @@ def favicon():
     "/system/sandbox-status",
     summary="Get Sandbox Mode Status",
     description="Retourneert de huidige sandbox-modus status van het systeem.",
+    dependencies=[Depends(verify_api_key)],
 )
 def get_sandbox_status():
     """Geeft aan of het systeem in Sandbox Mode of Live Mode draait."""
