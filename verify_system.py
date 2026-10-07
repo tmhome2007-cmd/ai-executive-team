@@ -667,6 +667,29 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 23: STATIC CHECK — blocking startup checks stay off asyncio loop
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_check23 = f.read()
+
+    lifespan_match = re.search(
+        r"async def lifespan\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
+        main_content_check23,
+        re.DOTALL,
+    )
+    if lifespan_match and "await asyncio.to_thread(run_startup_checks)" in lifespan_match.group(0):
+        log_pass("startup checks are offloaded from the asyncio event loop before Playwright sync API runs")
+    else:
+        log_fail(
+            "Async startup blocking-call check",
+            "lifespan() must call 'await asyncio.to_thread(run_startup_checks)' so Playwright sync API does not run inside the asyncio event loop."
+        )
+except Exception as e:
+    log_fail("Async startup blocking-call check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
