@@ -47,6 +47,31 @@ def _normalize_quantitative_claim(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip().lower())
 
 
+def _is_evidence_request_window(text: str, start: int, end: int) -> bool:
+    """
+    Een tijdsduur is niet automatisch een business-claim. Zinnen zoals
+    "revenue data for the past 12 months" beschrijven welk bewijs nodig is,
+    niet een forecast/payback/timeline. Negeer zulke historische
+    evidence-window formuleringen.
+    """
+    before = (text or "")[max(0, start - 80):start].lower()
+    after = (text or "")[end:min(len(text or ""), end + 50)].lower()
+    context = before + (text or "")[start:end].lower() + after
+
+    historical_markers = (
+        "past ", "last ", "previous ", "prior ", "historical ",
+        "data for the ", "data from the ", "history for the ",
+    )
+    evidence_markers = (
+        "evidence", "data", "history", "records", "metrics", "actuals",
+    )
+
+    return (
+        any(marker in before for marker in historical_markers)
+        and any(marker in context for marker in evidence_markers)
+    )
+
+
 def find_unsupported_quantitative_claims(source_text: str, output_text: str) -> List[str]:
     """
     Detecteert precieze financiële/tijd-claims die in de meeting-output
@@ -65,6 +90,10 @@ def find_unsupported_quantitative_claims(source_text: str, output_text: str) -> 
     for match in _QUANTITATIVE_CLAIM_PATTERN.finditer(output_text or ""):
         raw = match.group(0)
         normalized = _normalize_quantitative_claim(raw)
+
+        if _is_evidence_request_window(output_text or "", match.start(), match.end()):
+            continue
+
         if normalized not in supported and normalized not in seen:
             unsupported.append(raw)
             seen.add(normalized)
