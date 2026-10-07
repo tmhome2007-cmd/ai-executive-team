@@ -178,6 +178,59 @@ def init_db() -> None:
     conn.close()
 
 
+def recover_interrupted_states() -> dict:
+    """
+    Herstelt process-crash/restart states conservatief.
+
+    Een 'executing' actie kan al gedeeltelijke real-world side effects hebben
+    gehad vóór de crash, dus we voeren hem NOOIT automatisch opnieuw uit.
+    We markeren hem failed + audit warning. Een 'preparing' decision heeft nog
+    geen directe side effects (alleen proposal-creatie), en wordt retrybaar
+    gemaakt als preparation_failed.
+    """
+    action_warning = json.dumps({
+        "error": (
+            "Execution was interrupted by a process restart. Real-world side "
+            "effects may be partially complete or unknown. Manual review is "
+            "required before proposing/retrying any equivalent action."
+        )
+    })
+    preparation_warning = (
+        "Preparation was interrupted by a process restart. Existing linked "
+        "action proposals remain in their current states; review them before retrying preparation."
+    )
+    reviewed_at = datetime.datetime.now().isoformat()
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'execution_failed', reviewed_at = ?, result_detail = ?
+            WHERE status = 'executing'
+            """,
+            (reviewed_at, action_warning),
+        )
+        recovered_actions = cursor.rowcount
+
+        cursor.execute(
+            """
+            UPDATE decisions
+            SET preparation_status = 'preparation_failed',
+                preparation_summary = ?
+            WHERE preparation_status = 'preparing'
+            """,
+            (preparation_warning,),
+        )
+        recovered_preparations = cursor.rowcount
+        conn.commit()
+
+    return {
+        "actions": recovered_actions,
+        "preparations": recovered_preparations,
+    }
+
+
 @contextmanager
 def get_connection():
     """
