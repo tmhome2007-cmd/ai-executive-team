@@ -1524,6 +1524,50 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 63: DYNAMIC CHECK — interrupted executing actions fail closed after restart
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_63
+    from memory.database import (
+        init_db as _init_db_63,
+        propose_action as _propose_63,
+        transition_action_status as _transition_63,
+        claim_action_for_execution as _claim_63,
+        recover_interrupted_actions as _recover_63,
+        get_action_by_id as _get_action_63,
+    )
+
+    original_db_63 = _verify_config_63.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_63.DATABASE_PATH = os.path.join(temp_dir, "recovery.db")
+            _init_db_63()
+            action_id = _propose_63("COO", "interrupted action", "echo hello", "shell")
+            _transition_63(action_id, "approved", ("pending",))
+            claimed = _claim_63(action_id)
+            recovered_count = _recover_63()
+            recovered = _get_action_63(action_id)
+            detail = json.loads(recovered["result_detail"])
+
+            if (
+                claimed
+                and recovered_count == 1
+                and recovered["status"] == "execution_failed"
+                and "outcome is unknown" in detail.get("error", "").lower()
+            ):
+                log_pass("startup recovery marks interrupted executions failed instead of retrying uncertain real-world effects")
+            else:
+                log_fail(
+                    "Interrupted execution recovery",
+                    f"claimed={claimed}, recovered_count={recovered_count}, recovered={recovered}",
+                )
+    finally:
+        _verify_config_63.DATABASE_PATH = original_db_63
+except Exception as e:
+    log_fail("Interrupted execution recovery check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
