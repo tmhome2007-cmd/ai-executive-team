@@ -26,7 +26,7 @@ from tools.research_tool import PageReaderTool, reset_call_count, get_call_count
 from workflows.meeting import run_executive_meeting
 from workflows.execution_lock import acquire_execution_lock_async, release_execution_lock
 from memory.database import log_decision
-from notifications.telegram_bot import send_notification_async
+from notifications.telegram_bot import send_notification_async, escape_html
 from config import config
 
 RESEARCH_SOURCES = [
@@ -148,7 +148,7 @@ async def run_daily_research() -> dict:
             )
             try:
                 await send_notification_async(
-                    "⚠️ *Daily Research FAILED*\n\nCSO could not verifiably complete "
+                    "⚠️ <b>Daily Research FAILED</b>\n\nCSO could not verifiably complete "
                     "the research tool calls after 3 attempts. No meeting was held."
                 )
             except Exception as notify_err:
@@ -190,7 +190,7 @@ async def run_daily_research() -> dict:
         try:
             snippet = meeting_result["final_decision"][:300]
             await send_notification_async(
-                f"📊 *Daily Research Findings*\n\n{snippet}..."
+                f"📊 <b>Daily Research Findings</b>\n\n{escape_html(snippet)}..."
             )
         except Exception as notify_err:
             print(f"Warning: failed to send success notification: {notify_err}")
