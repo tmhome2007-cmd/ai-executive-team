@@ -634,14 +634,10 @@ def execute_approved_action(action_id: int):
     if not result.get("success", False):
         error_msg = result.get("error", "Execution failed")
         if error_msg == "Action not found":
-            raise HTTPException(
-                status_code=404,
-                detail=error_msg
-            )
-        raise HTTPException(
-            status_code=400,
-            detail=error_msg
-        )
+            raise HTTPException(status_code=404, detail=error_msg)
+        if "must be 'approved'" in error_msg or "could not be claimed for execution" in error_msg:
+            raise HTTPException(status_code=409, detail=error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
         
     return result
 
