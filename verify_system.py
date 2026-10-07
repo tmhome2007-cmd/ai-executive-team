@@ -1273,19 +1273,338 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
-# CHECK 52: STATIC CHECK — research counter counts only successful content
+# CHECK 52: DYNAMIC CHECK — decision owner-approval lifecycle is enforced
+# -------------------------------------------------------------------
+try:
+    from config import config as _phase2_config
+    from memory.database import (
+        init_db as _phase2_init_db,
+        log_decision as _phase2_log_decision,
+        get_decision_by_id as _phase2_get_decision,
+        transition_decision_approval as _phase2_transition_decision,
+        claim_decision_for_preparation as _phase2_claim_preparation,
+        finalize_decision_preparation as _phase2_finalize_preparation,
+    )
+
+    original_db_path = _phase2_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _phase2_config.DATABASE_PATH = os.path.join(temp_dir, "phase2.db")
+            _phase2_init_db()
+            decision_id = _phase2_log_decision(
+                topic="Phase 2 lifecycle test",
+                agents_involved=["CEO"],
+                task_description="Test",
+                decision_outcome="Recommendation",
+                sandbox_mode=True,
+            )
+
+            pending_row = _phase2_get_decision(decision_id)
+            prep_before_approval = _phase2_claim_preparation(decision_id)
+            approved = _phase2_transition_decision(
+                decision_id, "approved", ("pending",), owner_feedback="Proceed carefully"
+            )
+            duplicate_approval = _phase2_transition_decision(
+                decision_id, "approved", ("pending",)
+            )
+            first_prep_claim = _phase2_claim_preparation(decision_id)
+            second_prep_claim = _phase2_claim_preparation(decision_id)
+            finalized = _phase2_finalize_preparation(
+                decision_id, "prepared", "Preparation complete"
+            )
+            final_row = _phase2_get_decision(decision_id)
+
+            if (
+                pending_row["approval_status"] == "pending"
+                and not prep_before_approval
+                and approved
+                and not duplicate_approval
+                and first_prep_claim
+                and not second_prep_claim
+                and finalized
+                and final_row["approval_status"] == "approved"
+                and final_row["preparation_status"] == "prepared"
+                and final_row["owner_feedback"] == "Proceed carefully"
+            ):
+                log_pass("decision lifecycle requires owner approval and prevents duplicate preparation claims")
+            else:
+                log_fail(
+                    "Decision owner-approval lifecycle",
+                    f"pending={pending_row}, pre_before={prep_before_approval}, approved={approved}, "
+                    f"dup_approval={duplicate_approval}, first_claim={first_prep_claim}, "
+                    f"second_claim={second_prep_claim}, finalized={finalized}, final={final_row}",
+                )
+    finally:
+        _phase2_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Decision owner-approval lifecycle check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 53: DYNAMIC CHECK — action proposals retain source decision ID
+# -------------------------------------------------------------------
+try:
+    from config import config as _phase2_action_config
+    from memory.database import (
+        init_db as _phase2_action_init_db,
+        propose_action as _phase2_propose_action,
+        get_action_by_id as _phase2_get_action,
+    )
+
+    original_db_path = _phase2_action_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _phase2_action_config.DATABASE_PATH = os.path.join(temp_dir, "phase2_action.db")
+            _phase2_action_init_db()
+            action_id = _phase2_propose_action(
+                proposed_by="CTO",
+                action_description="Test linked proposal",
+                action_detail="echo phase2",
+                action_type="shell",
+                decision_id=123,
+            )
+            action = _phase2_get_action(action_id)
+            if action and action["decision_id"] == 123:
+                log_pass("action proposals preserve their originating approved decision_id")
+            else:
+                log_fail("Action decision provenance", f"Unexpected action row: {action}")
+    finally:
+        _phase2_action_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Action decision provenance check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 54: STATIC CHECK — decision approval/preparation endpoints are protected
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_54 = f.read()
+
+    phase2_routes = [
+        '"/decisions/detail/{decision_id}"',
+        '"/decisions/{decision_id}/approve"',
+        '"/decisions/{decision_id}/reject"',
+        '"/decisions/{decision_id}/prepare"',
+    ]
+    missing_or_unprotected = []
+    for route in phase2_routes:
+        match = re.search(re.escape(route), main_content_54)
+        if not match:
+            missing_or_unprotected.append(f"{route} missing")
+            continue
+        start = match.start()
+        def_match = re.search(r"\n\s*(async def|def)\s", main_content_54[start:])
+        end = start + def_match.start() if def_match else start + 600
+        if "Depends(verify_api_key)" not in main_content_54[start:end]:
+            missing_or_unprotected.append(f"{route} unauthenticated")
+
+    if not missing_or_unprotected:
+        log_pass("decision detail, owner review, and preparation endpoints are API-key protected")
+    else:
+        log_fail("Phase 2 endpoint protection", "; ".join(missing_or_unprotected))
+except Exception as e:
+    log_fail("Phase 2 endpoint protection check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 55: STATIC CHECK — preparation cannot execute actions directly
+# -------------------------------------------------------------------
+try:
+    with open("workflows/preparation.py", "r", encoding="utf-8") as f:
+        preparation_content_55 = f.read()
+
+    imports_executor = "execute_action" in preparation_content_55
+    requires_approval = 'approval_status") != "approved"' in preparation_content_55
+    claims_preparation = "claim_decision_for_preparation(decision_id)" in preparation_content_55
+    uses_scoped_agents = "build_preparation_agents(decision_id)" in preparation_content_55
+
+    if not imports_executor and requires_approval and claims_preparation and uses_scoped_agents:
+        log_pass("preparation phase requires approved decision, is single-claim, and has no direct execution path")
+    else:
+        log_fail(
+            "Preparation execution separation",
+            f"imports_executor={imports_executor}, requires_approval={requires_approval}, "
+            f"claims={claims_preparation}, scoped_agents={uses_scoped_agents}",
+        )
+except Exception as e:
+    log_fail("Preparation execution separation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 56: STATIC CHECK — preparation tools are decision-scoped
+# -------------------------------------------------------------------
+try:
+    with open("agents/executive_agents.py", "r", encoding="utf-8") as f:
+        agents_content_56 = f.read()
+    with open("tools/action_proposal_tool.py", "r", encoding="utf-8") as f:
+        action_tool_content_56 = f.read()
+    with open("tools/file_operation_tool.py", "r", encoding="utf-8") as f:
+        file_tool_content_56 = f.read()
+    with open("tools/browser_action_tool.py", "r", encoding="utf-8") as f:
+        browser_tool_content_56 = f.read()
+
+    scoped = (
+        "def build_preparation_agents(decision_id: int)" in agents_content_56
+        and "decision_id=decision_id" in agents_content_56
+    )
+    tool_linked = all(
+        "decision_id=self.decision_id" in content
+        for content in (action_tool_content_56, file_tool_content_56, browser_tool_content_56)
+    )
+    if scoped and tool_linked:
+        log_pass("preparation proposal tools attach the originating decision_id to every action")
+    else:
+        log_fail("Decision-scoped preparation tools", f"scoped={scoped}, linked={tool_linked}")
+except Exception as e:
+    log_fail("Decision-scoped preparation tools check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 57: STATIC CHECK — failed daily research is not owner-approvable
+# -------------------------------------------------------------------
+try:
+    with open("workflows/daily_research.py", "r", encoding="utf-8") as f:
+        daily_content_57 = f.read()
+
+    failure_block = re.search(
+        r'Daily Research FAILED — Tool Verification.*?return \{',
+        daily_content_57,
+        re.DOTALL,
+    )
+    if failure_block and 'approval_status="not_applicable"' in failure_block.group(0):
+        log_pass("failed daily research records are marked not_applicable instead of entering owner approval")
+    else:
+        log_fail("Failed research approval state", "Missing approval_status='not_applicable' on failure record")
+except Exception as e:
+    log_fail("Failed research approval state check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 58: DYNAMIC CHECK — decision-scoped proposals are idempotent but isolated
+# -------------------------------------------------------------------
+try:
+    from config import config as _phase2_dedupe_config
+    from memory.database import (
+        init_db as _phase2_dedupe_init_db,
+        propose_action as _phase2_dedupe_propose,
+    )
+
+    original_db_path = _phase2_dedupe_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _phase2_dedupe_config.DATABASE_PATH = os.path.join(temp_dir, "phase2_dedupe.db")
+            _phase2_dedupe_init_db()
+            first = _phase2_dedupe_propose("CTO", "x", "echo same", "shell", decision_id=10)
+            retry = _phase2_dedupe_propose("CTO", "x", "echo same", "shell", decision_id=10)
+            different_decision = _phase2_dedupe_propose(
+                "CTO", "x", "echo same", "shell", decision_id=11
+            )
+            if first == retry and different_decision != first:
+                log_pass("preparation retry reuses exact same decision action without suppressing other decisions")
+            else:
+                log_fail(
+                    "Decision-scoped proposal idempotency",
+                    f"first={first}, retry={retry}, different_decision={different_decision}",
+                )
+    finally:
+        _phase2_dedupe_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Decision-scoped proposal idempotency check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 59: DYNAMIC CHECK — interrupted runtime states recover conservatively
+# -------------------------------------------------------------------
+try:
+    from config import config as _recover_config
+    from memory.database import (
+        init_db as _recover_init_db,
+        log_decision as _recover_log_decision,
+        transition_decision_approval as _recover_approve,
+        claim_decision_for_preparation as _recover_claim_prep,
+        propose_action as _recover_propose_action,
+        transition_action_status as _recover_action_status,
+        claim_action_for_execution as _recover_claim_action,
+        recover_interrupted_states as _recover_states,
+        get_action_by_id as _recover_get_action,
+        get_decision_by_id as _recover_get_decision,
+    )
+
+    original_db_path = _recover_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _recover_config.DATABASE_PATH = os.path.join(temp_dir, "recover.db")
+            _recover_init_db()
+
+            decision_id = _recover_log_decision("recover", ["CEO"], "x", "y")
+            _recover_approve(decision_id, "approved", ("pending",))
+            _recover_claim_prep(decision_id)
+
+            action_id = _recover_propose_action("CTO", "recover", "echo x", "shell", decision_id)
+            _recover_action_status(action_id, "approved", ("pending",))
+            _recover_claim_action(action_id)
+
+            recovered = _recover_states()
+            action = _recover_get_action(action_id)
+            decision = _recover_get_decision(decision_id)
+
+            if (
+                recovered == {"actions": 1, "preparations": 1}
+                and action["status"] == "execution_failed"
+                and "process restart" in (action["result_detail"] or "")
+                and decision["preparation_status"] == "preparation_failed"
+                and "process restart" in (decision["preparation_summary"] or "")
+            ):
+                log_pass("restart recovery marks interrupted execution/preparation for manual-safe review")
+            else:
+                log_fail(
+                    "Interrupted state recovery",
+                    f"recovered={recovered}, action={action}, decision={decision}",
+                )
+    finally:
+        _recover_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Interrupted state recovery check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 60: STATIC CHECK — Telegram has owner-level decision review controls
+# -------------------------------------------------------------------
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        telegram_content_60 = f.read()
+
+    required = [
+        "def build_decision_keyboard",
+        "decision_approve:",
+        "decision_reject:",
+        "transition_decision_approval",
+        "preparation is now unlocked",
+    ]
+    missing = [item for item in required if item not in telegram_content_60]
+    if not missing:
+        log_pass("Telegram supports owner approve/reject for executive decisions without executing actions")
+    else:
+        log_fail("Telegram decision owner gate", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Telegram decision owner gate check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 61: STATIC CHECK — research success counter increments after valid content
 # -------------------------------------------------------------------
 try:
     with open("tools/research_tool.py", "r", encoding="utf-8") as f:
-        research_content_52 = f.read()
+        research_content_61 = f.read()
 
-    success_increment = research_content_52.find("_CALL_COUNT += 1")
-    status_check = research_content_52.find("if response.status_code != 200")
-    empty_check = research_content_52.find("if not full_text")
+    success_increment = research_content_61.find("_CALL_COUNT += 1")
+    status_check = research_content_61.find("if response.status_code != 200")
+    empty_check = research_content_61.find("if not full_text")
     if (
         success_increment > status_check
         and success_increment > empty_check
-        and "Error: No textual paragraph content found on page." in research_content_52
+        and "Error: No textual paragraph content found on page." in research_content_61
     ):
         log_pass("daily research verification counts only successful, non-empty source reads")
     else:
@@ -1298,18 +1617,141 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
-# CHECK 53: STATIC CHECK — normal server entrypoint is single-process
+# CHECK 62: STATIC CHECK — dashboard exposes owner decision lifecycle
+# -------------------------------------------------------------------
+try:
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_62 = f.read()
+
+    required = [
+        "Approve Decision",
+        "Reject Decision",
+        "Prepare Approved Decision",
+        "Source decision #",
+        "preparation_status",
+    ]
+    missing = [item for item in required if item not in dashboard_content_62]
+    if not missing:
+        log_pass("dashboard exposes decision review, preparation, and action provenance")
+    else:
+        log_fail("Phase 2 dashboard controls", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Phase 2 dashboard controls check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 63: STATIC CHECK — decision detail route cannot shadow /decisions/history
 # -------------------------------------------------------------------
 try:
     with open("main.py", "r", encoding="utf-8") as f:
-        main_content_53 = f.read()
+        main_content_63 = f.read()
 
-    if 'uvicorn.run("main:app", host=bind_host, port=8000, reload=False)' in main_content_53:
+    ambiguous_detail = '@app.get(\n    "/decisions/{decision_id}"' in main_content_63
+    safe_detail = '"/decisions/detail/{decision_id}"' in main_content_63
+    if safe_detail and not ambiguous_detail:
+        log_pass("decision detail route is namespaced and cannot shadow /decisions/history")
+    else:
+        log_fail(
+            "Decision route ambiguity",
+            f"safe_detail={safe_detail}, ambiguous_detail={ambiguous_detail}",
+        )
+except Exception as e:
+    log_fail("Decision route ambiguity check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 64: STATIC CHECK — normal server entrypoint is single-process
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_64 = f.read()
+
+    if 'uvicorn.run("main:app", host=bind_host, port=8000, reload=False)' in main_content_64:
         log_pass("normal python main.py entrypoint disables auto-reload worker overlap")
     else:
         log_fail("Stable Uvicorn runtime", "Expected reload=False in normal main.py entrypoint")
 except Exception as e:
     log_fail("Stable Uvicorn runtime check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 65: DYNAMIC CHECK — action provenance survives cross-machine ID changes
+# -------------------------------------------------------------------
+try:
+    from config import config as _sync_config
+    from memory.database import (
+        init_db as _sync_init_db,
+        log_decision as _sync_log_decision,
+        propose_action as _sync_propose_action,
+        export_history_to_jsonl as _sync_export,
+        import_history_from_jsonl as _sync_import,
+        get_action_history as _sync_action_history,
+        get_decision_by_id as _sync_get_decision,
+    )
+
+    original_db_path = _sync_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_a = os.path.join(temp_dir, "a.db")
+            db_b = os.path.join(temp_dir, "b.db")
+            export_path = os.path.join(temp_dir, "history.jsonl")
+
+            _sync_config.DATABASE_PATH = db_a
+            _sync_init_db()
+            source_decision_id = _sync_log_decision("sync source", ["CEO"], "x", "y")
+            _sync_propose_action(
+                "CTO", "linked", "echo linked", "shell", decision_id=source_decision_id
+            )
+            source_decision = _sync_get_decision(source_decision_id)
+            _sync_export(export_path)
+
+            _sync_config.DATABASE_PATH = db_b
+            _sync_init_db()
+            # Force different local integer IDs on target machine.
+            _sync_log_decision("local-only", ["CEO"], "a", "b")
+            imported = _sync_import(export_path)
+            imported_actions = _sync_action_history(limit=10)
+            linked_action = next(a for a in imported_actions if a["decision_sync_uuid"] == source_decision["sync_uuid"])
+            linked_decision = _sync_get_decision(linked_action["decision_id"])
+
+            if (
+                imported["actions_imported"] == 1
+                and linked_decision is not None
+                and linked_decision["sync_uuid"] == source_decision["sync_uuid"]
+                and linked_action["decision_id"] != source_decision_id
+            ):
+                log_pass("cross-machine action provenance remaps stable decision UUID to target local ID")
+            else:
+                log_fail(
+                    "Cross-machine decision provenance",
+                    f"imported={imported}, linked_action={linked_action}, linked_decision={linked_decision}",
+                )
+    finally:
+        _sync_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Cross-machine decision provenance check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 66: STATIC CHECK — Telegram approved decision can enter preparation
+# -------------------------------------------------------------------
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        telegram_content_66 = f.read()
+
+    required = [
+        "decision_prepare:",
+        'if action_type == "decision_prepare":',
+        "await asyncio.to_thread(run_decision_preparation, action_id)",
+        "Concrete actions will still require separate approval",
+    ]
+    missing = [item for item in required if item not in telegram_content_66]
+    if not missing:
+        log_pass("Telegram supports explicit prepare-after-approval without bypassing action approval")
+    else:
+        log_fail("Telegram preparation gate", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Telegram preparation gate check crashed", str(e))
 
 
 # -------------------------------------------------------------------
