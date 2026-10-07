@@ -175,9 +175,25 @@ def run_executive_meeting(
                 "If a prior executive introduced an unsupported number or company fact, explicitly reject or label it as unverified. "
                 "Structure your response as: Evidence-supported assessment; Assumptions / unknowns; Recommendation; Evidence needed before action."
             )
-            expected_output = (
-                "Your professional assessment building upon or contrasting with prior executive inputs."
-            )
+            if key == "ceo":
+                description += (
+                    "\n\nCEO FINAL-SYNTHESIS RULES:\n"
+                    "- Do not copy or concatenate previous executives' answers.\n"
+                    "- Produce a concise decision brief that synthesizes only the strongest evidence-backed points and material disagreements.\n"
+                    "- Explicitly list unsupported assumptions and missing evidence.\n"
+                    "- If the evidence is insufficient for a real-world commitment, recommend the next research/validation step instead of pretending the decision is ready.\n"
+                    "- End with an Approval Gate stating exactly what the human owner is being asked to approve now, if anything."
+                )
+                expected_output = (
+                    "A concise CEO decision brief with: Evidence-supported findings; Material disagreements/risks; "
+                    "Assumptions/unknowns; Recommendation; Next validation step; Approval Gate. "
+                    "No copied executive prose and no unsupported precise figures."
+                )
+            else:
+                expected_output = (
+                    "Your professional assessment building upon or contrasting with prior executive inputs, "
+                    "with evidence separated from assumptions/unknowns and no unsupported precise figures."
+                )
             current_task = Task(
                 description=description,
                 expected_output=expected_output,
