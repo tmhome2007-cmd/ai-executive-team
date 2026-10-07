@@ -651,4 +651,7 @@ if __name__ == "__main__":
     # via BIND_HOST in .env als je écht vanaf een ander apparaat op hetzelfde
     # netwerk bij het dashboard moet kunnen (en dan met extra voorzichtigheid).
     bind_host = os.getenv("BIND_HOST", "127.0.0.1")
-    uvicorn.run("main:app", host=bind_host, port=8000, reload=True)
+    # Stable single-process default. For active development, run
+    # "uvicorn main:app --reload" explicitly instead. Auto-reload can briefly
+    # overlap workers, which is unsafe for the single Telegram poller.
+    uvicorn.run("main:app", host=bind_host, port=8000, reload=False)
