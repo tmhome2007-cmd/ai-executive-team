@@ -53,8 +53,15 @@ def check_database_writable() -> tuple[bool, str]:
         db_path = config.DATABASE_PATH
         os.makedirs(os.path.dirname(os.path.abspath(db_path)) or ".", exist_ok=True)
         conn = sqlite3.connect(db_path, timeout=3.0)
-        conn.execute("SELECT 1")
-        conn.close()
+        try:
+            # SELECT 1 bewijst alleen dat de database leesbaar is. BEGIN
+            # IMMEDIATE vraagt SQLite om een echte write-reservering; op een
+            # read-only database faalt dit direct, zonder dat we data hoeven
+            # te wijzigen. Daarna rollen we de lege transactie meteen terug.
+            conn.execute("BEGIN IMMEDIATE")
+            conn.rollback()
+        finally:
+            conn.close()
         return True, "ok"
     except Exception as e:
         return False, f"Database niet beschrijfbaar: {e}"
