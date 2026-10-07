@@ -7,3 +7,6 @@ executive-dashboard/.next/
 memory/*.db
 .DS_Store
 Bewaarde terminaluitvoer.txt
+backups/
+logs/
+workspace/
