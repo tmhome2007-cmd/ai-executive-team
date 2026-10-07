@@ -9,6 +9,7 @@ from logging_config import setup_logging, get_logger
 setup_logging()  # Moet als EERSTE gebeuren, vóór andere imports die loggen
 logger = get_logger(__name__)
 
+import asyncio
 import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -130,7 +131,10 @@ async def lifespan(app: FastAPI):
     # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
     # waarschuwingen in plaats van dat het probleem pas bij de eerste
     # crew-aanroep, verwarrend, aan het licht komt.
-    run_startup_checks()
+    # run_startup_checks() bevat o.a. Playwright's synchrone API. Lifespan draait
+    # op de asyncio event-loop; voer de blokkerende checks daarom in een worker
+    # thread uit zodat Playwright niet crasht met "Sync API inside the asyncio loop".
+    await asyncio.to_thread(run_startup_checks)
 
     # Start de interactieve Telegram-listener (Approve/Reject/Execute knoppen)
     # in zijn eigen achtergrond-thread met een eigen event loop.
