@@ -68,6 +68,39 @@ def _is_safe_research_url(url: str) -> str | None:
     return None
 
 
+def _get_safe_response(url: str, headers: dict, timeout: float = 10.0, max_redirects: int = 5):
+    """
+    Volgt redirects handmatig zodat ELKE redirect-target opnieuw door de
+    SSRF-check gaat. requests.get(..., allow_redirects=True) zou anders een
+    publiek URL kunnen accepteren dat vervolgens naar localhost/private IP
+    redirect en zo de eerste validatie omzeilt.
+    """
+    current_url = url
+    for _ in range(max_redirects + 1):
+        block_reason = _is_safe_research_url(current_url)
+        if block_reason:
+            raise ValueError(f"URL blocked for safety — {block_reason}")
+
+        response = requests.get(
+            current_url,
+            headers=headers,
+            timeout=timeout,
+            allow_redirects=False,
+        )
+
+        if response.is_redirect or response.is_permanent_redirect:
+            location = response.headers.get("Location")
+            if not location:
+                return response
+            from urllib.parse import urljoin
+            current_url = urljoin(current_url, location)
+            continue
+
+        return response
+
+    raise ValueError(f"Too many redirects (>{max_redirects})")
+
+
 class PageReaderTool(BaseTool):
     name: str = "read_web_page"
     description: str = "Reads the textual content from a given web page URL."
@@ -87,8 +120,9 @@ class PageReaderTool(BaseTool):
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
             
-            # Voer het netwerkverzoek uit met headers
-            response = requests.get(url, headers=headers, timeout=10)
+            # Volg redirects handmatig; ieder doel wordt opnieuw tegen de
+            # private/loopback/link-local SSRF-regels gevalideerd.
+            response = _get_safe_response(url, headers=headers, timeout=10)
             
             if response.status_code != 200:
                 return f"Error: Received status code {response.status_code} for URL {url}"
