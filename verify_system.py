@@ -879,6 +879,55 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 34: DYNAMIC CHECK — historical evidence windows are not false positives
+# -------------------------------------------------------------------
+try:
+    from workflows.meeting import find_unsupported_quantitative_claims
+
+    source = "No revenue history was supplied."
+    evidence_request = "Before deciding, collect revenue data for the past 12 months."
+    forecast = "The expected payback period is 12 months."
+
+    request_claims = find_unsupported_quantitative_claims(source, evidence_request)
+    forecast_claims = find_unsupported_quantitative_claims(source, forecast)
+
+    if not request_claims and forecast_claims == ["12 months"]:
+        log_pass("quantitative guard ignores historical evidence windows but still flags unsupported forecasts")
+    else:
+        log_fail(
+            "Quantitative context guard",
+            f"Unexpected results: evidence_request={request_claims}, forecast={forecast_claims}"
+        )
+except Exception as e:
+    log_fail("Quantitative context guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 35: STATIC CHECK — ad-hoc decision meetings are reasoning-only
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_35 = f.read()
+
+    trigger_match = re.search(
+        r"def trigger_ad_hoc_decision.*?(?=\n\n@app\.|\Z)",
+        main_content_35,
+        re.DOTALL,
+    )
+    block = trigger_match.group(0) if trigger_match else ""
+
+    if "agents_source=EXECUTIVE_AGENTS_NO_TOOLS" in block:
+        log_pass("/decisions/trigger uses tool-free executives; reasoning cannot silently propose real-world actions")
+    else:
+        log_fail(
+            "Reasoning-only decision meeting check",
+            "/decisions/trigger must pass EXECUTIVE_AGENTS_NO_TOOLS into run_executive_meeting"
+        )
+except Exception as e:
+    log_fail("Reasoning-only decision meeting check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
