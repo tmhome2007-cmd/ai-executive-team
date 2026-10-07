@@ -388,7 +388,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
 
     db_id = log_decision(
         topic=request.topic,
-        agents_involved=request.agent_keys,
+        agents_involved=participants,
         task_description=request.task_description,
         decision_outcome=final_decision,
         sandbox_mode=config.SANDBOX_MODE,
@@ -576,10 +576,19 @@ def read_pending_actions():
     description="Haalt de meest recente acties op UIT ALLE statussen (inclusief afgehandelde/geblokkeerde), voor een volledig audit-overzicht — in tegenstelling tot /actions/pending, dat alleen nog-actiegevende items toont.",
     dependencies=[Depends(verify_api_key)],
 )
-def read_action_history(limit: int = 20, offset: int = 0, status: Optional[str] = None):
+def read_action_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: Optional[str] = None,
+):
     """Retourneert een lijst van de meest recente acties, ongeacht status (tenzij gefilterd)."""
-    limit = max(1, min(limit, 100))
-    offset = max(0, offset)
+    if status is not None:
+        from memory.database import VALID_ACTION_STATUSES
+        if status not in VALID_ACTION_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid action status filter '{status}'.",
+            )
     return get_action_history(limit, offset, status)
 
 
