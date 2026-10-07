@@ -1568,6 +1568,27 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 64: STATIC CHECK — sandbox mode updates memory only after persistence
+# -------------------------------------------------------------------
+try:
+    with open("config.py", "r", encoding="utf-8") as f:
+        config_content_64 = f.read()
+
+    replace_pos = config_content_64.find("os.replace(tmp_path, env_path)")
+    memory_pos = config_content_64.find("config.SANDBOX_MODE = enabled")
+
+    if replace_pos != -1 and memory_pos > replace_pos:
+        log_pass("sandbox mode updates live memory only after the atomic .env write succeeds")
+    else:
+        log_fail(
+            "Transactional sandbox mode persistence",
+            f"os.replace position={replace_pos}, memory update position={memory_pos}",
+        )
+except Exception as e:
+    log_fail("Transactional sandbox mode persistence check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
