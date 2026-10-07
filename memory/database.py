@@ -385,6 +385,28 @@ def propose_action(
     new_sync_uuid = str(uuid.uuid4())
     with get_connection() as conn:
         cursor = conn.cursor()
+
+        # Preparation retries must be idempotent. If this exact proposal was
+        # already created for the same approved decision, return its existing
+        # ID instead of creating another action row.
+        if decision_id is not None:
+            cursor.execute(
+                """
+                SELECT id
+                FROM action_queue
+                WHERE decision_id = ?
+                  AND proposed_by = ?
+                  AND action_type = ?
+                  AND action_detail = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (decision_id, proposed_by, action_type, action_detail),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                return existing["id"]
+
         cursor.execute("""
             INSERT INTO action_queue (
                 timestamp, proposed_by, action_description, action_detail,
