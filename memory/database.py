@@ -413,6 +413,31 @@ def propose_action(
         return cursor.lastrowid
 
 
+def get_latest_action_id() -> int:
+    """Retourneert de hoogste action_queue id, of 0 als er nog geen acties zijn."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COALESCE(MAX(id), 0) AS max_id FROM action_queue")
+        return int(cursor.fetchone()["max_id"])
+
+
+def get_actions_after_id(action_id: int) -> list[dict]:
+    """Retourneert acties die ná een bekende queue-snapshot zijn aangemaakt."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, timestamp, proposed_by, action_description, action_detail,
+                   status, reviewed_at, action_type, result_detail, sync_uuid
+            FROM action_queue
+            WHERE id > ?
+            ORDER BY id ASC
+            """,
+            (action_id,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
 def get_pending_actions() -> list[dict]:
     """
     Haalt alle acties op met status 'pending', meest recente eerst.
