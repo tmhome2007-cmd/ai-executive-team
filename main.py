@@ -233,6 +233,7 @@ class DecisionResponse(BaseModel):
     participants: list[str]
     individual_outputs: dict[str, str]
     quality_warnings: dict = Field(default_factory=dict)
+    approval_status: str = "pending"
 
 
 class DecisionReviewRequest(BaseModel):
@@ -425,6 +426,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         participants=participants,
         individual_outputs=meeting_result.get("individual_outputs", {}),
         quality_warnings=meeting_result.get("quality_warnings", {}),
+        approval_status="pending",
     )
 
 
