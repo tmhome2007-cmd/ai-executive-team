@@ -473,17 +473,25 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
 
     try:
         detail = json.loads(action_detail_raw)
+        if not isinstance(detail, dict):
+            raise ValueError("action_detail must be a JSON object")
         url = detail["url"]
         click_selector = detail.get("click_selector") or None
-        if click_selector is not None and str(click_selector).strip().lower() in ("null", "none", "n/a"):
+
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError("url must be a non-empty string")
+        if click_selector is not None and not isinstance(click_selector, str):
+            raise ValueError("click_selector must be a string or null")
+        if click_selector is not None and click_selector.strip().lower() in ("null", "none", "n/a", ""):
             click_selector = None
-    except (json.JSONDecodeError, KeyError) as e:
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
         update_action_status(action_id, "execution_failed")
-        record_execution_result(action_id, json.dumps({"error": f"Malformed browser_action action_detail: {e}"}))
+        error_msg = f"Malformed browser_action action_detail: {e}"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
         return {
             "success": False,
             "action_id": action_id,
-            "error": f"Malformed browser_action action_detail: {e}",
+            "error": error_msg,
         }
 
     url_block_reason = check_url_safety(url)
