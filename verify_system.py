@@ -716,6 +716,29 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 25: STATIC CHECK — database health check tests write capability
+# -------------------------------------------------------------------
+try:
+    with open("system_checks.py", "r", encoding="utf-8") as f:
+        system_checks_content_25 = f.read()
+
+    db_check_match = re.search(
+        r"def check_database_writable.*?(?=\ndef |\Z)",
+        system_checks_content_25,
+        re.DOTALL,
+    )
+    if db_check_match and "BEGIN IMMEDIATE" in db_check_match.group(0) and "rollback()" in db_check_match.group(0):
+        log_pass("database health check verifies real SQLite write access without persisting changes")
+    else:
+        log_fail(
+            "Database write-health check",
+            "check_database_writable() must acquire a write transaction (BEGIN IMMEDIATE) and roll it back; SELECT-only checks can falsely report a read-only DB as writable."
+        )
+except Exception as e:
+    log_fail("Database write-health check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
