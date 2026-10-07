@@ -151,9 +151,18 @@ def init_db() -> None:
             status TEXT NOT NULL DEFAULT 'pending',
             reviewed_at TEXT,
             preparation_status TEXT NOT NULL DEFAULT 'not_started',
-            prepared_at TEXT
+            prepared_at TEXT,
+            preparation_outcome TEXT
         )
     """)
+
+    # Migratie voor databases die de Phase-2 tabel al zonder outcome-kolom
+    # hebben gezien.
+    try:
+        cursor.execute("ALTER TABLE decision_approvals ADD COLUMN preparation_outcome TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     # Bestaande beslissingen van vóór Phase 2 krijgen veilig 'pending':
     # niets uit oude historie wordt stilzwijgend als goedgekeurd behandeld.
@@ -237,7 +246,8 @@ def get_decision_by_id(decision_id: int) -> dict | None:
                 COALESCE(a.status, 'pending') AS approval_status,
                 a.reviewed_at AS approval_reviewed_at,
                 COALESCE(a.preparation_status, 'not_started') AS preparation_status,
-                a.prepared_at
+                a.prepared_at,
+                a.preparation_outcome
             FROM decisions d
             LEFT JOIN decision_approvals a ON a.decision_id = d.id
             WHERE d.id = ?
@@ -298,8 +308,12 @@ def claim_decision_for_preparation(decision_id: int) -> bool:
         return cursor.rowcount == 1
 
 
-def finish_decision_preparation(decision_id: int, success: bool) -> bool:
-    """Zet een geclaimde preparation-run atomair naar completed of failed."""
+def finish_decision_preparation(
+    decision_id: int,
+    success: bool,
+    outcome: str | None = None,
+) -> bool:
+    """Zet preparation atomair naar completed/failed en bewaart het plan."""
     target = "completed" if success else "failed"
     now = datetime.datetime.now().isoformat()
     with get_connection() as conn:
@@ -307,10 +321,10 @@ def finish_decision_preparation(decision_id: int, success: bool) -> bool:
         cursor.execute(
             """
             UPDATE decision_approvals
-            SET preparation_status = ?, prepared_at = ?
+            SET preparation_status = ?, prepared_at = ?, preparation_outcome = ?
             WHERE decision_id = ? AND preparation_status = 'in_progress'
             """,
-            (target, now, decision_id),
+            (target, now, outcome, decision_id),
         )
         conn.commit()
         return cursor.rowcount == 1
@@ -355,7 +369,8 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
                 COALESCE(a.status, 'pending') AS approval_status,
                 a.reviewed_at AS approval_reviewed_at,
                 COALESCE(a.preparation_status, 'not_started') AS preparation_status,
-                a.prepared_at
+                a.prepared_at,
+                a.preparation_outcome
             FROM decisions d
             LEFT JOIN decision_approvals a ON a.decision_id = d.id
             ORDER BY d.timestamp DESC
