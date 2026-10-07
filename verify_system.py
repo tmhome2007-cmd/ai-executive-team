@@ -1273,6 +1273,214 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 52: DYNAMIC CHECK — decision owner-approval lifecycle is enforced
+# -------------------------------------------------------------------
+try:
+    from config import config as _phase2_config
+    from memory.database import (
+        init_db as _phase2_init_db,
+        log_decision as _phase2_log_decision,
+        get_decision_by_id as _phase2_get_decision,
+        transition_decision_approval as _phase2_transition_decision,
+        claim_decision_for_preparation as _phase2_claim_preparation,
+        finalize_decision_preparation as _phase2_finalize_preparation,
+    )
+
+    original_db_path = _phase2_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _phase2_config.DATABASE_PATH = os.path.join(temp_dir, "phase2.db")
+            _phase2_init_db()
+            decision_id = _phase2_log_decision(
+                topic="Phase 2 lifecycle test",
+                agents_involved=["CEO"],
+                task_description="Test",
+                decision_outcome="Recommendation",
+                sandbox_mode=True,
+            )
+
+            pending_row = _phase2_get_decision(decision_id)
+            prep_before_approval = _phase2_claim_preparation(decision_id)
+            approved = _phase2_transition_decision(
+                decision_id, "approved", ("pending",), owner_feedback="Proceed carefully"
+            )
+            duplicate_approval = _phase2_transition_decision(
+                decision_id, "approved", ("pending",)
+            )
+            first_prep_claim = _phase2_claim_preparation(decision_id)
+            second_prep_claim = _phase2_claim_preparation(decision_id)
+            finalized = _phase2_finalize_preparation(
+                decision_id, "prepared", "Preparation complete"
+            )
+            final_row = _phase2_get_decision(decision_id)
+
+            if (
+                pending_row["approval_status"] == "pending"
+                and not prep_before_approval
+                and approved
+                and not duplicate_approval
+                and first_prep_claim
+                and not second_prep_claim
+                and finalized
+                and final_row["approval_status"] == "approved"
+                and final_row["preparation_status"] == "prepared"
+                and final_row["owner_feedback"] == "Proceed carefully"
+            ):
+                log_pass("decision lifecycle requires owner approval and prevents duplicate preparation claims")
+            else:
+                log_fail(
+                    "Decision owner-approval lifecycle",
+                    f"pending={pending_row}, pre_before={prep_before_approval}, approved={approved}, "
+                    f"dup_approval={duplicate_approval}, first_claim={first_prep_claim}, "
+                    f"second_claim={second_prep_claim}, finalized={finalized}, final={final_row}",
+                )
+    finally:
+        _phase2_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Decision owner-approval lifecycle check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 53: DYNAMIC CHECK — action proposals retain source decision ID
+# -------------------------------------------------------------------
+try:
+    from config import config as _phase2_action_config
+    from memory.database import (
+        init_db as _phase2_action_init_db,
+        propose_action as _phase2_propose_action,
+        get_action_by_id as _phase2_get_action,
+    )
+
+    original_db_path = _phase2_action_config.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _phase2_action_config.DATABASE_PATH = os.path.join(temp_dir, "phase2_action.db")
+            _phase2_action_init_db()
+            action_id = _phase2_propose_action(
+                proposed_by="CTO",
+                action_description="Test linked proposal",
+                action_detail="echo phase2",
+                action_type="shell",
+                decision_id=123,
+            )
+            action = _phase2_get_action(action_id)
+            if action and action["decision_id"] == 123:
+                log_pass("action proposals preserve their originating approved decision_id")
+            else:
+                log_fail("Action decision provenance", f"Unexpected action row: {action}")
+    finally:
+        _phase2_action_config.DATABASE_PATH = original_db_path
+except Exception as e:
+    log_fail("Action decision provenance check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 54: STATIC CHECK — decision approval/preparation endpoints are protected
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_54 = f.read()
+
+    phase2_routes = [
+        '"/decisions/{decision_id}"',
+        '"/decisions/{decision_id}/approve"',
+        '"/decisions/{decision_id}/reject"',
+        '"/decisions/{decision_id}/prepare"',
+    ]
+    missing_or_unprotected = []
+    for route in phase2_routes:
+        match = re.search(re.escape(route), main_content_54)
+        if not match:
+            missing_or_unprotected.append(f"{route} missing")
+            continue
+        start = match.start()
+        def_match = re.search(r"\n\s*(async def|def)\s", main_content_54[start:])
+        end = start + def_match.start() if def_match else start + 600
+        if "Depends(verify_api_key)" not in main_content_54[start:end]:
+            missing_or_unprotected.append(f"{route} unauthenticated")
+
+    if not missing_or_unprotected:
+        log_pass("decision detail, owner review, and preparation endpoints are API-key protected")
+    else:
+        log_fail("Phase 2 endpoint protection", "; ".join(missing_or_unprotected))
+except Exception as e:
+    log_fail("Phase 2 endpoint protection check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 55: STATIC CHECK — preparation cannot execute actions directly
+# -------------------------------------------------------------------
+try:
+    with open("workflows/preparation.py", "r", encoding="utf-8") as f:
+        preparation_content_55 = f.read()
+
+    imports_executor = "execute_action" in preparation_content_55
+    requires_approval = 'approval_status") != "approved"' in preparation_content_55
+    claims_preparation = "claim_decision_for_preparation(decision_id)" in preparation_content_55
+    uses_scoped_agents = "build_preparation_agents(decision_id)" in preparation_content_55
+
+    if not imports_executor and requires_approval and claims_preparation and uses_scoped_agents:
+        log_pass("preparation phase requires approved decision, is single-claim, and has no direct execution path")
+    else:
+        log_fail(
+            "Preparation execution separation",
+            f"imports_executor={imports_executor}, requires_approval={requires_approval}, "
+            f"claims={claims_preparation}, scoped_agents={uses_scoped_agents}",
+        )
+except Exception as e:
+    log_fail("Preparation execution separation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 56: STATIC CHECK — preparation tools are decision-scoped
+# -------------------------------------------------------------------
+try:
+    with open("agents/executive_agents.py", "r", encoding="utf-8") as f:
+        agents_content_56 = f.read()
+    with open("tools/action_proposal_tool.py", "r", encoding="utf-8") as f:
+        action_tool_content_56 = f.read()
+    with open("tools/file_operation_tool.py", "r", encoding="utf-8") as f:
+        file_tool_content_56 = f.read()
+    with open("tools/browser_action_tool.py", "r", encoding="utf-8") as f:
+        browser_tool_content_56 = f.read()
+
+    scoped = (
+        "def build_preparation_agents(decision_id: int)" in agents_content_56
+        and "decision_id=decision_id" in agents_content_56
+    )
+    tool_linked = all(
+        "decision_id=self.decision_id" in content
+        for content in (action_tool_content_56, file_tool_content_56, browser_tool_content_56)
+    )
+    if scoped and tool_linked:
+        log_pass("preparation proposal tools attach the originating decision_id to every action")
+    else:
+        log_fail("Decision-scoped preparation tools", f"scoped={scoped}, linked={tool_linked}")
+except Exception as e:
+    log_fail("Decision-scoped preparation tools check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 57: STATIC CHECK — failed daily research is not owner-approvable
+# -------------------------------------------------------------------
+try:
+    with open("workflows/daily_research.py", "r", encoding="utf-8") as f:
+        daily_content_57 = f.read()
+
+    failure_block = re.search(
+        r'Daily Research FAILED — Tool Verification.*?return \{',
+        daily_content_57,
+        re.DOTALL,
+    )
+    if failure_block and 'approval_status="not_applicable"' in failure_block.group(0):
+        log_pass("failed daily research records are marked not_applicable instead of entering owner approval")
+    else:
+        log_fail("Failed research approval state", "Missing approval_status='not_applicable' on failure record")
+except Exception as e:
+    log_fail("Failed research approval state check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
