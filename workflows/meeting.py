@@ -7,6 +7,7 @@ Agents bouwen voort op elkaars antwoorden en leveren zowel een individuele als g
 
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -121,8 +122,26 @@ def run_executive_meeting(
     # loopt altijd binnen EXECUTION_LOCK, zodat hij nooit gelijktijdig draait
     # met bijvoorbeeld de geplande dagelijkse research (die anders de
     # belasting simpelweg zou optellen in plaats van serialiseren).
+    # Timeout rond de blokkerende kickoff-aanroep: als Ollama vastloopt of
+    # extreem traag reageert, mag dit de aanroeper (en daarmee EXECUTION_LOCK)
+    # niet voor onbepaalde tijd blokkeren. EERLIJKE beperking: Python kan een
+    # lopende thread niet écht geforceerd stoppen — bij een timeout krijgt de
+    # aanroeper direct een duidelijke fout terug, maar de onderliggende
+    # crew-aanroep kan op de achtergrond nog even doorlopen tot hij zelf
+    # afrondt. Dat is nog altijd veel beter dan een verzoek dat voor altijd
+    # blijft hangen.
+    MEETING_TIMEOUT_SECONDS = 600  # 10 minuten
+
     with EXECUTION_LOCK:
-        crew_result = crew.kickoff()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(crew.kickoff)
+            try:
+                crew_result = future.result(timeout=MEETING_TIMEOUT_SECONDS)
+            except FutureTimeoutError:
+                raise TimeoutError(
+                    f"Meeting execution exceeded the {MEETING_TIMEOUT_SECONDS}s timeout — "
+                    f"Ollama may be unresponsive or the model is taking unusually long."
+                )
 
     # 4. Verzamel de individuele output per taak/agent
     individual_outputs: Dict[str, str] = {}

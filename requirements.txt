@@ -1,11 +1,15 @@
-crewai
+# crewai gepind op de daadwerkelijk geteste versie (patch-updates toegestaan,
+# maar GEEN automatische sprong naar een nieuwe minor/major versie — dit
+# project is tijdens ontwikkeling meerdere keren geraakt door breaking
+# changes in crewai's async API tussen versies).
+crewai>=1.15.21,<1.16.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.34.0
 requests>=2.32.0
 python-dotenv>=1.0.1
 playwright>=1.40.0
 python-telegram-bot>=21.0
-apscheduler
-langchain-community
-langchain-ollama
-requests>=2.31.0
+apscheduler>=3.10.0
+langchain-community>=0.3.0
+langchain-ollama>=0.2.0
+beautifulsoup4>=4.12.0

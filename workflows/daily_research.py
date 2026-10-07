@@ -74,9 +74,15 @@ async def _run_research_crew_once() -> str:
     # EXECUTION_LOCK als in meeting.py zorgt dat deze nooit gelijktijdig
     # draait met een ad-hoc /decisions/trigger meeting. We gebruiken hier de
     # async-veilige acquire-helper zodat het wachten de event loop niet blokkeert.
+    RESEARCH_TIMEOUT_SECONDS = 300  # 5 minuten
     await acquire_execution_lock_async()
     try:
-        result = await crew.kickoff_async()
+        result = await asyncio.wait_for(crew.kickoff_async(), timeout=RESEARCH_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        raise TimeoutError(
+            f"Research crew execution exceeded the {RESEARCH_TIMEOUT_SECONDS}s timeout — "
+            f"Ollama may be unresponsive."
+        )
     finally:
         release_execution_lock()
     return str(result)

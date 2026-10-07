@@ -13,8 +13,14 @@ import os
 import re
 import shlex
 import subprocess
+
+try:
+    import resource  # Unix-only (macOS/Linux) — niet beschikbaar op Windows
+    _RESOURCE_MODULE_AVAILABLE = True
+except ImportError:
+    _RESOURCE_MODULE_AVAILABLE = False
 from urllib.parse import urlparse
-from memory.database import get_action_by_id, update_action_status
+from memory.database import get_action_by_id, update_action_status, record_execution_result
 from notifications.telegram_bot import send_notification, escape_html
 from config import config
 
@@ -31,6 +37,38 @@ from config import config
 
 # Shell metakarakters die het commando in losse deelcommando's opsplitsen
 _SHELL_CHAIN_SPLIT = re.compile(r"&&|\|\||;|\|")
+
+
+def _limit_subprocess_resources() -> None:
+    """
+    Wordt uitgevoerd IN het kindproces, vlak vóór het echte commando start
+    (via preexec_fn). Begrenst CPU-tijd en geheugen zodat een losgeslagen of
+    kwaadaardig commando (bijv. "yes", of iets dat /dev/zero leest) niet
+    onbeperkt CPU/RAM kan opslokken tijdens de 30 seconden wall-clock timeout
+    — die timeout stopt het proces pas AAN HET EIND van 30s, dit begrenst wat
+    het in de tussentijd kan verbruiken. Alleen actief op Unix (macOS/Linux).
+    """
+    if not _RESOURCE_MODULE_AVAILABLE:
+        return
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (25, 25))  # max 25 CPU-seconden
+        resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))  # max 512MB adresruimte
+    except Exception:
+        pass  # als het platform dit niet ondersteunt, ga gewoon door zonder limiet
+
+
+def _get_safe_subprocess_env() -> dict:
+    """
+    Bouwt een MINIMALE environment voor subprocess.run() — NIET de volledige
+    os.environ van dit proces. Zonder dit zou een goedgekeurd shell-commando
+    zoals "env", "printenv" of "set" gewoon TELEGRAM_BOT_TOKEN, API_SECRET_KEY
+    en OPENAI_API_KEY uit .env kunnen dumpen naar een bestand of de output —
+    geen enkel dangerous-pattern zou dat opvangen, want die commando's zijn
+    op zichzelf volkomen onschuldig. Alleen wat een normaal commando echt
+    nodig heeft (PATH, HOME, taal-instellingen) wordt doorgegeven.
+    """
+    safe_keys = ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "USER", "SHELL")
+    return {k: os.environ[k] for k in safe_keys if k in os.environ}
 
 
 def _get_workspace_root() -> str:
@@ -63,6 +101,19 @@ def check_workspace_confinement(command: str) -> str | None:
     # plaats van te doen alsof we het veilig kunnen controleren.
     if "`" in command or "$(" in command:
         return "Command substitution (` or $(...)) detected — cannot statically verify target paths, blocked for safety"
+
+    # Shell variable expansie ($HOME, ${HOME}, $1, etc.) is precies zo
+    # onvoorspelbaar als command substitution voor statische analyse: het
+    # ECHTE pad is pas bekend op het moment dat de shell het daadwerkelijk
+    # expandeert, niet nu. Een commando als "rm -rf $HOME" bevat geen enkel
+    # token dat begint met /, ~ of . — dus _looks_like_path() zou het NOOIT
+    # herkennen als een te controleren pad, en geen enkel DANGEROUS_PATTERNS
+    # regex matcht de letterlijke tekst "$HOME" — waardoor dit commando
+    # volledig langs BEIDE controles zou glippen en op het echte home-
+    # folder zou uitvoeren zodra de shell het expandeert. Blokkeer daarom
+    # elke variabele-referentie bij voorbaat, net als command substitution.
+    if re.search(r"\$\{?\w+\}?", command):
+        return "Shell variable expansion ($VAR or ${VAR}) detected — the real target path cannot be statically verified before the shell expands it, blocked for safety"
 
     workspace_root = _get_workspace_root()
 
@@ -238,6 +289,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
         content = detail.get("content", "")
     except (json.JSONDecodeError, KeyError) as e:
         update_action_status(action_id, "execution_failed")
+        record_execution_result(action_id, json.dumps({"error": f"Malformed file_operation action_detail: {e}"}))
         return {
             "success": False,
             "action_id": action_id,
@@ -250,6 +302,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
     confinement_reason = check_workspace_confinement(file_path)
     if confinement_reason:
         update_action_status(action_id, "blocked_dangerous")
+        record_execution_result(action_id, json.dumps({"error": f"Blocked: {confinement_reason}"}))
         try:
             send_notification(
                 f"🚫 <b>FILE OPERATION BLOCKED — path outside workspace</b>\n\n"
@@ -291,6 +344,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             with open(resolved_path, "r", encoding="utf-8") as f:
                 file_content = f.read()
             update_action_status(action_id, "executed")
+            record_execution_result(action_id, json.dumps({"stdout": file_content[:2000]}))
             try:
                 send_notification(
                     f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
@@ -307,6 +361,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             with open(resolved_path, mode, encoding="utf-8") as f:
                 f.write(content)
             update_action_status(action_id, "executed")
+            record_execution_result(action_id, json.dumps({"stdout": f"Wrote {len(content)} characters to {resolved_path}"}))
             try:
                 send_notification(
                     f"⚡ <b>FILE {operation.upper()} SUCCESSFUL</b>\n\n"
@@ -320,11 +375,13 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
 
         else:
             update_action_status(action_id, "execution_failed")
+            record_execution_result(action_id, json.dumps({"error": f"Unknown operation: {operation}"}))
             return {"success": False, "action_id": action_id, "error": f"Unknown operation: {operation}"}
 
     except Exception as e:
         update_action_status(action_id, "execution_failed")
         error_msg = f"File operation failed: {e}"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
         try:
             send_notification(
                 f"❌ <b>FILE OPERATION FAILED</b>\n\n"
@@ -355,6 +412,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             click_selector = None
     except (json.JSONDecodeError, KeyError) as e:
         update_action_status(action_id, "execution_failed")
+        record_execution_result(action_id, json.dumps({"error": f"Malformed browser_action action_detail: {e}"}))
         return {
             "success": False,
             "action_id": action_id,
@@ -364,6 +422,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
     url_block_reason = check_url_safety(url)
     if url_block_reason:
         update_action_status(action_id, "blocked_dangerous")
+        record_execution_result(action_id, json.dumps({"error": f"Blocked: {url_block_reason}"}))
         try:
             send_notification(
                 f"🚫 <b>BROWSER ACTION BLOCKED — unsafe URL</b>\n\n"
@@ -421,6 +480,10 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         result_summary = f"Navigated to '{url}' (page title: '{page_title}')" + (
             f" and clicked '{click_selector}'" if click_selector else ""
         )
+        record_execution_result(action_id, json.dumps({
+            "stdout": result_summary,
+            "screenshot_path": screenshot_path,
+        }))
         try:
             send_notification(
                 f"⚡ <b>BROWSER ACTION SUCCESSFUL</b>\n\n"
@@ -442,6 +505,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
     except Exception as e:
         update_action_status(action_id, "execution_failed")
         error_msg = f"Browser action failed: {e}"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
         try:
             send_notification(
                 f"❌ <b>BROWSER ACTION FAILED</b>\n\n"
@@ -496,6 +560,7 @@ def execute_action(action_id: int) -> dict:
 
     if block_reason:
         update_action_status(action_id, "blocked_dangerous")
+        record_execution_result(action_id, json.dumps({"error": f"Blocked: {block_reason}"}))
 
         try:
             notification_text = (
@@ -546,11 +611,17 @@ def execute_action(action_id: int) -> dict:
             capture_output=True,
             text=True,
             timeout=30,  # 30 seconden time-out ter beveiliging
-            cwd=_get_workspace_root()
+            cwd=_get_workspace_root(),
+            env=_get_safe_subprocess_env(),  # GEEN secrets (.env) doorgeven aan het kindproces
+            preexec_fn=_limit_subprocess_resources if _RESOURCE_MODULE_AVAILABLE else None,
         )
 
         if completed_process.returncode == 0:
             update_action_status(action_id, "executed")
+            record_execution_result(action_id, json.dumps({
+                "stdout": completed_process.stdout,
+                "stderr": completed_process.stderr,
+            }))
 
             try:
                 notification_text = (
@@ -573,6 +644,7 @@ def execute_action(action_id: int) -> dict:
         else:
             update_action_status(action_id, "execution_failed")
             error_msg = completed_process.stderr or f"Command exited with return code {completed_process.returncode}"
+            record_execution_result(action_id, json.dumps({"error": error_msg, "stdout": completed_process.stdout, "stderr": completed_process.stderr}))
 
             try:
                 notification_text = (
@@ -597,6 +669,7 @@ def execute_action(action_id: int) -> dict:
     except subprocess.TimeoutExpired:
         update_action_status(action_id, "execution_failed")
         error_msg = "Command timed out after 30 seconds."
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
 
         try:
             send_notification(
@@ -618,6 +691,7 @@ def execute_action(action_id: int) -> dict:
     except Exception as e:
         update_action_status(action_id, "execution_failed")
         error_msg = f"Unexpected error during execution: {e}"
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
 
         try:
             send_notification(

@@ -5,12 +5,20 @@ Hoofdbestand voor de FastAPI applicatie van het AI Executive Team.
 Beheert de API-endpoints en de geautomatiseerde (catch-up) achtergrondtaken.
 """
 
+from logging_config import setup_logging, get_logger
+setup_logging()  # Moet als EERSTE gebeuren, vóór andere imports die loggen
+logger = get_logger(__name__)
+
 import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Query, Depends, Header
+from fastapi import FastAPI, HTTPException, Query, Depends, Header, Request
+import hmac
+import time
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
+import os
+import re
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -22,13 +30,16 @@ from memory.database import (
     get_pending_actions,
     get_action_history,
     update_action_status,
+    get_system_stats,
+    backup_database,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
-from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener
-from config import config, set_sandbox_mode
+from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
+from config import config, set_sandbox_mode, validate_config, ConfigValidationError
+from system_checks import check_ollama_reachable, check_database_writable, check_telegram_configured, check_playwright_browser_installed, run_startup_checks, get_uptime_seconds
 
 
 # 1. Globale status dictionary voor het monitoren van de laatste run
@@ -103,8 +114,23 @@ async def scheduled_research_job():
 # 4. Lifespan Handler (Opstarten en Afsluiten)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Valideer de configuratie EERST — fail fast met een duidelijke foutmelding
+    # in plaats van een verwarrende crash minuten later midden in een crew-run.
+    try:
+        config_warnings = validate_config()
+        for w in config_warnings:
+            logger.warning(f"Config warning: {w}")
+    except ConfigValidationError as e:
+        logger.error(f"FATAL: {e}")
+        raise
+
     # Initialiseer de database
     init_db()
+
+    # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
+    # waarschuwingen in plaats van dat het probleem pas bij de eerste
+    # crew-aanroep, verwarrend, aan het licht komt.
+    run_startup_checks()
 
     # Start de interactieve Telegram-listener (Approve/Reject/Execute knoppen)
     # in zijn eigen achtergrond-thread met een eigen event loop.
@@ -118,19 +144,40 @@ async def lifespan(app: FastAPI):
         id="daily_research_interval_job",
         replace_existing=True,
     )
+    scheduler.add_job(
+        lambda: backup_database(keep_last=7),
+        trigger=IntervalTrigger(hours=24),
+        id="daily_database_backup_job",
+        replace_existing=True,
+    )
     scheduler.start()
     app.state.scheduler = scheduler
+    logger.info("Scheduler started: daily research catch-up (15 min interval) + daily DB backup (24h interval).")
 
     # Voer direct bij het opstarten één check/catch-up uit (asynchroon)
     await scheduled_research_job()
 
+    # Eén backup bij het opstarten, zodat je niet 24 uur moet wachten op de
+    # eerste veiligheidskopie na een verse installatie.
+    try:
+        backup_path = backup_database(keep_last=7)
+        logger.info(f"Startup database backup created: {backup_path}")
+    except Exception as e:
+        logger.warning(f"Startup database backup failed: {e}")
+
+    logger.info("Application startup complete.")
+
     yield
+
+    logger.info("Application shutting down...")
 
     # Sluit de scheduler netjes af bij het stoppen van de app
     app.state.scheduler.shutdown()
+    logger.info("Scheduler stopped.")
 
     # Stop de Telegram-listener netjes (wacht tot de achtergrond-thread eindigt)
     stop_telegram_listener()
+    logger.info("Telegram listener stopped. Shutdown complete.")
 
 
 # 5. FastAPI App Instantie
@@ -149,6 +196,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 5.2 Request-logging middleware: elke HTTP-aanroep (methode, pad, status,
+# duur) wordt gelogd — geeft achteraf zichtbaarheid in API-gebruik zonder
+# dat je op het moment zelf de terminal moet volgen.
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    duration_ms = round((time.time() - start_time) * 1000, 1)
+    logger.info(f'{request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)')
+    return response
 
 
 # 6. Pydantic Respons en Request Modellen
@@ -175,18 +234,54 @@ class DecisionResponse(BaseModel):
 
 
 # --- API Key Beveiliging ---
-def verify_api_key(x_api_key: str = Header(None)) -> bool:
+
+# Bijhouden van gefaalde pogingen per client-IP, puur in-memory (dit draait
+# als één lokaal proces, geen gedeelde/verspreide store nodig). Zonder dit
+# kon iemand onbeperkt X-API-Key waarden proberen — vooral relevant nu de
+# server ook bereikbaar kan zijn vanaf hetzelfde netwerk (zie BIND_HOST).
+_failed_auth_attempts: dict[str, list[float]] = {}
+_MAX_FAILED_ATTEMPTS = 5
+_LOCKOUT_WINDOW_SECONDS = 300  # 5 minuten
+
+
+def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
     """
     Controleert of de ontvangen X-API-Key header overeenkomt met de geconfigureerde API_SECRET_KEY.
     Faalt standaard als er geen sleutel op de server is ingesteld (fail closed).
-    """
-    server_key = config.API_SECRET_KEY
 
-    if not server_key or x_api_key != server_key:
+    Twee aanvullende beveiligingen t.o.v. de oorspronkelijke versie:
+    - hmac.compare_digest() in plaats van != voor een CONSTANT-TIME vergelijking
+      (een simpele stringvergelijking stopt vroeg zodra het eerste verschil
+      wordt gevonden, wat in theorie de sleutel karakter-voor-karakter zou
+      kunnen lekken via timing).
+    - Een simpele lockout: na 5 mislukte pogingen vanaf hetzelfde IP binnen
+      5 minuten wordt verder proberen geblokkeerd (429), ongeacht of de
+      daaropvolgende poging toevallig wél de juiste sleutel zou zijn.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+
+    attempts = [t for t in _failed_auth_attempts.get(client_ip, []) if now - t < _LOCKOUT_WINDOW_SECONDS]
+
+    if len(attempts) >= _MAX_FAILED_ATTEMPTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed authentication attempts. Try again later.",
+        )
+
+    server_key = config.API_SECRET_KEY
+    is_valid = bool(server_key) and x_api_key is not None and hmac.compare_digest(x_api_key, server_key)
+
+    if not is_valid:
+        attempts.append(now)
+        _failed_auth_attempts[client_ip] = attempts
         raise HTTPException(
             status_code=401,
             detail="Missing or invalid API key",
         )
+
+    # Succesvolle poging: reset de teller voor dit IP.
+    _failed_auth_attempts.pop(client_ip, None)
     return True
 
 
@@ -199,7 +294,7 @@ def read_root():
 @app.get(
     "/workflows/daily-research/status",
     summary="Get Status of Last Daily Research Run",
-    
+    dependencies=[Depends(verify_api_key)],
 )
 def get_daily_research_status():
     """Geeft de status en uitkomst van de laatst uitgevoerde onderzoeks-workflow terug."""
@@ -317,14 +412,15 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     "/decisions/history",
     summary="Get Decision History",
     description="Haalt de meest recente besluiten op uit de database met een instelbare limiet (maximaal 100).",
-    
+    dependencies=[Depends(verify_api_key)],
 )
 def get_decision_history(
-    limit: int = Query(default=20, ge=1, le=100, description="Aantal op te halen besluiten (1-100)")
+    limit: int = Query(default=20, ge=1, le=100, description="Aantal op te halen besluiten (1-100)"),
+    offset: int = Query(default=0, ge=0, description="Aantal over te slaan besluiten (voor paginering)"),
 ):
     """Retourneert een lijst van recent opgeslagen besluiten."""
     try:
-        decisions = get_recent_decisions(limit=limit)
+        decisions = get_recent_decisions(limit=limit, offset=offset)
         return decisions
     except Exception as e:
         raise HTTPException(
@@ -350,6 +446,49 @@ def favicon():
 def get_sandbox_status():
     """Geeft aan of het systeem in Sandbox Mode of Live Mode draait."""
     return {"sandbox_mode": config.SANDBOX_MODE}
+
+
+@app.get(
+    "/system/health",
+    summary="Comprehensive Health Check",
+    description="Verifieert daadwerkelijk of Ollama, de database en Telegram bereikbaar/geconfigureerd zijn — in tegenstelling tot de root '/', die alleen zegt dat de server zelf draait.",
+    dependencies=[Depends(verify_api_key)],
+)
+def get_system_health():
+    """Retourneert per-component gezondheidsstatus, plus algehele status en uptime."""
+    ollama_ok, ollama_msg = check_ollama_reachable()
+    db_ok, db_msg = check_database_writable()
+    tg_ok, tg_msg = check_telegram_configured()
+    pw_ok, pw_msg = check_playwright_browser_installed()
+    tg_listener_ok, tg_listener_error = is_telegram_listener_alive()
+
+    overall_ok = ollama_ok and db_ok  # Telegram/Playwright zijn optioneel, blokkeren 'healthy' niet
+
+    return {
+        "status": "healthy" if overall_ok else "degraded",
+        "uptime_seconds": round(get_uptime_seconds(), 1),
+        "sandbox_mode": config.SANDBOX_MODE,
+        "components": {
+            "ollama": {"ok": ollama_ok, "message": ollama_msg},
+            "database": {"ok": db_ok, "message": db_msg},
+            "telegram_configured": {"ok": tg_ok, "message": tg_msg},
+            "telegram_listener_running": {"ok": tg_listener_ok, "message": tg_listener_error or "ok"},
+            "playwright_browser": {"ok": pw_ok, "message": pw_msg},
+        },
+    }
+
+
+@app.get(
+    "/system/stats",
+    summary="System Statistics",
+    description="Aantallen beslissingen/acties, uitsplitsing per actiestatus, en het slaagpercentage van dagelijkse research.",
+    dependencies=[Depends(verify_api_key)],
+)
+def get_stats():
+    """Retourneert de systeemstatistieken uit de database, plus uptime."""
+    stats = get_system_stats()
+    stats["uptime_seconds"] = round(get_uptime_seconds(), 1)
+    return stats
 
 
 class SandboxModeRequest(BaseModel):
@@ -383,6 +522,35 @@ def toggle_sandbox_mode(request: SandboxModeRequest):
 
     return {"sandbox_mode": config.SANDBOX_MODE}
 
+
+# Strikte whitelist: browser-actie-screenshots worden ALTIJD exact zo
+# genoemd door workflows/action_executor.py (_execute_browser_action). Door
+# de bestandsnaam tegen dit patroon te valideren voordat we hem in een pad
+# gebruiken, is padtraversal (../../etc/passwd) door constructie onmogelijk —
+# dit is geen algemene file-server, alleen deze ene, voorspelbare vorm mag door.
+_SCREENSHOT_FILENAME_PATTERN = re.compile(r"^action_\d+\.png$")
+
+
+@app.get(
+    "/screenshots/{filename}",
+    summary="Get Browser Action Screenshot",
+    description="Serveert een screenshot die is opgeslagen door een uitgevoerde browser_action. Bestandsnaam moet exact het patroon action_<id>.png volgen.",
+    dependencies=[Depends(verify_api_key)],
+)
+def get_screenshot(filename: str):
+    """Retourneert de PNG-screenshot van een uitgevoerde browser-actie, indien aanwezig."""
+    if not _SCREENSHOT_FILENAME_PATTERN.match(filename):
+        raise HTTPException(status_code=400, detail="Invalid screenshot filename format.")
+
+    workspace_root = os.path.realpath(os.path.expanduser(config.WORKSPACE_ROOT or "./workspace"))
+    screenshot_path = os.path.join(workspace_root, "screenshots", filename)
+
+    if not os.path.isfile(screenshot_path):
+        raise HTTPException(status_code=404, detail="Screenshot not found.")
+
+    return FileResponse(screenshot_path, media_type="image/png")
+
+
 # ===================================================================
 # ACTION APPROVAL QUEUE ENDPOINTS
 # ===================================================================
@@ -404,10 +572,11 @@ def read_pending_actions():
     description="Haalt de meest recente acties op UIT ALLE statussen (inclusief afgehandelde/geblokkeerde), voor een volledig audit-overzicht — in tegenstelling tot /actions/pending, dat alleen nog-actiegevende items toont.",
     dependencies=[Depends(verify_api_key)],
 )
-def read_action_history(limit: int = 20):
-    """Retourneert een lijst van de meest recente acties, ongeacht status."""
+def read_action_history(limit: int = 20, offset: int = 0, status: Optional[str] = None):
+    """Retourneert een lijst van de meest recente acties, ongeacht status (tenzij gefilterd)."""
     limit = max(1, min(limit, 100))
-    return get_action_history(limit)
+    offset = max(0, offset)
+    return get_action_history(limit, offset, status)
 
 
 @app.post(
@@ -468,4 +637,11 @@ def execute_approved_action(action_id: int):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # BELANGRIJK: standaard 127.0.0.1 (alleen deze machine), NIET 0.0.0.0.
+    # 0.0.0.0 maakt deze API bereikbaar voor ELK ander apparaat op hetzelfde
+    # netwerk (bijv. een schoolnetwerk) — inclusief pogingen om de API-key
+    # te brute-forcen vanaf een ander toestel. Alleen bewust overschrijven
+    # via BIND_HOST in .env als je écht vanaf een ander apparaat op hetzelfde
+    # netwerk bij het dashboard moet kunnen (en dan met extra voorzichtigheid).
+    bind_host = os.getenv("BIND_HOST", "127.0.0.1")
+    uvicorn.run("main:app", host=bind_host, port=8000, reload=True)

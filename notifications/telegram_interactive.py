@@ -25,6 +25,7 @@ from typing import Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes
+from telegram.error import Conflict as TelegramConflictError
 
 project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
@@ -34,6 +35,9 @@ from config import config
 from notifications.telegram_bot import send_notification_with_keyboard, escape_html
 from memory.database import get_action_by_id, update_action_status
 from workflows.action_executor import execute_action
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # ------------------------------------------------------------------
 # GEDEELDE STATE VOOR DE ACHTERGROND-THREAD
@@ -45,7 +49,22 @@ _state: dict = {
     "loop": None,
     "application": None,
     "stop_event": None,  # een asyncio.Event, aangemaakt BINNEN de eigen loop
+    "started_successfully": False,  # wordt pas True NA een geslaagde start_polling()
+    "last_error": None,  # laatste opstartfout, voor /system/health
 }
+
+
+def is_telegram_listener_alive() -> tuple[bool, Optional[str]]:
+    """
+    Retourneert (True, None) als de listener-thread leeft EN start_polling()
+    daadwerkelijk is gelukt, anders (False, laatste_foutmelding). Gebruikt
+    door /system/health, zodat een mislukte start (bijv. 'Conflict: terminated
+    by other getUpdates request' — een ANDERE actieve proces pollt al met
+    deze bot-token) zichtbaar is zonder in logs/app.log te hoeven graven.
+    """
+    thread = _state.get("thread")
+    alive = thread is not None and thread.is_alive() and _state.get("started_successfully", False)
+    return alive, _state.get("last_error")
 
 
 # ------------------------------------------------------------------
@@ -115,6 +134,25 @@ def send_proposal_notification(
 # ------------------------------------------------------------------
 async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
+
+    # KRITIEKE CONTROLE: verifieer dat dit bericht ECHT van de eigenaar komt.
+    # Zonder deze check zou ELKE Telegram-gebruiker die deze bot vindt en een
+    # bericht stuurt (of ooit een callback triggert) real-world acties kunnen
+    # goedkeuren, afwijzen of UITVOEREN op deze machine. Een bot-username is
+    # geen geheim — dit moet ALTIJD expliciet worden gecontroleerd.
+    sender_chat_id = str(update.effective_chat.id) if update.effective_chat else None
+    owner_chat_id = str(getattr(config, "TELEGRAM_CHAT_ID", "")).strip()
+
+    if not owner_chat_id or sender_chat_id != owner_chat_id:
+        # Bewust een generiek antwoord — geen details weggeven aan wie dan
+        # ook die dit probeert, en niets loggen dat een aanvaller nuttig zou
+        # vinden (geen actie-ID's, geen systeeminformatie).
+        try:
+            await query.answer("Unauthorized.", show_alert=True)
+        except Exception:
+            pass
+        logger.warning(f"Blocked Telegram callback from unauthorized chat_id: {sender_chat_id}")
+        return
 
     try:
         action_type, action_id_str = query.data.split(":")
@@ -189,7 +227,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         # Bewerken kan falen als het bericht al identiek is, of te oud is —
         # dit mag de bot nooit laten crashen.
-        print(f"Warning: could not edit Telegram message after button tap: {e}")
+        logger.warning(f"Could not edit Telegram message after button tap: {e}")
 
 
 # ------------------------------------------------------------------
@@ -205,24 +243,48 @@ def _run_listener_in_thread() -> None:
         stop_event = asyncio.Event()
         _state["stop_event"] = stop_event
 
-        application = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
-        application.add_handler(CallbackQueryHandler(handle_button_callback))
-        _state["application"] = application
+        try:
+            application = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+            application.add_handler(CallbackQueryHandler(handle_button_callback))
+            _state["application"] = application
 
-        await application.initialize()
-        await application.start()
-        await application.updater.start_polling(drop_pending_updates=True)
-        print("Telegram interactive listener started (polling for button taps).")
+            await application.initialize()
+            await application.start()
+            await application.updater.start_polling(drop_pending_updates=True)
+        except TelegramConflictError as e:
+            # DE meest voorkomende echte oorzaak: een ANDER proces (vaak een
+            # niet volledig afgesloten vorige --reload worker, of een los
+            # testscript) pollt al met dezelfde bot-token. Telegram staat
+            # maar één actieve long-poll per token tegelijk toe.
+            _state["last_error"] = (
+                f"Conflict: another process is already polling this bot token. "
+                f"Stop any other running instance of this app (check for zombie "
+                f"processes from a previous --reload restart) before retrying. ({e})"
+            )
+            logger.error(f"Telegram listener FAILED to start: {_state['last_error']}")
+            return
+        except Exception as e:
+            _state["last_error"] = f"Unexpected error during startup: {e}"
+            logger.error(f"Telegram listener FAILED to start: {e}", exc_info=True)
+            return
+
+        _state["started_successfully"] = True
+        _state["last_error"] = None
+        logger.info("Telegram interactive listener started (polling for button taps).")
 
         await stop_event.wait()
 
-        print("Telegram interactive listener shutting down...")
+        logger.info("Telegram interactive listener shutting down...")
+        _state["started_successfully"] = False
         await application.updater.stop()
         await application.stop()
         await application.shutdown()
 
     try:
         loop.run_until_complete(_main())
+    except Exception as e:
+        _state["last_error"] = f"Listener thread crashed: {e}"
+        logger.error(f"Telegram listener thread crashed unexpectedly: {e}", exc_info=True)
     finally:
         loop.close()
 
@@ -234,11 +296,11 @@ def start_telegram_listener() -> None:
     zodat het systeem prima blijft werken zonder Telegram als dat gewenst is.
     """
     if not getattr(config, "TELEGRAM_BOT_TOKEN", "").strip():
-        print("Telegram interactive listener NOT started: TELEGRAM_BOT_TOKEN is not set.")
+        logger.warning("Telegram interactive listener NOT started: TELEGRAM_BOT_TOKEN is not set.")
         return
 
     if _state["thread"] is not None and _state["thread"].is_alive():
-        print("Telegram interactive listener is already running.")
+        logger.info("Telegram interactive listener is already running.")
         return
 
     thread = threading.Thread(target=_run_listener_in_thread, daemon=True, name="telegram-listener")

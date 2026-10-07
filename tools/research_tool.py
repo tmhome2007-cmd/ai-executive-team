@@ -2,7 +2,24 @@
 tools/research_tool.py
 
 Aangepaste tool voor het inlezen van webpagina's met geschikte User-Agent headers.
+
+BELANGRIJK — SSRF-bescherming:
+Dit is het ENIGE tool in het hele systeem dat een agent-gekozen URL
+onmiddellijk opvraagt, ZONDER menselijke goedkeuring vooraf (in tegenstelling
+tot propose_browser_action, dat wél door een approve-stap gaat en al
+check_url_safety() gebruikt). Zonder validatie hier zou een agent — via een
+misleidende taakomschrijving, of via prompt-injectie vanuit een kwaadaardige
+pagina die het al aan het lezen was — dit tool kunnen gebruiken om interne
+diensten te bereiken (bijv. de Ollama API, of vóór deze fix zelfs de eigen
+FastAPI-backend). We valideren daarom niet alleen het schema, maar lossen de
+hostnaam ook echt op naar een IP-adres en weigeren loopback/private/
+link-local adressen — dit vangt ook DNS-rebinding-achtige trucs op waarbij
+een op het oog extern domein toch naar 127.0.0.1 wijst.
 """
+
+import ipaddress
+import socket
+from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -18,12 +35,50 @@ def reset_call_count():
 def get_call_count():
     return _CALL_COUNT
 
+
+def _is_safe_research_url(url: str) -> str | None:
+    """
+    Controleert of een URL veilig is om op te vragen. Retourneert een
+    reden-string als de URL geweigerd moet worden, anders None.
+    """
+    try:
+        parsed = urlparse(url.strip())
+    except Exception:
+        return f"Could not parse URL: {url}"
+
+    if parsed.scheme not in ("http", "https"):
+        return f"Only http/https URLs are allowed (got scheme: '{parsed.scheme or 'none'}')"
+
+    if not parsed.hostname:
+        return "URL has no valid hostname"
+
+    try:
+        resolved_ip = socket.gethostbyname(parsed.hostname)
+        ip_obj = ipaddress.ip_address(resolved_ip)
+    except (socket.gaierror, ValueError) as e:
+        return f"Could not resolve hostname '{parsed.hostname}': {e}"
+
+    if ip_obj.is_loopback or ip_obj.is_private or ip_obj.is_link_local or ip_obj.is_reserved:
+        return (
+            f"URL resolves to a loopback/private/internal address ({resolved_ip}) — "
+            f"blocked to prevent the research tool from reaching internal services "
+            f"(e.g. Ollama, the backend API, or anything else on the local network)"
+        )
+
+    return None
+
+
 class PageReaderTool(BaseTool):
     name: str = "read_web_page"
     description: str = "Reads the textual content from a given web page URL."
 
     def _run(self, url: str) -> str:
         global _CALL_COUNT
+
+        block_reason = _is_safe_research_url(url)
+        if block_reason:
+            return f"Error: URL blocked for safety — {block_reason}"
+
         _CALL_COUNT += 1
         
         try:

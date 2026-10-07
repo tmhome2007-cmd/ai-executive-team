@@ -1,0 +1,77 @@
+"""
+logging_config.py
+
+Centrale logging-configuratie voor het hele project. Tot nu toe gebruikte
+elke module gewone print()-statements — prima voor interactief testen, maar
+onbruikbaar zodra dit systeem weken achter elkaar autonoom draait: er is dan
+geen doorzoekbare geschiedenis, geen niveau-onderscheid (DEBUG/INFO/WARNING/
+ERROR), en de terminal-scrollback is de enige "log" die bestaat.
+
+Gebruik in elke module:
+    from logging_config import get_logger
+    logger = get_logger(__name__)
+    logger.info("Iets gebeurde")
+    logger.warning("Iets verdachts")
+    logger.error("Iets ging mis", exc_info=True)
+"""
+
+import logging
+import os
+from logging.handlers import RotatingFileHandler
+
+_LOG_DIR = "logs"
+_LOG_FILE = os.path.join(_LOG_DIR, "app.log")
+_MAX_BYTES = 5 * 1024 * 1024  # 5MB per bestand
+_BACKUP_COUNT = 3  # bewaar de laatste 3 geroteerde bestanden (totaal ~20MB max)
+
+_configured = False
+
+
+def setup_logging(level: int = logging.INFO) -> None:
+    """
+    Configureert de root logger EENMALIG bij het opstarten van de applicatie
+    (aangeroepen vanuit main.py, vóór al het andere). Idempotent — een
+    dubbele aanroep doet niets extra's.
+    """
+    global _configured
+    if _configured:
+        return
+
+    os.makedirs(_LOG_DIR, exist_ok=True)
+
+    formatter = logging.Formatter(
+        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(level)
+
+    file_handler = RotatingFileHandler(
+        _LOG_FILE, maxBytes=_MAX_BYTES, backupCount=_BACKUP_COUNT, encoding="utf-8"
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.DEBUG)  # bestand bewaart alles, console toont minder ruis
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+    # Bibliotheken zoals urllib3/telegram zijn vaak erg spraakzaam op DEBUG —
+    # dat verdrinkt onze eigen logs. Ietwat temperen, zonder ze volledig stil
+    # te maken (WARNING en hoger blijft altijd zichtbaar).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("telegram").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
+    _configured = True
+
+
+def get_logger(name: str) -> logging.Logger:
+    """Haalt een logger op voor de gegeven module (gebruik altijd __name__)."""
+    if not _configured:
+        setup_logging()
+    return logging.getLogger(name)

@@ -102,6 +102,67 @@ def set_sandbox_mode(enabled: bool) -> None:
     with open(env_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
 
+
+class ConfigValidationError(Exception):
+    """Wordt gegooid bij een fatale configuratiefout — de app mag dan niet starten."""
+    pass
+
+
+def validate_config() -> list[str]:
+    """
+    Controleert de belangrijkste instellingen bij het opstarten en gooit
+    ConfigValidationError met een DUIDELIJKE, bruikbare foutmelding als er
+    iets fundamenteel mist of verkeerd is — in plaats van dat de app start
+    en pas minuten later, midden in een crew-run, verwarrend faalt.
+    Retourneert een lijst met niet-fatale WAARSCHUWINGEN (dingen die geen
+    startup blokkeren, maar wel de moeite waard zijn om te melden).
+    """
+    errors = []
+    warnings = []
+
+    if not config.API_SECRET_KEY:
+        errors.append(
+            "API_SECRET_KEY is leeg. Genereer er een met: openssl rand -hex 32, "
+            "en zet die in .env."
+        )
+    elif len(config.API_SECRET_KEY) < 16:
+        warnings.append(
+            f"API_SECRET_KEY is slechts {len(config.API_SECRET_KEY)} tekens — "
+            "overweeg een langere, willekeurige sleutel voor echte beveiliging."
+        )
+
+    if not config.TELEGRAM_BOT_TOKEN:
+        warnings.append(
+            "TELEGRAM_BOT_TOKEN is leeg — notificaties en de interactieve "
+            "Approve/Reject/Execute-knoppen werken dan niet."
+        )
+    elif ":" not in config.TELEGRAM_BOT_TOKEN:
+        warnings.append(
+            "TELEGRAM_BOT_TOKEN ziet er niet uit als een geldig Telegram-token "
+            "(verwacht formaat: cijfers:letters, bijv. 123456:ABC-...)."
+        )
+
+    if not config.TELEGRAM_CHAT_ID:
+        warnings.append(
+            "TELEGRAM_CHAT_ID is leeg — de interactieve Telegram-listener kan "
+            "dan niemand als eigenaar herkennen en zal ALLE callbacks weigeren."
+        )
+
+    if not config.OLLAMA_BASE_URL.startswith(("http://", "https://")):
+        errors.append(
+            f"OLLAMA_BASE_URL ('{config.OLLAMA_BASE_URL}') ziet er niet uit als "
+            "een geldige URL — verwacht iets als http://localhost:11434."
+        )
+
+    if errors:
+        error_text = "\n".join(f"  - {e}" for e in errors)
+        raise ConfigValidationError(
+            f"Configuratie ongeldig, applicatie kan niet starten:\n{error_text}"
+        )
+
+    return warnings
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("CONFIGURATION LOADED SUCCESSFULLY")
@@ -111,3 +172,14 @@ if __name__ == "__main__":
     print(f"Database Path   : {config.DATABASE_PATH}")
     print(f"API Key Loaded  : {'Ja' if config.API_SECRET_KEY else 'Nee (Leeg)'}")
     print("=" * 60)
+
+    try:
+        config_warnings = validate_config()
+        if config_warnings:
+            print("⚠️  Waarschuwingen:")
+            for w in config_warnings:
+                print(f"   - {w}")
+        else:
+            print("✅ Geen configuratieproblemen gevonden.")
+    except ConfigValidationError as e:
+        print(f"❌ {e}")

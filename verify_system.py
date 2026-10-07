@@ -114,12 +114,16 @@ try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # Verwachte beveiligingsinstellingen per endpoint
+        # Verwachte beveiligingsinstellingen per endpoint. Na de security-
+        # hardeningsronde zijn /workflows/daily-research/status en
+        # /decisions/history bewust NIET meer publiek — ze konden bedrijfs-
+        # gevoelige inhoud tonen zonder sleutel.
         expected_auth_status = {
-            "/workflows/daily-research/status": False,
-            "/decisions/history": False,
+            "/workflows/daily-research/status": True,
+            "/decisions/history": True,
             "/workflows/daily-research/trigger": True,
             "/decisions/trigger": True,
+            "/screenshots/{filename}": True,
         }
 
         auth_audit_errors = []
@@ -205,24 +209,24 @@ try:
     if not server_online:
         log_skip("Live API Endpoint checks", "server not running on http://localhost:8000")
     else:
-        # Test 1: Public status endpoint (200)
+        # Test 1: daily-research/status now requires auth — expect 401 without a key
         res_status = requests.get("http://localhost:8000/workflows/daily-research/status", timeout=5)
-        if res_status.status_code == 200:
-            log_pass("LIVE: GET /workflows/daily-research/status returned status 200 (Public)")
+        if res_status.status_code == 401:
+            log_pass("LIVE: GET /workflows/daily-research/status rejected unauthenticated request with status 401 (Protected)")
         else:
             log_fail(
                 "LIVE: GET /workflows/daily-research/status", 
-                f"Expected status 200, got {res_status.status_code}"
+                f"Expected status 401 for unauthenticated request, got {res_status.status_code}"
             )
 
-        # Test 2: Public history endpoint (200)
+        # Test 2: decisions/history now requires auth — expect 401 without a key
         res_history = requests.get("http://localhost:8000/decisions/history?limit=1", timeout=5)
-        if res_history.status_code == 200:
-            log_pass("LIVE: GET /decisions/history returned status 200 (Public)")
+        if res_history.status_code == 401:
+            log_pass("LIVE: GET /decisions/history rejected unauthenticated request with status 401 (Protected)")
         else:
             log_fail(
                 "LIVE: GET /decisions/history", 
-                f"Expected status 200, got {res_history.status_code}"
+                f"Expected status 401 for unauthenticated request, got {res_history.status_code}"
             )
 
         # Test 3: Protected trigger endpoint without auth headers (401)
@@ -327,6 +331,339 @@ try:
             )
 except Exception as e:
     log_fail("/actions/execute auth check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 9: STATIC CHECK — URL safety guard blocks dangerous schemes
+# -------------------------------------------------------------------
+try:
+    from workflows.action_executor import check_url_safety
+
+    js_result = check_url_safety("javascript:alert(document.cookie)")
+    file_result = check_url_safety("file:///etc/passwd")
+    https_result = check_url_safety("https://en.wikipedia.org")
+
+    if js_result and file_result and https_result is None:
+        log_pass("check_url_safety() correctly blocks javascript:/file: schemes while allowing https")
+    else:
+        problems = []
+        if not js_result:
+            problems.append("javascript: URL was NOT blocked")
+        if not file_result:
+            problems.append("file: URL was NOT blocked")
+        if https_result is not None:
+            problems.append(f"a legitimate https URL was incorrectly blocked: {https_result}")
+        log_fail("check_url_safety() guard", "; ".join(problems))
+except Exception as e:
+    log_fail("URL safety check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 10: STATIC CHECK — file_operation and browser_action still call
+# their respective safety guards (source inspection, not just behavior)
+# -------------------------------------------------------------------
+try:
+    with open("workflows/action_executor.py", "r", encoding="utf-8") as f:
+        executor_content = f.read()
+
+    file_op_match = re.search(
+        r"def _execute_file_operation.*?(?=\ndef |\Z)", executor_content, re.DOTALL
+    )
+    browser_match = re.search(
+        r"def _execute_browser_action.*?(?=\ndef |\Z)", executor_content, re.DOTALL
+    )
+
+    problems = []
+    if not file_op_match or "check_workspace_confinement" not in file_op_match.group(0):
+        problems.append("_execute_file_operation no longer calls check_workspace_confinement")
+    if not browser_match or "check_url_safety" not in browser_match.group(0):
+        problems.append("_execute_browser_action no longer calls check_url_safety")
+
+    if problems:
+        log_fail("action_executor.py guard wiring check", "; ".join(problems))
+    else:
+        log_pass("_execute_file_operation and _execute_browser_action both still call their safety guards")
+except Exception as e:
+    log_fail("Guard wiring check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 11: STATIC CHECK — action_queue schema has action_type + sync_uuid + result_detail
+# -------------------------------------------------------------------
+try:
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content = f.read()
+
+    required_columns = ["action_type", "sync_uuid", "result_detail"]
+    missing = [c for c in required_columns if c not in db_content]
+
+    if not missing:
+        log_pass("action_queue schema includes action_type, sync_uuid, and result_detail columns")
+    else:
+        log_fail(
+            "database.py schema check",
+            f"Missing expected column(s) in database.py: {missing}"
+        )
+except Exception as e:
+    log_fail("Schema check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 12: STATIC CHECK — cross-machine sync functions exist
+# -------------------------------------------------------------------
+try:
+    from memory.database import export_history_to_jsonl, import_history_from_jsonl
+    log_pass("export_history_to_jsonl and import_history_from_jsonl are both importable")
+except ImportError as e:
+    log_fail("Cross-machine sync functions check", f"Could not import sync functions: {e}")
+except Exception as e:
+    log_fail("Sync functions check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 13: STATIC CHECK — shell variable expansion bypass stays closed
+# -------------------------------------------------------------------
+# Found via adversarial testing: "rm -rf $HOME" bypassed BOTH the danger
+# blocklist and workspace confinement entirely, since $HOME is not
+# recognized as a path-like token and no literal pattern matches it. Fixed
+# by blocking any $VAR/${VAR} reference outright. This check ensures a
+# future refactor can't silently reopen that exact gap.
+try:
+    from workflows.action_executor import is_dangerous_command, check_workspace_confinement
+
+    bypass_attempt = "rm -rf $HOME"
+    danger = is_dangerous_command(bypass_attempt)
+    confinement = None if danger else check_workspace_confinement(bypass_attempt)
+
+    if danger or confinement:
+        log_pass("Shell variable expansion ($HOME) is correctly blocked, not a silent bypass")
+    else:
+        log_fail(
+            "Shell variable expansion bypass check",
+            "'rm -rf $HOME' was NOT blocked by either guard — this is a known, previously-fixed bypass that has reopened."
+        )
+except Exception as e:
+    log_fail("Variable expansion bypass check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 14: STATIC CHECK — Telegram callback verifies sender's chat_id
+# -------------------------------------------------------------------
+# CRITICAL: without this check, any Telegram user who finds the bot could
+# approve/reject/EXECUTE real actions. Source-inspection confirms the check
+# is still wired into the actual callback handler, not just present
+# somewhere unused in the file.
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        ti_content = f.read()
+
+    callback_match = re.search(
+        r"async def handle_button_callback.*?(?=\nasync def |\ndef |\Z)", ti_content, re.DOTALL
+    )
+    if callback_match and "TELEGRAM_CHAT_ID" in callback_match.group(0) and "effective_chat" in callback_match.group(0):
+        log_pass("handle_button_callback() verifies sender's chat_id against TELEGRAM_CHAT_ID")
+    else:
+        log_fail(
+            "Telegram callback authorization check",
+            "handle_button_callback() does not appear to verify the sender's chat_id — CRITICAL: any Telegram user could control real actions."
+        )
+except Exception as e:
+    log_fail("Telegram callback auth check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 15: STATIC CHECK — server does not default to binding 0.0.0.0
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content = f.read()
+
+    if 'host="0.0.0.0"' in main_content and "BIND_HOST" not in main_content:
+        log_fail(
+            "Server bind address check",
+            "main.py hardcodes host=\"0.0.0.0\" — exposes the API to the whole local network by default."
+        )
+    else:
+        log_pass("Server does not hardcode an open 0.0.0.0 bind (uses a safe default or BIND_HOST override)")
+except Exception as e:
+    log_fail("Bind address check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 16: STATIC CHECK — subprocess execution uses a sanitized environment
+# -------------------------------------------------------------------
+try:
+    with open("workflows/action_executor.py", "r", encoding="utf-8") as f:
+        exec_content = f.read()
+
+    subprocess_match = re.search(r"subprocess\.run\(\s*action_detail.*?\n\s*\)", exec_content, re.DOTALL)
+    if subprocess_match and "env=" in subprocess_match.group(0):
+        log_pass("subprocess.run() passes a sanitized env= — secrets are not inherited by executed commands")
+    else:
+        log_fail(
+            "Subprocess environment sanitization check",
+            "subprocess.run() does not pass env= — executed commands inherit the full process environment, including secrets from .env."
+        )
+except Exception as e:
+    log_fail("Subprocess env check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 17: STATIC CHECK — subprocess has resource limits beyond the timeout
+# -------------------------------------------------------------------
+try:
+    if "preexec_fn" in exec_content and "RLIMIT" in exec_content:
+        log_pass("subprocess execution has CPU/memory resource limits (RLIMIT) beyond the wall-clock timeout")
+    else:
+        log_fail(
+            "Subprocess resource limit check",
+            "No RLIMIT/preexec_fn found — a runaway command could consume unlimited CPU/memory until the timeout fires."
+        )
+except Exception as e:
+    log_fail("Subprocess resource limit check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 18: STATIC CHECK — API key check uses constant-time comparison and rate limiting
+# -------------------------------------------------------------------
+try:
+    verify_key_match = re.search(r"def verify_api_key.*?(?=\ndef |\Z)", main_content, re.DOTALL)
+    if verify_key_match:
+        block = verify_key_match.group(0)
+        has_constant_time = "compare_digest" in block
+        has_rate_limit = "_MAX_FAILED_ATTEMPTS" in block or "429" in block
+
+        if has_constant_time and has_rate_limit:
+            log_pass("verify_api_key() uses constant-time comparison and rate-limits failed attempts")
+        else:
+            missing = []
+            if not has_constant_time:
+                missing.append("constant-time comparison (hmac.compare_digest)")
+            if not has_rate_limit:
+                missing.append("rate limiting / lockout on repeated failures")
+            log_fail("API key hardening check", f"Missing: {', '.join(missing)}")
+    else:
+        log_fail("API key hardening check", "verify_api_key() function not found in main.py")
+except Exception as e:
+    log_fail("API key hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 19: STATIC CHECK — decisions/history, daily-research/status, and
+# screenshots are now all auth-protected (were previously open)
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_check19 = f.read()
+
+    routes_to_check = [
+        '"/decisions/history"',
+        '"/workflows/daily-research/status"',
+        '"/screenshots/{filename}"',
+    ]
+    problems = []
+    for route in routes_to_check:
+        m = re.search(re.escape(route), main_content_check19)
+        if not m:
+            problems.append(f"{route} not found in main.py at all")
+            continue
+        start_pos = m.start()
+        def_match = re.search(r"\n\s*(async def|def)\s", main_content_check19[start_pos:])
+        end_pos = start_pos + def_match.start() if def_match else start_pos + 500
+        block = main_content_check19[start_pos:end_pos]
+        if "Depends(verify_api_key)" not in block:
+            problems.append(f"{route} is missing auth")
+
+    if problems:
+        log_fail("Newly-protected endpoints check", "; ".join(problems))
+    else:
+        log_pass("/decisions/history, /workflows/daily-research/status, and /screenshots/{filename} are all auth-protected")
+except Exception as e:
+    log_fail("Newly-protected endpoints check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 20: STATIC CHECK — research tool blocks internal/SSRF-style URLs
+# -------------------------------------------------------------------
+# PageReaderTool executes immediately with NO human approval step (unlike
+# propose_browser_action) — this was found completely unvalidated: an agent
+# could be tricked into fetching internal services (the backend itself,
+# Ollama's API, anything on the local network) with zero protection.
+try:
+    from tools.research_tool import _is_safe_research_url
+
+    localhost_result = _is_safe_research_url("http://localhost:8000/decisions/history")
+    ollama_result = _is_safe_research_url("http://127.0.0.1:11434/api/tags")
+    https_result = _is_safe_research_url("https://en.wikipedia.org/wiki/AI")
+
+    if localhost_result and ollama_result and https_result is None:
+        log_pass("research_tool.py blocks internal/loopback URLs (SSRF protection) while allowing real external sites")
+    else:
+        problems = []
+        if not localhost_result:
+            problems.append("localhost URL was NOT blocked")
+        if not ollama_result:
+            problems.append("127.0.0.1 (Ollama) URL was NOT blocked")
+        if https_result is not None:
+            problems.append(f"a legitimate https URL was incorrectly blocked: {https_result}")
+        log_fail("Research tool SSRF protection", "; ".join(problems))
+except Exception as e:
+    log_fail("Research tool SSRF check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 21: STATIC CHECK — every blocked/failed action branch persists
+# its reason via record_execution_result (not just success paths)
+# -------------------------------------------------------------------
+# Found via a real incident: a blocked/failed action's reason was only ever
+# sent to Telegram/the API response and discarded — Action History showed
+# "Execution Failed" with zero indication of why. Count must match: every
+# execution_failed/blocked_dangerous status update needs a paired call.
+try:
+    with open("workflows/action_executor.py", "r", encoding="utf-8") as f:
+        exec_content_check21 = f.read()
+
+    status_update_count = len(re.findall(
+        r'update_action_status\(action_id, "(execution_failed|blocked_dangerous)"\)', exec_content_check21
+    ))
+    record_result_count = exec_content_check21.count("record_execution_result(")
+
+    if record_result_count >= status_update_count and status_update_count > 0:
+        log_pass(f"All {status_update_count} failure/block branches persist their reason via record_execution_result")
+    else:
+        log_fail(
+            "Failure persistence check",
+            f"{status_update_count} failure/block status updates but only {record_result_count} record_execution_result calls — some failures won't show a reason in history."
+        )
+except Exception as e:
+    log_fail("Failure persistence check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 22: STATIC CHECK — Telegram listener startup failures are logged,
+# not silently lost
+# -------------------------------------------------------------------
+try:
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as f:
+        ti_content_check22 = f.read()
+
+    has_conflict_handling = "TelegramConflictError" in ti_content_check22 or "Conflict" in ti_content_check22
+    has_logger = "logger.error" in ti_content_check22
+    has_alive_check = "def is_telegram_listener_alive" in ti_content_check22
+
+    if has_conflict_handling and has_logger and has_alive_check:
+        log_pass("Telegram listener startup failures are caught, logged, and queryable via is_telegram_listener_alive()")
+    else:
+        missing = []
+        if not has_conflict_handling:
+            missing.append("Conflict error detection")
+        if not has_logger:
+            missing.append("structured error logging")
+        if not has_alive_check:
+            missing.append("is_telegram_listener_alive()")
+        log_fail("Telegram listener hardening check", f"Missing: {', '.join(missing)}")
+except Exception as e:
+    log_fail("Telegram listener hardening check crashed", str(e))
 
 
 # -------------------------------------------------------------------

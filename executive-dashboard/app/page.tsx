@@ -40,6 +40,7 @@ interface PendingAction {
   status: string;
   reviewed_at: string | null;
   action_type?: string;
+  result_detail?: string | null;
 }
 
 interface ExecutionResult {
@@ -50,6 +51,7 @@ interface ExecutionResult {
   stdout?: string;
   stderr?: string;
   error?: string;
+  screenshot_path?: string;
 }
 
 const AGENT_OPTIONS: { key: string; label: string }[] = [
@@ -76,6 +78,52 @@ const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   blocked_dangerous: { label: "Blocked (Dangerous)", className: "bg-orange-900/60 text-orange-300 border-orange-700" },
   execution_failed: { label: "Execution Failed", className: "bg-red-900/60 text-red-300 border-red-700" },
 };
+
+// /screenshots/{filename} now requires X-API-Key, and a plain <img src="..."> tag
+// cannot send custom headers (a real browser limitation, not a bug) — so this
+// component fetches the image manually with the header, then renders it via a
+// short-lived blob: URL instead. Cleans up the blob URL on unmount to avoid
+// leaking memory across many screenshots viewed in one session.
+function AuthenticatedScreenshot({ filename, apiKey }: { filename: string; apiKey: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    fetch(`${API_BASE}/screenshots/${filename}`, {
+      headers: { "X-API-Key": apiKey },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load screenshot");
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [filename, apiKey]);
+
+  if (failed) return <p className="text-xs text-red-400 mt-1">Could not load screenshot.</p>;
+  if (!blobUrl) return <p className="text-xs text-gray-500 mt-1">Loading screenshot...</p>;
+  return (
+    <img
+      src={blobUrl}
+      alt="Browser action screenshot"
+      className="mt-1 rounded border border-gray-700 max-w-full"
+    />
+  );
+}
 
 function statusBadge(status: string) {
   const style = STATUS_STYLES[status] || {
@@ -298,9 +346,17 @@ export default function DashboardPage() {
   const fetchDashboardData = useCallback(async () => {
     try {
       const [statusRes, historyRes] = await Promise.all([
-        fetch(`${API_BASE}/workflows/daily-research/status`),
-        fetch(`${API_BASE}/decisions/history?limit=20`),
+        fetch(`${API_BASE}/workflows/daily-research/status`, {
+          headers: { "X-API-Key": apiKey || "" },
+        }),
+        fetch(`${API_BASE}/decisions/history?limit=20`, {
+          headers: { "X-API-Key": apiKey || "" },
+        }),
       ]);
+      if (statusRes.status === 401 || historyRes.status === 401) {
+        handleAuthFailure();
+        return;
+      }
       if (!statusRes.ok || !historyRes.ok) {
         throw new Error("Could not connect to the backend.");
       }
@@ -310,7 +366,7 @@ export default function DashboardPage() {
     } catch (err: any) {
       setLoadError(err.message || "Could not connect to the backend.");
     }
-  }, []);
+  }, [apiKey]);
 
   useEffect(() => {
     if (apiKey !== null) {
@@ -699,6 +755,15 @@ export default function DashboardPage() {
                             </pre>
                           </div>
                         )}
+                        {execResult.screenshot_path && (
+                          <div>
+                            <span className="text-gray-500">screenshot:</span>
+                            <AuthenticatedScreenshot
+                              filename={execResult.screenshot_path.split("/").pop()!}
+                              apiKey={apiKey || ""}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -950,6 +1015,35 @@ export default function DashboardPage() {
                       {isExpanded ? "▲ Show less" : "▼ Show more"}
                     </button>
                   )}
+                  {item.result_detail && (() => {
+                    try {
+                      const parsedResult = JSON.parse(item.result_detail);
+                      return (
+                        <div className={`mt-3 p-3 bg-gray-950 border rounded text-xs space-y-1 ${parsedResult.error ? "border-red-900" : "border-blue-900"}`}>
+                          <div className={`font-semibold ${parsedResult.error ? "text-red-400" : "text-blue-400"}`}>
+                            {parsedResult.error ? "Failure Reason:" : "Result:"}
+                          </div>
+                          {parsedResult.error && (
+                            <pre className="text-red-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.error}</pre>
+                          )}
+                          {parsedResult.stdout && (
+                            <pre className="text-green-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.stdout}</pre>
+                          )}
+                          {parsedResult.stderr && (
+                            <pre className="text-red-300 whitespace-pre-wrap overflow-x-auto">{parsedResult.stderr}</pre>
+                          )}
+                          {parsedResult.screenshot_path && (
+                            <AuthenticatedScreenshot
+                              filename={parsedResult.screenshot_path.split("/").pop()}
+                              apiKey={apiKey || ""}
+                            />
+                          )}
+                        </div>
+                      );
+                    } catch {
+                      return null;
+                    }
+                  })()}
                   {item.reviewed_at && (
                     <p className="text-xs text-gray-600 mt-2">
                       Reviewed: {new Date(item.reviewed_at).toLocaleString("en-US")}
