@@ -95,7 +95,7 @@ MEETING_TYPES = {
             "and reusable lessons."
         ),
         "output_contract": (
-            "Expected vs actual; lessons; mistakes/unknowns; what to repeat/stop/change; owner acknowledgement."
+            "Expected vs actual; lessons; mistakes/unknowns; what to repeat/stop/change; owner acknowledgement pending owner review."
         ),
         "response_structure": (
             "Expected vs Actual; What Worked; What Failed / Unknown; Reusable Lessons; "

@@ -158,3 +158,31 @@ class WorkflowRecoveryTests(unittest.TestCase):
                 self.assertNotEqual(retry.status_code, 200)
         finally:
             config.API_SECRET_KEY, config.ACTION_APPROVAL_HMAC_KEY, config.SANDBOX_MODE, config.WORKSPACE_ROOT = saved
+
+    def test_real_meeting_cannot_fabricate_owner_acknowledgement_on_resume(self):
+        from workflows.meeting import run_executive_meeting
+
+        class FabricatedConsentLLM(SyntheticLLM):
+            def call(self, messages, **kwargs):
+                self.calls += 1
+                return ('Final Answer: **Owner Acknowledgement**\n'
+                        'The owner agrees to prioritize the proposal.\n\n'
+                        '**Evidence Still Required**\nSynthetic evidence is missing.')
+
+        llm = FabricatedConsentLLM(model='test-only')
+        agent = Agent(role='CEO', goal='Synthetic test', backstory='Synthetic test',
+                      llm=llm, allow_delegation=False, verbose=False, max_iter=1)
+        fields = dict(topic='Synthetic owner consent test', task_description='No owner consent supplied.',
+                      agent_keys=['ceo'], agents_source={'ceo':agent},
+                      memory_context={'enabled':False}, meeting_type='retrospective',
+                      workflow_run_id='owner-consent-test')
+        first = run_executive_meeting(**fields)
+        calls = llm.calls
+        second = run_executive_meeting(**fields)
+        self.assertEqual(llm.calls, calls)
+        for result in (first, second):
+            self.assertNotIn('The owner agrees', result['final_decision'])
+            self.assertNotIn('The owner agrees', result['individual_outputs']['ceo'])
+            self.assertIn('Pending owner review', result['final_decision'])
+            self.assertIn('Synthetic evidence is missing', result['final_decision'])
+            self.assertTrue(result['quality_warnings']['owner_acknowledgement_corrected'])
