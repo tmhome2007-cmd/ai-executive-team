@@ -20,6 +20,7 @@ interface DecisionHistoryItem {
   prepared_at?: string | null;
   preparation_outcome?: string | null;
   linked_action_count?: number;
+  linked_resource_request_count?: number;
 }
 
 interface DailyResearchStatus {
@@ -69,9 +70,30 @@ interface PendingAction {
   source_phase?: string | null;
 }
 
+interface ResourceRequest {
+  id: number;
+  timestamp: string;
+  requested_by: string;
+  resource_type: string;
+  resource_name: string;
+  reason: string;
+  required_for?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  status: string;
+  reviewed_at?: string | null;
+  fulfilled_at?: string | null;
+  fulfillment_note?: string | null;
+  source_decision_id?: number | null;
+  source_decision_sync_uuid?: string | null;
+  source_decision_topic?: string | null;
+  source_phase?: string | null;
+}
+
 interface DecisionLineage {
   decision: DecisionHistoryItem;
   actions: PendingAction[];
+  resource_requests: ResourceRequest[];
 }
 
 interface ExecutionResult {
@@ -520,6 +542,8 @@ export default function DashboardPage() {
   const [history, setHistory] = useState<DecisionHistoryItem[]>([]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const [actionHistory, setActionHistory] = useState<PendingAction[]>([]);
+  const [resourceRequests, setResourceRequests] = useState<ResourceRequest[]>([]);
+  const [resourceErrors, setResourceErrors] = useState<Record<number, string>>({});
   const [actionErrors, setActionErrors] = useState<Record<number, string>>({});
   const [executionResults, setExecutionResults] = useState<Record<number, ExecutionResult>>({});
   const [executingIds, setExecutingIds] = useState<Set<number>>(new Set());
@@ -583,6 +607,22 @@ export default function DashboardPage() {
     }
   }, [handleAuthFailure]);
 
+  const fetchResourceRequests = useCallback(async (currentKey: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/resources/pending`, {
+        headers: { "X-API-Key": currentKey },
+      });
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!res.ok) throw new Error("Could not fetch resource requests.");
+      setResourceRequests(await res.json());
+    } catch (err) {
+      console.error("Error fetching resource requests:", err);
+    }
+  }, [handleAuthFailure]);
+
   const fetchDashboardData = useCallback(async () => {
     try {
       const [statusRes, historyRes] = await Promise.all([
@@ -613,8 +653,9 @@ export default function DashboardPage() {
       fetchDashboardData();
       fetchPendingActions(apiKey);
       fetchActionHistory(apiKey);
+      fetchResourceRequests(apiKey);
     }
-  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory]);
+  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests]);
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
     if (type === "approve") {
@@ -654,6 +695,7 @@ export default function DashboardPage() {
       if (apiKey) {
         fetchPendingActions(apiKey);
         fetchActionHistory(apiKey);
+        fetchResourceRequests(apiKey);
       }
     } catch (err: any) {
       if (apiKey) fetchPendingActions(apiKey);
@@ -708,6 +750,7 @@ export default function DashboardPage() {
       if (apiKey) {
         fetchPendingActions(apiKey);
         fetchActionHistory(apiKey);
+        fetchResourceRequests(apiKey);
       }
     } catch (err: any) {
       setActionErrors((prev) => ({
@@ -721,6 +764,54 @@ export default function DashboardPage() {
         copy.delete(action.id);
         return copy;
       });
+    }
+  };
+
+  const handleResourceDecision = async (
+    id: number,
+    type: "approve" | "reject" | "fulfill"
+  ) => {
+    setResourceErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    let fulfillmentNote: string | null = null;
+    if (type === "fulfill") {
+      fulfillmentNote = window.prompt(
+        "Describe how the resource was provided. Do NOT paste passwords, API keys, tokens, or other secrets."
+      );
+      if (!fulfillmentNote?.trim()) return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/resources/${id}/${type}`, {
+        method: "POST",
+        headers: {
+          "X-API-Key": apiKey || "",
+          ...(type === "fulfill" ? { "Content-Type": "application/json" } : {}),
+        },
+        body:
+          type === "fulfill"
+            ? JSON.stringify({ fulfillment_note: fulfillmentNote })
+            : undefined,
+      });
+
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.detail || `Could not ${type} resource request.`);
+
+      if (apiKey) fetchResourceRequests(apiKey);
+      await fetchDashboardData();
+    } catch (err: any) {
+      setResourceErrors((prev) => ({
+        ...prev,
+        [id]: err.message || "Could not update resource request.",
+      }));
     }
   };
 
@@ -755,7 +846,7 @@ export default function DashboardPage() {
 
   const handlePrepareDecision = async (id: number) => {
     const confirmed = window.confirm(
-      "Start Phase 2 preparation? Tool-capable executives may create concrete action proposals, but nothing will execute without separate action approval."
+      "Start Phase 2 preparation? Tool-capable executives may create action proposals and structured resource requests. Nothing executes or grants access without separate owner review."
     );
     if (!confirmed) return;
 
@@ -1046,6 +1137,108 @@ export default function DashboardPage() {
               <p className="text-gray-200">{status?.message || "No run yet."}</p>
             </div>
           </div>
+        </div>
+
+        {/* Structured Resource / Capability Requests */}
+        <div className="bg-gray-900 border border-indigo-900/70 rounded-lg p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-indigo-200">
+              Resource & Capability Requests ({resourceRequests.length})
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Approval does not grant access or execute anything. Mark fulfilled only after you provide the resource separately.
+            </p>
+          </div>
+
+          {resourceRequests.length === 0 ? (
+            <p className="text-gray-500 text-sm">No resource requests awaiting owner action.</p>
+          ) : (
+            <div className="space-y-4">
+              {resourceRequests.map((resource) => (
+                <div
+                  key={resource.id}
+                  className="bg-gray-950 border border-indigo-900/70 rounded-md p-4 space-y-3"
+                >
+                  <div className="flex justify-between gap-3">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-xs bg-indigo-950 border border-indigo-800 text-indigo-300 rounded px-2 py-0.5 uppercase">
+                        {resource.resource_type}
+                      </span>
+                      {statusBadge(resource.status)}
+                      <span className="text-xs text-gray-500">
+                        requested by {resource.requested_by}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {new Date(resource.timestamp).toLocaleString("en-US")}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="font-semibold text-gray-200">{resource.resource_name}</div>
+                    <div className="text-sm text-gray-400 mt-1 whitespace-pre-wrap">
+                      {resource.reason}
+                    </div>
+                  </div>
+
+                  {resource.required_for && (
+                    <div className="text-xs">
+                      <span className="text-gray-500">Required for:</span>{" "}
+                      <span className="text-gray-300">{resource.required_for}</span>
+                    </div>
+                  )}
+
+                  {resource.amount !== null && resource.amount !== undefined && (
+                    <div className="text-xs">
+                      <span className="text-gray-500">Requested budget:</span>{" "}
+                      <span className="text-gray-300">
+                        {resource.amount} {resource.currency || ""}
+                      </span>
+                    </div>
+                  )}
+
+                  {resource.source_decision_id && (
+                    <div className="text-xs text-cyan-300">
+                      Source: Decision #{resource.source_decision_id}
+                      {resource.source_decision_topic
+                        ? ` — ${resource.source_decision_topic}`
+                        : ""}
+                    </div>
+                  )}
+
+                  {resourceErrors[resource.id] && (
+                    <div className="text-xs text-red-300 border border-red-900 bg-red-950/40 rounded p-2">
+                      {resourceErrors[resource.id]}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleResourceDecision(resource.id, "approve")}
+                      disabled={resource.status !== "pending"}
+                      className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded disabled:opacity-40"
+                    >
+                      Approve Resource
+                    </button>
+                    <button
+                      onClick={() => handleResourceDecision(resource.id, "reject")}
+                      disabled={!["pending", "approved"].includes(resource.status)}
+                      className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded disabled:opacity-40"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => handleResourceDecision(resource.id, "fulfill")}
+                      disabled={resource.status !== "approved"}
+                      className="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-xs rounded disabled:opacity-40"
+                    >
+                      Mark Fulfilled
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Pending Actions section */}
@@ -1351,6 +1544,9 @@ export default function DashboardPage() {
                         <span className="bg-cyan-950/40 border border-cyan-900 text-cyan-300 rounded px-2 py-0.5">
                           Linked actions: {item.linked_action_count || 0}
                         </span>
+                        <span className="bg-indigo-950/40 border border-indigo-900 text-indigo-300 rounded px-2 py-0.5">
+                          Resource requests: {item.linked_resource_request_count || 0}
+                        </span>
                       </div>
                     </div>
                     <span className="text-xs text-gray-500">
@@ -1463,6 +1659,20 @@ export default function DashboardPage() {
                                   <span className="text-gray-300">{action.actual_outcome}</span>
                                 </div>
                               )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {lineageResults[item.id].resource_requests?.length > 0 && (
+                        <div className="space-y-2 border-t border-gray-800 pt-3">
+                          <div className="text-xs font-semibold text-indigo-300">Resource Requests</div>
+                          {lineageResults[item.id].resource_requests.map((resource) => (
+                            <div key={resource.id} className="border border-indigo-900/70 rounded p-3 text-xs">
+                              <div className="text-indigo-300">
+                                #{resource.id} · {resource.resource_type} · {resource.status}
+                              </div>
+                              <div className="text-gray-300 mt-1">{resource.resource_name}</div>
+                              <div className="text-gray-500 mt-1">{resource.reason}</div>
                             </div>
                           ))}
                         </div>

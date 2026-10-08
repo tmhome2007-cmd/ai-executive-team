@@ -7,6 +7,7 @@ Exposeert de 'EXECUTIVE_AGENTS' dictionary met sleutels voor elke bestuursrol.
 from tools.action_proposal_tool import ProposeActionTool
 from tools.file_operation_tool import ProposeFileOperationTool
 from tools.browser_action_tool import ProposeBrowserActionTool
+from tools.resource_request_tool import ProposeResourceRequestTool
 from crewai import Agent, LLM
 from config import config
 
@@ -35,6 +36,7 @@ ceo_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeResourceRequestTool(role="CEO")],
 )
 
 # CFO — Maya Chen
@@ -53,7 +55,7 @@ cfo_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
-    tools=[ProposeFileOperationTool(role="CFO")],
+    tools=[ProposeFileOperationTool(role="CFO"), ProposeResourceRequestTool(role="CFO")],
 )
 
 # CSO — Alex Sterling
@@ -72,6 +74,7 @@ cso_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeResourceRequestTool(role="CSO")],
 )
 
 # CHRO — Jordan Blake
@@ -90,6 +93,7 @@ chro_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeResourceRequestTool(role="CHRO")],
 )
 
 # General Counsel — Sarah Okonkwo
@@ -108,7 +112,7 @@ general_counsel_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
-    tools=[ProposeFileOperationTool(role="General Counsel")],
+    tools=[ProposeFileOperationTool(role="General Counsel"), ProposeResourceRequestTool(role="General Counsel")],
 )
 
 # COO — Marcus Rivera
@@ -127,7 +131,12 @@ coo_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
-    tools=[ProposeActionTool(role="COO"), ProposeFileOperationTool(role="COO"), ProposeBrowserActionTool(role="COO")],
+    tools=[
+        ProposeActionTool(role="COO"),
+        ProposeFileOperationTool(role="COO"),
+        ProposeBrowserActionTool(role="COO"),
+        ProposeResourceRequestTool(role="COO"),
+    ],
 )
 
 # CMO — Zoe Nakamura
@@ -146,6 +155,7 @@ cmo_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeResourceRequestTool(role="CMO")],
 )
 
 # CPO — Dev Patel
@@ -164,6 +174,7 @@ cpo_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeResourceRequestTool(role="CPO")],
 )
 
 # Board Director — Elena Volkov
@@ -182,6 +193,7 @@ board_director_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeResourceRequestTool(role="Board Director")],
 )
 
 # CCO — Brandon Fire
@@ -200,6 +212,7 @@ chro_cco_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    tools=[ProposeResourceRequestTool(role="CCO")],
 )
 
 cto_agent = Agent(
@@ -217,7 +230,11 @@ cto_agent = Agent(
     verbose=True,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
-    tools=[ProposeActionTool(role="CTO"), ProposeFileOperationTool(role="CTO")],
+    tools=[
+        ProposeActionTool(role="CTO"),
+        ProposeFileOperationTool(role="CTO"),
+        ProposeResourceRequestTool(role="CTO"),
+    ],
 )
 
 # 3. Centrale Dictionary met alle 10 Executive Agenten

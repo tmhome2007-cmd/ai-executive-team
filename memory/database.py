@@ -36,6 +36,10 @@ VALID_ACTION_STATUSES = {
 VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
 VALID_DECISION_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
 VALID_PREPARATION_STATUSES = {"not_started", "in_progress", "completed", "failed"}
+VALID_RESOURCE_REQUEST_STATUSES = {"pending", "approved", "rejected", "fulfilled"}
+VALID_RESOURCE_TYPES = {
+    "access", "credential", "plugin", "data", "budget", "service", "hardware", "other"
+}
 _ACTION_PROVENANCE_LOCK = threading.RLock()
 _ACTION_PROVENANCE_CONTEXT: dict | None = None
 
@@ -47,6 +51,31 @@ VALID_OUTCOME_STATUSES = {
     "partial",
     "inconclusive",
 }
+
+_SECRET_LIKE_PATTERNS = (
+    "sk-",
+    "ghp_",
+    "github_pat_",
+    "xoxb-",
+    "xoxp-",
+    "AIza",
+    "-----BEGIN PRIVATE KEY-----",
+    "password=",
+    "api_key=",
+    "token=",
+)
+
+
+def _reject_secret_like_text(*values: str | None) -> None:
+    combined = "\n".join(value for value in values if value)
+    lowered = combined.lower()
+    for pattern in _SECRET_LIKE_PATTERNS:
+        if pattern.lower() in lowered:
+            raise ValueError(
+                "Potential secret detected. Store credentials in the configured secret/plugin "
+                "system and record only a non-secret description here."
+            )
+
 
 _SYNC_TABLE_COLUMNS = {
     "decisions": {
@@ -63,6 +92,12 @@ _SYNC_TABLE_COLUMNS = {
         "expected_cost_amount", "currency", "outcome_status", "actual_outcome",
         "actual_impact", "actual_cost_amount", "measured_at",
         "next_recommendation", "notes", "updated_at", "sync_uuid",
+    },
+    "resource_requests": {
+        "timestamp", "requested_by", "resource_type", "resource_name",
+        "reason", "required_for", "amount", "currency", "status",
+        "reviewed_at", "fulfilled_at", "fulfillment_note",
+        "source_decision_sync_uuid", "source_phase", "sync_uuid",
     },
 }
 
@@ -252,6 +287,33 @@ def init_db() -> None:
         )
     conn.commit()
 
+    # Tabel 5: gestructureerde resource/capability requests. Dit zijn GEEN
+    # executable actions. Approval betekent alleen dat de eigenaar akkoord is
+    # om de resource te verschaffen; credentials/secrets zelf worden hier
+    # bewust nooit opgeslagen.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS resource_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            requested_by TEXT NOT NULL,
+            resource_type TEXT NOT NULL,
+            resource_name TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            required_for TEXT,
+            amount REAL,
+            currency TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            reviewed_at TEXT,
+            fulfilled_at TEXT,
+            fulfillment_note TEXT,
+            source_decision_id INTEGER,
+            source_decision_sync_uuid TEXT,
+            source_phase TEXT,
+            sync_uuid TEXT NOT NULL UNIQUE
+        )
+    """)
+    conn.commit()
+
     # Bestaande beslissingen van vóór Phase 2 krijgen veilig 'pending':
     # niets uit oude historie wordt stilzwijgend als goedgekeurd behandeld.
     cursor.execute("""
@@ -340,7 +402,12 @@ def get_decision_by_id(decision_id: int) -> dict | None:
                     SELECT COUNT(*)
                     FROM action_queue q
                     WHERE q.source_decision_id = d.id
-                ) AS linked_action_count
+                ) AS linked_action_count,
+                (
+                    SELECT COUNT(*)
+                    FROM resource_requests r
+                    WHERE r.source_decision_id = d.id
+                ) AS linked_resource_request_count
             FROM decisions d
             LEFT JOIN decision_approvals a ON a.decision_id = d.id
             WHERE d.id = ?
@@ -504,6 +571,7 @@ def action_provenance_scope(
         "decision_sync_uuid": decision_sync_uuid,
         "phase": phase,
         "created_action_ids": [],
+        "created_resource_request_ids": [],
     }
 
     with _ACTION_PROVENANCE_LOCK:
@@ -521,6 +589,180 @@ def action_provenance_scope(
 def _current_action_provenance() -> dict | None:
     with _ACTION_PROVENANCE_LOCK:
         return _ACTION_PROVENANCE_CONTEXT
+
+
+# ===================================================================
+# STRUCTURED RESOURCE / CAPABILITY REQUESTS
+# ===================================================================
+
+def propose_resource_request(
+    requested_by: str,
+    resource_type: str,
+    resource_name: str,
+    reason: str,
+    required_for: str | None = None,
+    amount: float | None = None,
+    currency: str | None = None,
+) -> int:
+    if resource_type not in VALID_RESOURCE_TYPES:
+        raise ValueError(f"Unsupported resource_type: {resource_type}")
+    _reject_secret_like_text(resource_name, reason, required_for)
+    if not resource_name.strip() or not reason.strip():
+        raise ValueError("resource_name and reason are required")
+    if amount is not None:
+        if amount < 0:
+            raise ValueError("amount cannot be negative")
+        if resource_type != "budget":
+            raise ValueError("amount is only allowed for budget requests")
+        if not currency:
+            raise ValueError("currency is required for budget requests with an amount")
+    if currency is not None:
+        currency = currency.strip().upper()
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("currency must be a 3-letter code such as EUR or USD")
+
+    provenance = _current_action_provenance()
+    timestamp = datetime.datetime.now().isoformat()
+    new_sync_uuid = str(uuid.uuid4())
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO resource_requests (
+                timestamp, requested_by, resource_type, resource_name,
+                reason, required_for, amount, currency, status,
+                source_decision_id, source_decision_sync_uuid, source_phase,
+                sync_uuid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+            """,
+            (
+                timestamp, requested_by, resource_type, resource_name,
+                reason, required_for, amount, currency,
+                provenance.get("decision_id") if provenance else None,
+                provenance.get("decision_sync_uuid") if provenance else None,
+                provenance.get("phase") if provenance else None,
+                new_sync_uuid,
+            ),
+        )
+        request_id = cursor.lastrowid
+        conn.commit()
+
+    if provenance is not None:
+        with _ACTION_PROVENANCE_LOCK:
+            provenance.setdefault("created_resource_request_ids", []).append(request_id)
+    return request_id
+
+
+def get_resource_request_by_id(request_id: int) -> dict | None:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT r.*, d.topic AS source_decision_topic
+            FROM resource_requests r
+            LEFT JOIN decisions d ON d.id = r.source_decision_id
+            WHERE r.id = ?
+            """,
+            (request_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_resource_requests(
+    *,
+    statuses: tuple[str, ...] | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if statuses:
+            if any(status not in VALID_RESOURCE_REQUEST_STATUSES for status in statuses):
+                raise ValueError("Unsupported resource request status")
+            placeholders = ", ".join("?" for _ in statuses)
+            cursor.execute(
+                f"""
+                SELECT r.*, d.topic AS source_decision_topic
+                FROM resource_requests r
+                LEFT JOIN decisions d ON d.id = r.source_decision_id
+                WHERE r.status IN ({placeholders})
+                ORDER BY r.timestamp DESC
+                LIMIT ? OFFSET ?
+                """,
+                (*statuses, limit, offset),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT r.*, d.topic AS source_decision_topic
+                FROM resource_requests r
+                LEFT JOIN decisions d ON d.id = r.source_decision_id
+                ORDER BY r.timestamp DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_resource_requests_for_decision(decision_id: int) -> list[dict]:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT r.*, d.topic AS source_decision_topic
+            FROM resource_requests r
+            LEFT JOIN decisions d ON d.id = r.source_decision_id
+            WHERE r.source_decision_id = ?
+            ORDER BY r.timestamp ASC
+            """,
+            (decision_id,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def transition_resource_request_status(
+    request_id: int,
+    new_status: str,
+    allowed_from: tuple[str, ...],
+    fulfillment_note: str | None = None,
+) -> bool:
+    if new_status not in VALID_RESOURCE_REQUEST_STATUSES:
+        raise ValueError(f"Unsupported resource request status: {new_status}")
+    if not allowed_from or any(s not in VALID_RESOURCE_REQUEST_STATUSES for s in allowed_from):
+        raise ValueError(f"Invalid resource request allowed_from: {allowed_from}")
+    if new_status == "fulfilled" and not (fulfillment_note or "").strip():
+        raise ValueError("fulfillment_note is required when marking a request fulfilled")
+    if fulfillment_note is not None:
+        _reject_secret_like_text(fulfillment_note)
+
+    now = datetime.datetime.now().isoformat()
+    placeholders = ", ".join("?" for _ in allowed_from)
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if new_status == "fulfilled":
+            cursor.execute(
+                f"""
+                UPDATE resource_requests
+                SET status = ?, reviewed_at = COALESCE(reviewed_at, ?),
+                    fulfilled_at = ?, fulfillment_note = ?
+                WHERE id = ? AND status IN ({placeholders})
+                """,
+                (new_status, now, now, fulfillment_note.strip(), request_id, *allowed_from),
+            )
+        else:
+            cursor.execute(
+                f"""
+                UPDATE resource_requests
+                SET status = ?, reviewed_at = ?
+                WHERE id = ? AND status IN ({placeholders})
+                """,
+                (new_status, now, request_id, *allowed_from),
+            )
+        conn.commit()
+        return cursor.rowcount == 1
 
 
 # ===================================================================
@@ -993,6 +1235,7 @@ def get_decision_lineage(decision_id: int) -> dict | None:
     return {
         "decision": decision,
         "actions": get_actions_for_decision(decision_id),
+        "resource_requests": get_resource_requests_for_decision(decision_id),
     }
 
 
@@ -1096,6 +1339,15 @@ def export_history_to_jsonl(export_path: str) -> dict:
         """)
         outcome_rows = [dict(row) for row in cursor.fetchall()]
 
+        cursor.execute("""
+            SELECT timestamp, requested_by, resource_type, resource_name,
+                   reason, required_for, amount, currency, status, reviewed_at,
+                   fulfilled_at, fulfillment_note, source_decision_sync_uuid,
+                   source_phase, sync_uuid
+            FROM resource_requests
+        """)
+        resource_rows = [dict(row) for row in cursor.fetchall()]
+
     with open(export_path, "w", encoding="utf-8") as f:
         for row in decision_rows:
             row["_table"] = "decisions"
@@ -1106,11 +1358,15 @@ def export_history_to_jsonl(export_path: str) -> dict:
         for row in outcome_rows:
             row["_table"] = "action_outcomes"
             f.write(json.dumps(row) + "\n")
+        for row in resource_rows:
+            row["_table"] = "resource_requests"
+            f.write(json.dumps(row) + "\n")
 
     return {
         "decisions": len(decision_rows),
         "actions": len(action_rows),
         "outcomes": len(outcome_rows),
+        "resource_requests": len(resource_rows),
     }
 
 
@@ -1128,6 +1384,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
     imported_decisions = 0
     imported_actions = 0
     imported_outcomes = 0
+    imported_resource_requests = 0
     skipped = 0
 
     with get_connection() as conn:
@@ -1174,6 +1431,10 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     "action_outcomes": {
                         "action_sync_uuid", "outcome_status", "updated_at", "sync_uuid",
                     },
+                    "resource_requests": {
+                        "timestamp", "requested_by", "resource_type", "resource_name",
+                        "reason", "status", "sync_uuid",
+                    },
                 }[table]
 
                 if (
@@ -1202,6 +1463,24 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         if not source_decision:
                             # Never create a provenance link to the wrong local ID.
                             # Import the decision first, then retry this export.
+                            skipped += 1
+                            continue
+                        row["source_decision_id"] = source_decision["id"]
+                if table == "resource_requests":
+                    if row.get("status") not in VALID_RESOURCE_REQUEST_STATUSES:
+                        skipped += 1
+                        continue
+                    if row.get("resource_type") not in VALID_RESOURCE_TYPES:
+                        skipped += 1
+                        continue
+                    source_decision_sync_uuid = row.get("source_decision_sync_uuid")
+                    if source_decision_sync_uuid:
+                        cursor.execute(
+                            "SELECT id FROM decisions WHERE sync_uuid = ?",
+                            (source_decision_sync_uuid,),
+                        )
+                        source_decision = cursor.fetchone()
+                        if not source_decision:
                             skipped += 1
                             continue
                         row["source_decision_id"] = source_decision["id"]
@@ -1285,8 +1564,10 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     )
                 elif table == "action_queue":
                     imported_actions += 1
-                else:
+                elif table == "action_outcomes":
                     imported_outcomes += 1
+                else:
+                    imported_resource_requests += 1
 
         conn.commit()
 
@@ -1294,6 +1575,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
         "decisions_imported": imported_decisions,
         "actions_imported": imported_actions,
         "outcomes_imported": imported_outcomes,
+        "resource_requests_imported": imported_resource_requests,
         "skipped_existing": skipped,
     }
 
