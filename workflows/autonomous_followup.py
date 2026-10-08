@@ -41,6 +41,38 @@ _REASONING_EVENT_TYPES = {
 }
 
 
+def _get_all_active_goals(*, page_size: int = 100) -> list[dict]:
+    """Page through every active goal; never silently stop at the first page."""
+    goals: list[dict] = []
+    offset = 0
+    while True:
+        page = get_company_goals(
+            statuses=("active",),
+            limit=page_size,
+            offset=offset,
+        )
+        goals.extend(page)
+        if len(page) < page_size:
+            return goals
+        offset += len(page)
+
+
+def _get_all_open_followups(*, page_size: int = 250) -> list[dict]:
+    """Page through all open follow-ups so reconciliation cannot miss old rows."""
+    events: list[dict] = []
+    offset = 0
+    while True:
+        page = get_followup_events(
+            statuses=("open",),
+            limit=page_size,
+            offset=offset,
+        )
+        events.extend(page)
+        if len(page) < page_size:
+            return events
+        offset += len(page)
+
+
 def classify_goal_followups(
     goal: dict,
     lineage: dict,
@@ -270,7 +302,7 @@ async def run_autonomous_followup() -> dict:
     pending decision per deterministic fingerprint. Owner-gate events only
     create auditable follow-up records and notifications.
     """
-    active_goals = get_company_goals(statuses=("active",), limit=100)
+    active_goals = _get_all_active_goals()
     active_goal_ids = {goal["id"] for goal in active_goals}
     created_event_ids: list[int] = []
     generated_decision_ids: list[int] = []
@@ -398,7 +430,7 @@ async def run_autonomous_followup() -> dict:
     # events remain visible until the generated decision leaves pending state.
     resolved_event_ids: list[int] = []
     try:
-        for event in get_followup_events(statuses=("open",), limit=500):
+        for event in _get_all_open_followups():
             goal_id = event.get("goal_id")
             generated_decision_id = event.get("generated_decision_id")
 
