@@ -35,6 +35,10 @@ VALID_ACTION_STATUSES = {
 }
 VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
 VALID_DECISION_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
+VALID_MEETING_TYPES = {
+    "strategy", "operating_review", "incident",
+    "capital_allocation", "retrospective", "planning",
+}
 VALID_PREPARATION_STATUSES = {"not_started", "in_progress", "completed", "failed"}
 VALID_RESOURCE_REQUEST_STATUSES = {"pending", "approved", "rejected", "fulfilled"}
 VALID_RESOURCE_TYPES = {
@@ -106,6 +110,7 @@ _SYNC_TABLE_COLUMNS = {
     "decisions": {
         "timestamp", "topic", "agents_involved", "task_description",
         "decision_outcome", "sandbox_mode", "sync_uuid", "goal_sync_uuid",
+        "meeting_type",
     },
     "action_queue": {
         "timestamp", "proposed_by", "action_description", "action_detail",
@@ -254,7 +259,8 @@ def init_db() -> None:
             sandbox_mode INTEGER NOT NULL,
             sync_uuid TEXT,
             goal_id INTEGER,
-            goal_sync_uuid TEXT
+            goal_sync_uuid TEXT,
+            meeting_type TEXT NOT NULL DEFAULT 'strategy'
         )
     """)
 
@@ -277,6 +283,12 @@ def init_db() -> None:
         pass
     try:
         cursor.execute("ALTER TABLE decisions ADD COLUMN goal_sync_uuid TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE decisions ADD COLUMN meeting_type TEXT NOT NULL DEFAULT 'strategy'")
         conn.commit()
     except sqlite3.OperationalError:
         pass
@@ -1355,6 +1367,7 @@ def log_decision(
     decision_outcome: str,
     sandbox_mode: bool = True,
     goal_id: int | None = None,
+    meeting_type: str = "strategy",
 ) -> int:
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
@@ -1364,6 +1377,8 @@ def log_decision(
     sandbox_flag = 1 if sandbox_mode else 0
     new_sync_uuid = str(uuid.uuid4())
     goal_sync_uuid = None
+    if meeting_type not in VALID_MEETING_TYPES:
+        raise ValueError(f"Unsupported meeting type: {meeting_type}")
 
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -1384,11 +1399,11 @@ def log_decision(
         cursor.execute("""
             INSERT INTO decisions (
                 timestamp, topic, agents_involved, task_description, decision_outcome,
-                sandbox_mode, sync_uuid, goal_id, goal_sync_uuid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                sandbox_mode, sync_uuid, goal_id, goal_sync_uuid, meeting_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             timestamp, topic, agents_str, task_description, decision_outcome,
-            sandbox_flag, new_sync_uuid, goal_id, goal_sync_uuid,
+            sandbox_flag, new_sync_uuid, goal_id, goal_sync_uuid, meeting_type,
         ))
         
         decision_id = cursor.lastrowid
@@ -1413,7 +1428,7 @@ def get_decision_by_id(decision_id: int) -> dict | None:
             SELECT
                 d.id, d.timestamp, d.topic, d.agents_involved,
                 d.task_description, d.decision_outcome, d.sandbox_mode,
-                d.sync_uuid, d.goal_id, d.goal_sync_uuid,
+                d.sync_uuid, d.goal_id, d.goal_sync_uuid, d.meeting_type,
                 g.title AS goal_title, g.status AS goal_status,
                 COALESCE(a.status, 'pending') AS approval_status,
                 a.reviewed_at AS approval_reviewed_at,
@@ -1549,7 +1564,8 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
             SELECT
                 d.id, d.timestamp, d.topic, d.agents_involved, d.task_description,
                 d.decision_outcome, d.sandbox_mode, d.sync_uuid,
-                d.goal_id, d.goal_sync_uuid, g.title AS goal_title, g.status AS goal_status,
+                d.goal_id, d.goal_sync_uuid, d.meeting_type,
+                g.title AS goal_title, g.status AS goal_status,
                 COALESCE(a.status, 'pending') AS approval_status,
                 a.reviewed_at AS approval_reviewed_at,
                 COALESCE(a.preparation_status, 'not_started') AS preparation_status,
@@ -3077,7 +3093,8 @@ def export_history_to_jsonl(export_path: str) -> dict:
 
         cursor.execute("""
             SELECT timestamp, topic, agents_involved, task_description,
-                   decision_outcome, sandbox_mode, sync_uuid, goal_sync_uuid
+                   decision_outcome, sandbox_mode, sync_uuid, goal_sync_uuid,
+                   meeting_type
             FROM decisions
         """)
         decision_rows = [dict(row) for row in cursor.fetchall()]
@@ -3279,6 +3296,10 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         continue
 
                 if table == "decisions":
+                    if row.get("meeting_type", "strategy") not in VALID_MEETING_TYPES:
+                        skipped += 1
+                        continue
+                    row["meeting_type"] = row.get("meeting_type", "strategy")
                     goal_sync_uuid = row.get("goal_sync_uuid")
                     if goal_sync_uuid:
                         cursor.execute(
