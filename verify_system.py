@@ -4994,6 +4994,54 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 130: DYNAMIC/STATIC CHECK — incident hypotheses stay out of Known Facts
+# -------------------------------------------------------------------
+try:
+    from workflows.meeting import _find_incident_fact_speculation as _incident_leaks_130
+    from workflows.meeting_types import get_meeting_type_profile as _profile_130
+
+    bad_130 = (
+        "**Known Facts**\n"
+        "- Users cannot access the service.\n"
+        "- We cannot rule out infrastructure issues that may have caused the outage.\n\n"
+        "**Impact / Unknowns**\n"
+        "- Root cause is unknown."
+    )
+    good_130 = (
+        "**Known Facts**\n"
+        "- Users cannot access the service.\n"
+        "- Root cause is unknown.\n\n"
+        "**Impact / Unknowns**\n"
+        "- Infrastructure issues are a possible hypothesis, but this has not been verified."
+    )
+
+    bad_leaks_130 = _incident_leaks_130(bad_130)
+    good_leaks_130 = _incident_leaks_130(good_130)
+    incident_profile_130 = _profile_130("incident")
+
+    with open("workflows/meeting.py", "r", encoding="utf-8") as fh:
+        meeting_content_130 = fh.read()
+
+    static_ok_130 = all([
+        "INCIDENT EVIDENCE-SEPARATION WARNING" in meeting_content_130,
+        "incident_fact_speculation" in meeting_content_130,
+        "Known Facts; Impact / Unknowns; Containment Recommendation; Recovery Path; Approval Gate."
+            == incident_profile_130["response_structure"],
+        "Known Facts must contain ONLY established facts" in incident_profile_130["evidence_section_rule"],
+    ])
+
+    if bad_leaks_130 and not good_leaks_130 and static_ok_130:
+        log_pass("incident meetings enforce Known Facts separation and detect speculative hypotheses in current-evidence sections")
+    else:
+        log_fail(
+            "Incident evidence-separation guard",
+            f"bad={bad_leaks_130}, good={good_leaks_130}, static={static_ok_130}",
+        )
+except Exception as e:
+    log_fail("Incident evidence-separation guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
