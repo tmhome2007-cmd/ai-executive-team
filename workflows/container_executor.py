@@ -12,7 +12,7 @@ import secrets
 import stat
 import subprocess
 
-WORKER_IMAGE = "alpine:3.20"
+WORKER_IMAGE = "alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
 MAX_OUTPUT_BYTES = 65536
 
 
