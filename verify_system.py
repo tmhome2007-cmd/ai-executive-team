@@ -4017,7 +4017,7 @@ try:
 
     original_db_113 = _verify_config_113.DATABASE_PATH
     original_meeting_113 = _followup_module_113.run_executive_meeting
-    original_notify_113 = _followup_module_113.send_notification
+    original_notify_113 = _followup_module_113.send_notification_async
     calls_113 = []
 
     def _fake_meeting_113(*args, **kwargs):
@@ -4037,7 +4037,10 @@ try:
             _init_db_113()
             _goal_113("Strategy-less goal", "Mission", "Criteria", status="active")
             _followup_module_113.run_executive_meeting = _fake_meeting_113
-            _followup_module_113.send_notification = lambda *args, **kwargs: True
+            async def _fake_notify_113(*args, **kwargs):
+                return None
+
+            _followup_module_113.send_notification_async = _fake_notify_113
 
             first = _asyncio_113.run(_followup_module_113.run_autonomous_followup())
             second = _asyncio_113.run(_followup_module_113.run_autonomous_followup())
@@ -4067,7 +4070,7 @@ try:
                 )
     finally:
         _followup_module_113.run_executive_meeting = original_meeting_113
-        _followup_module_113.send_notification = original_notify_113
+        _followup_module_113.send_notification_async = original_notify_113
         _verify_config_113.DATABASE_PATH = original_db_113
 except Exception as e:
     log_fail("Autonomous reasoning safety check crashed", str(e))
@@ -4089,7 +4092,7 @@ try:
 
     original_db_114 = _verify_config_114.DATABASE_PATH
     original_meeting_114 = _followup_module_114.run_executive_meeting
-    original_notify_114 = _followup_module_114.send_notification
+    original_notify_114 = _followup_module_114.send_notification_async
 
     def _must_not_run_114(*args, **kwargs):
         raise AssertionError("Owner-gate follow-up incorrectly started an executive meeting")
@@ -4108,7 +4111,10 @@ try:
                 goal_id=goal_id,
             )
             _followup_module_114.run_executive_meeting = _must_not_run_114
-            _followup_module_114.send_notification = lambda *args, **kwargs: True
+            async def _fake_notify_114(*args, **kwargs):
+                return None
+
+            _followup_module_114.send_notification_async = _fake_notify_114
 
             result = _asyncio_114.run(_followup_module_114.run_autonomous_followup())
             open_events = _events_114(statuses=("open",), limit=20)
@@ -4129,7 +4135,7 @@ try:
                 )
     finally:
         _followup_module_114.run_executive_meeting = original_meeting_114
-        _followup_module_114.send_notification = original_notify_114
+        _followup_module_114.send_notification_async = original_notify_114
         _verify_config_114.DATABASE_PATH = original_db_114
 except Exception as e:
     log_fail("Owner-gate autonomous follow-up check crashed", str(e))
@@ -4151,7 +4157,7 @@ try:
     )
 
     original_db_115 = _verify_config_115.DATABASE_PATH
-    original_notify_115 = _followup_module_115.send_notification
+    original_notify_115 = _followup_module_115.send_notification_async
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             _verify_config_115.DATABASE_PATH = os.path.join(temp_dir, "followup-reconcile.db")
@@ -4165,7 +4171,10 @@ try:
                 True,
                 goal_id=goal_id,
             )
-            _followup_module_115.send_notification = lambda *args, **kwargs: True
+            async def _fake_notify_115(*args, **kwargs):
+                return None
+
+            _followup_module_115.send_notification_async = _fake_notify_115
 
             first = _asyncio_115.run(_followup_module_115.run_autonomous_followup())
             _approve_115(decision_id, "approved", ("pending",))
@@ -4192,7 +4201,7 @@ try:
                     f"first={first}, second={second}, events={events}",
                 )
     finally:
-        _followup_module_115.send_notification = original_notify_115
+        _followup_module_115.send_notification_async = original_notify_115
         _verify_config_115.DATABASE_PATH = original_db_115
 except Exception as e:
     log_fail("Follow-up reconciliation check crashed", str(e))
@@ -4310,6 +4319,7 @@ try:
         "pending owner approval",
         "generated_decision_ids",
         "resolved_event_ids",
+        "await send_notification_async(",
     ]
     required_db = [
         "CREATE TABLE IF NOT EXISTS followup_events",
