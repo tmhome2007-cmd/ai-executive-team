@@ -46,6 +46,15 @@ VALID_GOAL_STATUSES = {"draft", "active", "paused", "completed", "abandoned"}
 VALID_GOAL_PRIORITIES = {"critical", "high", "medium", "low"}
 VALID_FOLLOWUP_STATUSES = {"open", "resolved", "dismissed"}
 VALID_FOLLOWUP_SEVERITIES = {"info", "attention", "critical"}
+VALID_EXECUTIVE_MEMORY_KINDS = {
+    "decision_approved",
+    "decision_rejected",
+    "outcome_succeeded",
+    "outcome_failed",
+    "outcome_partial",
+    "outcome_inconclusive",
+    "general_lesson",
+}
 VALID_FOLLOWUP_EVENT_TYPES = {
     "strategy_review",
     "owner_decision_review",
@@ -135,6 +144,12 @@ _SYNC_TABLE_COLUMNS = {
         "source_decision_sync_uuid", "generated_decision_sync_uuid",
         "resolved_at", "sync_uuid",
     },
+    "executive_memories": {
+        "created_at", "updated_at", "executive_key", "memory_kind", "lesson",
+        "supporting_evidence", "confidence", "is_active", "source_goal_sync_uuid",
+        "source_decision_sync_uuid", "source_action_sync_uuid", "fingerprint",
+        "sync_uuid",
+    },
 }
 
 
@@ -197,6 +212,31 @@ def init_db() -> None:
             generated_decision_id INTEGER,
             generated_decision_sync_uuid TEXT,
             resolved_at TEXT,
+            sync_uuid TEXT NOT NULL UNIQUE
+        )
+    """)
+    conn.commit()
+
+    # Structured executive memory. Memories are historical/advisory only:
+    # they never override current evidence or owner-approved state.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS executive_memories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            executive_key TEXT NOT NULL,
+            memory_kind TEXT NOT NULL,
+            lesson TEXT NOT NULL,
+            supporting_evidence TEXT,
+            confidence REAL NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            source_goal_id INTEGER,
+            source_goal_sync_uuid TEXT,
+            source_decision_id INTEGER,
+            source_decision_sync_uuid TEXT,
+            source_action_id INTEGER,
+            source_action_sync_uuid TEXT,
+            fingerprint TEXT NOT NULL UNIQUE,
             sync_uuid TEXT NOT NULL UNIQUE
         )
     """)
@@ -797,6 +837,264 @@ def get_company_goal_lineage(goal_id: int) -> dict | None:
         "spend_by_currency": total_spend,
         "decisions": decision_lineages,
     }
+
+
+# ===================================================================
+# STRUCTURED EXECUTIVE MEMORY
+# ===================================================================
+
+def create_executive_memory(
+    *,
+    executive_key: str,
+    memory_kind: str,
+    lesson: str,
+    supporting_evidence: str | None = None,
+    confidence: float = 0.7,
+    source_goal_id: int | None = None,
+    source_decision_id: int | None = None,
+    source_action_id: int | None = None,
+    fingerprint: str,
+) -> tuple[int, bool]:
+    executive_key = executive_key.strip()
+    lesson = lesson.strip()
+    fingerprint = fingerprint.strip()
+    if not executive_key or not lesson or not fingerprint:
+        raise ValueError("executive_key, lesson, and fingerprint are required")
+    if memory_kind not in VALID_EXECUTIVE_MEMORY_KINDS:
+        raise ValueError(f"Unsupported executive memory kind: {memory_kind}")
+    if not (0.0 <= float(confidence) <= 1.0):
+        raise ValueError("confidence must be between 0 and 1")
+    _reject_secret_like_text(lesson, supporting_evidence)
+
+    source_goal_sync_uuid = None
+    source_decision_sync_uuid = None
+    source_action_sync_uuid = None
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        if source_goal_id is not None:
+            cursor.execute("SELECT sync_uuid FROM company_goals WHERE id = ?", (source_goal_id,))
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError("Source goal not found")
+            source_goal_sync_uuid = row["sync_uuid"]
+
+        if source_decision_id is not None:
+            cursor.execute(
+                "SELECT sync_uuid, goal_id, goal_sync_uuid FROM decisions WHERE id = ?",
+                (source_decision_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError("Source decision not found")
+            source_decision_sync_uuid = row["sync_uuid"]
+            if source_goal_id is None and row["goal_id"] is not None:
+                source_goal_id = row["goal_id"]
+                source_goal_sync_uuid = row["goal_sync_uuid"]
+
+        if source_action_id is not None:
+            cursor.execute(
+                "SELECT sync_uuid, source_decision_id, source_decision_sync_uuid FROM action_queue WHERE id = ?",
+                (source_action_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError("Source action not found")
+            source_action_sync_uuid = row["sync_uuid"]
+            if source_decision_id is None and row["source_decision_id"] is not None:
+                source_decision_id = row["source_decision_id"]
+                source_decision_sync_uuid = row["source_decision_sync_uuid"]
+                cursor.execute(
+                    "SELECT goal_id, goal_sync_uuid FROM decisions WHERE id = ?",
+                    (source_decision_id,),
+                )
+                drow = cursor.fetchone()
+                if drow and source_goal_id is None:
+                    source_goal_id = drow["goal_id"]
+                    source_goal_sync_uuid = drow["goal_sync_uuid"]
+
+        cursor.execute(
+            "SELECT id FROM executive_memories WHERE fingerprint = ?",
+            (fingerprint,),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            return int(existing["id"]), False
+
+        now = datetime.datetime.now().isoformat()
+        cursor.execute(
+            """
+            INSERT INTO executive_memories (
+                created_at, updated_at, executive_key, memory_kind, lesson,
+                supporting_evidence, confidence, is_active,
+                source_goal_id, source_goal_sync_uuid,
+                source_decision_id, source_decision_sync_uuid,
+                source_action_id, source_action_sync_uuid,
+                fingerprint, sync_uuid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                now, now, executive_key, memory_kind, lesson,
+                supporting_evidence.strip() if supporting_evidence else None,
+                float(confidence),
+                source_goal_id, source_goal_sync_uuid,
+                source_decision_id, source_decision_sync_uuid,
+                source_action_id, source_action_sync_uuid,
+                fingerprint, str(uuid.uuid4()),
+            ),
+        )
+        memory_id = cursor.lastrowid
+        conn.commit()
+        return int(memory_id), True
+
+
+def get_executive_memories(
+    executive_key: str,
+    *,
+    active_only: bool = True,
+    limit: int = 8,
+    goal_id: int | None = None,
+) -> list[dict]:
+    executive_key = executive_key.strip()
+    if not executive_key:
+        return []
+    clauses = ["executive_key = ?"]
+    params: list = [executive_key]
+    if active_only:
+        clauses.append("is_active = 1")
+    if goal_id is not None:
+        clauses.append("(source_goal_id = ? OR source_goal_id IS NULL)")
+        params.append(goal_id)
+    where = " AND ".join(clauses)
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT *
+            FROM executive_memories
+            WHERE {where}
+            ORDER BY confidence DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def set_executive_memory_active(memory_id: int, is_active: bool) -> bool:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE executive_memories
+            SET is_active = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (1 if is_active else 0, datetime.datetime.now().isoformat(), memory_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def create_decision_memories(decision_id: int, approval_status: str) -> list[int]:
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        return []
+    if approval_status not in {"approved", "rejected"}:
+        raise ValueError("Decision memory requires approved or rejected status")
+
+    kind = "decision_approved" if approval_status == "approved" else "decision_rejected"
+    lesson = (
+        f"Owner {approval_status} strategic direction '{decision['topic']}'. "
+        "Treat this as historical governance context, not proof that the same direction "
+        "is correct for a future situation."
+    )
+    evidence = (
+        f"Decision #{decision_id}; topic={decision['topic']}; "
+        f"owner_status={approval_status}; recommendation={decision['decision_outcome']}"
+    )
+
+    created_ids: list[int] = []
+    for executive_key in [
+        key.strip() for key in (decision.get("agents_involved") or "").split(",")
+        if key.strip()
+    ]:
+        memory_id, created = create_executive_memory(
+            executive_key=executive_key,
+            memory_kind=kind,
+            lesson=lesson,
+            supporting_evidence=evidence,
+            confidence=0.8,
+            source_goal_id=decision.get("goal_id"),
+            source_decision_id=decision_id,
+            fingerprint=f"decision:{decision['sync_uuid']}:{approval_status}:{executive_key}",
+        )
+        if created:
+            created_ids.append(memory_id)
+    return created_ids
+
+
+def create_action_outcome_memories(action_id: int) -> list[int]:
+    action = get_action_by_id(action_id)
+    if action is None:
+        return []
+    outcome_status = action.get("outcome_status")
+    if outcome_status not in {"succeeded", "failed", "partial", "inconclusive"}:
+        return []
+    source_decision_id = action.get("source_decision_id")
+    if source_decision_id is None:
+        return []
+    decision = get_decision_by_id(source_decision_id)
+    if decision is None:
+        return []
+
+    kind = f"outcome_{outcome_status}"
+    lesson = (
+        f"Measured action '{action.get('action_description')}' had business outcome "
+        f"'{outcome_status}'. Reuse only the lesson, not the old conclusion: compare "
+        "current evidence before applying it again."
+    )
+    evidence_parts = [
+        f"Action #{action_id}",
+        f"expected_outcome={action.get('expected_outcome') or 'unknown'}",
+        f"expected_impact={action.get('expected_impact') or 'unknown'}",
+        f"actual_outcome={action.get('actual_outcome') or 'unknown'}",
+        f"actual_impact={action.get('actual_impact') or 'unknown'}",
+        f"next_recommendation={action.get('next_recommendation') or 'none'}",
+    ]
+    evidence = "; ".join(evidence_parts)
+    confidence = {
+        "succeeded": 0.9,
+        "failed": 0.9,
+        "partial": 0.75,
+        "inconclusive": 0.5,
+    }[outcome_status]
+
+    created_ids: list[int] = []
+    roles = [
+        key.strip() for key in (decision.get("agents_involved") or "").split(",")
+        if key.strip()
+    ]
+    for executive_key in roles:
+        memory_id, created = create_executive_memory(
+            executive_key=executive_key,
+            memory_kind=kind,
+            lesson=lesson,
+            supporting_evidence=evidence,
+            confidence=confidence,
+            source_goal_id=decision.get("goal_id"),
+            source_decision_id=source_decision_id,
+            source_action_id=action_id,
+            fingerprint=(
+                f"action:{action['sync_uuid']}:outcome:{outcome_status}:"
+                f"{action.get('measured_at') or action.get('updated_at') or 'measured'}:{executive_key}"
+            ),
+        )
+        if created:
+            created_ids.append(memory_id)
+    return created_ids
 
 
 # ===================================================================
@@ -2715,6 +3013,15 @@ def export_history_to_jsonl(export_path: str) -> dict:
         followup_rows = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute("""
+            SELECT created_at, updated_at, executive_key, memory_kind, lesson,
+                   supporting_evidence, confidence, is_active,
+                   source_goal_sync_uuid, source_decision_sync_uuid,
+                   source_action_sync_uuid, fingerprint, sync_uuid
+            FROM executive_memories
+        """)
+        memory_rows = [dict(row) for row in cursor.fetchall()]
+
+        cursor.execute("""
             SELECT timestamp, topic, agents_involved, task_description,
                    decision_outcome, sandbox_mode, sync_uuid, goal_sync_uuid
             FROM decisions
@@ -2788,10 +3095,14 @@ def export_history_to_jsonl(export_path: str) -> dict:
         for row in followup_rows:
             row["_table"] = "followup_events"
             f.write(json.dumps(row) + "\n")
+        for row in memory_rows:
+            row["_table"] = "executive_memories"
+            f.write(json.dumps(row) + "\n")
 
     return {
         "goals": len(goal_rows),
         "followup_events": len(followup_rows),
+        "executive_memories": len(memory_rows),
         "decisions": len(decision_rows),
         "actions": len(action_rows),
         "outcomes": len(outcome_rows),
@@ -2814,6 +3125,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
     imported_goals = 0
     imported_followup_events = 0
+    imported_executive_memories = 0
     imported_decisions = 0
     imported_actions = 0
     imported_outcomes = 0
@@ -2862,6 +3174,10 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     "followup_events": {
                         "created_at", "updated_at", "event_type", "status",
                         "severity", "reason", "fingerprint", "sync_uuid",
+                    },
+                    "executive_memories": {
+                        "created_at", "updated_at", "executive_key", "memory_kind",
+                        "lesson", "confidence", "is_active", "fingerprint", "sync_uuid",
                     },
                     "decisions": {
                         "timestamp", "topic", "agents_involved", "task_description",
@@ -3070,6 +3386,42 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row is None:
                         continue
 
+                if table == "executive_memories":
+                    if row.get("memory_kind") not in VALID_EXECUTIVE_MEMORY_KINDS:
+                        skipped += 1
+                        continue
+                    try:
+                        confidence = float(row.get("confidence"))
+                    except (TypeError, ValueError):
+                        skipped += 1
+                        continue
+                    if not (0.0 <= confidence <= 1.0):
+                        skipped += 1
+                        continue
+                    if row.get("is_active") not in {0, 1, False, True}:
+                        skipped += 1
+                        continue
+
+                    for uuid_key, table_name, id_key in (
+                        ("source_goal_sync_uuid", "company_goals", "source_goal_id"),
+                        ("source_decision_sync_uuid", "decisions", "source_decision_id"),
+                        ("source_action_sync_uuid", "action_queue", "source_action_id"),
+                    ):
+                        foreign_uuid = row.get(uuid_key)
+                        if foreign_uuid:
+                            cursor.execute(
+                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",
+                                (foreign_uuid,),
+                            )
+                            foreign_row = cursor.fetchone()
+                            if not foreign_row:
+                                skipped += 1
+                                row = None
+                                break
+                            row[id_key] = foreign_row["id"]
+                    if row is None:
+                        continue
+
                 cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
                 if cursor.fetchone():
                     skipped += 1
@@ -3094,6 +3446,8 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     imported_goals += 1
                 elif table == "followup_events":
                     imported_followup_events += 1
+                elif table == "executive_memories":
+                    imported_executive_memories += 1
                 elif table == "decisions":
                     imported_decisions += 1
                     imported_decision_id = cursor.lastrowid
@@ -3122,6 +3476,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
     return {
         "goals_imported": imported_goals,
         "followup_events_imported": imported_followup_events,
+        "executive_memories_imported": imported_executive_memories,
         "decisions_imported": imported_decisions,
         "actions_imported": imported_actions,
         "outcomes_imported": imported_outcomes,
