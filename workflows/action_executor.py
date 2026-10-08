@@ -15,6 +15,8 @@ import re
 import shlex
 import socket
 import subprocess
+import signal
+import tempfile
 
 try:
     import resource  # Unix-only (macOS/Linux) — niet beschikbaar op Windows
@@ -64,6 +66,12 @@ def _limit_subprocess_resources() -> None:
     try:
         resource.setrlimit(resource.RLIMIT_CPU, (25, 25))  # max 25 CPU-seconden
         resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))  # max 512MB adresruimte
+        if hasattr(resource, "RLIMIT_FSIZE"):
+            resource.setrlimit(resource.RLIMIT_FSIZE, (2 * 1024 * 1024, 2 * 1024 * 1024))
+        if hasattr(resource, "RLIMIT_NOFILE"):
+            resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+        if hasattr(resource, "RLIMIT_NPROC"):
+            resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
     except Exception:
         pass  # als het platform dit niet ondersteunt, ga gewoon door zonder limiet
 
@@ -755,17 +763,80 @@ def execute_action(action_id: int) -> dict:
             "detail": f"[DRY RUN] Command simulated: {action_detail}",
         }
 
-    # 5. LIVE EXECUTIE MODUS (Inclusief Time-out & Subprocess error handling)
+    # 5. LIVE EXECUTIE MODUS
+    # Raw host commands are a deliberately separate opt-in because static
+    # string inspection is not an OS sandbox. Even when enabled, never invoke
+    # a shell: parse argv and reject shell grammar entirely.
+    if not getattr(config, "ALLOW_RAW_SHELL_EXECUTION", False):
+        update_action_status(action_id, "blocked_dangerous")
+        error_msg = (
+            "Live raw command execution is disabled. Use a structured action, "
+            "or explicitly set ALLOW_RAW_SHELL_EXECUTION=true after reviewing the risk."
+        )
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": error_msg,
+            "blocked": True,
+        }
+
+    if re.search(r"[|;&<>\n\r]", action_detail):
+        update_action_status(action_id, "blocked_dangerous")
+        error_msg = (
+            "Shell metacharacters/chaining/redirection are not supported for live raw commands. "
+            "Use one direct executable invocation or a structured action."
+        )
+        record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": error_msg,
+            "blocked": True,
+        }
+
     try:
-        completed_process = subprocess.run(
-            action_detail,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30,  # 30 seconden time-out ter beveiliging
-            cwd=_get_workspace_root(),
-            env=_get_safe_subprocess_env(),  # GEEN secrets (.env) doorgeven aan het kindproces
-            preexec_fn=_limit_subprocess_resources if _RESOURCE_MODULE_AVAILABLE else None,
+        argv = shlex.split(action_detail)
+        if not argv:
+            raise ValueError("Command is empty after parsing")
+
+        # File-backed stdout/stderr avoid unbounded in-memory capture. RLIMIT_FSIZE
+        # also caps what the child can write to these regular files.
+        with tempfile.TemporaryFile(mode="w+b") as stdout_file, tempfile.TemporaryFile(mode="w+b") as stderr_file:
+            process = subprocess.Popen(
+                argv,
+                shell=False,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                cwd=_get_workspace_root(),
+                env=_get_safe_subprocess_env(),
+                preexec_fn=_limit_subprocess_resources if _RESOURCE_MODULE_AVAILABLE else None,
+                start_new_session=True,
+            )
+            try:
+                returncode = process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                try:
+                    if os.name == "posix":
+                        os.killpg(process.pid, signal.SIGKILL)
+                    else:
+                        process.kill()
+                finally:
+                    process.wait()
+                raise
+
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout_text = stdout_file.read(2 * 1024 * 1024).decode("utf-8", errors="replace")
+            stderr_text = stderr_file.read(2 * 1024 * 1024).decode("utf-8", errors="replace")
+
+        completed_process = subprocess.CompletedProcess(
+            argv,
+            returncode,
+            stdout=stdout_text,
+            stderr=stderr_text,
         )
 
         if completed_process.returncode == 0:
