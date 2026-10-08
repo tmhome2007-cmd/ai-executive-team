@@ -31,8 +31,9 @@ class PrivateRotatingFileHandler(RotatingFileHandler):
     """Rotating handler that keeps current and rotated logs owner-only."""
 
     def _harden_permissions(self) -> None:
+        backup_count = int(getattr(self, "backupCount", 0) or 0)
         for path in [self.baseFilename] + [
-            f"{self.baseFilename}.{i}" for i in range(1, self.backupCount + 1)
+            f"{self.baseFilename}.{i}" for i in range(1, backup_count + 1)
         ]:
             if os.path.exists(path):
                 try:
