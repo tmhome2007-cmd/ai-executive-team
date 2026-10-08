@@ -186,3 +186,35 @@ class WorkflowRecoveryTests(unittest.TestCase):
             self.assertIn('Pending owner review', result['final_decision'])
             self.assertIn('Synthetic evidence is missing', result['final_decision'])
             self.assertTrue(result['quality_warnings']['owner_acknowledgement_corrected'])
+
+    def test_no_evidence_retrospective_suppresses_fabricated_outcomes_on_resume(self):
+        from workflows.meeting import run_executive_meeting
+
+        class InventedOutcomesLLM(SyntheticLLM):
+            def call(self, messages, **kwargs):
+                self.calls += 1
+                return ('Final Answer: **What Worked**\nThe team improved revenue and deployed changes.\n'
+                        '**What Failed**\nThe company lost customers.')
+
+        llm = InventedOutcomesLLM(model='test-only')
+        agent = Agent(role='CEO', goal='Synthetic test', backstory='Synthetic test',
+                      llm=llm, allow_delegation=False, verbose=False, max_iter=1)
+        fields = dict(topic='No evidence test',
+                      task_description='Synthetic test only. No real company data or actions. Explain missing evidence.',
+                      agent_keys=['ceo'], agents_source={'ceo':agent}, memory_context={'enabled':False},
+                      meeting_type='retrospective', workflow_run_id='no-evidence-test')
+        first = run_executive_meeting(**fields)
+        calls = llm.calls
+        second = run_executive_meeting(**fields)
+        self.assertEqual(llm.calls, calls)
+        for result in (first, second):
+            for output in [result['final_decision'], *result['individual_outputs'].values()]:
+                self.assertNotIn('improved revenue', output)
+                self.assertNotIn('lost customers', output)
+                self.assertIn('Unknown — evidence required', output)
+                self.assertIn('Pending owner review', output)
+            self.assertTrue(result['quality_warnings']['insufficient_retrospective_evidence'])
+        # A supplied observation is not treated as an absence declaration.
+        observed = run_executive_meeting(**dict(fields, workflow_run_id='observed-evidence-test',
+            task_description='Observed fixture outcome: the synthetic check completed successfully.'))
+        self.assertFalse(observed['quality_warnings']['insufficient_retrospective_evidence'])

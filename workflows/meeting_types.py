@@ -101,6 +101,12 @@ MEETING_TYPES = {
             "Expected vs Actual; What Worked; What Failed / Unknown; Reusable Lessons; "
             "What to Repeat / Stop / Change; Owner Acknowledgement."
         ),
+        "evidence_section_rule": (
+            "Expected vs Actual, What Worked and What Failed require observed outcomes from current evidence. "
+            "When outcomes are not supplied, say Unknown — evidence required. Never invent team discussions, "
+            "effective formats, implemented changes, market assumptions or company history. "
+            "Label general advice as recommendations, not observed lessons. Owner acknowledgement stays pending."
+        ),
         "approval_posture": (
             "Retrospectives do not authorize new execution. Any new direction becomes a separate pending decision."
         ),

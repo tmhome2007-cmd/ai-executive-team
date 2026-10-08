@@ -153,3 +153,27 @@ Relevant lesson: framework agent/tool behavior should not itself be the security
 The control plane is substantially stronger than the original implementation: authority is centralized, sensitive transports are opt-in, host shell is default-off, network/file boundaries are fail-closed, runtime artifacts are private/bounded, sync has integrity/auth authority separation, and autonomous failures are recoverable.
 
 The largest remaining risk is architectural: side effects still ultimately execute from the host process rather than an isolated disposable worker. That should be treated as the next major foundation milestone, not hidden behind additional regexes or prompt rules.
+
+## Local dashboard and meeting verification — 2026-10-08
+
+The owner confirmed the isolated dashboard/8001 API meeting flow. A real bug in
+Next's CSP was fixed: connect-src now follows the validated configured API origin
+rather than hard-coding port 8000. Local lint/build and browser verification pass.
+
+Generated Owner Acknowledgement sections are now normalized to pending owner
+review, including cached retries; they cannot assert newly recorded human consent.
+When a retrospective's current source explicitly declares no company/business data
+or no supplied outcome evidence, final and individual published outputs report
+missing evidence rather than model-invented outcomes. Historical memory does not
+satisfy current evidence. Observations supplied in other prompts are not classified
+as verified merely because this narrow absence guard does not trigger.
+
+Eight recovery/evidence integration tests pass, 150/150 foundation checks pass,
+and the changed workflow files pass Bandit. A separate real local Ollama -> FastAPI
+-> SQLite test verifies the no-evidence retrospective with disposable data and
+Telegram/background workflows disabled. Existing history is not rewritten.
+
+Audit scope follows the owner's clarification: controllable project security,
+privacy and bug fixes are audited; unpatched third-party advisories are tracked
+separately as upstream limitations. Deployment readiness and production release
+requirements remain separate from completion of a particular project fix.

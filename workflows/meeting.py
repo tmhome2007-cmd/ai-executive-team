@@ -132,6 +132,47 @@ def find_repeated_analysis(individual_outputs: Dict[str, str], min_chars: int = 
     return repeated
 
 
+def _retrospective_has_explicit_evidence_gap(source_text: str) -> bool:
+    """Recognize explicit absence declarations, not general semantic truth."""
+    return re.search(
+        r"\bno\s+(?:real\s+)?(?:company|business)\s+(?:data|evidence)\b"
+        r"|\bno\s+(?:(?:outcome|performance|retrospective)\s+)?evidence\s+(?:was\s+|is\s+)?(?:supplied|provided)\b",
+        source_text, re.IGNORECASE,
+    ) is not None
+
+
+_INSUFFICIENT_RETROSPECTIVE = """**Expected vs Actual**
+
+Unknown — evidence required. No outcome evidence was supplied for this retrospective.
+
+**What Worked**
+
+Unknown — no verified outcomes were supplied. No team achievement or effective process is established.
+
+**What Failed / Unknown**
+
+Unknown — no verified failures, implemented changes, team discussions or causal relationships are established.
+
+**Reusable Lessons**
+
+No incident-specific lessons can be established from the supplied information.
+General recommendation: compare documented expectations with measured outcomes.
+
+**What to Repeat / Stop / Change**
+
+No evidence-supported operational change is recommended yet. Collect outcome evidence before choosing changes.
+
+**Owner Acknowledgement**
+
+Pending owner review. This meeting does not record owner acknowledgement or approval.
+
+**Evidence Still Required**
+
+Provide the activity being reviewed, its expected result, observed outcome, relevant source records and unresolved questions.
+Only include metrics relevant to that activity; do not assume the company has revenue, customers or a budget.
+"""
+
+
 def _guard_owner_acknowledgement(output_text: str) -> tuple[str, bool]:
     """Generated acknowledgement sections cannot assert human consent."""
     section = re.compile(
@@ -611,6 +652,15 @@ def run_executive_meeting(
             + guarded_final_decision
         )
 
+    insufficient_retrospective_evidence = (
+        meeting_type == "retrospective" and _retrospective_has_explicit_evidence_gap(guard_source)
+    )
+    if insufficient_retrospective_evidence:
+        # Never publish model-invented outcomes when the source explicitly says
+        # there is no business evidence. Historical memory is not current evidence.
+        guarded_final_decision = _INSUFFICIENT_RETROSPECTIVE
+        guarded_individual_outputs = {key: _INSUFFICIENT_RETROSPECTIVE for key in individual_outputs}
+
     return {
         "workflow_run_id": workflow_run_id,
         "final_decision": guarded_final_decision,
@@ -618,6 +668,7 @@ def run_executive_meeting(
         "meeting_type": meeting_type,
         "individual_outputs": guarded_individual_outputs,
         "quality_warnings": {
+            "insufficient_retrospective_evidence": insufficient_retrospective_evidence,
             "owner_acknowledgement_corrected": owner_acknowledgement_corrected,
             "unsupported_quantitative_claims": quality_warnings,
             "individual_outputs": individual_quality_warnings,
