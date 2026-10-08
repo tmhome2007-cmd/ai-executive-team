@@ -2970,6 +2970,50 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 96: STATIC CHECK — printed resource payload fallback is schema-limited and non-executing
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_96 = f.read()
+
+    required = [
+        "def _extract_resource_request_payloads",
+        "def _materialize_resource_requests_from_text",
+        'value.get("name") != "propose_resource_request"',
+        "allowed_params = {",
+        "propose_resource_request(",
+        "with action_provenance_scope(",
+        "materialized_resource_ids",
+        "pseudo_resource_call = False",
+    ]
+    missing = [item for item in required if item not in main_content_96]
+
+    forbids_action_materialization = (
+        '"propose_action"' not in re.search(
+            r"def _extract_resource_request_payloads.*?def _materialize_resource_requests_from_text",
+            main_content_96,
+            re.DOTALL,
+        ).group(0)
+        if re.search(
+            r"def _extract_resource_request_payloads.*?def _materialize_resource_requests_from_text",
+            main_content_96,
+            re.DOTALL,
+        )
+        else False
+    )
+
+    if not missing and forbids_action_materialization:
+        log_pass("printed resource payload fallback is schema-limited, provenance-scoped, and cannot materialize executable actions")
+    else:
+        log_fail(
+            "Resource payload materialization fallback",
+            f"missing={missing}, forbids_action_materialization={forbids_action_materialization}",
+        )
+except Exception as e:
+    log_fail("Resource payload materialization fallback check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
