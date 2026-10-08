@@ -48,6 +48,11 @@ class Config:
     TELEGRAM_CHAT_ID: str = field(
         default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", "").strip()
     )
+    TELEGRAM_INCLUDE_SENSITIVE_DETAILS: bool = field(
+        default_factory=lambda: os.getenv(
+            "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", "false"
+        ).lower() in ("true", "1", "yes")
+    )
 
     # API Beveiliging Key
     API_SECRET_KEY: str = field(
