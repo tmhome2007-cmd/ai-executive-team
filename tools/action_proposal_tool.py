@@ -98,7 +98,7 @@ class ProposeActionTool(BaseTool):
                 action_detail=action_detail,
             )
         except Exception as e:
-            print(f"Warning: Failed to send Telegram notification for action proposal #{action_id}: {e}")
+            print(f"Warning: Telegram action-proposal notification failed ({type(e).__name__}); transport details suppressed.")
 
         # 3. Retourneer de bevestiging naar de agent
         return (
