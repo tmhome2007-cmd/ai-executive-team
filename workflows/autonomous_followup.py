@@ -323,6 +323,11 @@ async def run_autonomous_followup() -> dict:
 
             try:
                 prompt = _followup_meeting_prompt(goal, candidate, lineage)
+                followup_meeting_type = (
+                    "retrospective"
+                    if candidate["event_type"] == "adverse_outcome_review"
+                    else "strategy"
+                )
                 meeting = await asyncio.to_thread(
                     run_executive_meeting,
                     topic=f"Autonomous follow-up for Goal #{goal['id']}",
@@ -330,6 +335,7 @@ async def run_autonomous_followup() -> dict:
                     agent_keys=["cso", "coo", "ceo"],
                     agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
                     evidence_text=prompt,
+                    meeting_type=followup_meeting_type,
                 )
                 decision_id = log_decision(
                     topic=f"Autonomous follow-up: {goal['title']}",
@@ -338,6 +344,7 @@ async def run_autonomous_followup() -> dict:
                     decision_outcome=meeting.get("final_decision", ""),
                     sandbox_mode=config.SANDBOX_MODE,
                     goal_id=goal["id"],
+                    meeting_type=followup_meeting_type,
                 )
                 link_followup_generated_decision(event_id, decision_id)
                 generated_decision_ids.append(decision_id)
