@@ -20,6 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 import os
 import re
+import json
+import ast
 from pydantic import BaseModel, Field
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -47,6 +49,8 @@ from memory.database import (
     get_resource_request_by_id,
     get_resource_requests,
     transition_resource_request_status,
+    propose_resource_request,
+    action_provenance_scope,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -655,6 +659,153 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
         return provenance_mismatches, resource_provenance_mismatches
 
+    def _extract_resource_request_payloads(text: str) -> list[dict]:
+        """
+        Strictly extracts ONLY printed propose_resource_request dictionaries.
+        This fallback exists for models that expose valid tools but print a
+        function payload instead of invoking it. Executable action tools are
+        deliberately unsupported here.
+        """
+        allowed_top = {"name", "parameters"}
+        allowed_params = {
+            "resource_type", "resource_name", "reason", "required_for",
+            "amount", "currency",
+        }
+        parsed_payloads: list[dict] = []
+        seen: set[tuple] = set()
+
+        for start_index, char in enumerate(text):
+            if char != "{":
+                continue
+
+            depth = 0
+            in_string = False
+            escaped = False
+            end_index = None
+
+            for idx in range(start_index, len(text)):
+                current = text[idx]
+                if in_string:
+                    if escaped:
+                        escaped = False
+                    elif current == "\\":
+                        escaped = True
+                    elif current == '"':
+                        in_string = False
+                    continue
+
+                if current == '"':
+                    in_string = True
+                elif current == "{":
+                    depth += 1
+                elif current == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end_index = idx + 1
+                        break
+
+            if end_index is None:
+                continue
+
+            candidate = text[start_index:end_index]
+            try:
+                value = json.loads(candidate)
+            except Exception:
+                try:
+                    value = ast.literal_eval(candidate)
+                except Exception:
+                    continue
+
+            if (
+                not isinstance(value, dict)
+                or value.get("name") != "propose_resource_request"
+                or set(value.keys()) - allowed_top
+            ):
+                continue
+
+            params = value.get("parameters")
+            if not isinstance(params, dict) or set(params.keys()) - allowed_params:
+                continue
+            if not {"resource_type", "resource_name", "reason"}.issubset(params):
+                continue
+
+            resource_type = params.get("resource_type")
+            resource_name = params.get("resource_name")
+            reason = params.get("reason")
+            required_for = params.get("required_for")
+            amount = params.get("amount")
+            currency = params.get("currency")
+
+            if not all(isinstance(v, str) and v.strip() for v in (
+                resource_type, resource_name, reason
+            )):
+                continue
+            if required_for is not None and not isinstance(required_for, str):
+                continue
+            if amount is not None and not isinstance(amount, (int, float)):
+                continue
+            if currency is not None and not isinstance(currency, str):
+                continue
+
+            normalized = {
+                "resource_type": resource_type.strip(),
+                "resource_name": resource_name.strip(),
+                "reason": reason.strip(),
+                "required_for": required_for.strip() if isinstance(required_for, str) else None,
+                "amount": amount,
+                "currency": currency.strip() if isinstance(currency, str) else None,
+            }
+            dedupe_key = (
+                normalized["resource_type"],
+                normalized["resource_name"].lower(),
+                normalized["reason"].lower(),
+                normalized["required_for"],
+                normalized["amount"],
+                normalized["currency"],
+            )
+            if dedupe_key not in seen:
+                seen.add(dedupe_key)
+                parsed_payloads.append(normalized)
+
+        return parsed_payloads
+
+
+    def _materialize_resource_requests_from_text(text: str) -> list[int]:
+        payloads = _extract_resource_request_payloads(text)
+        if not payloads:
+            return []
+
+        created_ids: list[int] = []
+        requested_by = (
+            request.agent_keys[0].upper()
+            if len(request.agent_keys) == 1
+            else "PREPARATION"
+        )
+
+        # Re-enter the same trusted provenance scope only while writing these
+        # NON-EXECUTING, owner-gated requests. Existing DB validation still
+        # rejects secret-like values, invalid resource types, and malformed money.
+        with action_provenance_scope(
+            decision_id,
+            decision["sync_uuid"],
+            "preparation",
+        ):
+            for payload in payloads:
+                created_ids.append(
+                    propose_resource_request(
+                        requested_by=requested_by,
+                        resource_type=payload["resource_type"],
+                        resource_name=payload["resource_name"],
+                        reason=payload["reason"],
+                        required_for=payload["required_for"],
+                        amount=payload["amount"],
+                        currency=payload["currency"],
+                    )
+                )
+
+        return created_ids
+
+
     try:
         meeting_result = _run_preparation_meeting(preparation_prompt)
         participants = meeting_result.get("participants", [])
@@ -765,6 +916,38 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 )
             )
             pseudo_tool_call = bool(pseudo_action_call or pseudo_resource_call)
+
+        if pseudo_resource_call and not new_resource_requests:
+            materialized_resource_ids = _materialize_resource_requests_from_text(final_plan)
+            if materialized_resource_ids:
+                proposed_resource_request_ids = materialized_resource_ids
+                new_resource_requests = [
+                    resource_request
+                    for request_id in materialized_resource_ids
+                    if (
+                        resource_request := get_resource_request_by_id(request_id)
+                    ) is not None
+                ]
+                _, resource_provenance_mismatches = _provenance_mismatches(
+                    [],
+                    proposed_resource_request_ids,
+                    [],
+                    new_resource_requests,
+                )
+                if resource_provenance_mismatches:
+                    finish_decision_preparation(
+                        decision_id,
+                        False,
+                        "Materialized resource request failed provenance verification.",
+                    )
+                    raise HTTPException(
+                        status_code=502,
+                        detail=(
+                            "Materialized resource request had invalid decision provenance. "
+                            "Preparation was marked failed."
+                        ),
+                    )
+                pseudo_resource_call = False
 
         if (
             (pseudo_action_call and not new_actions)
