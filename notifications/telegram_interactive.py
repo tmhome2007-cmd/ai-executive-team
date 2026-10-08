@@ -228,7 +228,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("Unauthorized.", show_alert=True)
         except Exception:
             pass
-        logger.warning(f"Blocked Telegram callback from unauthorized chat_id: {sender_chat_id}")
+        logger.warning("Blocked unauthorized Telegram callback; sender identifiers suppressed.")
         return
 
     try:
