@@ -24,6 +24,8 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
     root = Path(workspace_root).resolve(strict=True)
     if not root.is_dir() or root.is_symlink():
         raise ContainerExecutionError("Invalid workspace directory")
+    if not hasattr(os, "getuid") or os.getuid() == 0:
+        raise ContainerExecutionError("Requires non-root Unix host identity")
     docker = shutil.which("docker")
     if not docker:
         raise ContainerExecutionError("Docker unavailable: fail closed")
@@ -32,7 +34,7 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
         "--network=none", "--read-only",
         "--cap-drop=ALL", "--security-opt=no-new-privileges",
         "--pids-limit=64", "--memory=256m", "--cpus=1",
-        "--user=65534:65534",
+        f"--user={os.getuid()}:{os.getgid()}",
         "--mount", f"type=bind,source={root},target=/workspace",
         "--workdir=/workspace",
         "--tmpfs=/tmp:rw,noexec,nosuid,size=16m",
