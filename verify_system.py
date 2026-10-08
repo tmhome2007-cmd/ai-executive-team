@@ -3889,7 +3889,11 @@ try:
         empty_lineage_111,
         today=_dt_111.date(2026, 10, 8),
     )
-    types_111 = {item["event_type"] for item in first_111}
+    non_overdue_111 = _classify_111(
+        {**goal_111, "target_date": None},
+        empty_lineage_111,
+        today=_dt_111.date(2026, 10, 8),
+    )
 
     decision_111 = {
         "id": 10,
@@ -3918,14 +3922,18 @@ try:
     )
 
     if (
-        {"strategy_review", "overdue_goal_review"}.issubset(types_111)
+        len(first_111) == 1
+        and first_111[0]["event_type"] == "overdue_goal_review"
+        and first_111[0]["meeting_required"] is True
+        and len(non_overdue_111) == 1
+        and non_overdue_111[0]["event_type"] == "strategy_review"
         and any(
             item["event_type"] == "adverse_outcome_review"
             and item["meeting_required"] is True
             for item in second_111
         )
     ):
-        log_pass("autonomous follow-up classification is deterministic and escalates strategy/adverse/overdue states")
+        log_pass("autonomous follow-up classification is deterministic and avoids duplicate strategy meetings")
     else:
         log_fail(
             "Autonomous follow-up classification",
