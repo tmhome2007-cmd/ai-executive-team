@@ -3815,6 +3815,62 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 110: DYNAMIC/STATIC CHECK — preparation browser URLs must be evidence-grounded
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_110
+    from memory.database import (
+        init_db as _init_db_110,
+        action_provenance_scope as _scope_110,
+        browser_url_allowed_by_provenance as _url_allowed_110,
+    )
+
+    original_db_110 = _verify_config_110.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_110.DATABASE_PATH = os.path.join(temp_dir, "browser-url-grounding.db")
+            _init_db_110()
+
+            outside_scope_allowed = _url_allowed_110("https://manual-owner-reviewed.example")
+            with _scope_110(
+                1,
+                "decision-sync-test",
+                "preparation",
+                allowed_browser_urls={"https://example.com/supplied"},
+            ):
+                supplied_allowed = _url_allowed_110("https://example.com/supplied")
+                invented_blocked = not _url_allowed_110("https://goal-system-integration.com")
+    finally:
+        _verify_config_110.DATABASE_PATH = original_db_110
+
+    with open("tools/browser_action_tool.py", "r", encoding="utf-8") as f:
+        browser_tool_content_110 = f.read()
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_110 = f.read()
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_110 = f.read()
+
+    static_ok = all([
+        "browser_url_allowed_by_provenance(url)" in browser_tool_content_110,
+        "Browser action proposal rejected: this URL was not present" in browser_tool_content_110,
+        "Never invent a domain or URL" in main_content_110,
+        "allowed_browser_urls" in main_content_110,
+        'provenance_context.get("allowed_browser_urls", [])' in meeting_content_110,
+    ])
+
+    if outside_scope_allowed and supplied_allowed and invented_blocked and static_ok:
+        log_pass("preparation browser proposals allow supplied URLs but reject invented domains before DB proposal creation")
+    else:
+        log_fail(
+            "Preparation browser URL grounding",
+            f"outside_scope_allowed={outside_scope_allowed}, supplied_allowed={supplied_allowed}, "
+            f"invented_blocked={invented_blocked}, static_ok={static_ok}",
+        )
+except Exception as e:
+    log_fail("Preparation browser URL grounding check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
