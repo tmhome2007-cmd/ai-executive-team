@@ -17,18 +17,21 @@
 - Dashboard explicit-any ESLint errors repaired.
 - Timed-out Docker worker attempts forced removal by unique name.
 - The bind-mount preflight rejects socket/device/FIFO entries and aborts if traversal fails or exceeds a fixed limit. This mitigates accidentally exposing host Unix sockets in the workspace but is not race-free if untrusted processes can change the workspace concurrently.
-- Timed-out action outcomes now become **inconclusive**, with mandatory manual reconciliation before any retry; the explicit regression check has been added to the system verifier.
+- Timed-out action outcomes now become **inconclusive**, with mandatory manual reconciliation before any retry; the system verifier previously passed **150/150** on this protection.
+- Two-worker SQLite approval-claim concurrency test added.
+- Persistent step claim ledger and crash reconciliation primitive added and initialized at backend startup; it is not yet integrated with every workflow step.
+- GitHub Actions use pinned immutable SHAs, verified against upstream release-tag commit references.
 
 ## Open release blockers
 1. **HIGH — unresolved npm dev-tooling advisory.** Production dependency audit (`npm audit --omit=dev --audit-level=high`) passes on workflow 37812997279, but the full development-tooling audit fails. The one-time updater committed Next.js and eslint-config-next 16.3.8 plus a regenerated lockfile; that updater passed lint/build and reduced npm audit from one critical/eight high to five high. Remaining findings are in the `eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces` development tooling chain. The upstream `braces` advisory has no patched release. Do not blindly downgrade eslint-config-next to v14 or report the audit clean. Recheck production-only vs development dependency exposure and document any risk acceptance.
 2. **HIGH — vulnerable ChromaDB transitive dependency.** pip-audit reports five advisories against chromadb 1.5.9 installed via CrewAI. Investigate compatible updates/constraints without bypassing CrewAI compatibility. A lockfile/constraints mechanism is recommended.
 3. **MEDIUM — dynamic SQL Bandit B608 warnings.** Current 21 findings include parameterized placeholders and code-generated column lists; validate each dynamic identifier against fixed whitelists. Suppress only individually justified false positives, never blanket-skip B608.
-4. **Workflow persistence.** No integrated per-step transactional checkpointing and exactly-once effect recovery has been demonstrated. Approved side effects must not be replayed after process crashes.
+4. **Workflow persistence.** A transactional step checkpoint ledger now exists and is initialized/reconciled on startup, but existing long-running agent workflows have not been migrated to use per-step keys, stable result identifiers, and explicit recovery decisions. Exactly-once external effects cannot be guaranteed by local SQLite alone; use provider idempotency keys and manual reconciliation.
 5. **Docker runtime limitations.** Docker daemon trust, mutable image tags, workspace writable mount, process cleanup failure, host-level process ownership and malicious code inside workspace remain concerns. Pin image digest, use a dedicated worker host/VM and restrict Docker daemon access. Test with a real installed Docker runtime prior to live use.
 6. **Privacy.** Long-lived SQLite, backups, sync history and audit data are not encrypted at rest at the application layer. Add retention configuration, full-disk encryption guidance and opt-in encrypted exports.
 7. **External transports.** Remote LLM and Telegram opt-ins transmit context to external services. Maintain disabled-by-default and verify logs contain no sensitive data.
 8. **End-to-end testing.** Exercise decision -> owner approval -> preparation -> execution -> failure -> restart -> idempotent resume, plus tampered imports, adversarial URLs, symlinks, and concurrent approval requests on a disposable machine.
-9. **GitHub Actions supply chain.** Existing third-party actions are referenced by mutable major tags; consider full-commit SHA pinning.
+9. **GitHub Actions supply chain.** Security workflow actions are pinned to inspected upstream commit SHAs. Continue rotating these through reviewed dependency update PRs.
 
 ## Gate criteria
 - GitHub Actions: compilation, verification, isolated-executor unit tests, Bandit, pip-audit, npm ci/lint/build/audit all green.
