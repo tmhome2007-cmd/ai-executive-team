@@ -34,7 +34,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_*.py' -v
 
       - name: Pre-pull verified worker image for live isolation tests
-        run: docker pull alpine:3.20
+        run: docker pull alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 
       - name: Test live Docker worker network and filesystem boundary
         env:
