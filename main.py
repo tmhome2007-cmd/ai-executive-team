@@ -16,6 +16,7 @@ from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException, Query, Depends, Header, Request
 import hmac
 import time
+import threading
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 import os
@@ -411,8 +412,10 @@ class PreparationResponse(BaseModel):
 # kon iemand onbeperkt X-API-Key waarden proberen — vooral relevant nu de
 # server ook bereikbaar kan zijn vanaf hetzelfde netwerk (zie BIND_HOST).
 _failed_auth_attempts: dict[str, list[float]] = {}
+_auth_attempts_lock = threading.Lock()
 _MAX_FAILED_ATTEMPTS = 5
 _LOCKOUT_WINDOW_SECONDS = 300  # 5 minuten
+_MAX_TRACKED_AUTH_CLIENTS = 1000
 
 
 def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
@@ -432,27 +435,52 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
 
-    attempts = [t for t in _failed_auth_attempts.get(client_ip, []) if now - t < _LOCKOUT_WINDOW_SECONDS]
-
-    if len(attempts) >= _MAX_FAILED_ATTEMPTS:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many failed authentication attempts. Try again later.",
-        )
-
     server_key = config.API_SECRET_KEY
-    is_valid = bool(server_key) and x_api_key is not None and hmac.compare_digest(x_api_key, server_key)
+    is_valid = (
+        bool(server_key)
+        and x_api_key is not None
+        and hmac.compare_digest(x_api_key, server_key)
+    )
 
-    if not is_valid:
-        attempts.append(now)
-        _failed_auth_attempts[client_ip] = attempts
-        raise HTTPException(
-            status_code=401,
-            detail="Missing or invalid API key",
-        )
+    with _auth_attempts_lock:
+        # Prune expired entries globally so spoofed/many client addresses cannot
+        # grow this process-local protection map forever.
+        for tracked_ip in list(_failed_auth_attempts):
+            recent = [
+                t for t in _failed_auth_attempts[tracked_ip]
+                if now - t < _LOCKOUT_WINDOW_SECONDS
+            ]
+            if recent:
+                _failed_auth_attempts[tracked_ip] = recent
+            else:
+                _failed_auth_attempts.pop(tracked_ip, None)
 
-    # Succesvolle poging: reset de teller voor dit IP.
-    _failed_auth_attempts.pop(client_ip, None)
+        attempts = list(_failed_auth_attempts.get(client_ip, []))
+        if len(attempts) >= _MAX_FAILED_ATTEMPTS:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many failed authentication attempts. Try again later.",
+            )
+
+        if not is_valid:
+            if (
+                client_ip not in _failed_auth_attempts
+                and len(_failed_auth_attempts) >= _MAX_TRACKED_AUTH_CLIENTS
+            ):
+                oldest_ip = min(
+                    _failed_auth_attempts,
+                    key=lambda ip: _failed_auth_attempts[ip][-1],
+                )
+                _failed_auth_attempts.pop(oldest_ip, None)
+            attempts.append(now)
+            _failed_auth_attempts[client_ip] = attempts
+            raise HTTPException(
+                status_code=401,
+                detail="Missing or invalid API key",
+            )
+
+        # Succesvolle poging: reset de teller voor dit IP.
+        _failed_auth_attempts.pop(client_ip, None)
     return True
 
 
@@ -1778,18 +1806,18 @@ def get_stats():
 
 
 class OutcomeUpdateRequest(BaseModel):
-    expected_outcome: Optional[str] = None
-    expected_impact: Optional[str] = None
+    expected_outcome: Optional[str] = Field(default=None, max_length=4000)
+    expected_impact: Optional[str] = Field(default=None, max_length=4000)
     expected_cost_amount: Optional[float] = Field(default=None, ge=0)
     currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     outcome_status: Optional[
         Literal["succeeded", "failed", "partial", "inconclusive"]
     ] = None
-    actual_outcome: Optional[str] = None
-    actual_impact: Optional[str] = None
+    actual_outcome: Optional[str] = Field(default=None, max_length=4000)
+    actual_impact: Optional[str] = Field(default=None, max_length=4000)
     actual_cost_amount: Optional[float] = Field(default=None, ge=0)
-    next_recommendation: Optional[str] = None
-    notes: Optional[str] = None
+    next_recommendation: Optional[str] = Field(default=None, max_length=4000)
+    notes: Optional[str] = Field(default=None, max_length=8000)
 
 
 class SandboxModeRequest(BaseModel):
