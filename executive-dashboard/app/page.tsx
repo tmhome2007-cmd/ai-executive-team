@@ -8,6 +8,7 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").r
 
 interface DecisionHistoryItem {
   id: number;
+  meeting_type?: string;
   timestamp: string;
   topic: string;
   agents_involved: string;
@@ -27,6 +28,15 @@ interface DecisionHistoryItem {
   goal_status?: string | null;
 }
 
+interface MeetingTypeProfile {
+  label: string;
+  default_agents: string[];
+  required_agents: string[];
+  evidence_focus: string;
+  output_contract: string;
+  approval_posture: string;
+}
+
 interface DailyResearchStatus {
   last_run_time: string | null;
   success: boolean | null;
@@ -37,6 +47,7 @@ interface DailyResearchStatus {
 interface DecisionResponse {
   database_id: number;
   topic: string;
+  meeting_type: string;
   goal_id?: number | null;
   final_decision: string;
   participants: string[];
@@ -1036,6 +1047,22 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchMeetingTypes = useCallback(async (currentKey: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/meeting-types`, {
+        headers: { "X-API-Key": currentKey },
+      });
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!res.ok) throw new Error("Could not fetch meeting types.");
+      setMeetingTypes(await res.json());
+    } catch (err: any) {
+      setLoadError(err.message || "Could not fetch meeting types.");
+    }
+  }, [handleAuthFailure]);
+
   const fetchDashboardData = useCallback(async () => {
     try {
       const [statusRes, historyRes] = await Promise.all([
@@ -1071,8 +1098,9 @@ export default function DashboardPage() {
       fetchGoals(apiKey);
       fetchFollowups(apiKey);
       fetchExecutiveMemories(apiKey, memoryExecutive);
+      fetchMeetingTypes(apiKey);
     }
-  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury, fetchGoals, fetchFollowups, fetchExecutiveMemories, memoryExecutive]);
+  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury, fetchGoals, fetchFollowups, fetchExecutiveMemories, fetchMeetingTypes, memoryExecutive]);
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
     if (type === "approve") {
@@ -1380,8 +1408,10 @@ export default function DashboardPage() {
   // --- Ad-hoc decision form state ---
   const [topic, setTopic] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
-  const [selectedAgents, setSelectedAgents] = useState<string[]>(["cfo", "ceo"]);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>(["cso", "cfo", "ceo"]);
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
+  const [selectedMeetingType, setSelectedMeetingType] = useState("strategy");
+  const [meetingTypes, setMeetingTypes] = useState<Record<string, MeetingTypeProfile>>({});
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DecisionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1418,6 +1448,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           topic,
           task_description: taskDescription,
+          meeting_type: selectedMeetingType,
           agent_keys: selectedAgents,
           goal_id: selectedGoalId ? Number(selectedGoalId) : null,
         }),
@@ -2389,7 +2420,7 @@ export default function DashboardPage() {
                 >
                   <div className="flex justify-between items-start gap-3">
                     <div>
-                      <h3 className="text-blue-400 font-bold text-lg">{item.topic}</h3>
+                      <h3 className="text-blue-400 font-bold text-lg">{item.topic}</h3>{item.meeting_type && <span className="text-xs text-purple-300 uppercase">{item.meeting_type.replaceAll("_", " ")}</span>}
                       <div className="flex gap-2 mt-2 text-xs">
                         <span className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5">
                           Decision: {approval}
