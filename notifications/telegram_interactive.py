@@ -33,7 +33,11 @@ if str(project_root) not in sys.path:
 
 from config import config
 from notifications.telegram_bot import send_notification_with_keyboard, escape_html
-from memory.database import get_action_by_id, transition_action_status
+from memory.database import (
+    get_action_by_id,
+    approve_action_with_treasury,
+    reject_action_with_treasury,
+)
 from workflows.action_executor import execute_action
 from logging_config import get_logger
 
@@ -176,10 +180,15 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         if current_status != "pending":
             await query.answer(f"Already '{current_status}' — cannot approve again.", show_alert=True)
             return
-        if not transition_action_status(action_id, "approved", ("pending",)):
+        try:
+            approval = approve_action_with_treasury(action_id)
+        except ValueError as exc:
             refreshed = get_action_by_id(action_id)
             current = refreshed["status"] if refreshed else "unknown"
-            await query.answer(f"Status changed to '{current}' before approval.", show_alert=True)
+            await query.answer(
+                f"Approval blocked: {str(exc)[:160]} (status: {current})",
+                show_alert=True,
+            )
             return
         await query.answer("Approved ✅")
         action["status"] = "approved"
@@ -191,10 +200,15 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         if current_status not in ("pending", "approved"):
             await query.answer(f"Already '{current_status}' — cannot reject now.", show_alert=True)
             return
-        if not transition_action_status(action_id, "rejected", ("pending", "approved")):
+        try:
+            reject_action_with_treasury(action_id)
+        except ValueError as exc:
             refreshed = get_action_by_id(action_id)
             current = refreshed["status"] if refreshed else "unknown"
-            await query.answer(f"Status changed to '{current}' before rejection.", show_alert=True)
+            await query.answer(
+                f"Rejection blocked: {str(exc)[:160]} (status: {current})",
+                show_alert=True,
+            )
             return
         await query.answer("Rejected ❌")
         action["status"] = "rejected"
