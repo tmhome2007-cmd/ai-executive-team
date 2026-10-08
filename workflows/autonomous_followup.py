@@ -56,36 +56,54 @@ def classify_goal_followups(
     decisions = lineage.get("decisions", [])
 
     target_date = goal.get("target_date")
+    is_overdue = False
     if target_date:
         target = datetime.date.fromisoformat(target_date)
-        if target < today:
+        is_overdue = target < today
+
+    if not decisions:
+        if is_overdue:
             candidates.append({
                 "event_type": "overdue_goal_review",
                 "severity": "critical",
                 "reason": (
-                    f"Active goal '{goal['title']}' passed its target date "
-                    f"({target_date}) and needs an evidence-based strategy review."
+                    f"Active goal '{goal['title']}' has no linked executive decision "
+                    f"and passed its target date ({target_date}). One tool-free strategy "
+                    "review is required before any preparation."
                 ),
-                "fingerprint": f"goal:{goal_sync}:overdue:{target_date}",
+                "fingerprint": f"goal:{goal_sync}:overdue-no-strategy:{target_date}",
                 "meeting_required": True,
-                "source_decision_id": decisions[-1]["decision"]["id"] if decisions else None,
+                "source_decision_id": None,
                 "source_action_id": None,
             })
+        else:
+            candidates.append({
+                "event_type": "strategy_review",
+                "severity": "attention",
+                "reason": (
+                    f"Active goal '{goal['title']}' has no linked executive decision yet. "
+                    "A tool-free strategy review is required before any preparation."
+                ),
+                "fingerprint": f"goal:{goal_sync}:strategy-review:v1",
+                "meeting_required": True,
+                "source_decision_id": None,
+                "source_action_id": None,
+            })
+        return candidates
 
-    if not decisions:
+    if is_overdue:
         candidates.append({
-            "event_type": "strategy_review",
-            "severity": "attention",
+            "event_type": "overdue_goal_review",
+            "severity": "critical",
             "reason": (
-                f"Active goal '{goal['title']}' has no linked executive decision yet. "
-                "A tool-free strategy review is required before any preparation."
+                f"Active goal '{goal['title']}' passed its target date "
+                f"({target_date}) and needs an evidence-based strategy review."
             ),
-            "fingerprint": f"goal:{goal_sync}:strategy-review:v1",
+            "fingerprint": f"goal:{goal_sync}:overdue:{target_date}",
             "meeting_required": True,
-            "source_decision_id": None,
+            "source_decision_id": decisions[-1]["decision"]["id"],
             "source_action_id": None,
         })
-        return candidates
 
     # Owner-facing unresolved gates are surfaced without generating extra
     # strategy meetings. The owner already has a concrete item to review.
