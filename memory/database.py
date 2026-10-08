@@ -21,6 +21,7 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from config import config
+from workflows.meeting_types import VALID_MEETING_TYPES
 
 
 VALID_ACTION_STATUSES = {
@@ -35,10 +36,6 @@ VALID_ACTION_STATUSES = {
 }
 VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
 VALID_DECISION_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
-VALID_MEETING_TYPES = {
-    "strategy", "operating_review", "incident",
-    "capital_allocation", "retrospective", "planning",
-}
 VALID_PREPARATION_STATUSES = {"not_started", "in_progress", "completed", "failed"}
 VALID_RESOURCE_REQUEST_STATUSES = {"pending", "approved", "rejected", "fulfilled"}
 VALID_RESOURCE_TYPES = {
