@@ -40,6 +40,8 @@ VALID_RESOURCE_REQUEST_STATUSES = {"pending", "approved", "rejected", "fulfilled
 VALID_RESOURCE_TYPES = {
     "access", "credential", "plugin", "data", "budget", "service", "hardware", "other"
 }
+VALID_TREASURY_ENTRY_TYPES = {"funding", "spend", "refund"}
+VALID_TREASURY_RESERVATION_STATUSES = {"active", "released", "consumed"}
 _ACTION_PROVENANCE_LOCK = threading.RLock()
 _ACTION_PROVENANCE_CONTEXT: dict | None = None
 
@@ -98,6 +100,15 @@ _SYNC_TABLE_COLUMNS = {
         "reason", "required_for", "amount", "currency", "status",
         "reviewed_at", "fulfilled_at", "fulfillment_note",
         "source_decision_sync_uuid", "source_phase", "sync_uuid",
+    },
+    "treasury_entries": {
+        "timestamp", "entry_type", "amount", "currency", "note",
+        "source_action_sync_uuid", "source_decision_sync_uuid", "sync_uuid",
+    },
+    "treasury_reservations": {
+        "timestamp", "amount", "currency", "status", "released_at",
+        "consumed_at", "source_action_sync_uuid", "source_decision_sync_uuid",
+        "sync_uuid",
     },
 }
 
@@ -309,6 +320,43 @@ def init_db() -> None:
             source_decision_id INTEGER,
             source_decision_sync_uuid TEXT,
             source_phase TEXT,
+            sync_uuid TEXT NOT NULL UNIQUE
+        )
+    """)
+    conn.commit()
+
+    # Tabel 6: immutable-ish treasury ledger. Positive amounts are stored;
+    # entry_type determines direction. Reservations live separately so
+    # earmarking money never masquerades as real spend.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS treasury_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            entry_type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT NOT NULL,
+            note TEXT,
+            source_action_id INTEGER,
+            source_action_sync_uuid TEXT,
+            source_decision_id INTEGER,
+            source_decision_sync_uuid TEXT,
+            sync_uuid TEXT NOT NULL UNIQUE
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS treasury_reservations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            released_at TEXT,
+            consumed_at TEXT,
+            source_action_id INTEGER UNIQUE,
+            source_action_sync_uuid TEXT UNIQUE,
+            source_decision_id INTEGER,
+            source_decision_sync_uuid TEXT,
             sync_uuid TEXT NOT NULL UNIQUE
         )
     """)
@@ -766,6 +814,472 @@ def transition_resource_request_status(
 
 
 # ===================================================================
+# COMPANY TREASURY / BUDGET
+# ===================================================================
+
+def _normalize_currency(currency: str) -> str:
+    value = (currency or "").strip().upper()
+    if len(value) != 3 or not value.isalpha():
+        raise ValueError("currency must be a 3-letter code such as EUR or USD")
+    return value
+
+
+def add_treasury_entry(
+    entry_type: str,
+    amount: float,
+    currency: str,
+    note: str | None = None,
+    *,
+    source_action_id: int | None = None,
+    source_action_sync_uuid: str | None = None,
+    source_decision_id: int | None = None,
+    source_decision_sync_uuid: str | None = None,
+) -> int:
+    if entry_type not in VALID_TREASURY_ENTRY_TYPES:
+        raise ValueError(f"Unsupported treasury entry type: {entry_type}")
+    if amount <= 0:
+        raise ValueError("Treasury amount must be greater than zero")
+    currency = _normalize_currency(currency)
+    if note:
+        _reject_secret_like_text(note)
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO treasury_entries (
+                timestamp, entry_type, amount, currency, note,
+                source_action_id, source_action_sync_uuid,
+                source_decision_id, source_decision_sync_uuid, sync_uuid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                datetime.datetime.now().isoformat(), entry_type, amount, currency, note,
+                source_action_id, source_action_sync_uuid,
+                source_decision_id, source_decision_sync_uuid, str(uuid.uuid4()),
+            ),
+        )
+        entry_id = cursor.lastrowid
+        conn.commit()
+        return entry_id
+
+
+def get_treasury_summary(currency: str | None = None) -> dict:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        params: tuple = ()
+        where = ""
+        if currency:
+            currency = _normalize_currency(currency)
+            where = "WHERE currency = ?"
+            params = (currency,)
+
+        cursor.execute(
+            f"""
+            SELECT currency,
+                   SUM(CASE
+                       WHEN entry_type IN ('funding', 'refund') THEN amount
+                       WHEN entry_type = 'spend' THEN -amount
+                       ELSE 0
+                   END) AS cash_balance
+            FROM treasury_entries
+            {where}
+            GROUP BY currency
+            """,
+            params,
+        )
+        balances = {row["currency"]: float(row["cash_balance"] or 0) for row in cursor.fetchall()}
+
+        reservation_where = (
+            "WHERE currency = ? AND status = 'active'"
+            if currency
+            else "WHERE status = 'active'"
+        )
+        cursor.execute(
+            f"""
+            SELECT currency, SUM(amount) AS reserved
+            FROM treasury_reservations
+            {reservation_where}
+            GROUP BY currency
+            """,
+            params,
+        )
+        reserved = {row["currency"]: float(row["reserved"] or 0) for row in cursor.fetchall()}
+
+        currencies = sorted(set(balances) | set(reserved))
+        by_currency = {}
+        for code in currencies:
+            cash = balances.get(code, 0.0)
+            held = reserved.get(code, 0.0)
+            by_currency[code] = {
+                "cash_balance": round(cash, 2),
+                "reserved": round(held, 2),
+                "available": round(cash - held, 2),
+            }
+
+        return {"currencies": by_currency}
+
+
+def get_treasury_history(limit: int = 50, offset: int = 0) -> list[dict]:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT e.*, d.topic AS source_decision_topic
+            FROM treasury_entries e
+            LEFT JOIN decisions d ON d.id = e.source_decision_id
+            ORDER BY e.timestamp DESC
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_treasury_reservation_for_action(action_id: int) -> dict | None:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM treasury_reservations WHERE source_action_id = ?",
+            (action_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def reserve_action_budget(action_id: int) -> dict | None:
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise ValueError("Action not found")
+    amount = action.get("expected_cost_amount")
+    currency = action.get("currency")
+    if amount is None or amount == 0:
+        return None
+    if amount < 0 or not currency:
+        raise ValueError("Paid actions require a non-negative expected cost and currency")
+    currency = _normalize_currency(currency)
+
+    existing = get_treasury_reservation_for_action(action_id)
+    if existing:
+        if existing["status"] == "active":
+            return existing
+        raise ValueError("Action already has a terminal treasury reservation")
+
+    summary = get_treasury_summary(currency)["currencies"].get(
+        currency,
+        {"cash_balance": 0.0, "reserved": 0.0, "available": 0.0},
+    )
+    if summary["available"] + 1e-9 < float(amount):
+        raise ValueError(
+            f"Insufficient available treasury funds: need {amount:.2f} {currency}, "
+            f"available {summary['available']:.2f} {currency}"
+        )
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO treasury_reservations (
+                timestamp, amount, currency, status,
+                source_action_id, source_action_sync_uuid,
+                source_decision_id, source_decision_sync_uuid, sync_uuid
+            ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+            """,
+            (
+                datetime.datetime.now().isoformat(), amount, currency,
+                action_id, action.get("sync_uuid"),
+                action.get("source_decision_id"), action.get("source_decision_sync_uuid"),
+                str(uuid.uuid4()),
+            ),
+        )
+        reservation_id = cursor.lastrowid
+        conn.commit()
+    return get_treasury_reservation_for_action(action_id)
+
+
+def approve_action_with_treasury(action_id: int) -> dict:
+    """
+    Atomically approves a pending action and, when an expected monetary cost
+    exists, reserves that amount from the matching currency treasury.
+    """
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute(
+            """
+            SELECT q.id, q.status, q.sync_uuid, q.source_decision_id,
+                   q.source_decision_sync_uuid,
+                   o.expected_cost_amount, o.currency
+            FROM action_queue q
+            LEFT JOIN action_outcomes o ON o.action_id = q.id
+            WHERE q.id = ?
+            """,
+            (action_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            conn.rollback()
+            raise ValueError("Action not found")
+        action = dict(row)
+        if action["status"] != "pending":
+            conn.rollback()
+            raise ValueError(f"Action cannot be approved from status '{action['status']}'")
+
+        amount = action.get("expected_cost_amount")
+        currency = action.get("currency")
+        reservation_id = None
+
+        if amount is not None and float(amount) > 0:
+            if not currency:
+                conn.rollback()
+                raise ValueError("Paid actions require currency before approval")
+            currency = _normalize_currency(currency)
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN entry_type IN ('funding', 'refund') THEN amount
+                        WHEN entry_type = 'spend' THEN -amount
+                        ELSE 0
+                    END
+                ), 0) AS cash_balance
+                FROM treasury_entries
+                WHERE currency = ?
+                """,
+                (currency,),
+            )
+            cash = float(cursor.fetchone()["cash_balance"] or 0)
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(amount), 0) AS reserved
+                FROM treasury_reservations
+                WHERE currency = ? AND status = 'active'
+                """,
+                (currency,),
+            )
+            reserved = float(cursor.fetchone()["reserved"] or 0)
+            available = cash - reserved
+            if available + 1e-9 < float(amount):
+                conn.rollback()
+                raise ValueError(
+                    f"Insufficient available treasury funds: need {float(amount):.2f} {currency}, "
+                    f"available {available:.2f} {currency}"
+                )
+
+            cursor.execute(
+                """
+                INSERT INTO treasury_reservations (
+                    timestamp, amount, currency, status,
+                    source_action_id, source_action_sync_uuid,
+                    source_decision_id, source_decision_sync_uuid, sync_uuid
+                ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+                """,
+                (
+                    now, float(amount), currency,
+                    action_id, action.get("sync_uuid"),
+                    action.get("source_decision_id"),
+                    action.get("source_decision_sync_uuid"),
+                    str(uuid.uuid4()),
+                ),
+            )
+            reservation_id = cursor.lastrowid
+
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'approved', reviewed_at = ?
+            WHERE id = ? AND status = 'pending'
+            """,
+            (now, action_id),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            raise ValueError("Action approval race detected")
+
+        conn.commit()
+        return {
+            "action_id": action_id,
+            "status": "approved",
+            "reservation_id": reservation_id,
+            "reserved_amount": float(amount) if reservation_id else 0.0,
+            "currency": currency if reservation_id else None,
+        }
+
+
+def reject_action_with_treasury(action_id: int) -> dict:
+    """Atomically rejects an action and releases any active reservation."""
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute("SELECT status FROM action_queue WHERE id = ?", (action_id,))
+        row = cursor.fetchone()
+        if row is None:
+            conn.rollback()
+            raise ValueError("Action not found")
+        if row["status"] not in {"pending", "approved"}:
+            conn.rollback()
+            raise ValueError(f"Action cannot be rejected from status '{row['status']}'")
+
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'rejected', reviewed_at = ?
+            WHERE id = ? AND status IN ('pending', 'approved')
+            """,
+            (now, action_id),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            raise ValueError("Action rejection race detected")
+
+        cursor.execute(
+            """
+            UPDATE treasury_reservations
+            SET status = 'released', released_at = ?
+            WHERE source_action_id = ? AND status = 'active'
+            """,
+            (now, action_id),
+        )
+        released = cursor.rowcount == 1
+        conn.commit()
+        return {"action_id": action_id, "status": "rejected", "reservation_released": released}
+
+
+def release_action_budget(action_id: int) -> bool:
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE treasury_reservations
+            SET status = 'released', released_at = ?
+            WHERE source_action_id = ? AND status = 'active'
+            """,
+            (now, action_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def record_action_spend(action_id: int, amount: float, currency: str, note: str | None = None) -> dict:
+    if amount < 0:
+        raise ValueError("actual spend cannot be negative")
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise ValueError("Action not found")
+    currency = _normalize_currency(currency)
+
+    reservation = get_treasury_reservation_for_action(action_id)
+    reserved_amount = 0.0
+    if reservation and reservation["status"] == "active":
+        if reservation["currency"] != currency:
+            raise ValueError("Actual spend currency must match the reserved currency")
+        reserved_amount = float(reservation["amount"])
+
+    already_spent = 0.0
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total
+            FROM treasury_entries
+            WHERE source_action_id = ? AND entry_type = 'spend'
+            """,
+            (action_id,),
+        )
+        already_spent = float(cursor.fetchone()["total"] or 0)
+
+    if already_spent > 0:
+        raise ValueError("Spend has already been recorded for this action")
+
+    summary = get_treasury_summary(currency)["currencies"].get(
+        currency,
+        {"cash_balance": 0.0, "reserved": 0.0, "available": 0.0},
+    )
+    extra_needed = max(0.0, float(amount) - reserved_amount)
+    if summary["available"] + 1e-9 < extra_needed:
+        raise ValueError(
+            f"Actual spend exceeds treasury capacity: extra {extra_needed:.2f} {currency} "
+            f"needed, available {summary['available']:.2f} {currency}"
+        )
+
+    entry_id = None
+    if float(amount) > 0:
+        entry_id = add_treasury_entry(
+            "spend",
+            float(amount),
+            currency,
+            note or f"Actual cost for action #{action_id}",
+            source_action_id=action_id,
+            source_action_sync_uuid=action.get("sync_uuid"),
+            source_decision_id=action.get("source_decision_id"),
+            source_decision_sync_uuid=action.get("source_decision_sync_uuid"),
+        )
+
+    now = datetime.datetime.now().isoformat()
+    if reservation and reservation["status"] == "active":
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            if float(amount) > 0:
+                cursor.execute(
+                    """
+                    UPDATE treasury_reservations
+                    SET status = 'consumed', consumed_at = ?
+                    WHERE source_action_id = ? AND status = 'active'
+                    """,
+                    (now, action_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE treasury_reservations
+                    SET status = 'released', released_at = ?
+                    WHERE source_action_id = ? AND status = 'active'
+                    """,
+                    (now, action_id),
+                )
+            conn.commit()
+
+    return {
+        "entry_id": entry_id,
+        "action_id": action_id,
+        "amount": float(amount),
+        "currency": currency,
+        "reservation_consumed": bool(reservation and reservation["status"] == "active"),
+    }
+
+
+def get_treasury_for_decision(decision_id: int) -> dict:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT *
+            FROM treasury_entries
+            WHERE source_decision_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (decision_id,),
+        )
+        entries = [dict(row) for row in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT *
+            FROM treasury_reservations
+            WHERE source_decision_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (decision_id,),
+        )
+        reservations = [dict(row) for row in cursor.fetchall()]
+        return {"entries": entries, "reservations": reservations}
+
+
+# ===================================================================
 # FUNCTIES VOOR ACTIEVOORSTELLEN (ACTION QUEUE)
 # ===================================================================
 
@@ -1068,6 +1582,197 @@ def update_action_outcome(
     return get_action_outcome(action_id)
 
 
+def update_action_outcome_with_treasury(
+    action_id: int,
+    *,
+    expected_outcome: str | None = None,
+    expected_impact: str | None = None,
+    expected_cost_amount: float | None = None,
+    currency: str | None = None,
+    outcome_status: str | None = None,
+    actual_outcome: str | None = None,
+    actual_impact: str | None = None,
+    actual_cost_amount: float | None = None,
+    next_recommendation: str | None = None,
+    notes: str | None = None,
+) -> dict | None:
+    """
+    Transactional outcome update. When actual_cost_amount is supplied, the
+    treasury spend and reservation consumption happen in the SAME SQLite
+    transaction as the outcome update.
+    """
+    if outcome_status is not None and outcome_status not in VALID_OUTCOME_STATUSES:
+        raise ValueError(f"Unsupported outcome status: {outcome_status}")
+    if expected_cost_amount is not None and expected_cost_amount < 0:
+        raise ValueError("expected_cost_amount cannot be negative")
+    if actual_cost_amount is not None and actual_cost_amount < 0:
+        raise ValueError("actual_cost_amount cannot be negative")
+    normalized_currency = _normalize_currency(currency) if currency is not None else None
+
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute(
+            """
+            SELECT q.id, q.status, q.sync_uuid, q.source_decision_id,
+                   q.source_decision_sync_uuid,
+                   o.currency AS existing_currency, o.actual_cost_amount
+            FROM action_queue q
+            JOIN action_outcomes o ON o.action_id = q.id
+            WHERE q.id = ?
+            """,
+            (action_id,),
+        )
+        action_row = cursor.fetchone()
+        if action_row is None:
+            conn.rollback()
+            return None
+        action = dict(action_row)
+
+        effective_currency = normalized_currency or action.get("existing_currency")
+        if (expected_cost_amount is not None or actual_cost_amount is not None) and not effective_currency:
+            conn.rollback()
+            raise ValueError("currency is required when recording a monetary amount")
+        if effective_currency:
+            effective_currency = _normalize_currency(effective_currency)
+
+        fields = {
+            "expected_outcome": expected_outcome,
+            "expected_impact": expected_impact,
+            "expected_cost_amount": expected_cost_amount,
+            "currency": normalized_currency,
+            "outcome_status": outcome_status,
+            "actual_outcome": actual_outcome,
+            "actual_impact": actual_impact,
+            "actual_cost_amount": actual_cost_amount,
+            "next_recommendation": next_recommendation,
+            "notes": notes,
+        }
+        updates = {key: value for key, value in fields.items() if value is not None}
+
+        if actual_cost_amount is not None:
+            if action["actual_cost_amount"] is not None:
+                conn.rollback()
+                raise ValueError("Actual cost has already been recorded for this action")
+            if action["status"] not in {"executed", "execution_failed", "blocked_dangerous"}:
+                conn.rollback()
+                raise ValueError(
+                    "Actual cost can only be recorded after a live terminal execution state"
+                )
+
+            cursor.execute(
+                """
+                SELECT * FROM treasury_reservations
+                WHERE source_action_id = ?
+                """,
+                (action_id,),
+            )
+            reservation_row = cursor.fetchone()
+            reservation = dict(reservation_row) if reservation_row else None
+            reserved_amount = 0.0
+            if reservation and reservation["status"] == "active":
+                if reservation["currency"] != effective_currency:
+                    conn.rollback()
+                    raise ValueError("Actual spend currency must match the reserved currency")
+                reserved_amount = float(reservation["amount"])
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN entry_type IN ('funding', 'refund') THEN amount
+                        WHEN entry_type = 'spend' THEN -amount
+                        ELSE 0
+                    END
+                ), 0) AS cash_balance
+                FROM treasury_entries
+                WHERE currency = ?
+                """,
+                (effective_currency,),
+            )
+            cash = float(cursor.fetchone()["cash_balance"] or 0)
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(amount), 0) AS reserved
+                FROM treasury_reservations
+                WHERE currency = ? AND status = 'active'
+                """,
+                (effective_currency,),
+            )
+            total_reserved = float(cursor.fetchone()["reserved"] or 0)
+            available = cash - total_reserved
+            extra_needed = max(0.0, float(actual_cost_amount) - reserved_amount)
+            if available + 1e-9 < extra_needed:
+                conn.rollback()
+                raise ValueError(
+                    f"Actual spend exceeds treasury capacity: extra {extra_needed:.2f} "
+                    f"{effective_currency} needed, available {available:.2f} {effective_currency}"
+                )
+
+            if float(actual_cost_amount) > 0:
+                cursor.execute(
+                    """
+                    INSERT INTO treasury_entries (
+                        timestamp, entry_type, amount, currency, note,
+                        source_action_id, source_action_sync_uuid,
+                        source_decision_id, source_decision_sync_uuid, sync_uuid
+                    ) VALUES (?, 'spend', ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        now,
+                        float(actual_cost_amount),
+                        effective_currency,
+                        f"Actual cost for action #{action_id}",
+                        action_id,
+                        action.get("sync_uuid"),
+                        action.get("source_decision_id"),
+                        action.get("source_decision_sync_uuid"),
+                        str(uuid.uuid4()),
+                    ),
+                )
+
+            if reservation and reservation["status"] == "active":
+                if float(actual_cost_amount) > 0:
+                    cursor.execute(
+                        """
+                        UPDATE treasury_reservations
+                        SET status = 'consumed', consumed_at = ?
+                        WHERE source_action_id = ? AND status = 'active'
+                        """,
+                        (now, action_id),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        UPDATE treasury_reservations
+                        SET status = 'released', released_at = ?
+                        WHERE source_action_id = ? AND status = 'active'
+                        """,
+                        (now, action_id),
+                    )
+
+        if outcome_status in {"succeeded", "failed", "partial", "inconclusive"}:
+            updates["measured_at"] = now
+        updates["updated_at"] = now
+
+        if updates:
+            assignments = ", ".join(f"{key} = ?" for key in updates)
+            values = list(updates.values()) + [action_id]
+            cursor.execute(
+                f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",
+                values,
+            )
+            if cursor.rowcount != 1:
+                conn.rollback()
+                return None
+
+        conn.commit()
+
+    return get_action_outcome(action_id)
+
+
 def mark_action_outcome_measurement_pending(action_id: int) -> bool:
     """
     Na succesvolle LIVE execution begint pas de businessmeting. Dit zegt
@@ -1236,6 +1941,7 @@ def get_decision_lineage(decision_id: int) -> dict | None:
         "decision": decision,
         "actions": get_actions_for_decision(decision_id),
         "resource_requests": get_resource_requests_for_decision(decision_id),
+        "treasury": get_treasury_for_decision(decision_id),
     }
 
 
@@ -1348,6 +2054,20 @@ def export_history_to_jsonl(export_path: str) -> dict:
         """)
         resource_rows = [dict(row) for row in cursor.fetchall()]
 
+        cursor.execute("""
+            SELECT timestamp, entry_type, amount, currency, note,
+                   source_action_sync_uuid, source_decision_sync_uuid, sync_uuid
+            FROM treasury_entries
+        """)
+        treasury_entry_rows = [dict(row) for row in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT timestamp, amount, currency, status, released_at, consumed_at,
+                   source_action_sync_uuid, source_decision_sync_uuid, sync_uuid
+            FROM treasury_reservations
+        """)
+        treasury_reservation_rows = [dict(row) for row in cursor.fetchall()]
+
     with open(export_path, "w", encoding="utf-8") as f:
         for row in decision_rows:
             row["_table"] = "decisions"
@@ -1361,12 +2081,20 @@ def export_history_to_jsonl(export_path: str) -> dict:
         for row in resource_rows:
             row["_table"] = "resource_requests"
             f.write(json.dumps(row) + "\n")
+        for row in treasury_entry_rows:
+            row["_table"] = "treasury_entries"
+            f.write(json.dumps(row) + "\n")
+        for row in treasury_reservation_rows:
+            row["_table"] = "treasury_reservations"
+            f.write(json.dumps(row) + "\n")
 
     return {
         "decisions": len(decision_rows),
         "actions": len(action_rows),
         "outcomes": len(outcome_rows),
         "resource_requests": len(resource_rows),
+        "treasury_entries": len(treasury_entry_rows),
+        "treasury_reservations": len(treasury_reservation_rows),
     }
 
 
@@ -1385,6 +2113,8 @@ def import_history_from_jsonl(import_path: str) -> dict:
     imported_actions = 0
     imported_outcomes = 0
     imported_resource_requests = 0
+    imported_treasury_entries = 0
+    imported_treasury_reservations = 0
     skipped = 0
 
     with get_connection() as conn:
@@ -1435,6 +2165,12 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         "timestamp", "requested_by", "resource_type", "resource_name",
                         "reason", "status", "sync_uuid",
                     },
+                    "treasury_entries": {
+                        "timestamp", "entry_type", "amount", "currency", "sync_uuid",
+                    },
+                    "treasury_reservations": {
+                        "timestamp", "amount", "currency", "status", "sync_uuid",
+                    },
                 }[table]
 
                 if (
@@ -1484,6 +2220,38 @@ def import_history_from_jsonl(import_path: str) -> dict:
                             skipped += 1
                             continue
                         row["source_decision_id"] = source_decision["id"]
+                if table in {"treasury_entries", "treasury_reservations"}:
+                    if table == "treasury_entries" and row.get("entry_type") not in VALID_TREASURY_ENTRY_TYPES:
+                        skipped += 1
+                        continue
+                    if table == "treasury_reservations" and row.get("status") not in VALID_TREASURY_RESERVATION_STATUSES:
+                        skipped += 1
+                        continue
+
+                    action_sync_uuid = row.get("source_action_sync_uuid")
+                    if action_sync_uuid:
+                        cursor.execute(
+                            "SELECT id FROM action_queue WHERE sync_uuid = ?",
+                            (action_sync_uuid,),
+                        )
+                        action_row = cursor.fetchone()
+                        if not action_row:
+                            skipped += 1
+                            continue
+                        row["source_action_id"] = action_row["id"]
+
+                    decision_sync_uuid = row.get("source_decision_sync_uuid")
+                    if decision_sync_uuid:
+                        cursor.execute(
+                            "SELECT id FROM decisions WHERE sync_uuid = ?",
+                            (decision_sync_uuid,),
+                        )
+                        decision_row = cursor.fetchone()
+                        if not decision_row:
+                            skipped += 1
+                            continue
+                        row["source_decision_id"] = decision_row["id"]
+
                 if table == "action_outcomes":
                     if row.get("outcome_status") not in VALID_OUTCOME_STATUSES:
                         skipped += 1
@@ -1566,8 +2334,12 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     imported_actions += 1
                 elif table == "action_outcomes":
                     imported_outcomes += 1
-                else:
+                elif table == "resource_requests":
                     imported_resource_requests += 1
+                elif table == "treasury_entries":
+                    imported_treasury_entries += 1
+                else:
+                    imported_treasury_reservations += 1
 
         conn.commit()
 
@@ -1576,6 +2348,8 @@ def import_history_from_jsonl(import_path: str) -> dict:
         "actions_imported": imported_actions,
         "outcomes_imported": imported_outcomes,
         "resource_requests_imported": imported_resource_requests,
+        "treasury_entries_imported": imported_treasury_entries,
+        "treasury_reservations_imported": imported_treasury_reservations,
         "skipped_existing": skipped,
     }
 
