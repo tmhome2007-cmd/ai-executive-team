@@ -2530,6 +2530,71 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 87: DYNAMIC CHECK — provenance survives CrewAI-style cross-thread tool calls
+# -------------------------------------------------------------------
+try:
+    import threading as _threading_87
+    from config import config as _verify_config_87
+    from memory.database import (
+        init_db as _init_db_87,
+        log_decision as _log_decision_87,
+        get_decision_by_id as _get_decision_87,
+        action_provenance_scope as _scope_87,
+        propose_action as _propose_87,
+        get_action_by_id as _get_action_87,
+    )
+
+    original_db_87 = _verify_config_87.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_87.DATABASE_PATH = os.path.join(temp_dir, "cross-thread-provenance.db")
+            _init_db_87()
+            decision_id = _log_decision_87(
+                "Cross-thread provenance test", ["coo"], "Evidence", "Direction", True
+            )
+            decision = _get_decision_87(decision_id)
+            created_ids = []
+            thread_errors = []
+
+            def _tool_thread():
+                try:
+                    created_ids.append(
+                        _propose_87(
+                            "COO",
+                            "Cross-thread linked action",
+                            "echo threaded",
+                            "shell",
+                        )
+                    )
+                except Exception as exc:
+                    thread_errors.append(str(exc))
+
+            with _scope_87(decision_id, decision["sync_uuid"], "preparation"):
+                worker = _threading_87.Thread(target=_tool_thread)
+                worker.start()
+                worker.join()
+
+            action = _get_action_87(created_ids[0]) if created_ids else None
+            if (
+                not thread_errors
+                and action
+                and action["source_decision_id"] == decision_id
+                and action["source_decision_sync_uuid"] == decision["sync_uuid"]
+                and action["source_phase"] == "preparation"
+            ):
+                log_pass("provenance remains attached when a tool call runs in a different worker thread")
+            else:
+                log_fail(
+                    "Cross-thread provenance",
+                    f"errors={thread_errors}, created_ids={created_ids}, action={action}",
+                )
+    finally:
+        _verify_config_87.DATABASE_PATH = original_db_87
+except Exception as e:
+    log_fail("Cross-thread provenance check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
