@@ -82,7 +82,7 @@ class ContainerWorkerTests(unittest.TestCase):
 
     def test_mount_option_injection_path_rejected(self):
         with tempfile.TemporaryDirectory() as parent:
-            unsafe = Path(parent) / "workspace,target=/host"
+            unsafe = Path(parent) / "workspace,target=host"
             unsafe.mkdir()
             with patch("workflows.container_executor.subprocess.run") as invoked:
                 with self.assertRaises(ContainerExecutionError):
