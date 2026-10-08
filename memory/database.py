@@ -3905,6 +3905,10 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     """
     import datetime as _dt
 
+    if not isinstance(keep_last, int) or keep_last < 1:
+        raise ValueError("keep_last must be a positive integer; never delete all backups")
+    if os.path.islink(backup_dir):
+        raise ValueError("Backup directory must not be a symlink")
     os.makedirs(backup_dir, exist_ok=True)
     try:
         os.chmod(backup_dir, 0o700)
