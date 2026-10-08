@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.12"
           cache: pip
 
       - name: Install backend and audit tools
@@ -28,7 +28,7 @@ jobs:
 
       - name: Compile Python sources
         run: |
-          python -m compileall -q             agents config.py logging_config.py main.py memory notifications             system_checks.py tools workflows
+          python -m compileall -q agents config.py logging_config.py main.py memory notifications system_checks.py tools workflows privacy_bootstrap.py
 
       - name: Bandit medium/high findings
         run: bandit -r agents memory notifications tools workflows main.py config.py system_checks.py -ll
