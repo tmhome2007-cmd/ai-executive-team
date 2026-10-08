@@ -2037,8 +2037,12 @@ def approve_action_with_treasury(action_id: int) -> dict:
             """
             SELECT q.id, q.status, q.sync_uuid, q.source_decision_id,
                    q.source_decision_sync_uuid,
+                   d.goal_id AS source_goal_id,
+                   g.status AS source_goal_status,
                    o.expected_cost_amount, o.currency
             FROM action_queue q
+            LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.id = ?
             """,
@@ -2052,6 +2056,15 @@ def approve_action_with_treasury(action_id: int) -> dict:
         if action["status"] != "pending":
             conn.rollback()
             raise ValueError(f"Action cannot be approved from status '{action['status']}'")
+
+        source_goal_id = action.get("source_goal_id")
+        if source_goal_id is not None and action.get("source_goal_status") != "active":
+            conn.rollback()
+            current = action.get("source_goal_status") or "missing"
+            raise ValueError(
+                f"Linked company goal #{source_goal_id} must be active before action approval "
+                f"(currently '{current}')"
+            )
 
         amount = action.get("expected_cost_amount")
         currency = action.get("currency")
