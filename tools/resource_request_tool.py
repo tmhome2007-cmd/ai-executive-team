@@ -4,6 +4,9 @@ CrewAI tool for proposing structured resources/capabilities the team needs.
 This never grants access, stores secrets, or executes anything.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 from typing import Type, Literal
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
