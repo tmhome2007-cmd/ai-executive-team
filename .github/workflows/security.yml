@@ -34,6 +34,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_*.py' -v
 
       - name: System regression verification
+        if: ${{ always() }}
         env:
           API_SECRET_KEY: "ci-local-regression-placeholder-1234567890"
           TELEGRAM_BOT_TOKEN: ""
