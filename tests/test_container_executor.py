@@ -48,6 +48,23 @@ class ContainerWorkerTests(unittest.TestCase):
                 with self.assertRaises(ContainerExecutionError):
                     run_in_container("echo hello", root)
 
+    def test_timeout_forces_container_cleanup(self):
+        with tempfile.TemporaryDirectory() as root:
+            def execute(args, **kwargs):
+                if args[1] == "run":
+                    raise subprocess.TimeoutExpired(args, 30)
+                return subprocess.CompletedProcess(args, 0, "", "")
+            with patch("workflows.container_executor.shutil.which", return_value="/usr/bin/docker"), patch(
+                "workflows.container_executor.subprocess.run", side_effect=execute
+            ) as mocked:
+                with self.assertRaises(ContainerExecutionError):
+                    run_in_container("echo safe", root)
+                self.assertEqual(mocked.call_count, 2)
+                original_args = mocked.call_args_list[0].args[0]
+                cleanup_args = mocked.call_args_list[1].args[0]
+                self.assertEqual(cleanup_args[:3], ["/usr/bin/docker", "rm", "-f"])
+                self.assertEqual(cleanup_args[3], original_args[original_args.index("--name") + 1])
+
     def test_empty_command_rejected(self):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(ContainerExecutionError):
