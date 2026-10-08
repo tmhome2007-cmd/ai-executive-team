@@ -2381,7 +2381,11 @@ def export_history_to_jsonl(export_path: str) -> dict:
         """)
         goal_rows = [dict(row) for row in cursor.fetchall()]
 
-        cursor.execute("SELECT * FROM decisions")
+        cursor.execute("""
+            SELECT timestamp, topic, agents_involved, task_description,
+                   decision_outcome, sandbox_mode, sync_uuid, goal_sync_uuid
+            FROM decisions
+        """)
         decision_rows = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute("""
