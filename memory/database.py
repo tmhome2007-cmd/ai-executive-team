@@ -11,6 +11,7 @@ import datetime
 import sys
 import uuid
 import json
+import re
 import threading
 import hashlib
 import hmac
@@ -88,21 +89,35 @@ _SECRET_LIKE_PATTERNS = (
     "xoxp-",
     "AIza",
     "-----BEGIN PRIVATE KEY-----",
+    "-----BEGIN RSA PRIVATE KEY-----",
+    "-----BEGIN OPENSSH PRIVATE KEY-----",
     "password=",
     "api_key=",
+    "apikey=",
     "token=",
+    "secret=",
+)
+
+_SECRET_LIKE_REGEXES = (
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\bASIA[0-9A-Z]{16}\b"),
+    re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{20,}\b"),  # Telegram bot token shape
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),  # JWT
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b"),
 )
 
 
 def _reject_secret_like_text(*values: str | None) -> None:
     combined = "\n".join(value for value in values if value)
     lowered = combined.lower()
-    for pattern in _SECRET_LIKE_PATTERNS:
-        if pattern.lower() in lowered:
-            raise ValueError(
-                "Potential secret detected. Store credentials in the configured secret/plugin "
-                "system and record only a non-secret description here."
-            )
+    detected = any(pattern.lower() in lowered for pattern in _SECRET_LIKE_PATTERNS)
+    if not detected:
+        detected = any(regex.search(combined) for regex in _SECRET_LIKE_REGEXES)
+    if detected:
+        raise ValueError(
+            "Potential secret detected. Store credentials in the configured secret/plugin "
+            "system and record only a non-secret description here."
+        )
 
 
 def _sync_signing_key() -> bytes:
