@@ -32,10 +32,12 @@ from memory.database import (
     claim_action_for_execution,
     mark_action_outcome_measurement_pending,
     mark_action_outcome_execution_failed,
+    mark_action_outcome_execution_uncertain,
     VALID_ACTION_TYPES,
 )
 from notifications.telegram_bot import send_notification, escape_html
 from config import config
+from workflows.container_executor import ContainerTimeoutError
 
 # ------------------------------------------------------------------
 # WORKSPACE CONFINEMENT
@@ -1057,11 +1059,11 @@ def execute_action(action_id: int) -> dict:
                 "stderr": completed_process.stderr,
             }
 
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, ContainerTimeoutError):
         update_action_status(action_id, "execution_failed")
-        error_msg = "Command timed out after 30 seconds."
+        error_msg = "Command timed out; real-world side effects are uncertain. Manual review required."
         record_execution_result(action_id, json.dumps({"error": error_msg}))
-        mark_action_outcome_execution_failed(action_id, error_msg)
+        mark_action_outcome_execution_uncertain(action_id, error_msg)
 
         try:
             send_notification(
