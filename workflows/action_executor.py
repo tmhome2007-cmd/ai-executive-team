@@ -848,7 +848,19 @@ def execute_action(action_id: int) -> dict:
             "success": False,
             "error": f"Action status is '{status}', must be 'approved' to execute."
         }
-    if not claim_action_for_execution(action_id):
+    try:
+        claimed = claim_action_for_execution(action_id)
+    except ValueError as integrity_err:
+        current = get_action_by_id(action_id)
+        return {
+            "success": False,
+            "action_id": action_id,
+            "blocked": True,
+            "error": str(integrity_err),
+            "status": current.get("status") if current else "unknown",
+        }
+
+    if not claimed:
         current = get_action_by_id(action_id)
         current_status = current.get("status") if current else "unknown"
         return {
