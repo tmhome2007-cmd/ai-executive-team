@@ -995,6 +995,7 @@ def action_provenance_scope(
     decision_id: int,
     decision_sync_uuid: str,
     phase: str = "preparation",
+    allowed_browser_urls: set[str] | None = None,
 ):
     """
     Process-wide provenance scope for one serialized CrewAI execution.
@@ -1012,6 +1013,11 @@ def action_provenance_scope(
         "phase": phase,
         "created_action_ids": [],
         "created_resource_request_ids": [],
+        "allowed_browser_urls": {
+            str(url).strip()
+            for url in (allowed_browser_urls or set())
+            if str(url).strip()
+        },
     }
 
     with _ACTION_PROVENANCE_LOCK:
@@ -1034,6 +1040,22 @@ def _current_action_provenance() -> dict | None:
 # ===================================================================
 # STRUCTURED RESOURCE / CAPABILITY REQUESTS
 # ===================================================================
+
+def browser_url_allowed_by_provenance(url: str) -> bool:
+    """
+    Preparation browser actions may only target URLs explicitly supplied in
+    trusted preparation context. Independent/manual proposals without an
+    active provenance scope keep their existing human-review behavior.
+    """
+    provenance = _current_action_provenance()
+    if provenance is None:
+        return True
+    allowed = provenance.get("allowed_browser_urls")
+    if allowed is None:
+        return True
+    candidate = (url or "").strip()
+    return candidate in allowed
+
 
 def propose_resource_request(
     requested_by: str,
