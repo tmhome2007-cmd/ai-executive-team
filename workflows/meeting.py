@@ -293,6 +293,8 @@ def run_executive_meeting(
     # blijft hangen.
     MEETING_TIMEOUT_SECONDS = 600  # 10 minuten
 
+    provenance_created_action_ids: List[int] = []
+
     def _kickoff_under_execution_lock():
         # De worker zelf houdt de globale lock vast. Als de HTTP-aanroeper na
         # de timeout terugkeert terwijl CrewAI intern nog doorloopt, blijft de
@@ -304,8 +306,12 @@ def run_executive_meeting(
                     decision_id=int(provenance_context["decision_id"]),
                     decision_sync_uuid=str(provenance_context["decision_sync_uuid"]),
                     phase=str(provenance_context.get("phase", "preparation")),
-                ):
-                    return crew.kickoff()
+                ) as provenance_scope:
+                    result = crew.kickoff()
+                    provenance_created_action_ids.extend(
+                        provenance_scope.get("created_action_ids", [])
+                    )
+                    return result
             return crew.kickoff()
 
     executor = ThreadPoolExecutor(max_workers=1)
@@ -365,6 +371,7 @@ def run_executive_meeting(
             "individual_outputs": individual_quality_warnings,
             "repeated_analysis": repeated_analysis,
         },
+        "proposed_action_ids": provenance_created_action_ids,
     }
 
 
