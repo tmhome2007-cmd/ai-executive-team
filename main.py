@@ -58,6 +58,12 @@ from memory.database import (
     approve_action_with_treasury,
     reject_action_with_treasury,
     update_action_outcome_with_treasury,
+    create_company_goal,
+    get_company_goal,
+    get_company_goals,
+    update_company_goal,
+    transition_company_goal_status,
+    get_company_goal_lineage,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -252,15 +258,39 @@ class DecisionRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=200)
     task_description: str = Field(min_length=1, max_length=12000)
     agent_keys: list[str] = Field(default_factory=lambda: ["cfo", "ceo"], min_length=1, max_length=11)
+    goal_id: Optional[int] = Field(default=None, ge=1)
 
 
 class DecisionResponse(BaseModel):
     database_id: int
     topic: str
+    goal_id: Optional[int] = None
     final_decision: str
     participants: list[str]
     individual_outputs: dict[str, str]
     quality_warnings: dict = Field(default_factory=dict)
+
+
+class GoalCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1, max_length=4000)
+    success_criteria: str = Field(min_length=1, max_length=4000)
+    priority: Literal["critical", "high", "medium", "low"] = "medium"
+    target_date: Optional[str] = Field(default=None, max_length=10)
+    status: Literal["draft", "active"] = "draft"
+
+
+class GoalUpdateRequest(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    success_criteria: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    priority: Optional[Literal["critical", "high", "medium", "low"]] = None
+    target_date: Optional[str] = Field(default=None, max_length=10)
+
+
+class GoalStatusRequest(BaseModel):
+    status: Literal["active", "paused", "completed", "abandoned"]
+    completion_note: Optional[str] = Field(default=None, max_length=2000)
 
 
 class PreparationRequest(BaseModel):
@@ -424,6 +454,106 @@ async def trigger_daily_research():
     )
 
 
+# ===================================================================
+# COMPANY GOALS / MISSIONS
+# ===================================================================
+
+@app.post(
+    "/goals",
+    summary="Create Company Goal",
+    dependencies=[Depends(verify_api_key)],
+)
+def create_goal(request: GoalCreateRequest):
+    try:
+        goal_id = create_company_goal(
+            title=request.title,
+            description=request.description,
+            success_criteria=request.success_criteria,
+            priority=request.priority,
+            target_date=request.target_date,
+            status=request.status,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return get_company_goal(goal_id)
+
+
+@app.get(
+    "/goals",
+    summary="List Company Goals",
+    dependencies=[Depends(verify_api_key)],
+)
+def list_goals(
+    status: Optional[str] = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    statuses = (status,) if status else None
+    try:
+        return get_company_goals(statuses=statuses, limit=limit, offset=offset)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get(
+    "/goals/{goal_id}",
+    summary="Get Company Goal",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_goal(goal_id: int):
+    goal = get_company_goal(goal_id)
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    return goal
+
+
+@app.patch(
+    "/goals/{goal_id}",
+    summary="Edit Company Goal",
+    dependencies=[Depends(verify_api_key)],
+)
+def patch_goal(goal_id: int, request: GoalUpdateRequest):
+    payload = request.model_dump(exclude_none=True)
+    try:
+        updated = update_company_goal(goal_id, **payload)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    return updated
+
+
+@app.post(
+    "/goals/{goal_id}/status",
+    summary="Transition Company Goal Status",
+    dependencies=[Depends(verify_api_key)],
+)
+def change_goal_status(goal_id: int, request: GoalStatusRequest):
+    try:
+        updated = transition_company_goal_status(
+            goal_id,
+            request.status,
+            request.completion_note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    return updated
+
+
+@app.get(
+    "/goals/{goal_id}/lineage",
+    summary="Get Goal-to-Outcome Lineage",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_goal_lineage(goal_id: int):
+    lineage = get_company_goal_lineage(goal_id)
+    if lineage is None:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    return lineage
+
+
 @app.post(
     "/decisions/trigger",
     response_model=DecisionResponse,
@@ -432,10 +562,32 @@ async def trigger_daily_research():
 )
 def trigger_ad_hoc_decision(request: DecisionRequest):
     """Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op."""
+    goal = None
+    meeting_task = request.task_description
+    if request.goal_id is not None:
+        goal = get_company_goal(request.goal_id)
+        if goal is None:
+            raise HTTPException(status_code=404, detail="Goal not found.")
+        if goal["status"] != "active":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Goal must be active before decisions can be linked to it (currently '{goal['status']}').",
+            )
+        meeting_task = (
+            f"COMPANY GOAL #{goal['id']}: {goal['title']}\n"
+            f"Mission: {goal['description']}\n"
+            f"Success criteria: {goal['success_criteria']}\n"
+            f"Priority: {goal['priority']}\n"
+            f"Target date: {goal.get('target_date') or 'none'}\n\n"
+            f"DECISION TASK:\n{request.task_description}\n\n"
+            "Keep the recommendation explicitly aligned to the company goal. "
+            "Do not claim the goal is complete; goal completion remains an owner decision."
+        )
+
     try:
         meeting_result = run_executive_meeting(
             topic=request.topic,
-            task_description=request.task_description,
+            task_description=meeting_task,
             agent_keys=request.agent_keys,
             # Decision meetings are reasoning-only. Tool-capable agents belong
             # in the separate preparation/execution phase after human approval.
@@ -461,6 +613,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         task_description=request.task_description,
         decision_outcome=final_decision,
         sandbox_mode=config.SANDBOX_MODE,
+        goal_id=request.goal_id,
     )
 
     try:
@@ -473,6 +626,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     return DecisionResponse(
         database_id=db_id,
         topic=request.topic,
+        goal_id=request.goal_id,
         final_decision=final_decision,
         participants=participants,
         individual_outputs=meeting_result.get("individual_outputs", {}),
@@ -574,6 +728,24 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             detail=f"Decision must be approved before preparation (currently '{decision['approval_status']}').",
         )
 
+    if decision.get("goal_id") is not None:
+        goal = get_company_goal(decision["goal_id"])
+        if goal is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Decision references a goal that no longer exists.",
+            )
+        if goal["status"] != "active":
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Linked company goal must remain active before preparation "
+                    f"(currently '{goal['status']}')."
+                ),
+            )
+    else:
+        goal = None
+
     if not claim_decision_for_preparation(decision_id):
         current = get_decision_by_id(decision_id)
         raise HTTPException(
@@ -589,7 +761,14 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         f"Original topic: {decision['topic']}\n\n"
         f"Original evidence/task:\n{decision['task_description']}\n\n"
         f"Human-approved strategic direction:\n{decision['decision_outcome']}\n\n"
-        "Your job is NOT to re-decide whether the direction should happen. "
+        + (
+            f"Linked company goal: {goal['title']}\n"
+            f"Goal success criteria: {goal['success_criteria']}\n"
+            f"Goal priority: {goal['priority']}\n"
+            f"Goal target date: {goal.get('target_date') or 'none'}\n\n"
+            if goal else ""
+        )
+        + "Your job is NOT to re-decide whether the direction should happen. "
         "Translate the approved direction into a concrete, safe preparation plan. "
         "Identify required resources, access, credentials, plugins, data, files, "
         "browser steps, or commands. If a concrete action is genuinely needed and "
