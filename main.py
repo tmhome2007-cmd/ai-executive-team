@@ -568,10 +568,13 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         "review. IMPORTANT: if you decide a proposal is needed, CALL the actual tool. "
         "Do not print, imitate, or describe a JSON/function-call payload in your answer. "
         "A textual pseudo-call is invalid and will fail preparation verification. "
-        "Never claim a proposed action has executed. Never invent access or "
-        "credentials we do not have. Missing capabilities must be listed explicitly "
-        "as resource/access requests. Minimize actions: do not propose anything that "
-        "is not necessary to prepare the approved direction."
+        "Never claim a proposed action has executed. For every action you actually "
+        "propose, include an expected_outcome and expected_impact so we can measure "
+        "whether it worked later. Include expected_cost_amount + currency ONLY when "
+        "the supplied evidence supports a real cost; otherwise leave cost unknown. "
+        "Never invent access or credentials we do not have. Missing capabilities must "
+        "be listed explicitly as resource/access requests. Minimize actions: do not "
+        "propose anything that is not necessary to prepare the approved direction."
     )
 
     try:
