@@ -27,7 +27,7 @@ from memory.database import (
     link_followup_generated_decision,
     log_decision,
 )
-from notifications.telegram_bot import send_notification, escape_html
+from notifications.telegram_bot import send_notification_async, escape_html
 from workflows.meeting import run_executive_meeting
 from config import config
 
@@ -307,7 +307,7 @@ async def run_autonomous_followup() -> dict:
             created_event_ids.append(event_id)
 
             try:
-                send_notification(
+                await send_notification_async(
                     "🔁 <b>AUTONOMOUS FOLLOW-UP</b>\n\n"
                     f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
                     f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
@@ -343,7 +343,7 @@ async def run_autonomous_followup() -> dict:
                 generated_decision_ids.append(decision_id)
 
                 try:
-                    send_notification(
+                    await send_notification_async(
                         "🧠 <b>FOLLOW-UP DECISION READY</b>\n\n"
                         f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
                         f"<b>Decision:</b> #{decision_id}\n"
