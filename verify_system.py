@@ -5664,6 +5664,297 @@ except Exception as e:
     log_fail("Dashboard credential/browser hardening check crashed", str(e))
 
 
+
+# -------------------------------------------------------------------
+# CHECK 143: DYNAMIC CHECK — invalid guesses cannot self-DoS the valid owner key
+# -------------------------------------------------------------------
+try:
+    import main as _main_143
+    from config import config as _config_143
+
+    class _Client143:
+        host = "127.0.0.1"
+
+    class _Request143:
+        client = _Client143()
+
+    old_key_143 = _config_143.API_SECRET_KEY
+    _main_143._failed_auth_attempts.clear()
+    try:
+        _config_143.API_SECRET_KEY = "owner-key-that-is-long-enough-for-test"
+        invalid_statuses_143 = []
+        for _ in range(_main_143._MAX_FAILED_ATTEMPTS):
+            try:
+                _main_143.verify_api_key(_Request143(), x_api_key="wrong-key")
+            except Exception as exc:
+                invalid_statuses_143.append(getattr(exc, "status_code", None))
+
+        blocked_invalid_143 = None
+        try:
+            _main_143.verify_api_key(_Request143(), x_api_key="another-wrong-key")
+        except Exception as exc:
+            blocked_invalid_143 = getattr(exc, "status_code", None)
+
+        valid_result_143 = _main_143.verify_api_key(
+            _Request143(),
+            x_api_key=_config_143.API_SECRET_KEY,
+        )
+
+        if (
+            invalid_statuses_143 == [401] * _main_143._MAX_FAILED_ATTEMPTS
+            and blocked_invalid_143 == 429
+            and valid_result_143 is True
+            and "127.0.0.1" not in _main_143._failed_auth_attempts
+        ):
+            log_pass("invalid API guesses are rate-limited without locking out a correct owner credential")
+        else:
+            log_fail(
+                "API auth availability hardening",
+                f"invalid={invalid_statuses_143}, blocked={blocked_invalid_143}, valid={valid_result_143}",
+            )
+    finally:
+        _config_143.API_SECRET_KEY = old_key_143
+        _main_143._failed_auth_attempts.clear()
+except Exception as e:
+    log_fail("API auth availability hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 144: STATIC CHECK — Telegram details/errors stay local by default
+# -------------------------------------------------------------------
+try:
+    with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+        executor_144 = fh.read()
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as fh:
+        interactive_144 = fh.read()
+    with open("notifications/telegram_bot.py", "r", encoding="utf-8") as fh:
+        bot_144 = fh.read()
+    with open("config.py", "r", encoding="utf-8") as fh:
+        config_144 = fh.read()
+
+    required_144 = [
+        "TELEGRAM_INCLUDE_SENSITIVE_DETAILS",
+        "_telegram_sensitive",
+        "details retained locally",
+        "Sensitive transport details are suppressed",
+    ]
+    combined_144 = "\n".join([executor_144, interactive_144, bot_144, config_144])
+    raw_error_print_144 = (
+        'print(f"Failed to send Telegram notification: {e}")' in bot_144
+        or 'print(f"Failed to send Telegram notification with keyboard: {e}")' in bot_144
+    )
+
+    if all(item in combined_144 for item in required_144) and not raw_error_print_144:
+        log_pass("Telegram keeps execution/transport details local by default and suppresses raw transport exceptions")
+    else:
+        log_fail(
+            "Telegram privacy hardening",
+            f"missing={[x for x in required_144 if x not in combined_144]}, raw_error_print={raw_error_print_144}",
+        )
+except Exception as e:
+    log_fail("Telegram privacy hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 145: DYNAMIC CHECK — autonomous follow-up paginates all durable rows
+# -------------------------------------------------------------------
+try:
+    import workflows.autonomous_followup as _followup_145
+
+    original_goals_145 = _followup_145.get_company_goals
+    original_events_145 = _followup_145.get_followup_events
+    goal_offsets_145 = []
+    event_offsets_145 = []
+
+    def _fake_goals_145(*, statuses=None, limit=100, offset=0):
+        goal_offsets_145.append(offset)
+        total = 205
+        return [{"id": i} for i in range(offset, min(offset + limit, total))]
+
+    def _fake_events_145(*, statuses=None, limit=250, offset=0):
+        event_offsets_145.append(offset)
+        total = 511
+        return [{"id": i} for i in range(offset, min(offset + limit, total))]
+
+    try:
+        _followup_145.get_company_goals = _fake_goals_145
+        _followup_145.get_followup_events = _fake_events_145
+        goals_145 = _followup_145._get_all_active_goals(page_size=100)
+        events_145 = _followup_145._get_all_open_followups(page_size=250)
+    finally:
+        _followup_145.get_company_goals = original_goals_145
+        _followup_145.get_followup_events = original_events_145
+
+    if (
+        len(goals_145) == 205
+        and goal_offsets_145 == [0, 100, 200]
+        and len(events_145) == 511
+        and event_offsets_145 == [0, 250, 500]
+    ):
+        log_pass("autonomous follow-up scans and reconciles every page instead of silently stopping at fixed limits")
+    else:
+        log_fail(
+            "Autonomous follow-up pagination",
+            f"goals={len(goals_145)} offsets={goal_offsets_145}; events={len(events_145)} offsets={event_offsets_145}",
+        )
+except Exception as e:
+    log_fail("Autonomous follow-up pagination check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 146: DYNAMIC/STATIC CHECK — structured file I/O resists link tricks
+# -------------------------------------------------------------------
+try:
+    from config import config as _config_146
+    from memory.database import (
+        init_db as _init_146,
+        propose_action as _propose_146,
+        transition_action_status as _transition_146,
+    )
+    from workflows.action_executor import execute_action as _execute_146
+
+    old_db_146 = _config_146.DATABASE_PATH
+    old_workspace_146 = _config_146.WORKSPACE_ROOT
+    old_sandbox_146 = _config_146.SANDBOX_MODE
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_146 = os.path.join(temp_dir, "workspace")
+            os.makedirs(workspace_146, exist_ok=True)
+            outside_146 = os.path.join(temp_dir, "outside.txt")
+            with open(outside_146, "w", encoding="utf-8") as fh:
+                fh.write("outside")
+
+            hardlink_146 = os.path.join(workspace_146, "hardlink.txt")
+            os.link(outside_146, hardlink_146)
+
+            _config_146.DATABASE_PATH = os.path.join(temp_dir, "links.db")
+            _config_146.WORKSPACE_ROOT = workspace_146
+            _config_146.SANDBOX_MODE = False
+            _init_146()
+
+            detail_146 = json.dumps({
+                "operation": "append",
+                "file_path": "hardlink.txt",
+                "content": " SHOULD-NOT-WRITE",
+            })
+            action_id_146 = _propose_146(
+                "COO", "Hardlink defense", detail_146, "file_operation"
+            )
+            _transition_146(action_id_146, "approved", ("pending",))
+            with suppress_executor_notifications():
+                result_146 = _execute_146(action_id_146)
+
+            with open(outside_146, "r", encoding="utf-8") as fh:
+                outside_body_146 = fh.read()
+
+            with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+                executor_source_146 = fh.read()
+
+            static_ok_146 = all(
+                token in executor_source_146
+                for token in (
+                    "O_NOFOLLOW",
+                    "dir_fd=parent_fd",
+                    "_require_safe_regular_fd",
+                    "st_nlink",
+                    "src_dir_fd=parent_fd",
+                    "dst_dir_fd=parent_fd",
+                )
+            )
+
+            if (
+                not result_146.get("success")
+                and outside_body_146 == "outside"
+                and "multiple hard links" in result_146.get("error", "")
+                and static_ok_146
+            ):
+                log_pass("structured file I/O uses descriptor-relative no-follow operations and rejects hard-link escape tricks")
+            else:
+                log_fail(
+                    "Structured file link hardening",
+                    f"result={result_146}, outside={outside_body_146!r}, static={static_ok_146}",
+                )
+    finally:
+        _config_146.DATABASE_PATH = old_db_146
+        _config_146.WORKSPACE_ROOT = old_workspace_146
+        _config_146.SANDBOX_MODE = old_sandbox_146
+except Exception as e:
+    log_fail("Structured file link hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 147: STATIC CHECK — runtime privacy/config artifacts fail closed
+# -------------------------------------------------------------------
+try:
+    with open("config.py", "r", encoding="utf-8") as fh:
+        config_147 = fh.read()
+    with open("logging_config.py", "r", encoding="utf-8") as fh:
+        logging_147 = fh.read()
+    with open("main.py", "r", encoding="utf-8") as fh:
+        main_147 = fh.read()
+    with open(".env.example", "r", encoding="utf-8") as fh:
+        env_147 = fh.read()
+
+    stale_env_147 = os.path.exists("env.example")
+    requirements_147 = [
+        "ALLOW_INSECURE_REMOTE_HTTP" in config_147,
+        "config.BIND_HOST not in loopback_hosts" in config_147,
+        "PrivateRotatingFileHandler" in logging_147,
+        "os.chmod(path, 0o600)" in logging_147,
+        "os.path.islink(os.path.join(screenshots_root, filename))" in main_147,
+        "bind_host = config.BIND_HOST" in main_147,
+        "BIND_HOST=127.0.0.1" in env_147,
+        "TELEGRAM_INCLUDE_SENSITIVE_DETAILS=False" in env_147,
+        not stale_env_147,
+    ]
+
+    if all(requirements_147):
+        log_pass("remote binds, screenshots, logs, and the canonical environment template use privacy-safe defaults")
+    else:
+        log_fail("Runtime privacy/config hardening", f"requirements={requirements_147}, stale_env={stale_env_147}")
+except Exception as e:
+    log_fail("Runtime privacy/config hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 148: STATIC CHECK — security automation and production CSP are hardened
+# -------------------------------------------------------------------
+try:
+    with open(".github/workflows/security.yml", "r", encoding="utf-8") as fh:
+        ci_148 = fh.read()
+    with open(".github/dependabot.yml", "r", encoding="utf-8") as fh:
+        dependabot_148 = fh.read()
+    with open("executive-dashboard/next.config.ts", "r", encoding="utf-8") as fh:
+        csp_148 = fh.read()
+
+    ci_ok_148 = all(
+        token in ci_148
+        for token in (
+            'python-version: "3.12"',
+            "pip-audit",
+            "bandit",
+            "npm audit --audit-level=high",
+            "npm run build",
+        )
+    )
+    dependabot_ok_148 = 'package-ecosystem: "github-actions"' in dependabot_148
+    csp_ok_148 = (
+        'const isDevelopment = process.env.NODE_ENV !== "production"' in csp_148
+        and '? "script-src \\'self\\' \\'unsafe-inline\\' \\'unsafe-eval\\'"' in csp_148
+        and ': "script-src \\'self\\' \\'unsafe-inline\\'"' in csp_148
+    )
+
+    if ci_ok_148 and dependabot_ok_148 and csp_ok_148:
+        log_pass("security CI/dependency monitoring are enabled and production CSP removes unsafe-eval")
+    else:
+        log_fail(
+            "Security automation/CSP hardening",
+            f"ci={ci_ok_148}, dependabot={dependabot_ok_148}, csp={csp_ok_148}",
+        )
+except Exception as e:
+    log_fail("Security automation/CSP hardening check crashed", str(e))
+
+
 # -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
