@@ -20,6 +20,10 @@ class ContainerExecutionError(RuntimeError):
     pass
 
 
+class ContainerTimeoutError(ContainerExecutionError):
+    pass
+
+
 def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedProcess[str]:
     if not isinstance(command, str) or not command.strip():
         raise ContainerExecutionError("Empty command rejected")
@@ -76,7 +80,7 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
                            capture_output=True, timeout=10, check=False)
         except (OSError, subprocess.TimeoutExpired):
             pass
-        raise ContainerExecutionError("Container timed out; attempted forced cleanup") from exc
+        raise ContainerTimeoutError("Container timed out; attempted forced cleanup") from exc
     except OSError as exc:
         raise ContainerExecutionError("Container invocation failed") from exc
     # Fail closed on unexpectedly large output instead of recording it.
