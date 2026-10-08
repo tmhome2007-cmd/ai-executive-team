@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import subprocess
+import socket
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -64,6 +65,20 @@ class ContainerWorkerTests(unittest.TestCase):
                 cleanup_args = mocked.call_args_list[1].args[0]
                 self.assertEqual(cleanup_args[:3], ["/usr/bin/docker", "rm", "-f"])
                 self.assertEqual(cleanup_args[3], original_args[original_args.index("--name") + 1])
+
+    def test_host_socket_in_workspace_rejected(self):
+        with tempfile.TemporaryDirectory() as root:
+            sock = socket.socket(socket.AF_UNIX)
+            try:
+                sock.bind(str(Path(root) / "docker.sock"))
+                with patch("workflows.container_executor.shutil.which", return_value="/usr/bin/docker"), patch(
+                    "workflows.container_executor.subprocess.run"
+                ) as invoked:
+                    with self.assertRaises(ContainerExecutionError):
+                        run_in_container("echo hello", root)
+                    invoked.assert_not_called()
+            finally:
+                sock.close()
 
     def test_empty_command_rejected(self):
         with tempfile.TemporaryDirectory() as root:
