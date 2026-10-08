@@ -21,7 +21,7 @@ if str(project_root) not in sys.path:
 
 from agents.executive_agents import EXECUTIVE_AGENTS
 from workflows.execution_lock import EXECUTION_LOCK
-from memory.database import action_provenance_scope
+from memory.database import action_provenance_scope, get_executive_memories
 
 
 EVIDENCE_DISCIPLINE = """
@@ -148,6 +148,7 @@ def run_executive_meeting(
     agents_source: Dict[str, Any] = None,
     evidence_text: str | None = None,
     provenance_context: Dict[str, Any] | None = None,
+    memory_context: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -165,6 +166,8 @@ def run_executive_meeting(
         provenance_context (dict, optioneel): bronbeslissing voor tool-acties.
             Wanneer aanwezig wordt de context IN de CrewAI worker thread gezet,
             zodat propose_* tools de juiste beslissing atomair erven.
+        memory_context (dict, optioneel): controls structured historical memory
+            retrieval. Memory is advisory only and is never added to evidence_text.
 
     Returns:
         Dict[str, Any]: Een dictionary met 'final_decision', 'participants' en 'individual_outputs'.
@@ -203,16 +206,52 @@ def run_executive_meeting(
     tasks: List[Task] = []
     agent_instances = []
 
+    memory_enabled = True if memory_context is None else bool(memory_context.get("enabled", True))
+    memory_goal_id = None if memory_context is None else memory_context.get("goal_id")
+    memory_limit = 5 if memory_context is None else int(memory_context.get("limit", 5))
+    memory_limit = max(0, min(memory_limit, 8))
+
+    def _memory_block(executive_key: str) -> str:
+        if not memory_enabled or memory_limit == 0:
+            return ""
+        memories = get_executive_memories(
+            executive_key,
+            active_only=True,
+            limit=memory_limit,
+            goal_id=memory_goal_id,
+        )
+        if not memories:
+            return ""
+        lines = [
+            "HISTORICAL EXECUTIVE MEMORY — ADVISORY ONLY:",
+            "- These are prior lessons, not current evidence.",
+            "- Revalidate every remembered claim against the current task/evidence.",
+            "- If memory conflicts with current evidence or owner state, current evidence/owner state wins.",
+            "- Never copy a remembered number, URL, resource, customer fact, or assumption as factual unless current evidence independently supports it.",
+        ]
+        for memory in memories:
+            lines.append(
+                f"- [{memory['memory_kind']}; confidence={float(memory['confidence']):.2f}] "
+                f"{memory['lesson']}"
+            )
+            if memory.get("supporting_evidence"):
+                lines.append(
+                    f"  Historical support: {memory['supporting_evidence']}"
+                )
+        return "\n".join(lines)
+
     # 2. Taken opbouwen in sequentiële volgorde
     for index, key in enumerate(agent_keys):
         agent_obj = agents_source[key]
         agent_instances.append(agent_obj)
+        role_memory = _memory_block(key)
 
         if index == 0:
             # De eerste agent start de discussie
             description = (
                 f"{task_description}\n\n"
-                f"{EVIDENCE_DISCIPLINE}\n\n"
+                + (f"{role_memory}\n\n" if role_memory else "")
+                + f"{EVIDENCE_DISCIPLINE}\n\n"
                 "Response structure:\n"
                 "1. Evidence-supported assessment\n"
                 "2. Assumptions / unknowns\n"
@@ -232,7 +271,8 @@ def run_executive_meeting(
             # Vervolgentaken ontvangen de historie van vorige taken als context
             description = (
                 f"{task_description}\n\n"
-                f"{EVIDENCE_DISCIPLINE}\n\n"
+                + (f"{role_memory}\n\n" if role_memory else "")
+                + f"{EVIDENCE_DISCIPLINE}\n\n"
                 "Instruction: Consider the perspectives already shared by your fellow executives above, "
                 "then add your own professional assessment from your role's perspective. "
                 "Do NOT repeat any point, recommendation, or concern already raised by a previous executive above — "
