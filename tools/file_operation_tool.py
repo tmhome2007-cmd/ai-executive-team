@@ -10,6 +10,9 @@ gewone Python file I/O binnen dezelfde workspace-confinement grens als
 workflows/action_executor.py al gebruikt voor shell-commando's.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 import json
 from typing import Type, Literal
 from pydantic import BaseModel, Field
