@@ -3871,6 +3871,488 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 111: DYNAMIC CHECK — deterministic follow-up classification
+# -------------------------------------------------------------------
+try:
+    import datetime as _dt_111
+    from workflows.autonomous_followup import classify_goal_followups as _classify_111
+
+    goal_111 = {
+        "id": 1,
+        "sync_uuid": "goal-sync-111",
+        "title": "Autonomous test goal",
+        "target_date": "2026-10-01",
+    }
+    empty_lineage_111 = {"decisions": []}
+    first_111 = _classify_111(
+        goal_111,
+        empty_lineage_111,
+        today=_dt_111.date(2026, 10, 8),
+    )
+    non_overdue_111 = _classify_111(
+        {**goal_111, "target_date": None},
+        empty_lineage_111,
+        today=_dt_111.date(2026, 10, 8),
+    )
+
+    decision_111 = {
+        "id": 10,
+        "sync_uuid": "decision-sync-111",
+        "approval_status": "approved",
+        "preparation_status": "completed",
+    }
+    action_111 = {
+        "id": 20,
+        "sync_uuid": "action-sync-111",
+        "status": "executed",
+        "outcome_status": "failed",
+        "measured_at": "2026-10-08T10:00:00",
+    }
+    lineage_111 = {
+        "decisions": [{
+            "decision": decision_111,
+            "actions": [action_111],
+            "resource_requests": [],
+        }]
+    }
+    second_111 = _classify_111(
+        {**goal_111, "target_date": None},
+        lineage_111,
+        today=_dt_111.date(2026, 10, 8),
+    )
+
+    if (
+        len(first_111) == 1
+        and first_111[0]["event_type"] == "overdue_goal_review"
+        and first_111[0]["meeting_required"] is True
+        and len(non_overdue_111) == 1
+        and non_overdue_111[0]["event_type"] == "strategy_review"
+        and any(
+            item["event_type"] == "adverse_outcome_review"
+            and item["meeting_required"] is True
+            for item in second_111
+        )
+    ):
+        log_pass("autonomous follow-up classification is deterministic and avoids duplicate strategy meetings")
+    else:
+        log_fail(
+            "Autonomous follow-up classification",
+            f"first={first_111}, second={second_111}",
+        )
+except Exception as e:
+    log_fail("Autonomous follow-up classification check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 112: DYNAMIC CHECK — follow-up fingerprints dedupe and lifecycle is atomic
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_112
+    from memory.database import (
+        init_db as _init_db_112,
+        create_company_goal as _goal_112,
+        create_followup_event as _event_112,
+        get_followup_event as _get_event_112,
+        transition_followup_event_status as _transition_112,
+    )
+
+    original_db_112 = _verify_config_112.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_112.DATABASE_PATH = os.path.join(temp_dir, "followup-dedupe.db")
+            _init_db_112()
+            goal_id = _goal_112("Follow-up", "Mission", "Criteria", status="active")
+            first_id, first_created = _event_112(
+                event_type="strategy_review",
+                severity="attention",
+                reason="Goal has no linked strategy yet.",
+                fingerprint="goal:test:strategy:v1",
+                goal_id=goal_id,
+            )
+            second_id, second_created = _event_112(
+                event_type="strategy_review",
+                severity="attention",
+                reason="Goal has no linked strategy yet.",
+                fingerprint="goal:test:strategy:v1",
+                goal_id=goal_id,
+            )
+            resolved = _transition_112(first_id, "resolved", ("open",))
+            duplicate_transition = _transition_112(first_id, "dismissed", ("open",))
+            row = _get_event_112(first_id)
+
+            if (
+                first_created
+                and not second_created
+                and first_id == second_id
+                and resolved
+                and not duplicate_transition
+                and row["status"] == "resolved"
+            ):
+                log_pass("follow-up fingerprints dedupe repeated scans and status transitions cannot be replayed")
+            else:
+                log_fail(
+                    "Follow-up dedupe/lifecycle",
+                    f"first=({first_id},{first_created}), second=({second_id},{second_created}), "
+                    f"resolved={resolved}, duplicate_transition={duplicate_transition}, row={row}",
+                )
+    finally:
+        _verify_config_112.DATABASE_PATH = original_db_112
+except Exception as e:
+    log_fail("Follow-up dedupe/lifecycle check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 113: DYNAMIC CHECK — autonomous reasoning creates one tool-free pending decision
+# -------------------------------------------------------------------
+try:
+    import asyncio as _asyncio_113
+    import workflows.autonomous_followup as _followup_module_113
+    from config import config as _verify_config_113
+    from memory.database import (
+        init_db as _init_db_113,
+        create_company_goal as _goal_113,
+        get_followup_events as _events_113,
+        get_recent_decisions as _decisions_113,
+    )
+
+    original_db_113 = _verify_config_113.DATABASE_PATH
+    original_meeting_113 = _followup_module_113.run_executive_meeting
+    original_notify_113 = _followup_module_113.send_notification_async
+    calls_113 = []
+
+    def _fake_meeting_113(*args, **kwargs):
+        calls_113.append(kwargs)
+        if kwargs.get("agents_source") is not _followup_module_113.EXECUTIVE_AGENTS_NO_TOOLS:
+            raise AssertionError("Autonomous follow-up used tool-capable agents")
+        return {
+            "final_decision": "Recommend an owner-reviewed validation step only.",
+            "participants": ["cso", "coo", "ceo"],
+            "individual_outputs": {},
+            "quality_warnings": {},
+        }
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_113.DATABASE_PATH = os.path.join(temp_dir, "followup-reasoning.db")
+            _init_db_113()
+            _goal_113("Strategy-less goal", "Mission", "Criteria", status="active")
+            _followup_module_113.run_executive_meeting = _fake_meeting_113
+            async def _fake_notify_113(*args, **kwargs):
+                return None
+
+            _followup_module_113.send_notification_async = _fake_notify_113
+
+            first = _asyncio_113.run(_followup_module_113.run_autonomous_followup())
+            second = _asyncio_113.run(_followup_module_113.run_autonomous_followup())
+            events = _events_113(limit=20)
+            decisions = _decisions_113(limit=20)
+
+            generated = [
+                row for row in events
+                if row["event_type"] == "strategy_review"
+                and row["generated_decision_id"] is not None
+            ]
+            if (
+                first["success"]
+                and len(first["generated_decision_ids"]) == 1
+                and len(second["generated_decision_ids"]) == 0
+                and len(calls_113) == 1
+                and len(generated) == 1
+                and decisions[0]["approval_status"] == "pending"
+                and decisions[0]["goal_id"] is not None
+            ):
+                log_pass("autonomous reasoning uses tool-free executives and creates one deduplicated pending owner decision")
+            else:
+                log_fail(
+                    "Autonomous reasoning safety",
+                    f"first={first}, second={second}, calls={len(calls_113)}, "
+                    f"generated={generated}, decisions={decisions}",
+                )
+    finally:
+        _followup_module_113.run_executive_meeting = original_meeting_113
+        _followup_module_113.send_notification_async = original_notify_113
+        _verify_config_113.DATABASE_PATH = original_db_113
+except Exception as e:
+    log_fail("Autonomous reasoning safety check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 114: DYNAMIC CHECK — owner-gate follow-up never starts another meeting
+# -------------------------------------------------------------------
+try:
+    import asyncio as _asyncio_114
+    import workflows.autonomous_followup as _followup_module_114
+    from config import config as _verify_config_114
+    from memory.database import (
+        init_db as _init_db_114,
+        create_company_goal as _goal_114,
+        log_decision as _decision_114,
+        get_followup_events as _events_114,
+    )
+
+    original_db_114 = _verify_config_114.DATABASE_PATH
+    original_meeting_114 = _followup_module_114.run_executive_meeting
+    original_notify_114 = _followup_module_114.send_notification_async
+
+    def _must_not_run_114(*args, **kwargs):
+        raise AssertionError("Owner-gate follow-up incorrectly started an executive meeting")
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_114.DATABASE_PATH = os.path.join(temp_dir, "followup-owner-gate.db")
+            _init_db_114()
+            goal_id = _goal_114("Approval waiting", "Mission", "Criteria", status="active")
+            _decision_114(
+                "Pending owner decision",
+                ["ceo"],
+                "Evidence",
+                "Recommendation",
+                True,
+                goal_id=goal_id,
+            )
+            _followup_module_114.run_executive_meeting = _must_not_run_114
+            async def _fake_notify_114(*args, **kwargs):
+                return None
+
+            _followup_module_114.send_notification_async = _fake_notify_114
+
+            result = _asyncio_114.run(_followup_module_114.run_autonomous_followup())
+            open_events = _events_114(statuses=("open",), limit=20)
+
+            if (
+                result["success"]
+                and result["generated_decision_ids"] == []
+                and any(
+                    event["event_type"] == "owner_decision_review"
+                    for event in open_events
+                )
+            ):
+                log_pass("owner approval follow-ups create alerts only and never spawn redundant executive meetings")
+            else:
+                log_fail(
+                    "Owner-gate autonomous follow-up",
+                    f"result={result}, events={open_events}",
+                )
+    finally:
+        _followup_module_114.run_executive_meeting = original_meeting_114
+        _followup_module_114.send_notification_async = original_notify_114
+        _verify_config_114.DATABASE_PATH = original_db_114
+except Exception as e:
+    log_fail("Owner-gate autonomous follow-up check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 115: DYNAMIC CHECK — stale owner alerts auto-resolve when state changes
+# -------------------------------------------------------------------
+try:
+    import asyncio as _asyncio_115
+    import workflows.autonomous_followup as _followup_module_115
+    from config import config as _verify_config_115
+    from memory.database import (
+        init_db as _init_db_115,
+        create_company_goal as _goal_115,
+        log_decision as _decision_115,
+        transition_decision_approval as _approve_115,
+        get_followup_events as _events_115,
+    )
+
+    original_db_115 = _verify_config_115.DATABASE_PATH
+    original_notify_115 = _followup_module_115.send_notification_async
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_115.DATABASE_PATH = os.path.join(temp_dir, "followup-reconcile.db")
+            _init_db_115()
+            goal_id = _goal_115("Reconcile alerts", "Mission", "Criteria", status="active")
+            decision_id = _decision_115(
+                "Owner gate transition",
+                ["ceo"],
+                "Evidence",
+                "Recommendation",
+                True,
+                goal_id=goal_id,
+            )
+            async def _fake_notify_115(*args, **kwargs):
+                return None
+
+            _followup_module_115.send_notification_async = _fake_notify_115
+
+            first = _asyncio_115.run(_followup_module_115.run_autonomous_followup())
+            _approve_115(decision_id, "approved", ("pending",))
+            second = _asyncio_115.run(_followup_module_115.run_autonomous_followup())
+            events = _events_115(limit=20)
+
+            approval_alert = next(
+                e for e in events if e["event_type"] == "owner_decision_review"
+            )
+            preparation_alert = next(
+                e for e in events if e["event_type"] == "owner_preparation_review"
+            )
+            if (
+                first["success"]
+                and second["success"]
+                and approval_alert["status"] == "resolved"
+                and preparation_alert["status"] == "open"
+                and approval_alert["id"] in second["resolved_event_ids"]
+            ):
+                log_pass("autonomous follow-up resolves stale owner alerts and surfaces the next real gate")
+            else:
+                log_fail(
+                    "Follow-up reconciliation",
+                    f"first={first}, second={second}, events={events}",
+                )
+    finally:
+        _followup_module_115.send_notification_async = original_notify_115
+        _verify_config_115.DATABASE_PATH = original_db_115
+except Exception as e:
+    log_fail("Follow-up reconciliation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 116: DYNAMIC CHECK — follow-up sync resolves UUID provenance across machines
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_116
+    from memory.database import (
+        init_db as _init_db_116,
+        create_company_goal as _goal_116,
+        log_decision as _decision_116,
+        create_followup_event as _event_116,
+        link_followup_generated_decision as _link_116,
+        export_history_to_jsonl as _export_116,
+        import_history_from_jsonl as _import_116,
+        get_followup_events as _events_116,
+        get_company_goals as _goals_116,
+        get_recent_decisions as _decisions_116,
+    )
+
+    original_db_116 = _verify_config_116.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_db = os.path.join(temp_dir, "followup-source.db")
+            target_db = os.path.join(temp_dir, "followup-target.db")
+            export_path = os.path.join(temp_dir, "followup-sync.jsonl")
+
+            _verify_config_116.DATABASE_PATH = source_db
+            _init_db_116()
+            source_goal_id = _goal_116("Synced follow-up", "Mission", "Criteria", status="active")
+            source_decision_id = _decision_116(
+                "Synced decision", ["ceo"], "Evidence", "Recommendation", True,
+                goal_id=source_goal_id,
+            )
+            event_id, _ = _event_116(
+                event_type="owner_decision_review",
+                severity="attention",
+                reason="Decision awaits owner review.",
+                fingerprint="sync-followup-fingerprint",
+                goal_id=source_goal_id,
+                source_decision_id=source_decision_id,
+            )
+            _link_116(event_id, source_decision_id)
+            _export_116(export_path)
+
+            _verify_config_116.DATABASE_PATH = target_db
+            _init_db_116()
+            _goal_116("Local goal", "Mission", "Criteria", status="active")
+            _decision_116("Local decision", ["ceo"], "Local", "Local", True)
+            summary = _import_116(export_path)
+
+            imported_event = next(
+                e for e in _events_116(limit=20)
+                if e["fingerprint"] == "sync-followup-fingerprint"
+            )
+            imported_goal = next(
+                g for g in _goals_116(limit=20)
+                if g["id"] == imported_event["goal_id"]
+            )
+            imported_decision = next(
+                d for d in _decisions_116(limit=20)
+                if d["id"] == imported_event["source_decision_id"]
+            )
+
+            if (
+                summary.get("followup_events_imported") == 1
+                and imported_event["generated_decision_id"] == imported_decision["id"]
+                and imported_event["goal_sync_uuid"] == imported_goal["sync_uuid"]
+                and imported_event["source_decision_sync_uuid"] == imported_decision["sync_uuid"]
+            ):
+                log_pass("follow-up sync reconstructs goal/decision provenance from stable UUIDs")
+            else:
+                log_fail(
+                    "Follow-up sync provenance",
+                    f"summary={summary}, event={imported_event}, "
+                    f"goal={imported_goal}, decision={imported_decision}",
+                )
+    finally:
+        _verify_config_116.DATABASE_PATH = original_db_116
+except Exception as e:
+    log_fail("Follow-up sync provenance check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 117: STATIC CHECK — scheduler, APIs, tool-free rule, and dashboard are integrated
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_117 = f.read()
+    with open("workflows/autonomous_followup.py", "r", encoding="utf-8") as f:
+        followup_content_117 = f.read()
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content_117 = f.read()
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_117 = f.read()
+
+    required_main = [
+        'id="autonomous_followup_interval_job"',
+        "IntervalTrigger(hours=1)",
+        '"/workflows/autonomous-followup/status"',
+        '"/workflows/autonomous-followup/trigger"',
+        '"/followups/open"',
+        '"/followups/history"',
+        '"/followups/{event_id}/resolve"',
+        '"/followups/{event_id}/dismiss"',
+    ]
+    required_followup = [
+        "EXECUTIVE_AGENTS_NO_TOOLS",
+        "classify_goal_followups",
+        "_REASONING_EVENT_TYPES",
+        "meeting_required",
+        "pending owner approval",
+        "generated_decision_ids",
+        "resolved_event_ids",
+        "await send_notification_async(",
+    ]
+    required_db = [
+        "CREATE TABLE IF NOT EXISTS followup_events",
+        "fingerprint TEXT NOT NULL UNIQUE",
+        "create_followup_event",
+        "link_followup_generated_decision",
+        '"followup_events": {',
+        '"followup_events_imported"',
+    ]
+    required_dashboard = [
+        "Autonomous Follow-Up",
+        "Run Scan Now",
+        "No open follow-up items",
+        "Tool-free follow-up created Decision",
+        "/followups/open",
+        "/workflows/autonomous-followup/status",
+    ]
+
+    missing = {
+        "main": [x for x in required_main if x not in main_content_117],
+        "workflow": [x for x in required_followup if x not in followup_content_117],
+        "database": [x for x in required_db if x not in db_content_117],
+        "dashboard": [x for x in required_dashboard if x not in dashboard_content_117],
+    }
+    if all(not values for values in missing.values()):
+        log_pass("autonomous follow-up scheduler, APIs, tool-free reasoning, audit queue, sync, and dashboard are integrated")
+    else:
+        log_fail("Autonomous follow-up integration", f"missing={missing}")
+except Exception as e:
+    log_fail("Autonomous follow-up integration check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)

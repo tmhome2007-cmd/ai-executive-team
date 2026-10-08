@@ -164,6 +164,35 @@ interface TreasurySummary {
   currencies: Record<string, TreasuryCurrencySummary>;
 }
 
+interface FollowupEvent {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  event_type: string;
+  status: "open" | "resolved" | "dismissed";
+  severity: "info" | "attention" | "critical";
+  reason: string;
+  fingerprint: string;
+  goal_id?: number | null;
+  goal_title?: string | null;
+  source_action_id?: number | null;
+  source_decision_id?: number | null;
+  source_decision_topic?: string | null;
+  generated_decision_id?: number | null;
+  generated_decision_topic?: string | null;
+}
+
+interface FollowupStatus {
+  last_run_time: string | null;
+  success: boolean | null;
+  scanned_goal_count: number;
+  created_event_ids: number[];
+  generated_decision_ids: number[];
+  resolved_event_ids: number[];
+  errors: string[];
+  message: string;
+}
+
 interface ExecutionResult {
   success: boolean;
   mode: string;
@@ -613,6 +642,10 @@ export default function DashboardPage() {
   const [resourceRequests, setResourceRequests] = useState<ResourceRequest[]>([]);
   const [resourceErrors, setResourceErrors] = useState<Record<number, string>>({});
   const [goals, setGoals] = useState<CompanyGoal[]>([]);
+  const [followups, setFollowups] = useState<FollowupEvent[]>([]);
+  const [followupStatus, setFollowupStatus] = useState<FollowupStatus | null>(null);
+  const [followupError, setFollowupError] = useState<string | null>(null);
+  const [runningFollowup, setRunningFollowup] = useState(false);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [goalLineage, setGoalLineage] = useState<Record<number, GoalLineage>>({});
   const [goalTitle, setGoalTitle] = useState("");
@@ -768,6 +801,69 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchFollowups = useCallback(async (currentKey: string) => {
+    try {
+      const [itemsRes, statusRes] = await Promise.all([
+        fetch(`${API_BASE}/followups/open?limit=100`, {
+          headers: { "X-API-Key": currentKey },
+        }),
+        fetch(`${API_BASE}/workflows/autonomous-followup/status`, {
+          headers: { "X-API-Key": currentKey },
+        }),
+      ]);
+      if (itemsRes.status === 401 || statusRes.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!itemsRes.ok || !statusRes.ok) {
+        throw new Error("Could not fetch autonomous follow-up state.");
+      }
+      setFollowups(await itemsRes.json());
+      setFollowupStatus(await statusRes.json());
+      setFollowupError(null);
+    } catch (err: any) {
+      setFollowupError(err.message || "Could not fetch autonomous follow-up state.");
+    }
+  }, [handleAuthFailure]);
+
+  const handleRunFollowup = async () => {
+    if (!apiKey) return;
+    setRunningFollowup(true);
+    setFollowupError(null);
+    try {
+      const res = await fetch(`${API_BASE}/workflows/autonomous-followup/trigger`, {
+        method: "POST",
+        headers: { "X-API-Key": apiKey },
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || "Autonomous follow-up scan failed.");
+      await Promise.all([
+        fetchFollowups(apiKey),
+        fetchDashboardData(),
+        fetchGoals(apiKey),
+      ]);
+    } catch (err: any) {
+      setFollowupError(err.message || "Autonomous follow-up scan failed.");
+    } finally {
+      setRunningFollowup(false);
+    }
+  };
+
+  const handleFollowupDecision = async (id: number, action: "resolve" | "dismiss") => {
+    if (!apiKey) return;
+    try {
+      const res = await fetch(`${API_BASE}/followups/${id}/${action}`, {
+        method: "POST",
+        headers: { "X-API-Key": apiKey },
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || `Could not ${action} follow-up.`);
+      await fetchFollowups(apiKey);
+    } catch (err: any) {
+      setFollowupError(err.message || `Could not ${action} follow-up.`);
+    }
+  };
+
   const fetchGoals = useCallback(async (currentKey: string) => {
     try {
       const res = await fetch(`${API_BASE}/goals?limit=100`, {
@@ -914,8 +1010,9 @@ export default function DashboardPage() {
       fetchResourceRequests(apiKey);
       fetchTreasury(apiKey);
       fetchGoals(apiKey);
+      fetchFollowups(apiKey);
     }
-  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury, fetchGoals]);
+  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury, fetchGoals, fetchFollowups]);
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
     if (type === "approve") {
@@ -1364,6 +1461,97 @@ export default function DashboardPage() {
             {loadError}
           </div>
         )}
+
+        {/* Autonomous Follow-Up */}
+        <div className="bg-gray-900 border border-violet-900/70 rounded-lg p-6 space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-violet-200">Autonomous Follow-Up</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Hourly deterministic scan. It may create tool-free pending decisions, but never approves, prepares, fulfills, reserves, executes, or measures anything.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRunFollowup}
+              disabled={runningFollowup}
+              className="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 text-white text-xs rounded disabled:opacity-50"
+            >
+              {runningFollowup ? "Scanning..." : "Run Scan Now"}
+            </button>
+          </div>
+
+          {followupStatus && (
+            <div className="text-xs text-gray-400 border border-gray-800 rounded p-3">
+              <div>{followupStatus.message}</div>
+              <div className="mt-1">
+                Last run: {followupStatus.last_run_time || "never"} · goals scanned: {followupStatus.scanned_goal_count}
+              </div>
+              {followupStatus.generated_decision_ids.length > 0 && (
+                <div className="mt-1 text-violet-300">
+                  Generated pending decisions: {followupStatus.generated_decision_ids.map((id) => `#${id}`).join(", ")}
+                </div>
+              )}
+            </div>
+          )}
+
+          {followupError && (
+            <div className="text-xs text-red-300 border border-red-900 bg-red-950/40 rounded p-2">
+              {followupError}
+            </div>
+          )}
+
+          {followups.length === 0 ? (
+            <p className="text-gray-500 text-sm">No open follow-up items.</p>
+          ) : (
+            <div className="space-y-3">
+              {followups.map((item) => (
+                <div
+                  key={item.id}
+                  className={`bg-gray-950 rounded p-4 border ${
+                    item.severity === "critical"
+                      ? "border-red-800"
+                      : item.severity === "attention"
+                      ? "border-yellow-800"
+                      : "border-gray-800"
+                  }`}
+                >
+                  <div className="flex justify-between gap-3">
+                    <div className="text-sm font-semibold text-gray-200">
+                      #{item.id} · {item.event_type.replaceAll("_", " ")}
+                    </div>
+                    <div className="text-xs uppercase text-gray-400">{item.severity}</div>
+                  </div>
+                  <div className="text-sm text-gray-400 mt-2">{item.reason}</div>
+                  <div className="text-xs text-gray-500 mt-2">
+                    {item.goal_id ? `Goal #${item.goal_id}${item.goal_title ? ` — ${item.goal_title}` : ""}` : "No goal"}
+                    {item.source_action_id ? ` · Action #${item.source_action_id}` : ""}
+                    {item.source_decision_id ? ` · Source Decision #${item.source_decision_id}` : ""}
+                  </div>
+                  {item.generated_decision_id && (
+                    <div className="text-xs text-violet-300 mt-1">
+                      Tool-free follow-up created Decision #{item.generated_decision_id} — pending owner review.
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => handleFollowupDecision(item.id, "resolve")}
+                      className="px-2.5 py-1 bg-green-800 text-white text-xs rounded"
+                    >
+                      Resolve
+                    </button>
+                    <button
+                      onClick={() => handleFollowupDecision(item.id, "dismiss")}
+                      className="px-2.5 py-1 bg-gray-800 text-gray-300 text-xs rounded"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Company Goals / Missions */}
         <div className="bg-gray-900 border border-amber-900/70 rounded-lg p-6 space-y-4">

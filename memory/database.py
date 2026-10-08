@@ -44,6 +44,18 @@ VALID_TREASURY_ENTRY_TYPES = {"funding", "spend", "refund"}
 VALID_TREASURY_RESERVATION_STATUSES = {"active", "released", "consumed"}
 VALID_GOAL_STATUSES = {"draft", "active", "paused", "completed", "abandoned"}
 VALID_GOAL_PRIORITIES = {"critical", "high", "medium", "low"}
+VALID_FOLLOWUP_STATUSES = {"open", "resolved", "dismissed"}
+VALID_FOLLOWUP_SEVERITIES = {"info", "attention", "critical"}
+VALID_FOLLOWUP_EVENT_TYPES = {
+    "strategy_review",
+    "owner_decision_review",
+    "owner_preparation_review",
+    "owner_action_review",
+    "owner_resource_review",
+    "outcome_measurement",
+    "adverse_outcome_review",
+    "overdue_goal_review",
+}
 _ACTION_PROVENANCE_LOCK = threading.RLock()
 _ACTION_PROVENANCE_CONTEXT: dict | None = None
 
@@ -117,6 +129,12 @@ _SYNC_TABLE_COLUMNS = {
         "priority", "target_date", "status", "completed_at", "completion_note",
         "sync_uuid",
     },
+    "followup_events": {
+        "created_at", "updated_at", "event_type", "status", "severity",
+        "reason", "fingerprint", "goal_sync_uuid", "source_action_sync_uuid",
+        "source_decision_sync_uuid", "generated_decision_sync_uuid",
+        "resolved_at", "sync_uuid",
+    },
 }
 
 
@@ -152,6 +170,33 @@ def init_db() -> None:
             status TEXT NOT NULL DEFAULT 'draft',
             completed_at TEXT,
             completion_note TEXT,
+            sync_uuid TEXT NOT NULL UNIQUE
+        )
+    """)
+    conn.commit()
+
+    # Autonomous follow-up audit queue. The deterministic scanner creates
+    # these records; tool-free meetings may create a new pending decision, but
+    # no follow-up event itself can approve/prepare/execute anything.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS followup_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open',
+            severity TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            fingerprint TEXT NOT NULL UNIQUE,
+            goal_id INTEGER,
+            goal_sync_uuid TEXT,
+            source_action_id INTEGER,
+            source_action_sync_uuid TEXT,
+            source_decision_id INTEGER,
+            source_decision_sync_uuid TEXT,
+            generated_decision_id INTEGER,
+            generated_decision_sync_uuid TEXT,
+            resolved_at TEXT,
             sync_uuid TEXT NOT NULL UNIQUE
         )
     """)
@@ -752,6 +797,199 @@ def get_company_goal_lineage(goal_id: int) -> dict | None:
         "spend_by_currency": total_spend,
         "decisions": decision_lineages,
     }
+
+
+# ===================================================================
+# AUTONOMOUS FOLLOW-UP EVENTS
+# ===================================================================
+
+def create_followup_event(
+    *,
+    event_type: str,
+    severity: str,
+    reason: str,
+    fingerprint: str,
+    goal_id: int | None = None,
+    source_action_id: int | None = None,
+    source_decision_id: int | None = None,
+) -> tuple[int, bool]:
+    if event_type not in VALID_FOLLOWUP_EVENT_TYPES:
+        raise ValueError(f"Unsupported follow-up event type: {event_type}")
+    if severity not in VALID_FOLLOWUP_SEVERITIES:
+        raise ValueError(f"Unsupported follow-up severity: {severity}")
+    reason = (reason or "").strip()
+    fingerprint = (fingerprint or "").strip()
+    if not reason or not fingerprint:
+        raise ValueError("Follow-up reason and fingerprint are required")
+    _reject_secret_like_text(reason, fingerprint)
+
+    goal_sync_uuid = None
+    source_action_sync_uuid = None
+    source_decision_sync_uuid = None
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        if goal_id is not None:
+            cursor.execute("SELECT sync_uuid FROM company_goals WHERE id = ?", (goal_id,))
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError("Goal not found")
+            goal_sync_uuid = row["sync_uuid"]
+
+        if source_action_id is not None:
+            cursor.execute(
+                "SELECT sync_uuid, source_decision_id, source_decision_sync_uuid FROM action_queue WHERE id = ?",
+                (source_action_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError("Source action not found")
+            source_action_sync_uuid = row["sync_uuid"]
+            if source_decision_id is None:
+                source_decision_id = row["source_decision_id"]
+                source_decision_sync_uuid = row["source_decision_sync_uuid"]
+
+        if source_decision_id is not None and source_decision_sync_uuid is None:
+            cursor.execute("SELECT sync_uuid FROM decisions WHERE id = ?", (source_decision_id,))
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError("Source decision not found")
+            source_decision_sync_uuid = row["sync_uuid"]
+
+        cursor.execute(
+            "SELECT id FROM followup_events WHERE fingerprint = ?",
+            (fingerprint,),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            return int(existing["id"]), False
+
+        now = datetime.datetime.now().isoformat()
+        cursor.execute(
+            """
+            INSERT INTO followup_events (
+                created_at, updated_at, event_type, status, severity, reason,
+                fingerprint, goal_id, goal_sync_uuid,
+                source_action_id, source_action_sync_uuid,
+                source_decision_id, source_decision_sync_uuid, sync_uuid
+            ) VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                now, now, event_type, severity, reason, fingerprint,
+                goal_id, goal_sync_uuid,
+                source_action_id, source_action_sync_uuid,
+                source_decision_id, source_decision_sync_uuid,
+                str(uuid.uuid4()),
+            ),
+        )
+        event_id = cursor.lastrowid
+        conn.commit()
+        return int(event_id), True
+
+
+def get_followup_event(event_id: int) -> dict | None:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT f.*, g.title AS goal_title,
+                   sd.topic AS source_decision_topic,
+                   gd.topic AS generated_decision_topic
+            FROM followup_events f
+            LEFT JOIN company_goals g ON g.id = f.goal_id
+            LEFT JOIN decisions sd ON sd.id = f.source_decision_id
+            LEFT JOIN decisions gd ON gd.id = f.generated_decision_id
+            WHERE f.id = ?
+            """,
+            (event_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_followup_events(
+    *,
+    statuses: tuple[str, ...] | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    if statuses and any(status not in VALID_FOLLOWUP_STATUSES for status in statuses):
+        raise ValueError("Unsupported follow-up status filter")
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        params: list = []
+        where = ""
+        if statuses:
+            placeholders = ", ".join("?" for _ in statuses)
+            where = f"WHERE f.status IN ({placeholders})"
+            params.extend(statuses)
+        cursor.execute(
+            f"""
+            SELECT f.*, g.title AS goal_title,
+                   sd.topic AS source_decision_topic,
+                   gd.topic AS generated_decision_topic
+            FROM followup_events f
+            LEFT JOIN company_goals g ON g.id = f.goal_id
+            LEFT JOIN decisions sd ON sd.id = f.source_decision_id
+            LEFT JOIN decisions gd ON gd.id = f.generated_decision_id
+            {where}
+            ORDER BY
+                CASE f.severity
+                    WHEN 'critical' THEN 1
+                    WHEN 'attention' THEN 2
+                    ELSE 3
+                END,
+                f.created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (*params, limit, offset),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def transition_followup_event_status(
+    event_id: int,
+    new_status: str,
+    allowed_from: tuple[str, ...] = ("open",),
+) -> bool:
+    if new_status not in VALID_FOLLOWUP_STATUSES:
+        raise ValueError(f"Unsupported follow-up status: {new_status}")
+    if not allowed_from or any(s not in VALID_FOLLOWUP_STATUSES for s in allowed_from):
+        raise ValueError("Invalid follow-up allowed_from states")
+    now = datetime.datetime.now().isoformat()
+    placeholders = ", ".join("?" for _ in allowed_from)
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            UPDATE followup_events
+            SET status = ?, updated_at = ?,
+                resolved_at = CASE WHEN ? IN ('resolved','dismissed') THEN ? ELSE resolved_at END
+            WHERE id = ? AND status IN ({placeholders})
+            """,
+            (new_status, now, new_status, now, event_id, *allowed_from),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def link_followup_generated_decision(event_id: int, decision_id: int) -> bool:
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise ValueError("Generated decision not found")
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE followup_events
+            SET generated_decision_id = ?, generated_decision_sync_uuid = ?, updated_at = ?
+            WHERE id = ? AND status = 'open' AND generated_decision_id IS NULL
+            """,
+            (decision_id, decision["sync_uuid"], now, event_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
 
 
 # ===================================================================
@@ -2468,6 +2706,15 @@ def export_history_to_jsonl(export_path: str) -> dict:
         goal_rows = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute("""
+            SELECT created_at, updated_at, event_type, status, severity, reason,
+                   fingerprint, goal_sync_uuid, source_action_sync_uuid,
+                   source_decision_sync_uuid, generated_decision_sync_uuid,
+                   resolved_at, sync_uuid
+            FROM followup_events
+        """)
+        followup_rows = [dict(row) for row in cursor.fetchall()]
+
+        cursor.execute("""
             SELECT timestamp, topic, agents_involved, task_description,
                    decision_outcome, sandbox_mode, sync_uuid, goal_sync_uuid
             FROM decisions
@@ -2538,9 +2785,13 @@ def export_history_to_jsonl(export_path: str) -> dict:
         for row in treasury_reservation_rows:
             row["_table"] = "treasury_reservations"
             f.write(json.dumps(row) + "\n")
+        for row in followup_rows:
+            row["_table"] = "followup_events"
+            f.write(json.dumps(row) + "\n")
 
     return {
         "goals": len(goal_rows),
+        "followup_events": len(followup_rows),
         "decisions": len(decision_rows),
         "actions": len(action_rows),
         "outcomes": len(outcome_rows),
@@ -2562,6 +2813,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
         return {"error": f"Import file not found: {import_path}"}
 
     imported_goals = 0
+    imported_followup_events = 0
     imported_decisions = 0
     imported_actions = 0
     imported_outcomes = 0
@@ -2606,6 +2858,10 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     "company_goals": {
                         "created_at", "updated_at", "title", "description",
                         "success_criteria", "priority", "status", "sync_uuid",
+                    },
+                    "followup_events": {
+                        "created_at", "updated_at", "event_type", "status",
+                        "severity", "reason", "fingerprint", "sync_uuid",
                     },
                     "decisions": {
                         "timestamp", "topic", "agents_involved", "task_description",
@@ -2782,6 +3038,38 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
                     row["action_id"] = local_action_id
 
+                if table == "followup_events":
+                    if row.get("event_type") not in VALID_FOLLOWUP_EVENT_TYPES:
+                        skipped += 1
+                        continue
+                    if row.get("status") not in VALID_FOLLOWUP_STATUSES:
+                        skipped += 1
+                        continue
+                    if row.get("severity") not in VALID_FOLLOWUP_SEVERITIES:
+                        skipped += 1
+                        continue
+
+                    for uuid_key, table_name, id_key in (
+                        ("goal_sync_uuid", "company_goals", "goal_id"),
+                        ("source_action_sync_uuid", "action_queue", "source_action_id"),
+                        ("source_decision_sync_uuid", "decisions", "source_decision_id"),
+                        ("generated_decision_sync_uuid", "decisions", "generated_decision_id"),
+                    ):
+                        foreign_uuid = row.get(uuid_key)
+                        if foreign_uuid:
+                            cursor.execute(
+                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",
+                                (foreign_uuid,),
+                            )
+                            foreign_row = cursor.fetchone()
+                            if not foreign_row:
+                                skipped += 1
+                                row = None
+                                break
+                            row[id_key] = foreign_row["id"]
+                    if row is None:
+                        continue
+
                 cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
                 if cursor.fetchone():
                     skipped += 1
@@ -2804,6 +3092,8 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
                 if table == "company_goals":
                     imported_goals += 1
+                elif table == "followup_events":
+                    imported_followup_events += 1
                 elif table == "decisions":
                     imported_decisions += 1
                     imported_decision_id = cursor.lastrowid
@@ -2831,6 +3121,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
     return {
         "goals_imported": imported_goals,
+        "followup_events_imported": imported_followup_events,
         "decisions_imported": imported_decisions,
         "actions_imported": imported_actions,
         "outcomes_imported": imported_outcomes,
