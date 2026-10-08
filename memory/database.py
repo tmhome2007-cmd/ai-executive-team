@@ -42,6 +42,8 @@ VALID_RESOURCE_TYPES = {
 }
 VALID_TREASURY_ENTRY_TYPES = {"funding", "spend", "refund"}
 VALID_TREASURY_RESERVATION_STATUSES = {"active", "released", "consumed"}
+VALID_GOAL_STATUSES = {"draft", "active", "paused", "completed", "abandoned"}
+VALID_GOAL_PRIORITIES = {"critical", "high", "medium", "low"}
 _ACTION_PROVENANCE_LOCK = threading.RLock()
 _ACTION_PROVENANCE_CONTEXT: dict | None = None
 
@@ -82,7 +84,7 @@ def _reject_secret_like_text(*values: str | None) -> None:
 _SYNC_TABLE_COLUMNS = {
     "decisions": {
         "timestamp", "topic", "agents_involved", "task_description",
-        "decision_outcome", "sandbox_mode", "sync_uuid",
+        "decision_outcome", "sandbox_mode", "sync_uuid", "goal_sync_uuid",
     },
     "action_queue": {
         "timestamp", "proposed_by", "action_description", "action_detail",
@@ -110,6 +112,11 @@ _SYNC_TABLE_COLUMNS = {
         "consumed_at", "source_action_sync_uuid", "source_decision_sync_uuid",
         "sync_uuid",
     },
+    "company_goals": {
+        "created_at", "updated_at", "title", "description", "success_criteria",
+        "priority", "target_date", "status", "completed_at", "completion_note",
+        "sync_uuid",
+    },
 }
 
 
@@ -129,6 +136,27 @@ def init_db() -> None:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
+    # Tabel 0: owner-defined company goals / missions.
+    # Agents may work toward these goals but cannot silently create or rewrite
+    # them; mutations happen only through authenticated owner-facing APIs.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS company_goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            success_criteria TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            target_date TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            completed_at TEXT,
+            completion_note TEXT,
+            sync_uuid TEXT NOT NULL UNIQUE
+        )
+    """)
+    conn.commit()
+
     # Tabel 1: Bestuursbesluiten
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS decisions (
@@ -139,7 +167,9 @@ def init_db() -> None:
             task_description TEXT NOT NULL,
             decision_outcome TEXT NOT NULL,
             sandbox_mode INTEGER NOT NULL,
-            sync_uuid TEXT
+            sync_uuid TEXT,
+            goal_id INTEGER,
+            goal_sync_uuid TEXT
         )
     """)
 
@@ -151,6 +181,17 @@ def init_db() -> None:
     # of een rij al eerder is gesynchroniseerd.
     try:
         cursor.execute("ALTER TABLE decisions ADD COLUMN sync_uuid TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE decisions ADD COLUMN goal_id INTEGER")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE decisions ADD COLUMN goal_sync_uuid TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass
@@ -392,6 +433,328 @@ def get_connection():
 
 
 # ===================================================================
+# COMPANY GOALS / MISSIONS
+# ===================================================================
+
+def _normalize_goal_target_date(target_date: str | None) -> str | None:
+    if target_date is None or not target_date.strip():
+        return None
+    value = target_date.strip()
+    try:
+        parsed = datetime.date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("target_date must use YYYY-MM-DD format") from exc
+    return parsed.isoformat()
+
+
+def create_company_goal(
+    title: str,
+    description: str,
+    success_criteria: str,
+    priority: str = "medium",
+    target_date: str | None = None,
+    status: str = "draft",
+) -> int:
+    title = title.strip()
+    description = description.strip()
+    success_criteria = success_criteria.strip()
+    if not title or not description or not success_criteria:
+        raise ValueError("title, description, and success_criteria are required")
+    if priority not in VALID_GOAL_PRIORITIES:
+        raise ValueError(f"Unsupported goal priority: {priority}")
+    if status not in {"draft", "active"}:
+        raise ValueError("New goals may only start as draft or active")
+    target_date = _normalize_goal_target_date(target_date)
+    _reject_secret_like_text(title, description, success_criteria)
+    now = datetime.datetime.now().isoformat()
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO company_goals (
+                created_at, updated_at, title, description, success_criteria,
+                priority, target_date, status, sync_uuid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                now, now, title, description, success_criteria, priority,
+                target_date, status, str(uuid.uuid4()),
+            ),
+        )
+        goal_id = cursor.lastrowid
+        conn.commit()
+        return goal_id
+
+
+def get_company_goal(goal_id: int) -> dict | None:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM company_goals WHERE id = ?", (goal_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_company_goals(
+    *,
+    statuses: tuple[str, ...] | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    if statuses and any(status not in VALID_GOAL_STATUSES for status in statuses):
+        raise ValueError("Unsupported goal status filter")
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        params: list = []
+        where = ""
+        if statuses:
+            placeholders = ", ".join("?" for _ in statuses)
+            where = f"WHERE g.status IN ({placeholders})"
+            params.extend(statuses)
+        cursor.execute(
+            f"""
+            SELECT g.*,
+                   (SELECT COUNT(*) FROM decisions d WHERE d.goal_id = g.id) AS linked_decision_count,
+                   (
+                       SELECT COUNT(*)
+                       FROM action_queue q
+                       JOIN decisions d ON d.id = q.source_decision_id
+                       WHERE d.goal_id = g.id
+                   ) AS linked_action_count,
+                   (
+                       SELECT COUNT(*)
+                       FROM action_outcomes o
+                       JOIN action_queue q ON q.id = o.action_id
+                       JOIN decisions d ON d.id = q.source_decision_id
+                       WHERE d.goal_id = g.id
+                         AND o.outcome_status IN ('succeeded','failed','partial','inconclusive')
+                   ) AS measured_outcome_count
+            FROM company_goals g
+            {where}
+            ORDER BY
+                CASE g.priority
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    ELSE 4
+                END,
+                g.created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (*params, limit, offset),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def update_company_goal(
+    goal_id: int,
+    *,
+    title: str | None = None,
+    description: str | None = None,
+    success_criteria: str | None = None,
+    priority: str | None = None,
+    target_date: str | None = None,
+) -> dict | None:
+    goal = get_company_goal(goal_id)
+    if goal is None:
+        return None
+    if goal["status"] in {"completed", "abandoned"}:
+        raise ValueError("Terminal goals cannot be edited")
+    updates: dict[str, object] = {}
+    for key, value in {
+        "title": title,
+        "description": description,
+        "success_criteria": success_criteria,
+    }.items():
+        if value is not None:
+            clean = value.strip()
+            if not clean:
+                raise ValueError(f"{key} cannot be empty")
+            _reject_secret_like_text(clean)
+            updates[key] = clean
+    if priority is not None:
+        if priority not in VALID_GOAL_PRIORITIES:
+            raise ValueError(f"Unsupported goal priority: {priority}")
+        updates["priority"] = priority
+    if target_date is not None:
+        updates["target_date"] = _normalize_goal_target_date(target_date)
+    if not updates:
+        return goal
+    updates["updated_at"] = datetime.datetime.now().isoformat()
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        assignments = ", ".join(f"{key} = ?" for key in updates)
+        cursor.execute(
+            f"UPDATE company_goals SET {assignments} WHERE id = ?",
+            (*updates.values(), goal_id),
+        )
+        conn.commit()
+    return get_company_goal(goal_id)
+
+
+def transition_company_goal_status(
+    goal_id: int,
+    new_status: str,
+    completion_note: str | None = None,
+) -> dict | None:
+    if new_status not in VALID_GOAL_STATUSES:
+        raise ValueError(f"Unsupported goal status: {new_status}")
+    goal = get_company_goal(goal_id)
+    if goal is None:
+        return None
+
+    allowed = {
+        "draft": {"active", "abandoned"},
+        "active": {"paused", "completed", "abandoned"},
+        "paused": {"active", "completed", "abandoned"},
+        "completed": set(),
+        "abandoned": set(),
+    }
+    if new_status not in allowed[goal["status"]]:
+        raise ValueError(
+            f"Goal cannot transition from '{goal['status']}' to '{new_status}'"
+        )
+    if new_status in {"completed", "abandoned"}:
+        if not (completion_note or "").strip():
+            raise ValueError("completion_note is required for completed/abandoned goals")
+        _reject_secret_like_text(completion_note)
+    elif completion_note is not None:
+        raise ValueError("completion_note is only valid for completed/abandoned goals")
+
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+
+        if new_status in {"completed", "abandoned"}:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM action_queue q
+                JOIN decisions d ON d.id = q.source_decision_id
+                WHERE d.goal_id = ? AND q.status = 'executing'
+                """,
+                (goal_id,),
+            )
+            if int(cursor.fetchone()["count"] or 0) > 0:
+                conn.rollback()
+                raise ValueError(
+                    "Goal cannot be closed while a linked action is executing; "
+                    "review the real-world result first"
+                )
+
+            # Terminal goal closure cancels unexecuted goal-specific work and
+            # releases its reserved capital so treasury cannot remain stranded.
+            cursor.execute(
+                """
+                UPDATE treasury_reservations
+                SET status = 'released', released_at = ?
+                WHERE status = 'active'
+                  AND source_action_id IN (
+                      SELECT q.id
+                      FROM action_queue q
+                      JOIN decisions d ON d.id = q.source_decision_id
+                      WHERE d.goal_id = ?
+                        AND q.status IN ('pending', 'approved')
+                  )
+                """,
+                (now, goal_id),
+            )
+            cursor.execute(
+                """
+                UPDATE action_queue
+                SET status = 'rejected', reviewed_at = ?
+                WHERE id IN (
+                    SELECT q.id
+                    FROM action_queue q
+                    JOIN decisions d ON d.id = q.source_decision_id
+                    WHERE d.goal_id = ?
+                      AND q.status IN ('pending', 'approved')
+                )
+                """,
+                (now, goal_id),
+            )
+            cursor.execute(
+                """
+                UPDATE resource_requests
+                SET status = 'rejected', reviewed_at = ?
+                WHERE source_decision_id IN (
+                    SELECT id FROM decisions WHERE goal_id = ?
+                )
+                  AND status IN ('pending', 'approved')
+                """,
+                (now, goal_id),
+            )
+
+        cursor.execute(
+            """
+            UPDATE company_goals
+            SET status = ?, updated_at = ?,
+                completed_at = CASE WHEN ? IN ('completed','abandoned') THEN ? ELSE NULL END,
+                completion_note = CASE WHEN ? IN ('completed','abandoned') THEN ? ELSE NULL END
+            WHERE id = ? AND status = ?
+            """,
+            (
+                new_status, now, new_status, now, new_status,
+                completion_note.strip() if completion_note else None,
+                goal_id, goal["status"],
+            ),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            raise ValueError("Goal status transition race detected")
+        conn.commit()
+    return get_company_goal(goal_id)
+
+
+def get_company_goal_lineage(goal_id: int) -> dict | None:
+    goal = get_company_goal(goal_id)
+    if goal is None:
+        return None
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id
+            FROM decisions
+            WHERE goal_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (goal_id,),
+        )
+        decision_ids = [row["id"] for row in cursor.fetchall()]
+
+    decision_lineages = [
+        lineage
+        for decision_id in decision_ids
+        if (lineage := get_decision_lineage(decision_id)) is not None
+    ]
+    outcome_counts = {"succeeded": 0, "failed": 0, "partial": 0, "inconclusive": 0}
+    total_spend: dict[str, float] = {}
+    for lineage in decision_lineages:
+        for action in lineage.get("actions", []):
+            status = action.get("outcome_status")
+            if status in outcome_counts:
+                outcome_counts[status] += 1
+        for entry in lineage.get("treasury", {}).get("entries", []):
+            if entry.get("entry_type") == "spend":
+                code = entry["currency"]
+                total_spend[code] = round(
+                    total_spend.get(code, 0.0) + float(entry["amount"]),
+                    2,
+                )
+
+    return {
+        "goal": goal,
+        "decision_count": len(decision_lineages),
+        "outcome_counts": outcome_counts,
+        "spend_by_currency": total_spend,
+        "decisions": decision_lineages,
+    }
+
+
+# ===================================================================
 # FUNCTIES VOOR BESTUURSBESLUITEN (DECISIONS)
 # ===================================================================
 
@@ -400,7 +763,8 @@ def log_decision(
     agents_involved: list[str],
     task_description: str,
     decision_outcome: str,
-    sandbox_mode: bool = True
+    sandbox_mode: bool = True,
+    goal_id: int | None = None,
 ) -> int:
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
@@ -409,14 +773,33 @@ def log_decision(
     agents_str = ",".join(agents_involved)
     sandbox_flag = 1 if sandbox_mode else 0
     new_sync_uuid = str(uuid.uuid4())
+    goal_sync_uuid = None
 
     with get_connection() as conn:
         cursor = conn.cursor()
+        if goal_id is not None:
+            cursor.execute(
+                "SELECT sync_uuid, status FROM company_goals WHERE id = ?",
+                (goal_id,),
+            )
+            goal = cursor.fetchone()
+            if goal is None:
+                raise ValueError("Goal not found")
+            if goal["status"] != "active":
+                raise ValueError(
+                    f"Decisions may only be linked to active goals; current goal status is '{goal['status']}'"
+                )
+            goal_sync_uuid = goal["sync_uuid"]
+
         cursor.execute("""
             INSERT INTO decisions (
-                timestamp, topic, agents_involved, task_description, decision_outcome, sandbox_mode, sync_uuid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (timestamp, topic, agents_str, task_description, decision_outcome, sandbox_flag, new_sync_uuid))
+                timestamp, topic, agents_involved, task_description, decision_outcome,
+                sandbox_mode, sync_uuid, goal_id, goal_sync_uuid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            timestamp, topic, agents_str, task_description, decision_outcome,
+            sandbox_flag, new_sync_uuid, goal_id, goal_sync_uuid,
+        ))
         
         decision_id = cursor.lastrowid
         cursor.execute(
@@ -440,7 +823,8 @@ def get_decision_by_id(decision_id: int) -> dict | None:
             SELECT
                 d.id, d.timestamp, d.topic, d.agents_involved,
                 d.task_description, d.decision_outcome, d.sandbox_mode,
-                d.sync_uuid,
+                d.sync_uuid, d.goal_id, d.goal_sync_uuid,
+                g.title AS goal_title, g.status AS goal_status,
                 COALESCE(a.status, 'pending') AS approval_status,
                 a.reviewed_at AS approval_reviewed_at,
                 COALESCE(a.preparation_status, 'not_started') AS preparation_status,
@@ -458,6 +842,7 @@ def get_decision_by_id(decision_id: int) -> dict | None:
                 ) AS linked_resource_request_count
             FROM decisions d
             LEFT JOIN decision_approvals a ON a.decision_id = d.id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             WHERE d.id = ?
             """,
             (decision_id,),
@@ -574,6 +959,7 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
             SELECT
                 d.id, d.timestamp, d.topic, d.agents_involved, d.task_description,
                 d.decision_outcome, d.sandbox_mode, d.sync_uuid,
+                d.goal_id, d.goal_sync_uuid, g.title AS goal_title, g.status AS goal_status,
                 COALESCE(a.status, 'pending') AS approval_status,
                 a.reviewed_at AS approval_reviewed_at,
                 COALESCE(a.preparation_status, 'not_started') AS preparation_status,
@@ -583,9 +969,15 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
                     SELECT COUNT(*)
                     FROM action_queue q
                     WHERE q.source_decision_id = d.id
-                ) AS linked_action_count
+                ) AS linked_action_count,
+                (
+                    SELECT COUNT(*)
+                    FROM resource_requests r
+                    WHERE r.source_decision_id = d.id
+                ) AS linked_resource_request_count
             FROM decisions d
             LEFT JOIN decision_approvals a ON a.decision_id = d.id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             ORDER BY d.timestamp DESC
             LIMIT ? OFFSET ?
         """, (limit, offset))
@@ -603,6 +995,7 @@ def action_provenance_scope(
     decision_id: int,
     decision_sync_uuid: str,
     phase: str = "preparation",
+    allowed_browser_urls: set[str] | None = None,
 ):
     """
     Process-wide provenance scope for one serialized CrewAI execution.
@@ -620,6 +1013,11 @@ def action_provenance_scope(
         "phase": phase,
         "created_action_ids": [],
         "created_resource_request_ids": [],
+        "allowed_browser_urls": {
+            str(url).strip()
+            for url in (allowed_browser_urls or set())
+            if str(url).strip()
+        },
     }
 
     with _ACTION_PROVENANCE_LOCK:
@@ -642,6 +1040,22 @@ def _current_action_provenance() -> dict | None:
 # ===================================================================
 # STRUCTURED RESOURCE / CAPABILITY REQUESTS
 # ===================================================================
+
+def browser_url_allowed_by_provenance(url: str) -> bool:
+    """
+    Preparation browser actions may only target URLs explicitly supplied in
+    trusted preparation context. Independent/manual proposals without an
+    active provenance scope keep their existing human-review behavior.
+    """
+    provenance = _current_action_provenance()
+    if provenance is None:
+        return True
+    allowed = provenance.get("allowed_browser_urls")
+    if allowed is None:
+        return True
+    candidate = (url or "").strip()
+    return candidate in allowed
+
 
 def propose_resource_request(
     requested_by: str,
@@ -707,9 +1121,11 @@ def get_resource_request_by_id(request_id: int) -> dict | None:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT r.*, d.topic AS source_decision_topic
+            SELECT r.*, d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title
             FROM resource_requests r
             LEFT JOIN decisions d ON d.id = r.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             WHERE r.id = ?
             """,
             (request_id,),
@@ -732,9 +1148,11 @@ def get_resource_requests(
             placeholders = ", ".join("?" for _ in statuses)
             cursor.execute(
                 f"""
-                SELECT r.*, d.topic AS source_decision_topic
+                SELECT r.*, d.topic AS source_decision_topic,
+                       d.goal_id AS source_goal_id, g.title AS source_goal_title
                 FROM resource_requests r
                 LEFT JOIN decisions d ON d.id = r.source_decision_id
+                LEFT JOIN company_goals g ON g.id = d.goal_id
                 WHERE r.status IN ({placeholders})
                 ORDER BY r.timestamp DESC
                 LIMIT ? OFFSET ?
@@ -744,9 +1162,11 @@ def get_resource_requests(
         else:
             cursor.execute(
                 """
-                SELECT r.*, d.topic AS source_decision_topic
+                SELECT r.*, d.topic AS source_decision_topic,
+                       d.goal_id AS source_goal_id, g.title AS source_goal_title
                 FROM resource_requests r
                 LEFT JOIN decisions d ON d.id = r.source_decision_id
+                LEFT JOIN company_goals g ON g.id = d.goal_id
                 ORDER BY r.timestamp DESC
                 LIMIT ? OFFSET ?
                 """,
@@ -760,9 +1180,11 @@ def get_resource_requests_for_decision(decision_id: int) -> list[dict]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT r.*, d.topic AS source_decision_topic
+            SELECT r.*, d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title
             FROM resource_requests r
             LEFT JOIN decisions d ON d.id = r.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             WHERE r.source_decision_id = ?
             ORDER BY r.timestamp ASC
             """,
@@ -925,9 +1347,11 @@ def get_treasury_history(limit: int = 50, offset: int = 0) -> list[dict]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT e.*, d.topic AS source_decision_topic
+            SELECT e.*, d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title
             FROM treasury_entries e
             LEFT JOIN decisions d ON d.id = e.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             ORDER BY e.timestamp DESC
             LIMIT ? OFFSET ?
             """,
@@ -1381,11 +1805,13 @@ def get_actions_after_id(action_id: int) -> list[dict]:
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                    q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                    d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
             LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.id > ?
             ORDER BY q.id ASC
@@ -1406,11 +1832,13 @@ def get_pending_actions() -> list[dict]:
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                    q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                    d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
             LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.status IN ('pending', 'approved', 'executing')
             ORDER BY q.timestamp DESC
@@ -1893,11 +2321,13 @@ def get_action_by_id(action_id: int) -> dict | None:
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                    q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                    d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
             LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.id = ?
         """, (action_id,))
@@ -1917,12 +2347,14 @@ def get_actions_for_decision(decision_id: int) -> list[dict]:
                    q.result_detail, q.sync_uuid, q.source_decision_id,
                    q.source_decision_sync_uuid, q.source_phase,
                    d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount,
                    o.currency, o.outcome_status, o.actual_outcome, o.actual_impact,
                    o.actual_cost_amount, o.measured_at, o.next_recommendation,
                    o.notes AS outcome_notes
             FROM action_queue q
             LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.source_decision_id = ?
             ORDER BY q.timestamp ASC
@@ -1966,11 +2398,13 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                        q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                        q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                        d.topic AS source_decision_topic,
+                       d.goal_id AS source_goal_id, g.title AS source_goal_title,
                        o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                        o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                        o.measured_at, o.next_recommendation, o.notes AS outcome_notes
                 FROM action_queue q
                 LEFT JOIN decisions d ON d.id = q.source_decision_id
+                LEFT JOIN company_goals g ON g.id = d.goal_id
                 LEFT JOIN action_outcomes o ON o.action_id = q.id
                 WHERE q.status = ?
                 ORDER BY q.timestamp DESC
@@ -1982,11 +2416,13 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                        q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                        q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                        d.topic AS source_decision_topic,
+                       d.goal_id AS source_goal_id, g.title AS source_goal_title,
                        o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                        o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                        o.measured_at, o.next_recommendation, o.notes AS outcome_notes
                 FROM action_queue q
                 LEFT JOIN decisions d ON d.id = q.source_decision_id
+                LEFT JOIN company_goals g ON g.id = d.goal_id
                 LEFT JOIN action_outcomes o ON o.action_id = q.id
                 ORDER BY q.timestamp DESC
                 LIMIT ? OFFSET ?
@@ -2023,7 +2459,19 @@ def export_history_to_jsonl(export_path: str) -> dict:
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT * FROM decisions")
+        cursor.execute("""
+            SELECT created_at, updated_at, title, description, success_criteria,
+                   priority, target_date, status, completed_at, completion_note,
+                   sync_uuid
+            FROM company_goals
+        """)
+        goal_rows = [dict(row) for row in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT timestamp, topic, agents_involved, task_description,
+                   decision_outcome, sandbox_mode, sync_uuid, goal_sync_uuid
+            FROM decisions
+        """)
         decision_rows = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute("""
@@ -2069,6 +2517,9 @@ def export_history_to_jsonl(export_path: str) -> dict:
         treasury_reservation_rows = [dict(row) for row in cursor.fetchall()]
 
     with open(export_path, "w", encoding="utf-8") as f:
+        for row in goal_rows:
+            row["_table"] = "company_goals"
+            f.write(json.dumps(row) + "\n")
         for row in decision_rows:
             row["_table"] = "decisions"
             f.write(json.dumps(row) + "\n")
@@ -2089,6 +2540,7 @@ def export_history_to_jsonl(export_path: str) -> dict:
             f.write(json.dumps(row) + "\n")
 
     return {
+        "goals": len(goal_rows),
         "decisions": len(decision_rows),
         "actions": len(action_rows),
         "outcomes": len(outcome_rows),
@@ -2109,6 +2561,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
     if not os.path.exists(import_path):
         return {"error": f"Import file not found: {import_path}"}
 
+    imported_goals = 0
     imported_decisions = 0
     imported_actions = 0
     imported_outcomes = 0
@@ -2150,6 +2603,10 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
                 allowed_columns = _SYNC_TABLE_COLUMNS[table]
                 required_columns = {
+                    "company_goals": {
+                        "created_at", "updated_at", "title", "description",
+                        "success_criteria", "priority", "status", "sync_uuid",
+                    },
                     "decisions": {
                         "timestamp", "topic", "agents_involved", "task_description",
                         "decision_outcome", "sandbox_mode", "sync_uuid",
@@ -2180,6 +2637,33 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 ):
                     skipped += 1
                     continue
+
+                if table == "company_goals":
+                    if row.get("status") not in VALID_GOAL_STATUSES:
+                        skipped += 1
+                        continue
+                    if row.get("priority") not in VALID_GOAL_PRIORITIES:
+                        skipped += 1
+                        continue
+                    try:
+                        if row.get("target_date"):
+                            _normalize_goal_target_date(row.get("target_date"))
+                    except ValueError:
+                        skipped += 1
+                        continue
+
+                if table == "decisions":
+                    goal_sync_uuid = row.get("goal_sync_uuid")
+                    if goal_sync_uuid:
+                        cursor.execute(
+                            "SELECT id FROM company_goals WHERE sync_uuid = ?",
+                            (goal_sync_uuid,),
+                        )
+                        goal_row = cursor.fetchone()
+                        if not goal_row:
+                            skipped += 1
+                            continue
+                        row["goal_id"] = goal_row["id"]
 
                 if table == "action_queue":
                     if row.get("status") not in VALID_ACTION_STATUSES:
@@ -2318,7 +2802,9 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     skipped += 1
                     continue
 
-                if table == "decisions":
+                if table == "company_goals":
+                    imported_goals += 1
+                elif table == "decisions":
                     imported_decisions += 1
                     imported_decision_id = cursor.lastrowid
                     cursor.execute(
@@ -2344,6 +2830,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
         conn.commit()
 
     return {
+        "goals_imported": imported_goals,
         "decisions_imported": imported_decisions,
         "actions_imported": imported_actions,
         "outcomes_imported": imported_outcomes,

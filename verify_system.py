@@ -3383,6 +3383,494 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 104: DYNAMIC CHECK — goal lifecycle is owner-controlled and terminal states lock edits
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_104
+    from memory.database import (
+        init_db as _init_db_104,
+        create_company_goal as _create_goal_104,
+        get_company_goal as _get_goal_104,
+        transition_company_goal_status as _transition_goal_104,
+        update_company_goal as _update_goal_104,
+        log_decision as _decision_104,
+        get_decision_by_id as _get_decision_104,
+        action_provenance_scope as _scope_104,
+        propose_action as _propose_action_104,
+        propose_resource_request as _propose_resource_104,
+        transition_resource_request_status as _resource_status_104,
+        get_resource_request_by_id as _get_resource_104,
+        add_treasury_entry as _fund_104,
+        approve_action_with_treasury as _approve_action_104,
+        get_action_by_id as _get_action_104,
+        get_treasury_summary as _treasury_104,
+    )
+
+    original_db_104 = _verify_config_104.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_104.DATABASE_PATH = os.path.join(temp_dir, "goal-lifecycle.db")
+            _init_db_104()
+            goal_id = _create_goal_104(
+                "Grow test capital",
+                "Grow the company capital using evidence-based actions.",
+                "Reach 200 EUR treasury cash while preserving auditability.",
+                priority="high",
+                target_date="2027-01-31",
+                status="draft",
+            )
+            draft = _get_goal_104(goal_id)
+            active = _transition_goal_104(goal_id, "active")
+            paused = _transition_goal_104(goal_id, "paused")
+            resumed = _transition_goal_104(goal_id, "active")
+            completed = _transition_goal_104(
+                goal_id,
+                "completed",
+                "Owner verified the stated success criteria.",
+            )
+
+            edit_blocked = False
+            try:
+                _update_goal_104(goal_id, title="Should not change")
+            except ValueError as exc:
+                edit_blocked = "Terminal goals cannot be edited" in str(exc)
+
+            invalid_transition_blocked = False
+            try:
+                _transition_goal_104(goal_id, "active")
+            except ValueError as exc:
+                invalid_transition_blocked = "cannot transition" in str(exc)
+
+            cleanup_goal_id = _create_goal_104(
+                "Closure cleanup", "Mission", "Criteria", status="active"
+            )
+            cleanup_decision_id = _decision_104(
+                "Cleanup decision", ["cfo"], "Task", "Outcome", True, goal_id=cleanup_goal_id
+            )
+            cleanup_decision = _get_decision_104(cleanup_decision_id)
+            _fund_104("funding", 50, "EUR", "Cleanup capital")
+            with _scope_104(
+                cleanup_decision_id,
+                cleanup_decision["sync_uuid"],
+                "preparation",
+            ):
+                cleanup_action_id = _propose_action_104(
+                    "CFO",
+                    "Unexecuted paid goal work",
+                    "printf no-run",
+                    "shell",
+                    expected_cost_amount=20,
+                    currency="EUR",
+                )
+                cleanup_resource_id = _propose_resource_104(
+                    "COO",
+                    "access",
+                    "Test access",
+                    "Needed only for this goal",
+                )
+            _approve_action_104(cleanup_action_id)
+            _resource_status_104(cleanup_resource_id, "approved", ("pending",))
+            _transition_goal_104(
+                cleanup_goal_id,
+                "completed",
+                "Owner closes the goal and cancels remaining work.",
+            )
+            cleanup_action = _get_action_104(cleanup_action_id)
+            cleanup_resource = _get_resource_104(cleanup_resource_id)
+            cleanup_treasury = _treasury_104("EUR")["currencies"]["EUR"]
+            cleanup_ok = (
+                cleanup_action["status"] == "rejected"
+                and cleanup_resource["status"] == "rejected"
+                and cleanup_treasury
+                    == {"cash_balance": 50.0, "reserved": 0.0, "available": 50.0}
+            )
+
+            if (
+                draft["status"] == "draft"
+                and active["status"] == "active"
+                and paused["status"] == "paused"
+                and resumed["status"] == "active"
+                and completed["status"] == "completed"
+                and completed["completion_note"]
+                and edit_blocked
+                and invalid_transition_blocked
+                and cleanup_ok
+            ):
+                log_pass("company goal lifecycle is owner-controlled and terminal closure cancels unexecuted work/releases capital")
+            else:
+                log_fail(
+                    "Company goal lifecycle",
+                    f"draft={draft}, active={active}, paused={paused}, resumed={resumed}, "
+                    f"completed={completed}, edit_blocked={edit_blocked}, "
+                    f"invalid_transition_blocked={invalid_transition_blocked}, cleanup_ok={cleanup_ok}",
+                )
+    finally:
+        _verify_config_104.DATABASE_PATH = original_db_104
+except Exception as e:
+    log_fail("Company goal lifecycle check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 105: DYNAMIC CHECK — decisions link only to active goals
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_105
+    from memory.database import (
+        init_db as _init_db_105,
+        create_company_goal as _create_goal_105,
+        transition_company_goal_status as _transition_goal_105,
+        log_decision as _decision_105,
+        get_decision_by_id as _get_decision_105,
+    )
+
+    original_db_105 = _verify_config_105.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_105.DATABASE_PATH = os.path.join(temp_dir, "goal-decision.db")
+            _init_db_105()
+            draft_goal = _create_goal_105(
+                "Goal decision test", "Mission", "Success criteria", status="draft"
+            )
+
+            draft_blocked = False
+            try:
+                _decision_105("Blocked", ["ceo"], "Task", "Outcome", True, goal_id=draft_goal)
+            except ValueError as exc:
+                draft_blocked = "active goals" in str(exc)
+
+            _transition_goal_105(draft_goal, "active")
+            decision_id = _decision_105(
+                "Linked decision", ["ceo"], "Task", "Outcome", True, goal_id=draft_goal
+            )
+            linked = _get_decision_105(decision_id)
+            _transition_goal_105(draft_goal, "paused")
+
+            paused_blocked = False
+            try:
+                _decision_105("Blocked paused", ["ceo"], "Task", "Outcome", True, goal_id=draft_goal)
+            except ValueError as exc:
+                paused_blocked = "active goals" in str(exc)
+
+            if (
+                draft_blocked
+                and paused_blocked
+                and linked["goal_id"] == draft_goal
+                and linked["goal_title"] == "Goal decision test"
+                and linked["goal_status"] == "active"
+                and linked["goal_sync_uuid"]
+            ):
+                log_pass("decisions persist stable goal provenance and only active goals can receive new work")
+            else:
+                log_fail(
+                    "Goal decision linkage",
+                    f"draft_blocked={draft_blocked}, paused_blocked={paused_blocked}, linked={linked}",
+                )
+    finally:
+        _verify_config_105.DATABASE_PATH = original_db_105
+except Exception as e:
+    log_fail("Goal decision linkage check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 106: DYNAMIC CHECK — goal lineage aggregates outcomes and spend
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_106
+    from memory.database import (
+        init_db as _init_db_106,
+        create_company_goal as _create_goal_106,
+        log_decision as _decision_106,
+        get_decision_by_id as _get_decision_106,
+        action_provenance_scope as _scope_106,
+        propose_action as _propose_106,
+        add_treasury_entry as _fund_106,
+        approve_action_with_treasury as _approve_106,
+        update_action_status as _status_106,
+        update_action_outcome_with_treasury as _outcome_106,
+        get_company_goal_lineage as _lineage_106,
+    )
+
+    original_db_106 = _verify_config_106.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_106.DATABASE_PATH = os.path.join(temp_dir, "goal-lineage.db")
+            _init_db_106()
+            goal_id = _create_goal_106(
+                "Goal lineage", "Mission", "Measurable success", status="active"
+            )
+            decision_id = _decision_106(
+                "Goal-linked strategy", ["cfo"], "Evidence", "Approved direction", True, goal_id=goal_id
+            )
+            decision = _get_decision_106(decision_id)
+            _fund_106("funding", 100, "EUR", "Owner capital")
+            with _scope_106(decision_id, decision["sync_uuid"], "preparation"):
+                action_id = _propose_106(
+                    "CFO",
+                    "Goal-linked paid action",
+                    "printf goal-lineage",
+                    "shell",
+                    expected_outcome="Produce measurable result",
+                    expected_impact="Advance goal",
+                    expected_cost_amount=20,
+                    currency="EUR",
+                )
+            _approve_106(action_id)
+            _status_106(action_id, "executed")
+            _outcome_106(
+                action_id,
+                actual_cost_amount=15,
+                currency="EUR",
+                outcome_status="succeeded",
+                actual_outcome="Result achieved",
+            )
+            lineage = _lineage_106(goal_id)
+
+            if (
+                lineage["decision_count"] == 1
+                and lineage["outcome_counts"]["succeeded"] == 1
+                and lineage["spend_by_currency"] == {"EUR": 15.0}
+                and lineage["decisions"][0]["decision"]["goal_id"] == goal_id
+                and lineage["decisions"][0]["actions"][0]["source_goal_id"] == goal_id
+            ):
+                log_pass("goal lineage derives progress evidence from linked decisions, outcomes, and treasury spend")
+            else:
+                log_fail("Goal lineage aggregation", f"lineage={lineage}")
+    finally:
+        _verify_config_106.DATABASE_PATH = original_db_106
+except Exception as e:
+    log_fail("Goal lineage aggregation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 107: DYNAMIC CHECK — goal sync resolves decision link by stable UUID
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_107
+    from memory.database import (
+        init_db as _init_db_107,
+        create_company_goal as _create_goal_107,
+        get_company_goal as _get_goal_107,
+        log_decision as _decision_107,
+        export_history_to_jsonl as _export_107,
+        import_history_from_jsonl as _import_107,
+        get_company_goals as _goals_107,
+        get_recent_decisions as _decisions_107,
+    )
+
+    original_db_107 = _verify_config_107.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_db = os.path.join(temp_dir, "goal-source.db")
+            target_db = os.path.join(temp_dir, "goal-target.db")
+            export_path = os.path.join(temp_dir, "goal-sync.jsonl")
+
+            _verify_config_107.DATABASE_PATH = source_db
+            _init_db_107()
+            source_goal_id = _create_goal_107(
+                "Synced goal", "Mission", "Criteria", status="active"
+            )
+            source_goal = _get_goal_107(source_goal_id)
+            _decision_107(
+                "Synced goal decision", ["ceo"], "Task", "Outcome", True, goal_id=source_goal_id
+            )
+            _export_107(export_path)
+
+            _verify_config_107.DATABASE_PATH = target_db
+            _init_db_107()
+            _create_goal_107("Local goal", "Local", "Local criteria", status="active")
+            summary = _import_107(export_path)
+
+            imported_goal = next(
+                row for row in _goals_107(limit=20)
+                if row["sync_uuid"] == source_goal["sync_uuid"]
+            )
+            imported_decision = next(
+                row for row in _decisions_107(limit=20)
+                if row["topic"] == "Synced goal decision"
+            )
+
+            if (
+                summary.get("goals_imported") == 1
+                and imported_goal["id"] != source_goal_id
+                and imported_decision["goal_id"] == imported_goal["id"]
+                and imported_decision["goal_sync_uuid"] == source_goal["sync_uuid"]
+            ):
+                log_pass("goal sync reconstructs local decision links from stable goal UUIDs")
+            else:
+                log_fail(
+                    "Goal sync provenance",
+                    f"summary={summary}, goal={imported_goal}, decision={imported_decision}",
+                )
+    finally:
+        _verify_config_107.DATABASE_PATH = original_db_107
+except Exception as e:
+    log_fail("Goal sync provenance check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 108: DYNAMIC CHECK — goal validation rejects unsafe/invalid metadata
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_108
+    from memory.database import init_db as _init_db_108, create_company_goal as _create_goal_108
+
+    original_db_108 = _verify_config_108.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_108.DATABASE_PATH = os.path.join(temp_dir, "goal-validation.db")
+            _init_db_108()
+
+            bad_date = False
+            secret_blocked = False
+            bad_priority = False
+            try:
+                _create_goal_108("Date", "Mission", "Criteria", target_date="31-01-2027")
+            except ValueError as exc:
+                bad_date = "YYYY-MM-DD" in str(exc)
+            try:
+                _create_goal_108("Secret", "api_key=should-never-be-here", "Criteria")
+            except ValueError as exc:
+                secret_blocked = "Potential secret detected" in str(exc)
+            try:
+                _create_goal_108("Priority", "Mission", "Criteria", priority="urgent")
+            except ValueError as exc:
+                bad_priority = "Unsupported goal priority" in str(exc)
+
+            if bad_date and secret_blocked and bad_priority:
+                log_pass("goal metadata validates dates/priorities and rejects obvious secret-like content")
+            else:
+                log_fail(
+                    "Goal metadata validation",
+                    f"bad_date={bad_date}, secret_blocked={secret_blocked}, bad_priority={bad_priority}",
+                )
+    finally:
+        _verify_config_108.DATABASE_PATH = original_db_108
+except Exception as e:
+    log_fail("Goal metadata validation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 109: STATIC CHECK — goal APIs, preparation gate, sync, and dashboard are integrated
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_109 = f.read()
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content_109 = f.read()
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_109 = f.read()
+
+    required_main = [
+        '"/goals"',
+        '"/goals/{goal_id}"',
+        '"/goals/{goal_id}/status"',
+        '"/goals/{goal_id}/lineage"',
+        "goal_id: Optional[int]",
+        "Goal must be active before decisions can be linked to it",
+        "Linked company goal must remain active before preparation",
+        "goal completion remains an owner decision",
+        "def _require_linked_goal_active",
+        'operation="approve decision direction"',
+        'operation="approve resource request"',
+        'operation="fulfill resource request"',
+        'operation="approve action"',
+        'operation="execute action"',
+    ]
+    required_db = [
+        "CREATE TABLE IF NOT EXISTS company_goals",
+        "VALID_GOAL_STATUSES",
+        "VALID_GOAL_PRIORITIES",
+        "goal_sync_uuid",
+        "get_company_goal_lineage",
+        "Goal cannot be closed while a linked action is executing",
+        "Terminal goal closure cancels unexecuted goal-specific work",
+        '"company_goals": {',
+        '"goals_imported"',
+    ]
+    required_dashboard = [
+        "Company Goals / Missions",
+        "Measurable success criteria",
+        "Create Goal",
+        "Company Goal (optional)",
+        "Only active goals can receive new decisions",
+        "View Lineage",
+        "Complete",
+        "Abandon",
+    ]
+
+    missing_main = [item for item in required_main if item not in main_content_109]
+    missing_db = [item for item in required_db if item not in db_content_109]
+    missing_dashboard = [item for item in required_dashboard if item not in dashboard_content_109]
+
+    if not missing_main and not missing_db and not missing_dashboard:
+        log_pass("goal APIs, owner lifecycle gates, stable sync, lineage, and dashboard are integrated")
+    else:
+        log_fail(
+            "Goal system integration",
+            f"missing_main={missing_main}, missing_db={missing_db}, "
+            f"missing_dashboard={missing_dashboard}",
+        )
+except Exception as e:
+    log_fail("Goal system integration check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 110: DYNAMIC/STATIC CHECK — preparation browser URLs must be evidence-grounded
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_110
+    from memory.database import (
+        init_db as _init_db_110,
+        action_provenance_scope as _scope_110,
+        browser_url_allowed_by_provenance as _url_allowed_110,
+    )
+
+    original_db_110 = _verify_config_110.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_110.DATABASE_PATH = os.path.join(temp_dir, "browser-url-grounding.db")
+            _init_db_110()
+
+            outside_scope_allowed = _url_allowed_110("https://manual-owner-reviewed.example")
+            with _scope_110(
+                1,
+                "decision-sync-test",
+                "preparation",
+                allowed_browser_urls={"https://example.com/supplied"},
+            ):
+                supplied_allowed = _url_allowed_110("https://example.com/supplied")
+                invented_blocked = not _url_allowed_110("https://goal-system-integration.com")
+    finally:
+        _verify_config_110.DATABASE_PATH = original_db_110
+
+    with open("tools/browser_action_tool.py", "r", encoding="utf-8") as f:
+        browser_tool_content_110 = f.read()
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_110 = f.read()
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_110 = f.read()
+
+    static_ok = all([
+        "browser_url_allowed_by_provenance(url)" in browser_tool_content_110,
+        "Browser action proposal rejected: this URL was not present" in browser_tool_content_110,
+        "Never invent a domain or URL" in main_content_110,
+        "allowed_browser_urls" in main_content_110,
+        'provenance_context.get("allowed_browser_urls", [])' in meeting_content_110,
+    ])
+
+    if outside_scope_allowed and supplied_allowed and invented_blocked and static_ok:
+        log_pass("preparation browser proposals allow supplied URLs but reject invented domains before DB proposal creation")
+    else:
+        log_fail(
+            "Preparation browser URL grounding",
+            f"outside_scope_allowed={outside_scope_allowed}, supplied_allowed={supplied_allowed}, "
+            f"invented_blocked={invented_blocked}, static_ok={static_ok}",
+        )
+except Exception as e:
+    log_fail("Preparation browser URL grounding check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)

@@ -21,6 +21,10 @@ interface DecisionHistoryItem {
   preparation_outcome?: string | null;
   linked_action_count?: number;
   linked_resource_request_count?: number;
+  goal_id?: number | null;
+  goal_sync_uuid?: string | null;
+  goal_title?: string | null;
+  goal_status?: string | null;
 }
 
 interface DailyResearchStatus {
@@ -33,6 +37,7 @@ interface DailyResearchStatus {
 interface DecisionResponse {
   database_id: number;
   topic: string;
+  goal_id?: number | null;
   final_decision: string;
   participants: string[];
   individual_outputs?: Record<string, string>;
@@ -68,6 +73,8 @@ interface PendingAction {
   source_decision_sync_uuid?: string | null;
   source_decision_topic?: string | null;
   source_phase?: string | null;
+  source_goal_id?: number | null;
+  source_goal_title?: string | null;
 }
 
 interface ResourceRequest {
@@ -88,6 +95,34 @@ interface ResourceRequest {
   source_decision_sync_uuid?: string | null;
   source_decision_topic?: string | null;
   source_phase?: string | null;
+  source_goal_id?: number | null;
+  source_goal_title?: string | null;
+}
+
+interface CompanyGoal {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  title: string;
+  description: string;
+  success_criteria: string;
+  priority: "critical" | "high" | "medium" | "low";
+  target_date?: string | null;
+  status: "draft" | "active" | "paused" | "completed" | "abandoned";
+  completed_at?: string | null;
+  completion_note?: string | null;
+  sync_uuid: string;
+  linked_decision_count?: number;
+  linked_action_count?: number;
+  measured_outcome_count?: number;
+}
+
+interface GoalLineage {
+  goal: CompanyGoal;
+  decision_count: number;
+  outcome_counts: Record<string, number>;
+  spend_by_currency: Record<string, number>;
+  decisions: DecisionLineage[];
 }
 
 interface TreasuryLineageEntry {
@@ -577,6 +612,16 @@ export default function DashboardPage() {
   const [actionHistory, setActionHistory] = useState<PendingAction[]>([]);
   const [resourceRequests, setResourceRequests] = useState<ResourceRequest[]>([]);
   const [resourceErrors, setResourceErrors] = useState<Record<number, string>>({});
+  const [goals, setGoals] = useState<CompanyGoal[]>([]);
+  const [goalError, setGoalError] = useState<string | null>(null);
+  const [goalLineage, setGoalLineage] = useState<Record<number, GoalLineage>>({});
+  const [goalTitle, setGoalTitle] = useState("");
+  const [goalDescription, setGoalDescription] = useState("");
+  const [goalSuccessCriteria, setGoalSuccessCriteria] = useState("");
+  const [goalPriority, setGoalPriority] = useState<CompanyGoal["priority"]>("medium");
+  const [goalTargetDate, setGoalTargetDate] = useState("");
+  const [goalStartActive, setGoalStartActive] = useState(true);
+  const [creatingGoal, setCreatingGoal] = useState(false);
   const [treasury, setTreasury] = useState<TreasurySummary>({ currencies: {} });
   const [fundAmount, setFundAmount] = useState("");
   const [fundCurrency, setFundCurrency] = useState("");
@@ -723,6 +768,119 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchGoals = useCallback(async (currentKey: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/goals?limit=100`, {
+        headers: { "X-API-Key": currentKey },
+      });
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!res.ok) throw new Error("Could not fetch company goals.");
+      setGoals(await res.json());
+    } catch (err: any) {
+      setGoalError(err.message || "Could not fetch company goals.");
+    }
+  }, [handleAuthFailure]);
+
+  const handleCreateGoal = async () => {
+    if (!apiKey) return;
+    if (!goalTitle.trim() || !goalDescription.trim() || !goalSuccessCriteria.trim()) {
+      setGoalError("Title, mission description, and success criteria are required.");
+      return;
+    }
+    setCreatingGoal(true);
+    setGoalError(null);
+    try {
+      const res = await fetch(`${API_BASE}/goals`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          title: goalTitle.trim(),
+          description: goalDescription.trim(),
+          success_criteria: goalSuccessCriteria.trim(),
+          priority: goalPriority,
+          target_date: goalTargetDate || null,
+          status: goalStartActive ? "active" : "draft",
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!res.ok) throw new Error(data?.detail || "Could not create company goal.");
+      setGoalTitle("");
+      setGoalDescription("");
+      setGoalSuccessCriteria("");
+      setGoalTargetDate("");
+      await fetchGoals(apiKey);
+    } catch (err: any) {
+      setGoalError(err.message || "Could not create company goal.");
+    } finally {
+      setCreatingGoal(false);
+    }
+  };
+
+  const handleGoalStatus = async (
+    goal: CompanyGoal,
+    status: "active" | "paused" | "completed" | "abandoned"
+  ) => {
+    if (!apiKey) return;
+    let completionNote: string | null = null;
+    if (status === "completed" || status === "abandoned") {
+      completionNote = window.prompt(
+        status === "completed"
+          ? "Record the evidence/reason this goal is complete."
+          : "Record why this goal is being abandoned."
+      );
+      if (!completionNote?.trim()) return;
+    }
+    setGoalError(null);
+    try {
+      const res = await fetch(`${API_BASE}/goals/${goal.id}/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({ status, completion_note: completionNote }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || "Could not update goal status.");
+      await fetchGoals(apiKey);
+      await fetchDashboardData();
+    } catch (err: any) {
+      setGoalError(err.message || "Could not update goal status.");
+    }
+  };
+
+  const handleGoalLineage = async (goalId: number) => {
+    if (!apiKey) return;
+    if (goalLineage[goalId]) {
+      setGoalLineage((prev) => {
+        const next = { ...prev };
+        delete next[goalId];
+        return next;
+      });
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/goals/${goalId}/lineage`, {
+        headers: { "X-API-Key": apiKey },
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || "Could not load goal lineage.");
+      setGoalLineage((prev) => ({ ...prev, [goalId]: data }));
+    } catch (err: any) {
+      setGoalError(err.message || "Could not load goal lineage.");
+    }
+  };
+
   const fetchDashboardData = useCallback(async () => {
     try {
       const [statusRes, historyRes] = await Promise.all([
@@ -755,8 +913,9 @@ export default function DashboardPage() {
       fetchActionHistory(apiKey);
       fetchResourceRequests(apiKey);
       fetchTreasury(apiKey);
+      fetchGoals(apiKey);
     }
-  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury]);
+  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury, fetchGoals]);
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
     if (type === "approve") {
@@ -1065,6 +1224,7 @@ export default function DashboardPage() {
   const [topic, setTopic] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [selectedAgents, setSelectedAgents] = useState<string[]>(["cfo", "ceo"]);
+  const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DecisionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1102,6 +1262,7 @@ export default function DashboardPage() {
           topic,
           task_description: taskDescription,
           agent_keys: selectedAgents,
+          goal_id: selectedGoalId ? Number(selectedGoalId) : null,
         }),
       });
 
@@ -1203,6 +1364,160 @@ export default function DashboardPage() {
             {loadError}
           </div>
         )}
+
+        {/* Company Goals / Missions */}
+        <div className="bg-gray-900 border border-amber-900/70 rounded-lg p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-amber-200">Company Goals / Missions</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Goals are owner-controlled. Agents can work toward active goals, but cannot declare them complete.
+            </p>
+          </div>
+
+          {goalError && (
+            <div className="text-xs text-red-300 border border-red-900 bg-red-950/40 rounded p-2">
+              {goalError}
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-2 gap-2">
+            <input
+              value={goalTitle}
+              onChange={(e) => setGoalTitle(e.target.value)}
+              placeholder="Goal title"
+              className="bg-gray-950 border border-gray-700 rounded p-2 text-sm"
+            />
+            <select
+              value={goalPriority}
+              onChange={(e) => setGoalPriority(e.target.value as CompanyGoal["priority"])}
+              className="bg-gray-950 border border-gray-700 rounded p-2 text-sm"
+            >
+              <option value="critical">Critical priority</option>
+              <option value="high">High priority</option>
+              <option value="medium">Medium priority</option>
+              <option value="low">Low priority</option>
+            </select>
+            <textarea
+              value={goalDescription}
+              onChange={(e) => setGoalDescription(e.target.value)}
+              placeholder="Mission / what the company is trying to achieve"
+              rows={2}
+              className="bg-gray-950 border border-gray-700 rounded p-2 text-sm"
+            />
+            <textarea
+              value={goalSuccessCriteria}
+              onChange={(e) => setGoalSuccessCriteria(e.target.value)}
+              placeholder="Measurable success criteria"
+              rows={2}
+              className="bg-gray-950 border border-gray-700 rounded p-2 text-sm"
+            />
+            <input
+              type="date"
+              value={goalTargetDate}
+              onChange={(e) => setGoalTargetDate(e.target.value)}
+              className="bg-gray-950 border border-gray-700 rounded p-2 text-sm"
+            />
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input
+                type="checkbox"
+                checked={goalStartActive}
+                onChange={(e) => setGoalStartActive(e.target.checked)}
+              />
+              Start active
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={handleCreateGoal}
+            disabled={creatingGoal}
+            className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-xs rounded disabled:opacity-50"
+          >
+            {creatingGoal ? "Creating..." : "Create Goal"}
+          </button>
+
+          <div className="space-y-3">
+            {goals.length === 0 && <p className="text-gray-500 text-sm">No company goals yet.</p>}
+            {goals.map((goal) => (
+              <div key={goal.id} className="bg-gray-950 border border-amber-900/50 rounded p-4 space-y-2">
+                <div className="flex justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-gray-200">
+                      #{goal.id} · {goal.title}
+                    </div>
+                    <div className="text-xs text-amber-300 uppercase">
+                      {goal.priority} · {goal.status}
+                      {goal.target_date ? ` · target ${goal.target_date}` : ""}
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 text-right">
+                    <div>{goal.linked_decision_count || 0} decisions</div>
+                    <div>{goal.linked_action_count || 0} actions</div>
+                    <div>{goal.measured_outcome_count || 0} measured outcomes</div>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-400">{goal.description}</div>
+                <div className="text-xs">
+                  <span className="text-gray-500">Success:</span>{" "}
+                  <span className="text-gray-300">{goal.success_criteria}</span>
+                </div>
+                {goal.completion_note && (
+                  <div className="text-xs text-gray-400">
+                    <span className="text-gray-500">Closure evidence:</span> {goal.completion_note}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {goal.status === "draft" && (
+                    <button onClick={() => handleGoalStatus(goal, "active")} className="px-2.5 py-1 bg-green-700 text-white text-xs rounded">
+                      Activate
+                    </button>
+                  )}
+                  {goal.status === "active" && (
+                    <button onClick={() => handleGoalStatus(goal, "paused")} className="px-2.5 py-1 bg-yellow-700 text-white text-xs rounded">
+                      Pause
+                    </button>
+                  )}
+                  {goal.status === "paused" && (
+                    <button onClick={() => handleGoalStatus(goal, "active")} className="px-2.5 py-1 bg-green-700 text-white text-xs rounded">
+                      Resume
+                    </button>
+                  )}
+                  {["active", "paused"].includes(goal.status) && (
+                    <button onClick={() => handleGoalStatus(goal, "completed")} className="px-2.5 py-1 bg-blue-700 text-white text-xs rounded">
+                      Complete
+                    </button>
+                  )}
+                  {!["completed", "abandoned"].includes(goal.status) && (
+                    <button onClick={() => handleGoalStatus(goal, "abandoned")} className="px-2.5 py-1 bg-red-800 text-white text-xs rounded">
+                      Abandon
+                    </button>
+                  )}
+                  <button onClick={() => handleGoalLineage(goal.id)} className="px-2.5 py-1 bg-gray-800 text-gray-200 text-xs rounded">
+                    {goalLineage[goal.id] ? "Hide Lineage" : "View Lineage"}
+                  </button>
+                </div>
+                {goalLineage[goal.id] && (
+                  <div className="border-t border-gray-800 pt-2 text-xs space-y-1">
+                    <div className="text-gray-300">
+                      Decisions: {goalLineage[goal.id].decision_count}
+                    </div>
+                    <div className="text-gray-300">
+                      Outcomes: {Object.entries(goalLineage[goal.id].outcome_counts)
+                        .map(([key, value]) => `${key} ${value}`)
+                        .join(" · ")}
+                    </div>
+                    <div className="text-gray-300">
+                      Spend: {Object.entries(goalLineage[goal.id].spend_by_currency).length
+                        ? Object.entries(goalLineage[goal.id].spend_by_currency)
+                            .map(([currency, amount]) => `${amount} ${currency}`)
+                            .join(" · ")
+                        : "none"}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Company Treasury */}
         <div className="bg-gray-900 border border-emerald-900/70 rounded-lg p-6 space-y-4">
@@ -1378,6 +1693,12 @@ export default function DashboardPage() {
                         : ""}
                     </div>
                   )}
+                  {resource.source_goal_id && (
+                    <div className="text-xs text-amber-300">
+                      Goal #{resource.source_goal_id}
+                      {resource.source_goal_title ? ` — ${resource.source_goal_title}` : ""}
+                    </div>
+                  )}
 
                   {resourceErrors[resource.id] && (
                     <div className="text-xs text-red-300 border border-red-900 bg-red-950/40 rounded p-2">
@@ -1456,6 +1777,12 @@ export default function DashboardPage() {
                         Source: Decision #{action.source_decision_id}
                         {action.source_decision_topic ? ` — ${action.source_decision_topic}` : ""}
                         {action.source_phase ? ` · ${action.source_phase}` : ""}
+                      </div>
+                    )}
+                    {action.source_goal_id && (
+                      <div className="text-xs text-amber-300 border border-amber-900/60 bg-amber-950/20 rounded px-2 py-1">
+                        Goal #{action.source_goal_id}
+                        {action.source_goal_title ? ` — ${action.source_goal_title}` : ""}
                       </div>
                     )}
 
@@ -1660,6 +1987,27 @@ export default function DashboardPage() {
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-gray-400 mb-1">
+                Company Goal (optional)
+              </label>
+              <select
+                value={selectedGoalId}
+                onChange={(e) => setSelectedGoalId(e.target.value)}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 text-gray-100 p-2"
+              >
+                <option value="">No linked goal</option>
+                {goals.filter((goal) => goal.status === "active").map((goal) => (
+                  <option key={goal.id} value={goal.id}>
+                    #{goal.id} · {goal.priority.toUpperCase()} · {goal.title}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Only active goals can receive new decisions.
+              </p>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">
                 Participating Agents
               </label>
@@ -1738,6 +2086,12 @@ export default function DashboardPage() {
                       {new Date(item.timestamp).toLocaleString("en-US")}
                     </span>
                   </div>
+                  {item.goal_id && (
+                    <div className="mt-2 text-xs text-amber-300 border border-amber-900/60 bg-amber-950/20 rounded px-2 py-1 w-fit">
+                      Goal #{item.goal_id}{item.goal_title ? ` — ${item.goal_title}` : ""}
+                      {item.goal_status ? ` · ${item.goal_status}` : ""}
+                    </div>
+                  )}
                   <p className="text-sm text-gray-500 mt-2">
                     Participants:{" "}
                     {item.agents_involved.split(",").map((a) => (
@@ -1959,6 +2313,12 @@ export default function DashboardPage() {
                       Provenance: Decision #{item.source_decision_id}
                       {item.source_decision_topic ? ` — ${item.source_decision_topic}` : ""}
                       {item.source_phase ? ` · phase: ${item.source_phase}` : ""}
+                    </div>
+                  )}
+                  {item.source_goal_id && (
+                    <div className="mt-2 text-xs text-amber-300 border border-amber-900/60 bg-amber-950/20 rounded px-3 py-2">
+                      Goal #{item.source_goal_id}
+                      {item.source_goal_title ? ` — ${item.source_goal_title}` : ""}
                     </div>
                   )}
                   {item.result_detail && (() => {

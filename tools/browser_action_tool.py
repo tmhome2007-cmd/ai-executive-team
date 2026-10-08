@@ -15,7 +15,7 @@ from typing import Type, Optional
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 
-from memory.database import propose_action
+from memory.database import propose_action, browser_url_allowed_by_provenance
 from notifications.telegram_interactive import send_proposal_notification
 from tools._dedupe_guard import check_and_register_proposal
 
@@ -84,6 +84,13 @@ class ProposeBrowserActionTool(BaseTool):
         # element literally named "null".
         if click_selector is not None and click_selector.strip().lower() in ("null", "none", "n/a", ""):
             click_selector = None
+
+        if not browser_url_allowed_by_provenance(url):
+            return (
+                "Browser action proposal rejected: this URL was not present in the "
+                "trusted preparation context. Do not invent domains or URLs. Ask for "
+                "the exact URL/resource instead."
+            )
 
         dedupe_key = f"browser_action:{self.role}:{url}:{click_selector}"
         duplicate_message = check_and_register_proposal(dedupe_key)
