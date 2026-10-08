@@ -571,19 +571,17 @@ export default function DashboardPage() {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState("");
 
-  useEffect(() => {
-    const stored = sessionStorage.getItem("dashboard_api_key");
-    if (stored) setApiKey(stored);
-  }, []);
-
+  // Keep the privileged control-plane API key in memory only. Persisting it
+  // in sessionStorage/localStorage would let any future XSS or compromised
+  // browser-side dependency read a credential that can authorize real-world
+  // actions. A refresh intentionally requires re-entry.
   const handleKeySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    sessionStorage.setItem("dashboard_api_key", keyInput);
     setApiKey(keyInput);
+    setKeyInput("");
   };
 
   const handleAuthFailure = useCallback(() => {
-    sessionStorage.removeItem("dashboard_api_key");
     setApiKey(null);
     setKeyInput("");
   }, []);
