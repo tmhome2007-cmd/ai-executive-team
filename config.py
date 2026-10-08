@@ -61,6 +61,13 @@ class Config:
     SANDBOX_MODE: bool = field(
         default_factory=lambda: os.getenv("SANDBOX_MODE", "true").lower() in ("true", "1", "yes")
     )
+    # Raw host command execution is intentionally a second explicit opt-in.
+    # Structured file/browser actions are preferred. Even with this enabled,
+    # action_executor runs argv directly (shell=False), not through a shell.
+    ALLOW_RAW_SHELL_EXECUTION: bool = field(
+        default_factory=lambda: os.getenv("ALLOW_RAW_SHELL_EXECUTION", "false").lower()
+        in ("true", "1", "yes")
+    )
     # Optionele, komma-gescheiden lijst van toegestane domeinen voor browser_action.
     # Leeg (standaard) = geen beperking, elk http/https-domein is toegestaan.
     ALLOWED_BROWSER_DOMAINS: str = field(
