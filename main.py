@@ -626,8 +626,8 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         ]
         return action_ids, resource_ids, actions, resources
 
-    def _validate_provenance(action_ids, resource_ids, actions, resources):
-        action_mismatch = [
+    def _provenance_mismatches(action_ids, resource_ids, actions, resources):
+        provenance_mismatches = [
             action for action in actions
             if (
                 action.get("source_decision_id") != decision_id
@@ -635,7 +635,12 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 or action.get("source_phase") != "preparation"
             )
         ]
-        resource_mismatch = [
+        if len(actions) != len(action_ids):
+            provenance_mismatches.append(
+                {"error": "Created action ID missing from database"}
+            )
+
+        resource_provenance_mismatches = [
             resource for resource in resources
             if (
                 resource.get("source_decision_id") != decision_id
@@ -643,12 +648,12 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 or resource.get("source_phase") != "preparation"
             )
         ]
-        return (
-            len(actions) == len(action_ids)
-            and len(resources) == len(resource_ids)
-            and not action_mismatch
-            and not resource_mismatch
-        )
+        if len(resources) != len(resource_ids):
+            resource_provenance_mismatches.append(
+                {"error": "Created resource request ID missing from database"}
+            )
+
+        return provenance_mismatches, resource_provenance_mismatches
 
     try:
         meeting_result = _run_preparation_meeting(preparation_prompt)
@@ -658,22 +663,36 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             _load_created_items(meeting_result)
         )
 
-        if not _validate_provenance(
+        provenance_mismatches, resource_provenance_mismatches = _provenance_mismatches(
             proposed_action_ids,
             proposed_resource_request_ids,
             new_actions,
             new_resource_requests,
-        ):
+        )
+        if provenance_mismatches:
             finish_decision_preparation(
                 decision_id,
                 False,
-                "Preparation failed provenance verification; mismatched proposal/request detected.",
+                "Preparation failed provenance verification; orphan/mismatched action detected.",
             )
             raise HTTPException(
                 status_code=502,
                 detail=(
-                    "Preparation created an action/resource request without the expected "
-                    "decision provenance. Preparation was marked failed."
+                    "Preparation created an action without the expected decision provenance. "
+                    "Preparation was marked failed; do not approve the orphan action."
+                ),
+            )
+        if resource_provenance_mismatches:
+            finish_decision_preparation(
+                decision_id,
+                False,
+                "Preparation failed provenance verification; orphan/mismatched resource request detected.",
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Preparation created a resource request without the expected decision provenance. "
+                    "Preparation was marked failed; do not fulfill the orphan request."
                 ),
             )
 
@@ -714,12 +733,13 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 _load_created_items(meeting_result)
             )
 
-            if not _validate_provenance(
+            retry_action_mismatch, retry_resource_mismatch = _provenance_mismatches(
                 proposed_action_ids,
                 proposed_resource_request_ids,
                 new_actions,
                 new_resource_requests,
-            ):
+            )
+            if retry_action_mismatch or retry_resource_mismatch:
                 finish_decision_preparation(
                     decision_id,
                     False,
