@@ -498,22 +498,24 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
-# CHECK 16: STATIC CHECK — subprocess execution uses a sanitized environment
+# CHECK 16: STATIC CHECK — container runtime does not inherit API process secrets
 # -------------------------------------------------------------------
 try:
-    with open("workflows/action_executor.py", "r", encoding="utf-8") as f:
-        exec_content = f.read()
-
-    subprocess_match = re.search(r"subprocess\.run\(\s*action_detail.*?\n\s*\)", exec_content, re.DOTALL)
-    if subprocess_match and "env=" in subprocess_match.group(0):
-        log_pass("subprocess.run() passes a sanitized env= — secrets are not inherited by executed commands")
+    with open("workflows/container_executor.py", "r", encoding="utf-8") as fh:
+        worker_source_16 = fh.read()
+    with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+        exec_content = fh.read()
+    if (
+        "run_in_container(action_detail, _get_workspace_root())" in exec_content
+        and "shell=False" in worker_source_16
+        and 'env={"PATH":' in worker_source_16
+        and '"--network=none"' in worker_source_16
+    ):
+        log_pass("Live shell delegates to the offline worker with explicit, sanitized process environment")
     else:
-        log_fail(
-            "Subprocess environment sanitization check",
-            "subprocess.run() does not pass env= — executed commands inherit the full process environment, including secrets from .env."
-        )
+        log_fail("Container environment sanitization", "Worker missing isolated invocation or minimal subprocess env")
 except Exception as e:
-    log_fail("Subprocess env check crashed", str(e))
+    log_fail("Container environment sanitization crashed", str(e))
 
 
 # -------------------------------------------------------------------
@@ -3796,8 +3798,6 @@ try:
         'operation="approve decision direction"',
         'operation="approve resource request"',
         'operation="fulfill resource request"',
-        'operation="approve action"',
-        'operation="execute action"',
     ]
     required_db = [
         "CREATE TABLE IF NOT EXISTS company_goals",
@@ -3821,7 +3821,11 @@ try:
         "Abandon",
     ]
 
+    with open("workflows/action_control.py", "r", encoding="utf-8") as fh:
+        action_control_109 = fh.read()
+    required_action_control_109 = ("_require_linked_goal_active(action, \"approve action\")", "_require_linked_goal_active(action, \"execute action\")")
     missing_main = [item for item in required_main if item not in main_content_109]
+    missing_main += [item for item in required_action_control_109 if item not in action_control_109]
     missing_db = [item for item in required_db if item not in db_content_109]
     missing_dashboard = [item for item in required_dashboard if item not in dashboard_content_109]
 
@@ -5251,7 +5255,7 @@ try:
             if (
                 tampered_once_133
                 and not any(a["action_description"] == "TAMPERED WITHOUT RESIGNING" for a in tampered_actions)
-                and tampered_summary.get("skipped", 0) >= 1
+                and tampered_summary.get("skipped_existing", 0) >= 1
                 and valid_summary.get("actions_imported") == 1
                 and valid_action["status"] == "pending"
                 and valid_reservation["status"] == "released"
@@ -5442,7 +5446,8 @@ try:
                 and backup_mode_138 == 0o600
                 and export_dir_mode_138 == 0o700
                 and "os.chmod(_LOG_DIR, 0o700)" in logging_138
-                and "os.chmod(_LOG_FILE, 0o600)" in logging_138
+                and "self._harden_permissions()" in logging_138
+                and "os.chmod(path, 0o600)" in logging_138
             ):
                 log_pass("database, sync, backups, and logs enforce owner-only local permissions")
             else:
