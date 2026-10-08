@@ -5956,6 +5956,95 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 149: DYNAMIC CHECK — non-local LLM transport is explicit opt-in
+# -------------------------------------------------------------------
+try:
+    from config import config as _config_149, validate_config as _validate_149, ConfigValidationError as _ConfigError149
+
+    old_url_149 = _config_149.OLLAMA_BASE_URL
+    old_remote_149 = _config_149.ALLOW_REMOTE_LLM
+    try:
+        _config_149.OLLAMA_BASE_URL = "https://models.example.com"
+        _config_149.ALLOW_REMOTE_LLM = False
+        blocked_149 = False
+        try:
+            _validate_149()
+        except _ConfigError149 as exc:
+            blocked_149 = "ALLOW_REMOTE_LLM" in str(exc)
+
+        _config_149.ALLOW_REMOTE_LLM = True
+        warnings_149 = _validate_149()
+
+        if blocked_149 and any("Remote LLM transport is explicitly enabled" in w for w in warnings_149):
+            log_pass("non-local LLM endpoints fail closed unless the owner explicitly accepts prompt/memory egress")
+        else:
+            log_fail("Remote LLM privacy boundary", f"blocked={blocked_149}, warnings={warnings_149}")
+    finally:
+        _config_149.OLLAMA_BASE_URL = old_url_149
+        _config_149.ALLOW_REMOTE_LLM = old_remote_149
+except Exception as e:
+    log_fail("Remote LLM privacy boundary check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 150: DYNAMIC/STATIC CHECK — Telegram remote control/details default off
+# -------------------------------------------------------------------
+try:
+    from config import config as _config_150
+    from notifications.telegram_interactive import (
+        build_action_keyboard as _keyboard_150,
+        _telegram_safe_action_detail as _detail_150,
+    )
+
+    old_control_150 = _config_150.TELEGRAM_ALLOW_REMOTE_CONTROL
+    old_details_150 = _config_150.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+    try:
+        _config_150.TELEGRAM_ALLOW_REMOTE_CONTROL = False
+        _config_150.TELEGRAM_INCLUDE_SENSITIVE_DETAILS = False
+
+        no_keyboard_150 = _keyboard_150(1, "pending")
+        hidden_shell_150 = _detail_150({
+            "action_type": "shell",
+            "action_detail": "printf secret-business-context",
+        })
+        hidden_browser_150 = _detail_150({
+            "action_type": "browser_action",
+            "action_detail": '{"url":"https://private.example/path","click_selector":"#submit"}',
+        })
+
+        with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as fh:
+            telegram_source_150 = fh.read()
+        with open(".env.example", "r", encoding="utf-8") as fh:
+            env_source_150 = fh.read()
+
+        static_ok_150 = all([
+            "TELEGRAM_ALLOW_REMOTE_CONTROL" in telegram_source_150,
+            "Remote control is disabled" in telegram_source_150,
+            "TELEGRAM_ALLOW_REMOTE_CONTROL=False" in env_source_150,
+            "TELEGRAM_INCLUDE_SENSITIVE_DETAILS=False" in env_source_150,
+        ])
+
+        if (
+            no_keyboard_150 is None
+            and "secret-business-context" not in hidden_shell_150
+            and "private.example" not in hidden_browser_150
+            and "retained locally" in hidden_shell_150
+            and static_ok_150
+        ):
+            log_pass("Telegram defaults to notification-only mode and keeps sensitive proposal details local")
+        else:
+            log_fail(
+                "Telegram remote-control privacy boundary",
+                f"keyboard={no_keyboard_150}, shell={hidden_shell_150}, browser={hidden_browser_150}, static={static_ok_150}",
+            )
+    finally:
+        _config_150.TELEGRAM_ALLOW_REMOTE_CONTROL = old_control_150
+        _config_150.TELEGRAM_INCLUDE_SENSITIVE_DETAILS = old_details_150
+except Exception as e:
+    log_fail("Telegram remote-control privacy boundary check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
