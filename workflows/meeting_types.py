@@ -18,6 +18,9 @@ MEETING_TYPES = {
         "output_contract": (
             "Strategic options; tradeoffs/risks; recommendation; validation plan; approval gate."
         ),
+        "response_structure": (
+            "Strategic Options; Tradeoffs / Risks; Recommendation; Validation Plan; Approval Gate."
+        ),
         "approval_posture": (
             "Recommend a direction only. Owner approval is required before preparation."
         ),
@@ -33,6 +36,9 @@ MEETING_TYPES = {
         "output_contract": (
             "Operating status; blockers/variance; accountable next steps; evidence gaps; approval gate."
         ),
+        "response_structure": (
+            "Operating Status; Blockers / Variance; Accountable Next Steps; Evidence Gaps; Approval Gate."
+        ),
         "approval_posture": (
             "May recommend operational changes, but no new action executes without existing gates."
         ),
@@ -47,6 +53,14 @@ MEETING_TYPES = {
         ),
         "output_contract": (
             "Known facts; impact/unknowns; containment recommendation; recovery path; escalation/approval gate."
+        ),
+        "response_structure": (
+            "Known Facts; Impact / Unknowns; Containment Recommendation; Recovery Path; Approval Gate."
+        ),
+        "evidence_section_rule": (
+            "Known Facts must contain ONLY established facts from the current task/evidence. "
+            "Move every hypothesis, possibility, cannot-rule-out statement, or speculative cause "
+            "to Impact / Unknowns."
         ),
         "approval_posture": (
             "Urgency never bypasses authority. Tool-free reasoning may recommend containment; "
@@ -64,6 +78,10 @@ MEETING_TYPES = {
         "output_contract": (
             "Capital request; alternatives; downside/uncertainty; expected measurable outcome; approval gate."
         ),
+        "response_structure": (
+            "Current Capital Evidence; Capital Request / Recommendation; Alternatives; "
+            "Downside / Uncertainty; Expected Measurable Outcome; Approval Gate."
+        ),
         "approval_posture": (
             "A meeting can recommend capital allocation only. Treasury reservation/spend remains separate."
         ),
@@ -79,6 +97,10 @@ MEETING_TYPES = {
         "output_contract": (
             "Expected vs actual; lessons; mistakes/unknowns; what to repeat/stop/change; owner acknowledgement."
         ),
+        "response_structure": (
+            "Expected vs Actual; What Worked; What Failed / Unknown; Reusable Lessons; "
+            "What to Repeat / Stop / Change; Owner Acknowledgement."
+        ),
         "approval_posture": (
             "Retrospectives do not authorize new execution. Any new direction becomes a separate pending decision."
         ),
@@ -92,6 +114,9 @@ MEETING_TYPES = {
         ),
         "output_contract": (
             "Plan objective; workstreams/dependencies; milestones; resource gaps; risks; approval gate."
+        ),
+        "response_structure": (
+            "Plan Objective; Workstreams / Dependencies; Milestones; Resource Gaps; Risks; Approval Gate."
         ),
         "approval_posture": (
             "Planning produces an owner-reviewable direction. Preparation and execution remain separate."
@@ -130,7 +155,12 @@ def meeting_type_prompt(meeting_type: str) -> str:
         f"MEETING TYPE: {meeting_type} — {profile['label']}\n"
         f"Evidence focus: {profile['evidence_focus']}\n"
         f"Required output contract: {profile['output_contract']}\n"
-        f"Authority posture: {profile['approval_posture']}\n"
+        f"Required response structure: {profile['response_structure']}\n"
+        + (
+            f"Evidence-section rule: {profile['evidence_section_rule']}\n"
+            if profile.get("evidence_section_rule") else ""
+        )
+        + f"Authority posture: {profile['approval_posture']}\n"
         "The meeting type changes reasoning structure only. It never expands tool, "
         "approval, resource, treasury, or execution authority."
     )
