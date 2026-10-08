@@ -1,0 +1,24 @@
+# Bandit B608 review — 2026-10-08
+
+**Finding classification: candidate static-analysis false positives, subject to regression testing.**
+
+The current Bandit scan detects 21 medium-severity occurrences in `memory/database.py`. Each constructs SQL with Python string interpolation. These are **not automatically vulnerabilities**, but dynamic identifiers must never originate from arbitrary external input.
+
+## Reviewed query families
+
+1. **Dynamic `IN (...)` placeholder counts:** goal, follow-up, decision-approval, resource-request and action transition/recovery queries. SQL structure is built from a number of literal `?` placeholders, and values are passed separately to sqlite3 `execute`. Status filters are checked against `VALID_*_STATUSES` where appropriate.
+2. **Literal WHERE/AND clauses:** executive-memory filters and treasury summaries build clauses from program-authored constant SQL fragments. User-provided values remain parameters.
+3. **Dynamic UPDATE assignments:** company-goal and action-outcome updates derive keys from named function parameters or fixed local dictionaries. They must remain restricted to statically known column names; a future refactor must not accept arbitrary caller-supplied column names.
+4. **Signed-sync SQL:** import accepts only table names in `_SYNC_TABLE_COLUMNS` and only row keys in the corresponding allowed set; input values remain bound parameters. Foreign key resolution table names are in literal tuples.
+5. **Dynamic INSERT:** table/column identifiers are derived from the same fixed import whitelist; values use positional parameters.
+
+## Required ongoing protection
+
+- Keep import-table and column sets immutable and explicit.
+- Continue to reject unknown row keys before generating UPDATE/INSERT.
+- Add dedicated malicious-column tests (e.g. column names containing `); DROP TABLE`) for signed imports.
+- Do not broadly disable Bandit B608. If individual suppressions are introduced, require code-review justification beside each location.
+- Re-run B608 after any SQL schema/import/refactor change.
+- Treat changes to assignment-key sources (particularly `updates` or imported rows) as security-sensitive.
+
+**Audit outcome:** No directly interpolated untrusted SQL *values* identified in these 21 inspected query sites; runtime exploitation has **not** been tested, and this review does **not** clear the Bandit gate.
