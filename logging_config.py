@@ -27,6 +27,29 @@ _BACKUP_COUNT = 3  # bewaar de laatste 3 geroteerde bestanden (totaal ~20MB max)
 _configured = False
 
 
+class PrivateRotatingFileHandler(RotatingFileHandler):
+    """Rotating handler that keeps current and rotated logs owner-only."""
+
+    def _harden_permissions(self) -> None:
+        for path in [self.baseFilename] + [
+            f"{self.baseFilename}.{i}" for i in range(1, self.backupCount + 1)
+        ]:
+            if os.path.exists(path):
+                try:
+                    os.chmod(path, 0o600)
+                except OSError:
+                    pass
+
+    def _open(self):
+        stream = super()._open()
+        self._harden_permissions()
+        return stream
+
+    def doRollover(self):
+        super().doRollover()
+        self._harden_permissions()
+
+
 def setup_logging(level: int = logging.INFO) -> None:
     """
     Configureert de root logger EENMALIG bij het opstarten van de applicatie
@@ -37,7 +60,11 @@ def setup_logging(level: int = logging.INFO) -> None:
     if _configured:
         return
 
-    os.makedirs(_LOG_DIR, exist_ok=True)
+    os.makedirs(_LOG_DIR, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(_LOG_DIR, 0o700)
+    except OSError:
+        pass
 
     formatter = logging.Formatter(
         fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -48,7 +75,7 @@ def setup_logging(level: int = logging.INFO) -> None:
     console_handler.setFormatter(formatter)
     console_handler.setLevel(level)
 
-    file_handler = RotatingFileHandler(
+    file_handler = PrivateRotatingFileHandler(
         _LOG_FILE, maxBytes=_MAX_BYTES, backupCount=_BACKUP_COUNT, encoding="utf-8"
     )
     file_handler.setFormatter(formatter)
