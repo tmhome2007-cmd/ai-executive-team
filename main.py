@@ -1850,9 +1850,23 @@ def get_screenshot(filename: str):
         raise HTTPException(status_code=400, detail="Invalid screenshot filename format.")
 
     workspace_root = os.path.realpath(os.path.expanduser(config.WORKSPACE_ROOT or "./workspace"))
-    screenshot_path = os.path.join(workspace_root, "screenshots", filename)
+    screenshots_root = os.path.realpath(os.path.join(workspace_root, "screenshots"))
+    screenshot_path = os.path.realpath(os.path.join(screenshots_root, filename))
 
-    if not os.path.isfile(screenshot_path):
+    try:
+        if os.path.commonpath([screenshots_root, screenshot_path]) != screenshots_root:
+            raise HTTPException(status_code=404, detail="Screenshot not found.")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Screenshot not found.")
+
+    # Refuse symlinked screenshot files/directories. FileResponse would follow
+    # symlinks, which could otherwise turn this endpoint into a local file read.
+    if (
+        not os.path.isdir(screenshots_root)
+        or os.path.islink(os.path.join(workspace_root, "screenshots"))
+        or os.path.islink(os.path.join(screenshots_root, filename))
+        or not os.path.isfile(screenshot_path)
+    ):
         raise HTTPException(status_code=404, detail="Screenshot not found.")
 
     return FileResponse(screenshot_path, media_type="image/png")
@@ -2095,7 +2109,7 @@ if __name__ == "__main__":
     # te brute-forcen vanaf een ander toestel. Alleen bewust overschrijven
     # via BIND_HOST in .env als je écht vanaf een ander apparaat op hetzelfde
     # netwerk bij het dashboard moet kunnen (en dan met extra voorzichtigheid).
-    bind_host = os.getenv("BIND_HOST", "127.0.0.1")
+    bind_host = config.BIND_HOST
     # Stable single-process default. For active development, run
     # "uvicorn main:app --reload" explicitly instead. Auto-reload can briefly
     # overlap workers, which is unsafe for the single Telegram poller.
