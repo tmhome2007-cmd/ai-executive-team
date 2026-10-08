@@ -4955,7 +4955,6 @@ try:
     required_meeting_129 = [
         "meeting_type_prompt(meeting_type)",
         '"meeting_type": meeting_type',
-        "The meeting type changes reasoning structure only",
     ]
     required_types_129 = [
         '"strategy"',
@@ -4964,6 +4963,7 @@ try:
         '"capital_allocation"',
         '"retrospective"',
         '"planning"',
+        "The meeting type changes reasoning structure only",
         "Urgency never bypasses authority",
         "Treasury reservation/spend remains separate",
     ]
