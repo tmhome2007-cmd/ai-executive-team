@@ -485,77 +485,165 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             print(f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}")
         return {"success": True, "mode": "dry_run", "action_id": action_id, "detail": preview}
 
-    # --- LIVE MODE: echte file I/O ---
+    # --- LIVE MODE: descriptor-relative file I/O ---
     try:
-        if operation == "read":
-            max_read_chars = 1024 * 1024
-            with open(resolved_path, "r", encoding="utf-8") as f:
-                file_content = f.read(max_read_chars + 1)
-            if len(file_content) > max_read_chars:
-                raise ValueError(
-                    "File exceeds the 1 MiB structured-read safety limit; "
-                    "use a narrower/local review method."
-                )
-            update_action_status(action_id, "executed")
-            record_execution_result(action_id, json.dumps({"stdout": file_content[:2000]}))
-            mark_action_outcome_measurement_pending(action_id)
-            try:
-                send_notification(
-                    f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
-                    f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
-                    "<b>Content:</b> retained locally; not copied to Telegram."
-                )
-            except Exception as e:
-                print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
-            return {"success": True, "mode": "live", "action_id": action_id, "stdout": file_content}
+        if len(content) > 1024 * 1024:
+            raise ValueError("Structured file write content exceeds the 1 MiB safety limit")
 
-        elif operation in ("write", "append"):
-            parent_dir = os.path.dirname(resolved_path) or workspace_root
-            if operation == "write":
-                # Atomic replacement prevents a crash from leaving a partial
-                # configuration/document. Temp file lives in the same directory
-                # so os.replace() remains atomic on the same filesystem.
-                fd, temp_path = tempfile.mkstemp(prefix=".agent-write-", dir=parent_dir, text=True)
+        parent_fd, final_name, secure_path = _open_workspace_parent_fd(file_path)
+        try:
+            if operation == "read":
+                fd = os.open(
+                    final_name,
+                    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=parent_fd,
+                )
                 try:
-                    with os.fdopen(fd, "w", encoding="utf-8") as tmp:
-                        tmp.write(content)
-                        tmp.flush()
-                        os.fsync(tmp.fileno())
-                    os.chmod(temp_path, 0o600)
-                    os.replace(temp_path, resolved_path)
+                    _require_safe_regular_fd(fd)
+                    max_read_chars = 1024 * 1024
+                    with os.fdopen(fd, "r", encoding="utf-8", errors="replace") as in_file:
+                        fd = -1
+                        file_content = in_file.read(max_read_chars + 1)
                 finally:
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
-            else:
-                with open(resolved_path, "a", encoding="utf-8") as out:
-                    out.write(content)
-                    out.flush()
-                    os.fsync(out.fileno())
+                    if fd >= 0:
+                        os.close(fd)
+
+                if len(file_content) > max_read_chars:
+                    raise ValueError(
+                        "File exceeds the 1 MiB structured-read safety limit; "
+                        "use a narrower/local review method."
+                    )
+
+                update_action_status(action_id, "executed")
+                record_execution_result(
+                    action_id,
+                    json.dumps({"stdout": file_content[:2000]}),
+                )
+                mark_action_outcome_measurement_pending(action_id)
                 try:
-                    os.chmod(resolved_path, 0o600)
-                except OSError:
+                    send_notification(
+                        f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
+                        f"<b>Action ID:</b> #{action_id}\n"
+                        f"<b>Path:</b> {_telegram_sensitive(secure_path, code=True)}\n"
+                        "<b>Content:</b> retained locally; not copied to Telegram."
+                    )
+                except Exception as notify_err:
+                    print(
+                        f"Warning: Failed to send Telegram notification for "
+                        f"action #{action_id}: {notify_err}"
+                    )
+                return {
+                    "success": True,
+                    "mode": "live",
+                    "action_id": action_id,
+                    "stdout": file_content,
+                }
+
+            if operation == "write":
+                # Refuse an existing symlink/special target. os.replace() would
+                # replace a symlink safely, but an unexpected symlink is itself
+                # evidence that the filesystem changed after approval.
+                try:
+                    existing = os.stat(
+                        final_name,
+                        dir_fd=parent_fd,
+                        follow_symlinks=False,
+                    )
+                    if not stat.S_ISREG(existing.st_mode):
+                        raise ValueError(
+                            "Structured write target exists but is not a regular file"
+                        )
+                except FileNotFoundError:
                     pass
+
+                temp_name = f".agent-write-{secrets.token_hex(12)}.tmp"
+                temp_fd = -1
+                try:
+                    temp_fd = os.open(
+                        temp_name,
+                        os.O_WRONLY
+                        | os.O_CREAT
+                        | os.O_EXCL
+                        | getattr(os, "O_NOFOLLOW", 0),
+                        0o600,
+                        dir_fd=parent_fd,
+                    )
+                    _require_safe_regular_fd(temp_fd)
+                    with os.fdopen(temp_fd, "w", encoding="utf-8") as out:
+                        temp_fd = -1
+                        out.write(content)
+                        out.flush()
+                        os.fsync(out.fileno())
+
+                    os.replace(
+                        temp_name,
+                        final_name,
+                        src_dir_fd=parent_fd,
+                        dst_dir_fd=parent_fd,
+                    )
+                    try:
+                        os.fsync(parent_fd)
+                    except OSError:
+                        pass
+                finally:
+                    if temp_fd >= 0:
+                        os.close(temp_fd)
+                    try:
+                        os.unlink(temp_name, dir_fd=parent_fd)
+                    except FileNotFoundError:
+                        pass
+
+            elif operation == "append":
+                fd = os.open(
+                    final_name,
+                    os.O_WRONLY
+                    | os.O_CREAT
+                    | os.O_APPEND
+                    | getattr(os, "O_NOFOLLOW", 0),
+                    0o600,
+                    dir_fd=parent_fd,
+                )
+                try:
+                    _require_safe_regular_fd(fd)
+                    with os.fdopen(fd, "a", encoding="utf-8") as out:
+                        fd = -1
+                        out.write(content)
+                        out.flush()
+                        os.fsync(out.fileno())
+                finally:
+                    if fd >= 0:
+                        os.close(fd)
+            else:
+                raise ValueError(f"Unknown operation: {operation}")
+
             update_action_status(action_id, "executed")
-            record_execution_result(action_id, json.dumps({"stdout": f"Wrote {len(content)} characters to {resolved_path}"}))
+            record_execution_result(
+                action_id,
+                json.dumps({
+                    "stdout": f"Wrote {len(content)} characters to {secure_path}"
+                }),
+            )
             mark_action_outcome_measurement_pending(action_id)
             try:
                 send_notification(
                     f"⚡ <b>FILE {operation.upper()} SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
+                    f"<b>Path:</b> {_telegram_sensitive(secure_path, code=True)}\n"
                     f"<b>Bytes written:</b> {len(content)}"
                 )
-            except Exception as e:
-                print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
-            return {"success": True, "mode": "live", "action_id": action_id, "stdout": f"Wrote {len(content)} characters to {resolved_path}"}
-
-        else:
-            update_action_status(action_id, "execution_failed")
-            error_msg = f"Unknown operation: {operation}"
-            record_execution_result(action_id, json.dumps({"error": error_msg}))
-            mark_action_outcome_execution_failed(action_id, error_msg)
-            return {"success": False, "action_id": action_id, "error": error_msg}
+            except Exception as notify_err:
+                print(
+                    f"Warning: Failed to send Telegram notification for "
+                    f"action #{action_id}: {notify_err}"
+                )
+            return {
+                "success": True,
+                "mode": "live",
+                "action_id": action_id,
+                "stdout": f"Wrote {len(content)} characters to {secure_path}",
+            }
+        finally:
+            os.close(parent_fd)
 
     except Exception as e:
         update_action_status(action_id, "execution_failed")
