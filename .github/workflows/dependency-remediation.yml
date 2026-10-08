@@ -1,0 +1,45 @@
+name: One-time dependency remediation
+on:
+  push:
+    branches:
+      - chatgpt/foundation-hardening
+    paths:
+      - .github/workflows/dependency-remediation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/foundation-hardening
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: executive-dashboard/package-lock.json
+
+      - name: Update patched framework and safe transitive fixes
+        working-directory: executive-dashboard
+        run: |
+          npm ci
+          npm install --save-exact next@16.3.8 eslint-config-next@16.3.8
+          npm audit fix || true
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Commit reproducible dependency manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add executive-dashboard/package.json executive-dashboard/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update patched Next.js and nonbreaking npm dependencies"
+            git push origin HEAD:chatgpt/foundation-hardening
+          fi
