@@ -2348,6 +2348,14 @@ def export_history_to_jsonl(export_path: str) -> dict:
     with get_connection() as conn:
         cursor = conn.cursor()
 
+        cursor.execute("""
+            SELECT created_at, updated_at, title, description, success_criteria,
+                   priority, target_date, status, completed_at, completion_note,
+                   sync_uuid
+            FROM company_goals
+        """)
+        goal_rows = [dict(row) for row in cursor.fetchall()]
+
         cursor.execute("SELECT * FROM decisions")
         decision_rows = [dict(row) for row in cursor.fetchall()]
 
@@ -2394,6 +2402,9 @@ def export_history_to_jsonl(export_path: str) -> dict:
         treasury_reservation_rows = [dict(row) for row in cursor.fetchall()]
 
     with open(export_path, "w", encoding="utf-8") as f:
+        for row in goal_rows:
+            row["_table"] = "company_goals"
+            f.write(json.dumps(row) + "\n")
         for row in decision_rows:
             row["_table"] = "decisions"
             f.write(json.dumps(row) + "\n")
@@ -2414,6 +2425,7 @@ def export_history_to_jsonl(export_path: str) -> dict:
             f.write(json.dumps(row) + "\n")
 
     return {
+        "goals": len(goal_rows),
         "decisions": len(decision_rows),
         "actions": len(action_rows),
         "outcomes": len(outcome_rows),
@@ -2434,6 +2446,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
     if not os.path.exists(import_path):
         return {"error": f"Import file not found: {import_path}"}
 
+    imported_goals = 0
     imported_decisions = 0
     imported_actions = 0
     imported_outcomes = 0
@@ -2475,6 +2488,10 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
                 allowed_columns = _SYNC_TABLE_COLUMNS[table]
                 required_columns = {
+                    "company_goals": {
+                        "created_at", "updated_at", "title", "description",
+                        "success_criteria", "priority", "status", "sync_uuid",
+                    },
                     "decisions": {
                         "timestamp", "topic", "agents_involved", "task_description",
                         "decision_outcome", "sandbox_mode", "sync_uuid",
@@ -2505,6 +2522,33 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 ):
                     skipped += 1
                     continue
+
+                if table == "company_goals":
+                    if row.get("status") not in VALID_GOAL_STATUSES:
+                        skipped += 1
+                        continue
+                    if row.get("priority") not in VALID_GOAL_PRIORITIES:
+                        skipped += 1
+                        continue
+                    try:
+                        if row.get("target_date"):
+                            _normalize_goal_target_date(row.get("target_date"))
+                    except ValueError:
+                        skipped += 1
+                        continue
+
+                if table == "decisions":
+                    goal_sync_uuid = row.get("goal_sync_uuid")
+                    if goal_sync_uuid:
+                        cursor.execute(
+                            "SELECT id FROM company_goals WHERE sync_uuid = ?",
+                            (goal_sync_uuid,),
+                        )
+                        goal_row = cursor.fetchone()
+                        if not goal_row:
+                            skipped += 1
+                            continue
+                        row["goal_id"] = goal_row["id"]
 
                 if table == "action_queue":
                     if row.get("status") not in VALID_ACTION_STATUSES:
@@ -2643,7 +2687,9 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     skipped += 1
                     continue
 
-                if table == "decisions":
+                if table == "company_goals":
+                    imported_goals += 1
+                elif table == "decisions":
                     imported_decisions += 1
                     imported_decision_id = cursor.lastrowid
                     cursor.execute(
@@ -2669,6 +2715,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
         conn.commit()
 
     return {
+        "goals_imported": imported_goals,
         "decisions_imported": imported_decisions,
         "actions_imported": imported_actions,
         "outcomes_imported": imported_outcomes,
