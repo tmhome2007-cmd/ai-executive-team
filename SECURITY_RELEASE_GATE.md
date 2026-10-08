@@ -16,6 +16,8 @@
 - Owner-sensitive dry-run command details no longer printed verbatim to the console.
 - Dashboard explicit-any ESLint errors repaired.
 - Timed-out Docker worker attempts forced removal by unique name.
+- The bind-mount preflight rejects socket/device/FIFO entries and aborts if traversal fails or exceeds a fixed limit. This mitigates accidentally exposing host Unix sockets in the workspace but is not race-free if untrusted processes can change the workspace concurrently.
+- Timed-out action outcomes now become **inconclusive**, with mandatory manual reconciliation before any retry; the explicit regression check has been added to the system verifier.
 
 ## Open release blockers
 1. **HIGH — unresolved npm dev-tooling advisory.** Production dependency audit (`npm audit --omit=dev --audit-level=high`) passes on workflow 37812997279, but the full development-tooling audit fails. The one-time updater committed Next.js and eslint-config-next 16.3.8 plus a regenerated lockfile; that updater passed lint/build and reduced npm audit from one critical/eight high to five high. Remaining findings are in the `eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces` development tooling chain. The upstream `braces` advisory has no patched release. Do not blindly downgrade eslint-config-next to v14 or report the audit clean. Recheck production-only vs development dependency exposure and document any risk acceptance.
