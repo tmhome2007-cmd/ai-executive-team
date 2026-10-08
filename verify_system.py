@@ -4707,6 +4707,53 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 124: DYNAMIC/STATIC CHECK — memory stays separate from current evidence
+# -------------------------------------------------------------------
+try:
+    from workflows.meeting import _find_memory_evidence_leaks as _memory_leaks_124
+
+    memory_124 = (
+        "Historical lesson: a prior validation did not produce sufficient business evidence."
+    )
+    bad_output_124 = (
+        "**Evidence-Supported Findings**\n"
+        "A prior validation did not produce sufficient business evidence.\n\n"
+        "**Recommendation**\nGather current evidence."
+    )
+    good_output_124 = (
+        "**Historical context**\n"
+        "A prior validation did not produce sufficient business evidence. "
+        "This is historical context, not current evidence.\n\n"
+        "**Evidence-Supported Findings**\n"
+        "The current task does not establish that the old result applies now.\n\n"
+        "**Recommendation**\nGather current evidence."
+    )
+
+    bad_leaks_124 = _memory_leaks_124(memory_124, bad_output_124)
+    good_leaks_124 = _memory_leaks_124(memory_124, good_output_124)
+
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_124 = f.read()
+
+    static_ok_124 = all([
+        "Historical context" in meeting_content_124,
+        "current task/evidence" in meeting_content_124,
+        "MEMORY/EVIDENCE SEPARATION WARNING" in meeting_content_124,
+        '"memory_evidence_leaks": memory_evidence_leaks' in meeting_content_124,
+    ])
+
+    if bad_leaks_124 and not good_leaks_124 and static_ok_124:
+        log_pass("memory copied into current-evidence sections is detected while separated historical context is allowed")
+    else:
+        log_fail(
+            "Executive memory evidence-separation guard",
+            f"bad={bad_leaks_124}, good={good_leaks_124}, static={static_ok_124}",
+        )
+except Exception as e:
+    log_fail("Executive memory evidence-separation guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
