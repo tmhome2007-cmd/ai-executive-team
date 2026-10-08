@@ -2242,7 +2242,12 @@ export default function DashboardPage() {
           {result && (
             <div className="border border-green-800 bg-green-950/40 rounded-md p-5 space-y-4">
               <div className="flex justify-between items-start">
-                <h3 className="text-lg font-bold text-green-300">{result.topic}</h3>
+                <div>
+                  <h3 className="text-lg font-bold text-green-300">{result.topic}</h3>
+                  <div className="text-xs text-purple-300 uppercase mt-1">
+                    {result.meeting_type.replaceAll("_", " ")}
+                  </div>
+                </div>
                 <span className="text-xs bg-gray-800 text-gray-400 rounded-full px-2 py-1">
                   ID: #{result.database_id}
                 </span>
@@ -2325,6 +2330,39 @@ export default function DashboardPage() {
                 placeholder="E.g. Expansion into the German market"
                 className="w-full rounded-md border border-gray-700 bg-gray-800 text-gray-100 p-2 placeholder-gray-500"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-1">
+                Meeting Type
+              </label>
+              <select
+                value={selectedMeetingType}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setSelectedMeetingType(next);
+                  const profile = meetingTypes[next];
+                  if (profile) setSelectedAgents(profile.default_agents);
+                }}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 text-gray-100 p-2"
+              >
+                {Object.entries(meetingTypes).map(([key, profile]) => (
+                  <option key={key} value={key}>
+                    {profile.label}
+                  </option>
+                ))}
+              </select>
+              {meetingTypes[selectedMeetingType] && (
+                <div className="mt-1 text-xs text-gray-500 space-y-1">
+                  <div>{meetingTypes[selectedMeetingType].evidence_focus}</div>
+                  <div>
+                    Default roles: {meetingTypes[selectedMeetingType].default_agents.join(", ")}
+                  </div>
+                  <div>
+                    Required roles: {meetingTypes[selectedMeetingType].required_agents.join(", ") || "none"}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
