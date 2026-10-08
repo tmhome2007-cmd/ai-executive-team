@@ -38,6 +38,23 @@ class FileOperationInput(BaseModel):
         ...,
         description="A short, human-readable explanation of why this file operation is being proposed."
     )
+    expected_outcome: str | None = Field(
+        default=None,
+        description="What concrete result should exist after this file operation is approved and executed."
+    )
+    expected_impact: str | None = Field(
+        default=None,
+        description="Qualitative impact expected from creating/reading/updating the file."
+    )
+    expected_cost_amount: float | None = Field(
+        default=None,
+        ge=0,
+        description="Expected monetary cost only when evidence supports one; otherwise leave empty."
+    )
+    currency: str | None = Field(
+        default=None,
+        description="3-letter currency code such as EUR or USD when expected_cost_amount is known."
+    )
 
 
 class ProposeFileOperationTool(BaseTool):
@@ -57,7 +74,17 @@ class ProposeFileOperationTool(BaseTool):
     def __init__(self, role: str, **data):
         super().__init__(role=role, **data)
 
-    def _run(self, operation: str, file_path: str, content: str, reason: str) -> str:
+    def _run(
+        self,
+        operation: str,
+        file_path: str,
+        content: str,
+        reason: str,
+        expected_outcome: str | None = None,
+        expected_impact: str | None = None,
+        expected_cost_amount: float | None = None,
+        currency: str | None = None,
+    ) -> str:
         # Breekt een runaway herhaal-loop: dezelfde (rol + operatie + pad)
         # binnen het dedupe-venster wordt niet opnieuw gelogd of genotificeerd.
         # Bewust NIET op 'content' of 'reason' meegewogen — het incident dat
@@ -86,6 +113,10 @@ class ProposeFileOperationTool(BaseTool):
             action_description=description,
             action_detail=action_detail_json,
             action_type="file_operation",
+            expected_outcome=expected_outcome,
+            expected_impact=expected_impact,
+            expected_cost_amount=expected_cost_amount,
+            currency=currency,
         )
 
         try:
