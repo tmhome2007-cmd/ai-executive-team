@@ -8,6 +8,7 @@ Never mount the Docker socket into this worker.
 import os
 from pathlib import Path
 import shutil
+import secrets
 import subprocess
 
 WORKER_IMAGE = "alpine:3.20"
@@ -29,8 +30,9 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
     docker = shutil.which("docker")
     if not docker:
         raise ContainerExecutionError("Docker unavailable: fail closed")
+    container_name = "executive-worker-" + secrets.token_hex(12)
     args = [
-        docker, "run", "--rm", "--pull=never",
+        docker, "run", "--rm", "--name", container_name, "--pull=never",
         "--network=none", "--read-only",
         "--cap-drop=ALL", "--security-opt=no-new-privileges",
         "--pids-limit=64", "--memory=256m", "--cpus=1",
@@ -46,8 +48,16 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
             timeout=30, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
             check=False,
         )
-    except (subprocess.TimeoutExpired, OSError) as exc:
-        raise ContainerExecutionError("Container invocation failed or timed out") from exc
+    except subprocess.TimeoutExpired as exc:
+        # Killing the Docker CLI does not always kill the container in the daemon.
+        try:
+            subprocess.run([docker, "rm", "-f", container_name], shell=False,
+                           capture_output=True, timeout=10, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        raise ContainerExecutionError("Container timed out; attempted forced cleanup") from exc
+    except OSError as exc:
+        raise ContainerExecutionError("Container invocation failed") from exc
     # Fail closed on unexpectedly large output instead of recording it.
     if len(result.stdout.encode("utf-8")) + len(result.stderr.encode("utf-8")) > MAX_OUTPUT_BYTES:
         raise ContainerExecutionError("Container output exceeded bounded result size")
