@@ -242,6 +242,7 @@ const AGENT_OPTIONS: { key: string; label: string }[] = [
   { key: "chro", label: "CHRO" },
   { key: "general_counsel", label: "General Counsel" },
   { key: "cpo", label: "CPO" },
+  { key: "cco", label: "CCO" },
   { key: "board_director", label: "Board Director" },
 ];
 
