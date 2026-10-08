@@ -9,6 +9,7 @@ import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI i
 
 
 import json
+import uuid
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
@@ -230,6 +231,7 @@ def run_executive_meeting(
     provenance_context: Dict[str, Any] | None = None,
     memory_context: Dict[str, Any] | None = None,
     meeting_type: str = "strategy",
+    workflow_run_id: str | None = None,
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -260,6 +262,8 @@ def run_executive_meeting(
     if agents_source is None:
         agents_source = EXECUTIVE_AGENTS
 
+    from workflows.durable_task import DurableTask
+    workflow_run_id = workflow_run_id or f"meeting:{uuid.uuid4()}"
     meeting_profile = get_meeting_type_profile(meeting_type)
     meeting_policy = meeting_type_prompt(meeting_type)
 
@@ -432,6 +436,14 @@ def run_executive_meeting(
                 context=list(tasks)  # Geef alle voorgaande taken mee als context
             )
 
+        current_task = DurableTask(
+            description=current_task.description,
+            expected_output=current_task.expected_output,
+            agent=agent_obj,
+            context=list(tasks) if tasks else None,
+            checkpoint_run_id=workflow_run_id,
+            checkpoint_step_id=f"agent:{index}:{key}",
+        )
         tasks.append(current_task)
 
     # 3. Stel de Crew samen en voer deze uit
@@ -439,7 +451,7 @@ def run_executive_meeting(
         agents=agent_instances,
         tasks=tasks,
         process=Process.sequential,
-        verbose=True
+        verbose=False
     )
 
     # De daadwerkelijke kickoff is de zware, CPU/GPU-intensieve stap — deze
@@ -581,6 +593,7 @@ def run_executive_meeting(
         )
 
     return {
+        "workflow_run_id": workflow_run_id,
         "final_decision": guarded_final_decision,
         "participants": agent_keys,
         "meeting_type": meeting_type,

@@ -42,6 +42,11 @@ class Config:
         default_factory=lambda: os.getenv("DATABASE_PATH", "./memory/executive_team.db").strip()
     )
 
+    ARTIFACT_RETENTION_DAYS: int = field(
+        default_factory=lambda: int(os.getenv("ARTIFACT_RETENTION_DAYS", "30"))
+    )
+    SYNC_EXPORT_DIR: str = field(default_factory=lambda: os.getenv("SYNC_EXPORT_DIR", "sync").strip())
+
     BACKUP_RETENTION_COUNT: int = field(
         default_factory=lambda: max(1, min(365, int(os.getenv("BACKUP_RETENTION_COUNT", "7"))))
     )
@@ -212,6 +217,8 @@ def validate_config() -> list[str]:
     """
     errors = []
     warnings = []
+    if not 1 <= config.ARTIFACT_RETENTION_DAYS <= 3650:
+        errors.append("ARTIFACT_RETENTION_DAYS must be 1–3650")
 
     if not config.API_SECRET_KEY:
         errors.append(

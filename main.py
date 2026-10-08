@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 
 import asyncio
 import datetime
+import hashlib
 from contextlib import asynccontextmanager
 from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException, Query, Depends, Header, Request
@@ -194,7 +195,7 @@ async def scheduled_autonomous_followup_job():
 
 # 4. Lifespan Handler (Opstarten en Afsluiten)
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def _lifespan_unlocked(app: FastAPI):
     # Valideer de configuratie EERST — fail fast met een duidelijke foutmelding
     # in plaats van een verwarrende crash minuten later midden in een crew-run.
     try:
@@ -228,6 +229,10 @@ async def lifespan(app: FastAPI):
             f"Recovered {recovered_actions} interrupted action(s) as execution_failed; "
             "manual review required because real-world outcome is unknown."
         )
+
+    from memory.artifact_retention import prune_generated_artifacts
+    retained = await asyncio.to_thread(prune_generated_artifacts)
+    logger.info("Generated artifact retention applied: %s", retained)
 
     # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
     # waarschuwingen in plaats van dat het probleem pas bij de eerste
@@ -271,6 +276,12 @@ async def lifespan(app: FastAPI):
         id="daily_database_backup_job",
         replace_existing=True,
     )
+    scheduler.add_job(
+        prune_generated_artifacts,
+        trigger=IntervalTrigger(hours=24),
+        id="generated_artifact_retention_job", replace_existing=True,
+        max_instances=1, coalesce=True,
+    )
     scheduler.start()
     app.state.scheduler = scheduler
     logger.info(
@@ -299,6 +310,14 @@ async def lifespan(app: FastAPI):
     # Stop de Telegram-listener netjes (wacht tot de achtergrond-thread eindigt)
     stop_telegram_listener()
     logger.info("Telegram listener stopped. Shutdown complete.")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from workflows.instance_lock import database_instance_lock
+    with database_instance_lock(config.DATABASE_PATH):
+        async with _lifespan_unlocked(app):
+            yield
 
 
 # 5. FastAPI App Instantie
@@ -341,6 +360,7 @@ class DailyResearchResponse(BaseModel):
 
 
 class DecisionRequest(BaseModel):
+    workflow_run_id: Optional[str] = Field(default=None, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9:_-]+$")
     topic: str = Field(min_length=1, max_length=200)
     task_description: str = Field(min_length=1, max_length=12000)
     meeting_type: Literal[
@@ -352,6 +372,7 @@ class DecisionRequest(BaseModel):
 
 
 class DecisionResponse(BaseModel):
+    workflow_run_id: Optional[str] = None
     database_id: int
     topic: str
     meeting_type: str
@@ -815,6 +836,8 @@ def list_meeting_types():
 )
 def trigger_ad_hoc_decision(request: DecisionRequest):
     """Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op."""
+    import uuid
+    workflow_run_id = request.workflow_run_id or f"decision:{uuid.uuid4()}"
     goal = None
     meeting_task = request.task_description
     try:
@@ -847,6 +870,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     try:
         meeting_result = run_executive_meeting(
             topic=request.topic,
+            workflow_run_id=workflow_run_id,
             task_description=meeting_task,
             agent_keys=resolved_agent_keys,
             # Decision meetings are reasoning-only. Tool-capable agents belong
@@ -881,6 +905,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         sandbox_mode=config.SANDBOX_MODE,
         goal_id=request.goal_id,
         meeting_type=request.meeting_type,
+        workflow_key=workflow_run_id,
     )
 
     try:
@@ -891,6 +916,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         print(f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}")
 
     return DecisionResponse(
+        workflow_run_id=workflow_run_id,
         database_id=db_id,
         topic=request.topic,
         meeting_type=request.meeting_type,
@@ -1094,6 +1120,7 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
     def _run_preparation_meeting(task_text: str):
         return run_executive_meeting(
+            workflow_run_id="prepare:" + decision["sync_uuid"] + ":" + hashlib.sha256(task_text.encode()).hexdigest()[:24],
             topic=f"Preparation for Decision #{decision_id}",
             task_description=task_text,
             agent_keys=request.agent_keys,

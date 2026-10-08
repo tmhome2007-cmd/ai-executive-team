@@ -416,6 +416,11 @@ def init_db() -> None:
     except sqlite3.OperationalError:
         pass
 
+    decision_columns = {row[1] for row in cursor.execute("PRAGMA table_info(decisions)")}
+    if "workflow_key" not in decision_columns:
+        cursor.execute("ALTER TABLE decisions ADD COLUMN workflow_key TEXT")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS decisions_workflow_key ON decisions(workflow_key) WHERE workflow_key IS NOT NULL")
+
     cursor.execute("SELECT id FROM decisions WHERE sync_uuid IS NULL")
     for (row_id,) in cursor.fetchall():
         cursor.execute("UPDATE decisions SET sync_uuid = ? WHERE id = ?", (str(uuid.uuid4()), row_id))
@@ -1554,6 +1559,7 @@ def log_decision(
     sandbox_mode: bool = True,
     goal_id: int | None = None,
     meeting_type: str = "strategy",
+    workflow_key: str | None = None,
 ) -> int:
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
@@ -1568,6 +1574,17 @@ def log_decision(
 
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        if workflow_key is not None:
+            if not isinstance(workflow_key, str) or not 1 <= len(workflow_key) <= 128:
+                raise ValueError("Invalid decision workflow key")
+            previous = cursor.execute("SELECT * FROM decisions WHERE workflow_key = ?", (workflow_key,)).fetchone()
+            if previous:
+                expected = (topic, agents_str, task_description, decision_outcome, sandbox_flag, goal_id, meeting_type)
+                actual = tuple(previous[key] for key in ("topic", "agents_involved", "task_description", "decision_outcome", "sandbox_mode", "goal_id", "meeting_type"))
+                if actual != expected:
+                    raise ValueError("Decision workflow key reused with different inputs")
+                return previous["id"]
         if goal_id is not None:
             cursor.execute(
                 "SELECT sync_uuid, status FROM company_goals WHERE id = ?",
@@ -1585,11 +1602,11 @@ def log_decision(
         cursor.execute("""
             INSERT INTO decisions (
                 timestamp, topic, agents_involved, task_description, decision_outcome,
-                sandbox_mode, sync_uuid, goal_id, goal_sync_uuid, meeting_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                sandbox_mode, sync_uuid, goal_id, goal_sync_uuid, meeting_type, workflow_key
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             timestamp, topic, agents_str, task_description, decision_outcome,
-            sandbox_flag, new_sync_uuid, goal_id, goal_sync_uuid, meeting_type,
+            sandbox_flag, new_sync_uuid, goal_id, goal_sync_uuid, meeting_type, workflow_key,
         ))
         
         decision_id = cursor.lastrowid
@@ -3468,6 +3485,9 @@ def export_history_to_jsonl(export_path: str) -> dict:
         os.chmod(export_path, 0o600)
     except OSError:
         pass
+
+    from memory.artifact_retention import register_sync_export
+    register_sync_export(export_path)
 
     return {
         "goals": len(goal_rows),

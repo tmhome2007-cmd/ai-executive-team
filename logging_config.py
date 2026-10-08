@@ -17,6 +17,8 @@ Gebruik in elke module:
 
 import logging
 import os
+import datetime
+import time
 from logging.handlers import RotatingFileHandler
 
 _LOG_DIR = "logs"
@@ -42,11 +44,25 @@ class PrivateRotatingFileHandler(RotatingFileHandler):
                     pass
 
     def _open(self):
+        # Age from the oldest entry, so an active low-volume log cannot keep
+        # old records indefinitely by receiving occasional new messages.
+        if not hasattr(self, "period_start"):
+            self.period_start = time.time()
+            try:
+                with open(self.baseFilename, encoding="utf-8") as previous:
+                    first = previous.readline(256)
+                self.period_start = datetime.datetime.strptime(first[:19], "%Y-%m-%d %H:%M:%S").timestamp()
+            except (OSError, ValueError):
+                pass
         stream = super()._open()
         self._harden_permissions()
         return stream
 
+    def shouldRollover(self, record):
+        return time.time() - self.period_start >= 86400 or super().shouldRollover(record)
+
     def doRollover(self):
+        self.period_start = time.time()
         super().doRollover()
         self._harden_permissions()
 
@@ -91,6 +107,7 @@ def setup_logging(level: int = logging.INFO) -> None:
     # dat verdrinkt onze eigen logs. Ietwat temperen, zonder ze volledig stil
     # te maken (WARNING en hoger blijft altijd zichtbaar).
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("telegram").setLevel(logging.WARNING)
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
@@ -103,3 +120,16 @@ def get_logger(name: str) -> logging.Logger:
     if not _configured:
         setup_logging()
     return logging.getLogger(name)
+
+
+def rotate_aged_active_log(*, now: float) -> None:
+    """Rotate the current directory's active handler before age pruning."""
+    target = os.path.abspath(_LOG_FILE)
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, PrivateRotatingFileHandler) and handler.baseFilename == target:
+            handler.acquire()
+            try:
+                if now - handler.period_start >= 86400:
+                    handler.doRollover()
+            finally:
+                handler.release()

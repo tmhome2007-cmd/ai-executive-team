@@ -684,7 +684,7 @@ try:
         main_content_check23 = f.read()
 
     lifespan_match = re.search(
-        r"async def lifespan\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
+        r"async def (?:lifespan|_lifespan_unlocked)\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
         main_content_check23,
         re.DOTALL,
     )
@@ -1407,7 +1407,7 @@ try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_58 = f.read()
     lifespan_match = re.search(
-        r"async def lifespan\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
+        r"async def (?:lifespan|_lifespan_unlocked)\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
         main_content_58,
         re.DOTALL,
     )

@@ -36,7 +36,7 @@ ceo_agent = Agent(
         "- How should resources be allocated across the business to support this decision, based only on resources we actually know exist? Do not inherit unsupported facts or figures from another executive."
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeResourceRequestTool(role="CEO")],
@@ -55,7 +55,7 @@ cfo_agent = Agent(
         "- What financial cost exposure and contractual budget commitment are actually supported by the evidence? Do not assume a budget, revenue base, funding level, or cost structure that was not provided."
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeFileOperationTool(role="CFO"), ProposeResourceRequestTool(role="CFO")],
@@ -74,7 +74,7 @@ cso_agent = Agent(
         "- Where are key competitors moving and how does this action counter them?"
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeResourceRequestTool(role="CSO")],
@@ -93,7 +93,7 @@ chro_agent = Agent(
         "- Do we have internal skill gaps that require new recruiting or training?"
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeResourceRequestTool(role="CHRO")],
@@ -112,7 +112,7 @@ general_counsel_agent = Agent(
         "- Are there intellectual property (IP) exposures or regulatory constraints?"
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeFileOperationTool(role="General Counsel"), ProposeResourceRequestTool(role="General Counsel")],
@@ -131,7 +131,7 @@ coo_agent = Agent(
         "- What supply chain, logistical, or execution risks could disrupt implementation? Only discuss a physical supply chain if the proposal actually requires one; do not invent operational infrastructure."
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[
@@ -155,7 +155,7 @@ cmo_agent = Agent(
         "- How can we position this decision to differentiate us in the market?"
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeResourceRequestTool(role="CMO")],
@@ -174,7 +174,7 @@ cpo_agent = Agent(
         "- Is this proposal technically feasible from a product design and user interaction standpoint?"
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeResourceRequestTool(role="CPO")],
@@ -193,7 +193,7 @@ board_director_agent = Agent(
         "- Does this action expose the organization to significant reputational harm?"
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeResourceRequestTool(role="Board Director")],
@@ -212,7 +212,7 @@ chro_cco_agent = Agent(
         "- What implementation risks exist and how can we mitigate them during rollout?"
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[ProposeResourceRequestTool(role="CCO")],
@@ -230,7 +230,7 @@ cto_agent = Agent(
         "- How does this affect the engineering roadmap and technical priorities?"
     ),
     llm=llm,
-    verbose=True,
+    verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
     tools=[
@@ -270,7 +270,7 @@ EXECUTIVE_AGENTS_NO_TOOLS = {
         goal=agent.goal,
         backstory=agent.backstory,
         llm=llm,
-        verbose=True,
+        verbose=False,
         allow_delegation=False,
         max_iter=5,
     )

@@ -25,13 +25,13 @@ unencrypted stolen disk.
 
 | Data type | Current implementation | Required owner action |
 |---|---|---|
-| Rotated application logs | 5 MiB files, 3 backups | Review for secrets; configure OS log retention |
-| Browser screenshots | Bounded by SCREENSHOT_RETENTION_COUNT | Set count and review collected content |
+| Rotated application logs | Size/count limits plus deletion after 30 days | Daily rotation also bounds active-log age |
+| Browser screenshots | Count limit plus deletion after 30 days | Review collected content |
 | Startup database backups | Bounded by backup keep_last | Encrypt volume and test restore |
-| JSONL sync exports | Manual export, persistent until removed | Track copies and set owner-led deletion dates |
+| JSONL sync exports | Registered exports in SYNC_EXPORT_DIR expire after 30 days | Track exported copies outside this directory |
 | Decisions and action outcomes | Durable audit trail, no automatic TTL | Define legal and business retention period before deletion |
 | Executive memories and research | Durable and may include private context | Review consent and data minimization |
-| Step checkpoints | State-only; no agent prompt payload | Retain alongside business audit evidence |
+| Step checkpoints | Agent outputs and proposal IDs, excluding messages/trace | Retain alongside business audit evidence |
 
 **Do not automatically prune the decision/action history:** it records human
 approvals and execution provenance. A future deletion feature must preserve
@@ -77,3 +77,26 @@ bounded 1–365); plaintext and encrypted backup families retain independently.
 `SCREENSHOT_RETENTION_COUNT` continues to bound browser screenshots. These are
 count/size limits, not age-based deletion or forensic secure erasure. Owner-led
 retention decisions remain required for live history, sync copies and memories.
+
+## Verified local deployment and age retention — 2026-10-08
+
+FileVault reports **On** on the audited Mac. This protects its system volume;
+it does not prove encryption on other machines or copied/exported artifacts.
+No production secrets or database were copied into the audit checkout.
+
+The owner selected 30 days. `ARTIFACT_RETENTION_DAYS=30` now expires rotated
+application logs, generated action screenshots and registered sync exports on
+startup and every 24 hours while the backend runs. Existing size/count bounds
+remain. Active app.log rotates daily on writes or cleanup; rotated files retain their
+mtime for expiry. The live file is never unlinked under an open handler. Expiry is checked daily rather than continuous.
+Unknown export files, files outside SYNC_EXPORT_DIR, symlinks, hard links, and
+unsafe directories are preserved. Approval, execution, decision, memory and
+checkpoint evidence is retained. Deletion is not forensic secure erasure.
+
+Telegram notifications default to a generic dashboard reminder. Sensitive
+details require TELEGRAM_INCLUDE_SENSITIVE_DETAILS. Transport failures suppress
+exception text, and agent verbose tracing is disabled.
+
+A single backend instance is enforced per database using an owner-private
+Unix flock. Deployments using Windows or network filesystems need an equivalent
+verified locking implementation; the current server must not be deployed there.

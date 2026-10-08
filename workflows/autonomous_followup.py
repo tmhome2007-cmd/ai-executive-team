@@ -386,6 +386,7 @@ async def run_autonomous_followup() -> dict:
                 )
                 meeting = await asyncio.to_thread(
                     run_executive_meeting,
+                    workflow_run_id=f"followup:{event_id}",
                     topic=f"Autonomous follow-up for Goal #{goal['id']}",
                     task_description=prompt,
                     agent_keys=["cso", "coo", "ceo"],
@@ -394,6 +395,7 @@ async def run_autonomous_followup() -> dict:
                     meeting_type=followup_meeting_type,
                 )
                 decision_id = log_decision(
+                    workflow_key=f"followup:{event_id}",
                     topic=f"Autonomous follow-up: {goal['title']}",
                     agents_involved=meeting.get("participants", ["cso", "coo", "ceo"]),
                     task_description=prompt,

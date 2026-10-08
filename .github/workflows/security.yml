@@ -76,6 +76,9 @@ jobs:
       - name: Install exact frontend dependencies
         run: npm ci
 
+      - name: Verify native directory-glob adapter
+        run: npm run test:lint-glob
+
       - name: Lint
         run: npm run lint
 

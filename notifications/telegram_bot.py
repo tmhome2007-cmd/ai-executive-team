@@ -44,6 +44,12 @@ def escape_html(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _private_notification_text(message: str) -> str:
+    if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS:
+        return message
+    return "AI Executive Team update. Review the local dashboard for details."
+
+
 async def send_notification_async(message: str) -> None:
     """
     Verstuurt asynchroon een Telegram-bericht met behulp van de geconfigureerde bot token en chat ID.
@@ -64,7 +70,7 @@ async def send_notification_async(message: str) -> None:
         bot = Bot(token=token)
         await bot.send_message(
             chat_id=chat_id,
-            text=message,
+            text=_private_notification_text(message),
             parse_mode="HTML"
         )
         logger.info("Telegram notification sent successfully.")
@@ -73,7 +79,7 @@ async def send_notification_async(message: str) -> None:
             "Telegram notification failed (%s). Sensitive transport details are suppressed.",
             type(exc).__name__,
         )
-        raise
+        raise RuntimeError("Telegram transport failed; details suppressed") from None
 
 
 def send_notification(message: str) -> None:
@@ -106,7 +112,7 @@ async def send_notification_with_keyboard_async(
         bot = Bot(token=token)
         sent_message = await bot.send_message(
             chat_id=chat_id,
-            text=message,
+            text=_private_notification_text(message),
             parse_mode="HTML",
             reply_markup=reply_markup,
         )
@@ -117,7 +123,7 @@ async def send_notification_with_keyboard_async(
             "Telegram keyboard notification failed (%s). Sensitive transport details are suppressed.",
             type(exc).__name__,
         )
-        raise
+        raise RuntimeError("Telegram transport failed; details suppressed") from None
 
 
 def send_notification_with_keyboard(
