@@ -1,5 +1,7 @@
 # Foundation Hardening Audit
 
+> **2026-10-08 update:** A constrained Docker-only opt-in command worker is now implemented and unit-tested. The original host-shell execution path was removed. This is not equivalent to a dedicated VM security boundary, and the dependency, runtime, recovery and privacy release blockers remain open. Read [SECURITY_RELEASE_GATE.md](SECURITY_RELEASE_GATE.md) before merging.
+
 Status: pre-frontend backend/security/privacy audit  
 Branch: `chatgpt/foundation-hardening`
 
