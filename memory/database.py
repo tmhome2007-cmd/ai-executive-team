@@ -25,6 +25,7 @@ if str(project_root) not in sys.path:
 
 from config import config
 from workflows.meeting_types import VALID_MEETING_TYPES
+from workflows.capability_policy import require_action_capability
 
 
 VALID_ACTION_STATUSES = {
@@ -148,6 +149,70 @@ def _sync_record_signature_valid(record: dict) -> bool:
         return False
     expected = _sync_record_signature(record)
     return hmac.compare_digest(supplied, expected)
+
+
+def _action_approval_signing_key() -> bytes:
+    key = (
+        getattr(config, "ACTION_APPROVAL_HMAC_KEY", "")
+        or getattr(config, "SYNC_HMAC_KEY", "")
+        or config.API_SECRET_KEY
+    ).strip()
+    if not key:
+        raise ValueError(
+            "ACTION_APPROVAL_HMAC_KEY/SYNC_HMAC_KEY/API_SECRET_KEY is required "
+            "to bind action approvals to their exact payload"
+        )
+    return key.encode("utf-8")
+
+
+def _action_approval_payload(action: dict) -> dict:
+    """Canonical authority-bearing fields covered by an owner approval."""
+    return {
+        "sync_uuid": action.get("sync_uuid"),
+        "proposed_by": action.get("proposed_by"),
+        "action_description": action.get("action_description"),
+        "action_detail": action.get("action_detail"),
+        "action_type": action.get("action_type"),
+        "expected_outcome": action.get("expected_outcome"),
+        "expected_impact": action.get("expected_impact"),
+        "expected_cost_amount": action.get("expected_cost_amount"),
+        "currency": action.get("currency"),
+        "source_decision_sync_uuid": action.get("source_decision_sync_uuid"),
+        "source_phase": action.get("source_phase"),
+    }
+
+
+def _action_approval_seal(action: dict) -> str:
+    canonical = json.dumps(
+        _action_approval_payload(action),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hmac.new(
+        _action_approval_signing_key(),
+        canonical,
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _action_row_for_approval(cursor: sqlite3.Cursor, action_id: int) -> dict | None:
+    cursor.execute(
+        """
+        SELECT q.id, q.status, q.sync_uuid, q.proposed_by,
+               q.action_description, q.action_detail, q.action_type,
+               q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
+               q.approval_seal,
+               o.expected_outcome, o.expected_impact,
+               o.expected_cost_amount, o.currency
+        FROM action_queue q
+        LEFT JOIN action_outcomes o ON o.action_id = q.id
+        WHERE q.id = ?
+        """,
+        (action_id,),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
 
 
 _SYNC_TABLE_COLUMNS = {
