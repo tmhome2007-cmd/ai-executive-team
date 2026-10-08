@@ -17,6 +17,8 @@ try {
   assert.deepEqual(globSync(path.join(root, 'absent-*'), options), []);
   assert.throws(() => globSync('{'.repeat(10000), options));
   assert.throws(() => globSync('{'.repeat(17)+'x'+'}'.repeat(17), options), RangeError);
+  assert.throws(() => globSync('{a,b}'.repeat(9), options), RangeError);
+  assert.throws(() => globSync('{1..100000000}', options), RangeError);
   assert.throws(() => globSync('*', {onlyDirectories:true, followSymbolicLinks:true}));
   // Exercise the real installed plugin path: no-html-link-for-pages uses getRootDirs.
   const {getRootDirs} = require('@next/eslint-plugin-next/dist/utils/get-root-dirs');

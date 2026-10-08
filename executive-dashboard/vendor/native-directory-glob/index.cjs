@@ -11,11 +11,26 @@ function globSync(pattern, options = {}) {
   if (typeof pattern !== 'string' || pattern.length > 4096 || pattern.includes('\0')) {
     throw new TypeError('Invalid directory-glob pattern');
   }
-  // Bound recursive brace parsing even for owner-supplied eslint settings.
+  // Cap nesting and Cartesian expansion before handing patterns to Node.
+  // Repeated sibling braces can explode without nesting.
+  if (/\{[^{}]*\.\.[^{}]*\}/.test(pattern)) throw new RangeError('Directory-glob brace ranges are unsupported');
+  const groups = [{sum:0, product:1}];
   let depth = 0;
   for (const character of pattern) {
-    if (character === '{' && ++depth > 16) throw new RangeError('Directory-glob nesting exceeds 16');
-    if (character === '}' && --depth < 0) throw new TypeError('Unbalanced directory-glob pattern');
+    if (character === '{') {
+      if (++depth > 16) throw new RangeError('Directory-glob nesting exceeds 16');
+      groups.push({sum:0, product:1});
+    } else if (character === ',' && depth > 0) {
+      const group = groups.at(-1);
+      group.sum += group.product;
+      group.product = 1;
+    } else if (character === '}') {
+      if (--depth < 0) throw new TypeError('Unbalanced directory-glob pattern');
+      const group = groups.pop();
+      groups.at(-1).product *= group.sum + group.product;
+    }
+    const group = groups.at(-1);
+    if (group.sum + group.product > 256) throw new RangeError('Directory-glob expansion exceeds 256');
   }
   if (depth !== 0) throw new TypeError('Unbalanced directory-glob pattern');
   return [...fs.globSync(pattern)].filter(path => {
