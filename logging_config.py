@@ -38,6 +38,10 @@ def setup_logging(level: int = logging.INFO) -> None:
         return
 
     os.makedirs(_LOG_DIR, exist_ok=True)
+    try:
+        os.chmod(_LOG_DIR, 0o700)
+    except OSError:
+        pass
 
     formatter = logging.Formatter(
         fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -51,6 +55,11 @@ def setup_logging(level: int = logging.INFO) -> None:
     file_handler = RotatingFileHandler(
         _LOG_FILE, maxBytes=_MAX_BYTES, backupCount=_BACKUP_COUNT, encoding="utf-8"
     )
+    try:
+        if os.path.exists(_LOG_FILE):
+            os.chmod(_LOG_FILE, 0o600)
+    except OSError:
+        pass
     file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.DEBUG)  # bestand bewaart alles, console toont minder ruis
 
