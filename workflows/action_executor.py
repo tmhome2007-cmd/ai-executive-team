@@ -12,6 +12,8 @@ import ipaddress
 import json
 import os
 import re
+import secrets
+import stat
 import shlex
 import socket
 import subprocess
@@ -334,6 +336,75 @@ def is_dangerous_command(command: str) -> str | None:
         if re.search(pattern, command, flags=re.IGNORECASE):
             return reason
     return None
+
+
+def _open_workspace_parent_fd(file_path: str) -> tuple[int, str, str]:
+    """
+    Resolve a target lexically beneath WORKSPACE_ROOT and open its parent
+    directory component-by-component with O_NOFOLLOW.
+
+    Returning an anchored parent dirfd closes the check-then-open race: later
+    file operations address the final name relative to this already-open
+    directory rather than resolving the path again through mutable symlinks.
+    """
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+        raise RuntimeError(
+            "Secure structured file operations require POSIX O_NOFOLLOW support"
+        )
+
+    workspace_root = _get_workspace_root()
+    expanded = os.path.expanduser(file_path)
+    lexical_target = os.path.abspath(
+        expanded if os.path.isabs(expanded)
+        else os.path.join(workspace_root, expanded)
+    )
+    try:
+        if os.path.commonpath([workspace_root, lexical_target]) != workspace_root:
+            raise ValueError("File path escapes WORKSPACE_ROOT")
+    except ValueError as exc:
+        raise ValueError("File path escapes WORKSPACE_ROOT") from exc
+
+    relative = os.path.relpath(lexical_target, workspace_root)
+    parts = [part for part in relative.split(os.sep) if part not in {"", "."}]
+    if not parts or any(part == ".." for part in parts):
+        raise ValueError("File path must identify a file inside WORKSPACE_ROOT")
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    current_fd = os.open(workspace_root, flags)
+    try:
+        for component in parts[:-1]:
+            next_fd = os.open(
+                component,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=current_fd,
+            )
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd, parts[-1], lexical_target
+    except Exception:
+        os.close(current_fd)
+        raise
+
+
+def _require_safe_regular_fd(fd: int) -> None:
+    """Reject devices/FIFOs/sockets and hard-linked files for structured I/O."""
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError("Structured file operation target must be a regular file")
+    if info.st_nlink != 1:
+        raise ValueError(
+            "Structured file operation target has multiple hard links; blocked for safety"
+        )
+
+
+def _telegram_sensitive(value: str, *, code: bool = False) -> str:
+    """Keep execution details local unless the owner explicitly opts in."""
+    if getattr(config, "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", False):
+        escaped = escape_html(value)
+        return f"<code>{escaped}</code>" if code else escaped
+    return "<i>hidden for privacy — inspect locally</i>"
 
 
 def _execute_file_operation(action_id: int, action: dict) -> dict:
