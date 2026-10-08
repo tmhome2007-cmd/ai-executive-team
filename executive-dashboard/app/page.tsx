@@ -51,6 +51,17 @@ interface PendingAction {
   reviewed_at: string | null;
   action_type?: string;
   result_detail?: string | null;
+  expected_outcome?: string | null;
+  expected_impact?: string | null;
+  expected_cost_amount?: number | null;
+  currency?: string | null;
+  outcome_status?: string | null;
+  actual_outcome?: string | null;
+  actual_impact?: string | null;
+  actual_cost_amount?: number | null;
+  measured_at?: string | null;
+  next_recommendation?: string | null;
+  outcome_notes?: string | null;
 }
 
 interface ExecutionResult {
@@ -135,6 +146,214 @@ function AuthenticatedScreenshot({ filename, apiKey }: { filename: string; apiKe
     />
   );
 }
+
+function OutcomeEditor({
+  action,
+  apiKey,
+  onSaved,
+}: {
+  action: PendingAction;
+  apiKey: string;
+  onSaved: () => void;
+}) {
+  const [status, setStatus] = useState(
+    ["succeeded", "failed", "partial", "inconclusive"].includes(action.outcome_status || "")
+      ? action.outcome_status || ""
+      : ""
+  );
+  const [actualOutcome, setActualOutcome] = useState(action.actual_outcome || "");
+  const [actualImpact, setActualImpact] = useState(action.actual_impact || "");
+  const [actualCost, setActualCost] = useState(
+    action.actual_cost_amount !== null && action.actual_cost_amount !== undefined
+      ? String(action.actual_cost_amount)
+      : ""
+  );
+  const [currency, setCurrency] = useState(action.currency || "");
+  const [nextRecommendation, setNextRecommendation] = useState(action.next_recommendation || "");
+  const [notes, setNotes] = useState(action.outcome_notes || "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const canRecordActual = ["executed", "execution_failed", "blocked_dangerous"].includes(action.status);
+
+  const save = async () => {
+    if (!canRecordActual) return;
+    if (!status || !actualOutcome.trim()) {
+      setMessage("Choose an outcome status and describe the actual outcome.");
+      return;
+    }
+    if (actualCost && !currency.trim()) {
+      setMessage("Currency is required when actual cost is entered.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const payload: Record<string, unknown> = {
+        outcome_status: status,
+        actual_outcome: actualOutcome.trim(),
+      };
+      if (actualImpact.trim()) payload.actual_impact = actualImpact.trim();
+      if (actualCost.trim()) payload.actual_cost_amount = Number(actualCost);
+      if (currency.trim()) payload.currency = currency.trim().toUpperCase();
+      if (nextRecommendation.trim()) payload.next_recommendation = nextRecommendation.trim();
+      if (notes.trim()) payload.notes = notes.trim();
+
+      const response = await fetch(`${API_BASE}/actions/${action.id}/outcome`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.detail || "Could not save outcome.");
+
+      setMessage("Outcome saved.");
+      onSaved();
+    } catch (err: any) {
+      setMessage(err.message || "Could not save outcome.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 border border-cyan-900 bg-gray-950 rounded p-4 space-y-3">
+      <div className="flex justify-between items-center gap-3">
+        <h4 className="font-semibold text-cyan-300">Outcome Tracking</h4>
+        <span className="text-xs border border-cyan-800 text-cyan-300 rounded px-2 py-0.5">
+          {action.outcome_status || "not_started"}
+        </span>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3 text-xs">
+        <div>
+          <div className="text-gray-500">Expected outcome</div>
+          <div className="text-gray-300 whitespace-pre-wrap">
+            {action.expected_outcome || "Not specified"}
+          </div>
+        </div>
+        <div>
+          <div className="text-gray-500">Expected impact</div>
+          <div className="text-gray-300 whitespace-pre-wrap">
+            {action.expected_impact || "Not specified"}
+          </div>
+        </div>
+        <div>
+          <div className="text-gray-500">Expected cost</div>
+          <div className="text-gray-300">
+            {action.expected_cost_amount !== null && action.expected_cost_amount !== undefined
+              ? `${action.expected_cost_amount} ${action.currency || ""}`.trim()
+              : "Unknown / not specified"}
+          </div>
+        </div>
+        <div>
+          <div className="text-gray-500">Measured at</div>
+          <div className="text-gray-300">
+            {action.measured_at ? new Date(action.measured_at).toLocaleString("en-US") : "Not measured yet"}
+          </div>
+        </div>
+      </div>
+
+      {action.actual_outcome && (
+        <div className="text-xs space-y-1 border-t border-gray-800 pt-3">
+          <div><span className="text-gray-500">Actual outcome:</span> <span className="text-gray-300">{action.actual_outcome}</span></div>
+          {action.actual_impact && <div><span className="text-gray-500">Actual impact:</span> <span className="text-gray-300">{action.actual_impact}</span></div>}
+          {action.actual_cost_amount !== null && action.actual_cost_amount !== undefined && (
+            <div><span className="text-gray-500">Actual cost:</span> <span className="text-gray-300">{action.actual_cost_amount} {action.currency || ""}</span></div>
+          )}
+          {action.next_recommendation && <div><span className="text-gray-500">Next recommendation:</span> <span className="text-gray-300">{action.next_recommendation}</span></div>}
+        </div>
+      )}
+
+      {canRecordActual && (
+        <details>
+          <summary className="cursor-pointer text-sm text-cyan-400">
+            Record / update measured outcome
+          </summary>
+          <div className="mt-3 grid gap-2">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="bg-gray-900 border border-gray-700 rounded p-2 text-sm"
+            >
+              <option value="">Choose outcome status</option>
+              <option value="succeeded">Succeeded</option>
+              <option value="failed">Failed</option>
+              <option value="partial">Partial</option>
+              <option value="inconclusive">Inconclusive</option>
+            </select>
+            <textarea
+              value={actualOutcome}
+              onChange={(e) => setActualOutcome(e.target.value)}
+              placeholder="What actually happened?"
+              rows={2}
+              className="bg-gray-900 border border-gray-700 rounded p-2 text-sm"
+            />
+            <textarea
+              value={actualImpact}
+              onChange={(e) => setActualImpact(e.target.value)}
+              placeholder="What impact did it actually have? (optional)"
+              rows={2}
+              className="bg-gray-900 border border-gray-700 rounded p-2 text-sm"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={actualCost}
+                onChange={(e) => setActualCost(e.target.value)}
+                placeholder="Actual cost"
+                className="bg-gray-900 border border-gray-700 rounded p-2 text-sm"
+              />
+              <input
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                placeholder="Currency (EUR)"
+                maxLength={3}
+                className="bg-gray-900 border border-gray-700 rounded p-2 text-sm uppercase"
+              />
+            </div>
+            <textarea
+              value={nextRecommendation}
+              onChange={(e) => setNextRecommendation(e.target.value)}
+              placeholder="What should the team do next? (optional)"
+              rows={2}
+              className="bg-gray-900 border border-gray-700 rounded p-2 text-sm"
+            />
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Measurement notes / evidence (optional)"
+              rows={2}
+              className="bg-gray-900 border border-gray-700 rounded p-2 text-sm"
+            />
+            {message && <p className="text-xs text-gray-300">{message}</p>}
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="w-fit px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 rounded text-xs text-white disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Outcome"}
+            </button>
+          </div>
+        </details>
+      )}
+
+      {action.status === "executed_dry_run" && (
+        <p className="text-xs text-purple-300">
+          Dry-run only: no real-world business outcome can be measured from this execution.
+        </p>
+      )}
+    </div>
+  );
+}
+
 
 function statusBadge(status: string) {
   const style = STATUS_STYLES[status] || {
@@ -1227,6 +1446,13 @@ export default function DashboardPage() {
                       return null;
                     }
                   })()}
+                  <OutcomeEditor
+                    action={item}
+                    apiKey={apiKey || ""}
+                    onSaved={() => {
+                      if (apiKey) fetchActionHistory(apiKey);
+                    }}
+                  />
                   {item.reviewed_at && (
                     <p className="text-xs text-gray-600 mt-2">
                       Reviewed: {new Date(item.reviewed_at).toLocaleString("en-US")}
