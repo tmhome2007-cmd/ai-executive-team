@@ -415,12 +415,194 @@ async def trigger_daily_research():
 )
 def trigger_ad_hoc_decision(request: DecisionRequest):
     """Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op."""
+    try:
+        meeting_result = run_executive_meeting(
+            topic=request.topic,
+            task_description=request.task_description,
+            agent_keys=request.agent_keys,
+            # Decision meetings are reasoning-only. Tool-capable agents belong
+            # in the separate preparation/execution phase after human approval.
+            agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid meeting request: {e}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Meeting execution failed: {e}",
+        )
+
+    final_decision = meeting_result.get("final_decision", "")
+    participants = meeting_result.get("participants", [])
+
+    db_id = log_decision(
+        topic=request.topic,
+        agents_involved=participants,
+        task_description=request.task_description,
+        decision_outcome=final_decision,
+        sandbox_mode=config.SANDBOX_MODE,
+    )
+
+    try:
+        snippet = final_decision[:200]
+        message = f"📌 <b>Ad-Hoc Decision Triggered</b>\n\n<b>Topic:</b> {escape_html(request.topic)}\n\n<b>Decision Snippet:</b>\n{escape_html(snippet)}..."
+        send_notification(message)
+    except Exception as notify_err:
+        print(f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}")
+
+    return DecisionResponse(
+        database_id=db_id,
+        topic=request.topic,
+        final_decision=final_decision,
+        participants=participants,
+        individual_outputs=meeting_result.get("individual_outputs", {}),
+        quality_warnings=meeting_result.get("quality_warnings", {}),
+    )
+
+
+@app.post(
+    "/decisions/{decision_id}/approve",
+    summary="Approve Executive Decision Direction",
+    dependencies=[Depends(verify_api_key)],
+)
+def approve_decision(decision_id: int):
+    """Human approval gate voor de strategische richting van een beslissing."""
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+
+    if not transition_decision_approval(decision_id, "approved", ("pending",)):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision cannot be approved from its current state "
+                f"(approval={current.get('approval_status') if current else 'unknown'}, "
+                f"preparation={current.get('preparation_status') if current else 'unknown'})."
+            ),
+        )
+
+    try:
+        send_notification(
+            f"✅ <b>DECISION APPROVED</b>\n\n"
+            f"<b>Decision ID:</b> #{decision_id}\n"
+            f"<b>Topic:</b> {escape_html(decision['topic'])}\n\n"
+            "The decision is now eligible for the separate preparation phase."
+        )
+    except Exception as notify_err:
+        logger.warning(f"Decision approval notification failed: {notify_err}")
+
+    return {
+        "decision_id": decision_id,
+        "approval_status": "approved",
+        "preparation_status": "not_started",
+    }
+
+
+@app.post(
+    "/decisions/{decision_id}/reject",
+    summary="Reject Executive Decision Direction",
+    dependencies=[Depends(verify_api_key)],
+)
+def reject_decision(decision_id: int):
+    """Reject een beslissing voordat preparation is gestart/voltooid."""
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+
+    if not transition_decision_approval(decision_id, "rejected", ("pending", "approved")):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision cannot be rejected from its current state "
+                f"(approval={current.get('approval_status') if current else 'unknown'}, "
+                f"preparation={current.get('preparation_status') if current else 'unknown'})."
+            ),
+        )
+
+    try:
+        send_notification(
+            f"❌ <b>DECISION REJECTED</b>\n\n"
+            f"<b>Decision ID:</b> #{decision_id}\n"
+            f"<b>Topic:</b> {escape_html(decision['topic'])}"
+        )
+    except Exception as notify_err:
+        logger.warning(f"Decision rejection notification failed: {notify_err}")
+
+    return {"decision_id": decision_id, "approval_status": "rejected"}
+
+
+@app.post(
+    "/decisions/{decision_id}/prepare",
+    response_model=PreparationResponse,
+    summary="Prepare an Approved Decision for Execution",
+    dependencies=[Depends(verify_api_key)],
+)
+def prepare_approved_decision(decision_id: int, request: PreparationRequest):
+    """
+    Phase 2: laat tool-capable executives een GOEDGEKEURDE strategische
+    beslissing vertalen naar concrete voorbereiding/action proposals en
+    structured resource requests. Niets wordt direct uitgevoerd of verleend.
+    """
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+    if decision["approval_status"] != "approved":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Decision must be approved before preparation (currently '{decision['approval_status']}').",
+        )
+
+    if not claim_decision_for_preparation(decision_id):
+        current = get_decision_by_id(decision_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Decision preparation could not be claimed "
+                f"(current preparation status: '{current.get('preparation_status') if current else 'unknown'}')."
+            ),
+        )
+
+    preparation_prompt = (
+        f"PHASE 2 — PREPARATION FOR APPROVED DECISION #{decision_id}\n\n"
+        f"Original topic: {decision['topic']}\n\n"
+        f"Original evidence/task:\n{decision['task_description']}\n\n"
+        f"Human-approved strategic direction:\n{decision['decision_outcome']}\n\n"
+        "Your job is NOT to re-decide whether the direction should happen. "
+        "Translate the approved direction into a concrete, safe preparation plan. "
+        "Identify required resources, access, credentials, plugins, data, files, "
+        "browser steps, or commands. If a concrete action is genuinely needed and "
+        "your role has an appropriate propose_* tool, you MAY propose it for human "
+        "review. IMPORTANT: if you decide a proposal is needed, CALL the actual tool. "
+        "Do not print, imitate, or describe a JSON/function-call payload in your answer. "
+        "A textual pseudo-call is invalid and will fail preparation verification. "
+        "Never claim a proposed action has executed. For every action you actually "
+        "propose, include an expected_outcome and expected_impact so we can measure "
+        "whether it worked later. Include expected_cost_amount + currency ONLY when "
+        "the supplied evidence supports a real cost; otherwise leave cost unknown. "
+        "Never invent access or credentials we do not have. For every missing resource "
+        "or capability that genuinely blocks the approved plan, CALL "
+        "propose_resource_request so the owner receives a structured request. For a "
+        "non-budget request, OMIT amount and currency. For a budget request whose amount "
+        "is unknown, OMIT amount and currency — NEVER send strings such as 'Unknown — "
+        "evidence required' into numeric/currency fields. Do not put passwords, API keys, "
+        "tokens, or secret values in any tool field. Merely listing a missing capability "
+        "in prose or printing a JSON object is not a structured request. Minimize actions: "
+        "do not propose anything that is not necessary to prepare the approved direction."
+    )
+
     def _run_preparation_meeting(task_text: str):
         return run_executive_meeting(
             topic=f"Preparation for Decision #{decision_id}",
             task_description=task_text,
             agent_keys=request.agent_keys,
             agents_source=EXECUTIVE_AGENTS,
+            # Only the ORIGINAL task/evidence is evidence for quantitative
+            # validation. The approved recommendation is direction, not proof.
             evidence_text=decision["task_description"],
             provenance_context={
                 "decision_id": decision_id,
@@ -429,81 +611,72 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             },
         )
 
-    try:
-        meeting_result = _run_preparation_meeting(preparation_prompt)
-        participants = meeting_result.get("participants", [])
-        final_plan = meeting_result.get("final_decision", "")
-        proposed_action_ids = meeting_result.get("proposed_action_ids", [])
-        proposed_resource_request_ids = meeting_result.get("proposed_resource_request_ids", [])
-        new_actions = [
+    def _load_created_items(meeting_result: dict):
+        action_ids = meeting_result.get("proposed_action_ids", [])
+        resource_ids = meeting_result.get("proposed_resource_request_ids", [])
+        actions = [
             action
-            for action_id in proposed_action_ids
+            for action_id in action_ids
             if (action := get_action_by_id(action_id)) is not None
         ]
+        resources = [
+            resource
+            for request_id in resource_ids
+            if (resource := get_resource_request_by_id(request_id)) is not None
+        ]
+        return action_ids, resource_ids, actions, resources
 
-        # Fail closed if any action explicitly created by THIS preparation
-        # escaped or mismatched the scoped provenance context. Because the
-        # meeting returns its exact created IDs, unrelated concurrent actions
-        # can never be mistaken for preparation output.
-        provenance_mismatches = [
-            action for action in new_actions
+    def _validate_provenance(action_ids, resource_ids, actions, resources):
+        action_mismatch = [
+            action for action in actions
             if (
                 action.get("source_decision_id") != decision_id
                 or action.get("source_decision_sync_uuid") != decision["sync_uuid"]
                 or action.get("source_phase") != "preparation"
             )
         ]
-        if len(new_actions) != len(proposed_action_ids):
-            provenance_mismatches.append({"error": "Created action ID missing from database"})
-        if provenance_mismatches:
-            finish_decision_preparation(
-                decision_id,
-                False,
-                "Preparation failed provenance verification; orphan/mismatched action detected.",
-            )
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "Preparation created an action without the expected decision provenance. "
-                    "Preparation was marked failed; do not approve the orphan action."
-                ),
-            )
-
-        new_resource_requests = [
-            resource_request
-            for request_id in proposed_resource_request_ids
-            if (resource_request := get_resource_request_by_id(request_id)) is not None
-        ]
-        resource_provenance_mismatches = [
-            resource_request for resource_request in new_resource_requests
+        resource_mismatch = [
+            resource for resource in resources
             if (
-                resource_request.get("source_decision_id") != decision_id
-                or resource_request.get("source_decision_sync_uuid") != decision["sync_uuid"]
-                or resource_request.get("source_phase") != "preparation"
+                resource.get("source_decision_id") != decision_id
+                or resource.get("source_decision_sync_uuid") != decision["sync_uuid"]
+                or resource.get("source_phase") != "preparation"
             )
         ]
-        if len(new_resource_requests) != len(proposed_resource_request_ids):
-            resource_provenance_mismatches.append(
-                {"error": "Created resource request ID missing from database"}
-            )
-        if resource_provenance_mismatches:
+        return (
+            len(actions) == len(action_ids)
+            and len(resources) == len(resource_ids)
+            and not action_mismatch
+            and not resource_mismatch
+        )
+
+    try:
+        meeting_result = _run_preparation_meeting(preparation_prompt)
+        participants = meeting_result.get("participants", [])
+        final_plan = meeting_result.get("final_decision", "")
+        proposed_action_ids, proposed_resource_request_ids, new_actions, new_resource_requests = (
+            _load_created_items(meeting_result)
+        )
+
+        if not _validate_provenance(
+            proposed_action_ids,
+            proposed_resource_request_ids,
+            new_actions,
+            new_resource_requests,
+        ):
             finish_decision_preparation(
                 decision_id,
                 False,
-                "Preparation failed provenance verification; orphan/mismatched resource request detected.",
+                "Preparation failed provenance verification; mismatched proposal/request detected.",
             )
             raise HTTPException(
                 status_code=502,
                 detail=(
-                    "Preparation created a resource request without the expected decision provenance. "
-                    "Preparation was marked failed; do not fulfill the orphan request."
+                    "Preparation created an action/resource request without the expected "
+                    "decision provenance. Preparation was marked failed."
                 ),
             )
 
-        # Some local models occasionally PRINT a function-call-shaped JSON
-        # object instead of actually invoking the CrewAI tool. That must never
-        # count as a successful preparation run: no DB action means no proposal
-        # was really created and therefore no human approval gate exists.
         pseudo_resource_call = bool(
             re.search(
                 r'(?is)(?:"name"\s*:\s*"propose_resource_request"|'
@@ -518,12 +691,11 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
                 final_plan,
             )
         )
+        # Compatibility alias retained for the original Phase 2 regression guard.
+        pseudo_tool_call = bool(pseudo_action_call or pseudo_resource_call)
 
-        # Some OpenAI-compatible local models occasionally print a resource
-        # function payload instead of issuing the tool call. Resource requests
-        # are non-executing and owner-gated, so we allow ONE narrow compatibility
-        # retry — but still require a real tool invocation. Printed JSON is never
-        # parsed into a database row.
+        # One narrow compatibility retry for NON-EXECUTING resource requests.
+        # Printed JSON is never parsed into a request; a real tool invocation is required.
         if pseudo_resource_call and not (new_actions or new_resource_requests):
             retry_prompt = (
                 preparation_prompt
@@ -538,42 +710,15 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             meeting_result = _run_preparation_meeting(retry_prompt)
             participants = meeting_result.get("participants", [])
             final_plan = meeting_result.get("final_decision", "")
-            proposed_action_ids = meeting_result.get("proposed_action_ids", [])
-            proposed_resource_request_ids = meeting_result.get(
-                "proposed_resource_request_ids", []
+            proposed_action_ids, proposed_resource_request_ids, new_actions, new_resource_requests = (
+                _load_created_items(meeting_result)
             )
-            new_actions = [
-                action
-                for action_id in proposed_action_ids
-                if (action := get_action_by_id(action_id)) is not None
-            ]
-            new_resource_requests = [
-                resource_request
-                for request_id in proposed_resource_request_ids
-                if (resource_request := get_resource_request_by_id(request_id)) is not None
-            ]
 
-            retry_action_mismatch = [
-                action for action in new_actions
-                if (
-                    action.get("source_decision_id") != decision_id
-                    or action.get("source_decision_sync_uuid") != decision["sync_uuid"]
-                    or action.get("source_phase") != "preparation"
-                )
-            ]
-            retry_resource_mismatch = [
-                resource_request for resource_request in new_resource_requests
-                if (
-                    resource_request.get("source_decision_id") != decision_id
-                    or resource_request.get("source_decision_sync_uuid") != decision["sync_uuid"]
-                    or resource_request.get("source_phase") != "preparation"
-                )
-            ]
-            if (
-                len(new_actions) != len(proposed_action_ids)
-                or retry_action_mismatch
-                or len(new_resource_requests) != len(proposed_resource_request_ids)
-                or retry_resource_mismatch
+            if not _validate_provenance(
+                proposed_action_ids,
+                proposed_resource_request_ids,
+                new_actions,
+                new_resource_requests,
             ):
                 finish_decision_preparation(
                     decision_id,
@@ -599,6 +744,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
                     final_plan,
                 )
             )
+            pseudo_tool_call = bool(pseudo_action_call or pseudo_resource_call)
 
         if (
             (pseudo_action_call and not new_actions)
@@ -615,15 +761,14 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             raise HTTPException(
                 status_code=502,
                 detail=(
-                    "Preparation agent printed a propose_* pseudo-call without a matching "
-                    "real tool invocation. Preparation was marked failed and is safe to retry."
+                    "Preparation agent described/printed a propose_* tool call without "
+                    "actually invoking the tool. No matching proposal/request was created, "
+                    "so preparation was marked failed and is safe to retry."
                 ),
             )
 
         finish_decision_preparation(decision_id, True, final_plan)
     except HTTPException:
-        # Deliberate verification/API errors above already persisted the
-        # appropriate preparation state and should keep their exact status/detail.
         raise
     except ValueError as e:
         finish_decision_preparation(decision_id, False, None)
