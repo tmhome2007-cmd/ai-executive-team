@@ -17,6 +17,9 @@ BELANGRIJK — async ontwerp:
   asyncio.run() aan, wat crasht binnen een reeds actieve event loop.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 import asyncio
 
 from crewai import Crew, Process, Task
