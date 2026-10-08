@@ -750,6 +750,7 @@ export default function DashboardPage() {
       if (apiKey) {
         fetchPendingActions(apiKey);
         fetchActionHistory(apiKey);
+        fetchResourceRequests(apiKey);
       }
     } catch (err: any) {
       setActionErrors((prev) => ({
@@ -845,7 +846,7 @@ export default function DashboardPage() {
 
   const handlePrepareDecision = async (id: number) => {
     const confirmed = window.confirm(
-      "Start Phase 2 preparation? Tool-capable executives may create concrete action proposals, but nothing will execute without separate action approval."
+      "Start Phase 2 preparation? Tool-capable executives may create action proposals and structured resource requests. Nothing executes or grants access without separate owner review."
     );
     if (!confirmed) return;
 
