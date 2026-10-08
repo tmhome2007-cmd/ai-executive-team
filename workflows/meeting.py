@@ -307,6 +307,9 @@ def run_executive_meeting(
                     decision_id=int(provenance_context["decision_id"]),
                     decision_sync_uuid=str(provenance_context["decision_sync_uuid"]),
                     phase=str(provenance_context.get("phase", "preparation")),
+                    allowed_browser_urls=set(
+                        provenance_context.get("allowed_browser_urls", [])
+                    ),
                 ) as provenance_scope:
                     result = crew.kickoff()
                     provenance_created_action_ids.extend(
