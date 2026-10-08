@@ -74,6 +74,10 @@ jobs:
         if: ${{ always() }}
         run: npm run build
 
+      - name: Audit production npm dependencies
+        if: ${{ always() }}
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Audit high/critical npm vulnerabilities
         if: ${{ always() }}
         run: npm audit --audit-level=high
