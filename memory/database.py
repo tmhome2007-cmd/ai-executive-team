@@ -12,6 +12,8 @@ import sys
 import uuid
 import json
 import threading
+import hashlib
+import hmac
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -101,6 +103,36 @@ def _reject_secret_like_text(*values: str | None) -> None:
                 "Potential secret detected. Store credentials in the configured secret/plugin "
                 "system and record only a non-secret description here."
             )
+
+
+def _sync_signing_key() -> bytes:
+    key = (getattr(config, "SYNC_HMAC_KEY", "") or config.API_SECRET_KEY).strip()
+    if not key:
+        raise ValueError("SYNC_HMAC_KEY/API_SECRET_KEY is required for authenticated sync")
+    return key.encode("utf-8")
+
+
+def _sync_record_signature(record: dict) -> str:
+    payload = {
+        key: value
+        for key, value in record.items()
+        if key != "_signature"
+    }
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hmac.new(_sync_signing_key(), canonical, hashlib.sha256).hexdigest()
+
+
+def _sync_record_signature_valid(record: dict) -> bool:
+    supplied = record.get("_signature")
+    if not isinstance(supplied, str) or not supplied:
+        return False
+    expected = _sync_record_signature(record)
+    return hmac.compare_digest(supplied, expected)
 
 
 _SYNC_TABLE_COLUMNS = {
@@ -510,6 +542,10 @@ def init_db() -> None:
 
     conn.commit()
     conn.close()
+    try:
+        os.chmod(db_path, 0o600)
+    except OSError:
+        pass
 
 
 @contextmanager
@@ -3145,34 +3181,34 @@ def export_history_to_jsonl(export_path: str) -> dict:
         """)
         treasury_reservation_rows = [dict(row) for row in cursor.fetchall()]
 
+    export_dir = os.path.dirname(os.path.abspath(export_path)) or "."
+    os.makedirs(export_dir, exist_ok=True)
+    try:
+        os.chmod(export_dir, 0o700)
+    except OSError:
+        pass
+
     with open(export_path, "w", encoding="utf-8") as f:
-        for row in goal_rows:
-            row["_table"] = "company_goals"
-            f.write(json.dumps(row) + "\n")
-        for row in decision_rows:
-            row["_table"] = "decisions"
-            f.write(json.dumps(row) + "\n")
-        for row in action_rows:
-            row["_table"] = "action_queue"
-            f.write(json.dumps(row) + "\n")
-        for row in outcome_rows:
-            row["_table"] = "action_outcomes"
-            f.write(json.dumps(row) + "\n")
-        for row in resource_rows:
-            row["_table"] = "resource_requests"
-            f.write(json.dumps(row) + "\n")
-        for row in treasury_entry_rows:
-            row["_table"] = "treasury_entries"
-            f.write(json.dumps(row) + "\n")
-        for row in treasury_reservation_rows:
-            row["_table"] = "treasury_reservations"
-            f.write(json.dumps(row) + "\n")
-        for row in followup_rows:
-            row["_table"] = "followup_events"
-            f.write(json.dumps(row) + "\n")
-        for row in memory_rows:
-            row["_table"] = "executive_memories"
-            f.write(json.dumps(row) + "\n")
+        for table_name, rows in (
+            ("company_goals", goal_rows),
+            ("decisions", decision_rows),
+            ("action_queue", action_rows),
+            ("action_outcomes", outcome_rows),
+            ("resource_requests", resource_rows),
+            ("treasury_entries", treasury_entry_rows),
+            ("treasury_reservations", treasury_reservation_rows),
+            ("followup_events", followup_rows),
+            ("executive_memories", memory_rows),
+        ):
+            for source_row in rows:
+                record = dict(source_row)
+                record["_table"] = table_name
+                record["_signature"] = _sync_record_signature(record)
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    try:
+        os.chmod(export_path, 0o600)
+    except OSError:
+        pass
 
     return {
         "goals": len(goal_rows),
@@ -3226,6 +3262,17 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 if not isinstance(row, dict):
                     skipped += 1
                     continue
+
+                # Cross-machine sync carries executable/treasury history.
+                # Never trust unsigned/tampered records.
+                try:
+                    if not _sync_record_signature_valid(row):
+                        skipped += 1
+                        continue
+                except ValueError:
+                    skipped += 1
+                    continue
+                row.pop("_signature", None)
 
                 table = row.pop("_table", None)
                 sync_uuid_value = row.get("sync_uuid")
@@ -3320,6 +3367,13 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row.get("status") not in VALID_ACTION_STATUSES:
                         skipped += 1
                         continue
+                    # Sync transports history, never executable authority.
+                    # Remote approved/executing state must be re-approved
+                    # locally before this machine may perform a real effect.
+                    if row.get("status") in {"approved", "executing"}:
+                        row["status"] = "pending"
+                        row["reviewed_at"] = None
+                        row["result_detail"] = None
                     if row.get("action_type") not in VALID_ACTION_TYPES:
                         skipped += 1
                         continue
@@ -3362,6 +3416,12 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if table == "treasury_reservations" and row.get("status") not in VALID_TREASURY_RESERVATION_STATUSES:
                         skipped += 1
                         continue
+                    if table == "treasury_reservations" and row.get("status") == "active":
+                        # A remote reservation represents remote approval.
+                        # Preserve the audit row but never import it as local
+                        # spending authority.
+                        row["status"] = "released"
+                        row["released_at"] = datetime.datetime.now().isoformat()
 
                     action_sync_uuid = row.get("source_action_sync_uuid")
                     if action_sync_uuid:
@@ -3587,6 +3647,10 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     import datetime as _dt
 
     os.makedirs(backup_dir, exist_ok=True)
+    try:
+        os.chmod(backup_dir, 0o700)
+    except OSError:
+        pass
     timestamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     db_path = config.DATABASE_PATH
     backup_filename = f"executive_team_backup_{timestamp}.db"
@@ -3604,6 +3668,10 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     finally:
         destination.close()
         source.close()
+    try:
+        os.chmod(backup_path, 0o600)
+    except OSError:
+        pass
 
     existing_backups = sorted(
         [f for f in os.listdir(backup_dir) if f.startswith("executive_team_backup_") and f.endswith(".db")]
