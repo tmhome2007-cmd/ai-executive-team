@@ -21,6 +21,7 @@ if str(project_root) not in sys.path:
 
 from agents.executive_agents import EXECUTIVE_AGENTS
 from workflows.execution_lock import EXECUTION_LOCK
+from workflows.meeting_types import get_meeting_type_profile, meeting_type_prompt
 from memory.database import action_provenance_scope, get_executive_memories
 
 
@@ -189,6 +190,7 @@ def run_executive_meeting(
     evidence_text: str | None = None,
     provenance_context: Dict[str, Any] | None = None,
     memory_context: Dict[str, Any] | None = None,
+    meeting_type: str = "strategy",
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -208,6 +210,8 @@ def run_executive_meeting(
             zodat propose_* tools de juiste beslissing atomair erven.
         memory_context (dict, optioneel): controls structured historical memory
             retrieval. Memory is advisory only and is never added to evidence_text.
+        meeting_type (str): policy profile controlling evidence focus/output contract.
+            It never expands tool or approval authority.
 
     Returns:
         Dict[str, Any]: Een dictionary met 'final_decision', 'participants' en 'individual_outputs'.
@@ -216,6 +220,9 @@ def run_executive_meeting(
 
     if agents_source is None:
         agents_source = EXECUTIVE_AGENTS
+
+    meeting_profile = get_meeting_type_profile(meeting_type)
+    meeting_policy = meeting_type_prompt(meeting_type)
 
     # Werk op een lokale kopie zodat CEO-reordering nooit de lijst van de
     # aanroeper (bijv. Pydantic request state) in-place verandert.
@@ -293,6 +300,7 @@ def run_executive_meeting(
             # De eerste agent start de discussie
             description = (
                 f"{task_description}\n\n"
+                + f"{meeting_policy}\n\n"
                 + (f"{role_memory}\n\n" if role_memory else "")
                 + f"{EVIDENCE_DISCIPLINE}\n\n"
                 "Response structure:\n"
@@ -318,6 +326,7 @@ def run_executive_meeting(
             # Vervolgentaken ontvangen de historie van vorige taken als context
             description = (
                 f"{task_description}\n\n"
+                + f"{meeting_policy}\n\n"
                 + (f"{role_memory}\n\n" if role_memory else "")
                 + f"{EVIDENCE_DISCIPLINE}\n\n"
                 "Instruction: Consider the perspectives already shared by your fellow executives above, "
@@ -342,7 +351,8 @@ def run_executive_meeting(
                     "- Produce a concise decision brief that synthesizes only the strongest CURRENT-evidence-backed points and material disagreements.\n"
                     "- Explicitly list unsupported assumptions and missing evidence.\n"
                     "- If the evidence is insufficient for a real-world commitment, recommend the next research/validation step instead of pretending the decision is ready.\n"
-                    "- End with an Approval Gate stating exactly what the human owner is being asked to approve now, if anything."
+                    "- End with an Approval Gate stating exactly what the human owner is being asked to approve now, if anything.\n"
+                    f"- Meeting-type contract: {meeting_profile['output_contract']}"
                 )
                 expected_output = (
                     "A concise CEO decision brief with: Historical context when memory exists; Evidence-supported findings from current evidence only; Material disagreements/risks; "
@@ -492,6 +502,7 @@ def run_executive_meeting(
     return {
         "final_decision": guarded_final_decision,
         "participants": agent_keys,
+        "meeting_type": meeting_type,
         "individual_outputs": guarded_individual_outputs,
         "quality_warnings": {
             "unsupported_quantitative_claims": quality_warnings,
