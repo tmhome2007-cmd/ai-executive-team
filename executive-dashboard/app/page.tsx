@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
 
+const errorMessage = (error: unknown): string => error instanceof Error ? error.message : "";
+
 // --- Types ---
 
 interface DecisionHistoryItem {
@@ -371,8 +373,8 @@ function OutcomeEditor({
 
       setMessage("Outcome saved.");
       onSaved();
-    } catch (err: any) {
-      setMessage(err.message || "Could not save outcome.");
+    } catch (err: unknown) {
+      setMessage(errorMessage(err) || "Could not save outcome.");
     } finally {
       setSaving(false);
     }
@@ -654,8 +656,8 @@ export default function DashboardPage() {
 
       const data = await response.json();
       setSandboxMode(data.sandbox_mode);
-    } catch (err: any) {
-      setSandboxToggleError(err.message || "Failed to switch mode.");
+    } catch (err: unknown) {
+      setSandboxToggleError(errorMessage(err) || "Failed to switch mode.");
     } finally {
       setTogglingSandbox(false);
     }
@@ -725,7 +727,7 @@ export default function DashboardPage() {
       // Backend returns all active states: pending, approved, executing.
       // Terminal actions belong only in Action History.
       setPendingActions(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching pending actions:", err);
     }
   }, [handleAuthFailure]);
@@ -749,7 +751,7 @@ export default function DashboardPage() {
 
       const data: PendingAction[] = await res.json();
       setActionHistory(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching action history:", err);
     }
   }, [handleAuthFailure]);
@@ -824,8 +826,8 @@ export default function DashboardPage() {
       setFundNote("");
       setTreasuryMessage("Funding recorded.");
       await fetchTreasury(apiKey);
-    } catch (err: any) {
-      setTreasuryMessage(err.message || "Could not add treasury funding.");
+    } catch (err: unknown) {
+      setTreasuryMessage(errorMessage(err) || "Could not add treasury funding.");
     } finally {
       setFundingTreasury(false);
     }
@@ -851,8 +853,8 @@ export default function DashboardPage() {
       setFollowups(await itemsRes.json());
       setFollowupStatus(await statusRes.json());
       setFollowupError(null);
-    } catch (err: any) {
-      setFollowupError(err.message || "Could not fetch autonomous follow-up state.");
+    } catch (err: unknown) {
+      setFollowupError(errorMessage(err) || "Could not fetch autonomous follow-up state.");
     }
   }, [handleAuthFailure]);
 
@@ -872,8 +874,8 @@ export default function DashboardPage() {
         fetchDashboardData(),
         fetchGoals(apiKey),
       ]);
-    } catch (err: any) {
-      setFollowupError(err.message || "Autonomous follow-up scan failed.");
+    } catch (err: unknown) {
+      setFollowupError(errorMessage(err) || "Autonomous follow-up scan failed.");
     } finally {
       setRunningFollowup(false);
     }
@@ -889,8 +891,8 @@ export default function DashboardPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.detail || `Could not ${action} follow-up.`);
       await fetchFollowups(apiKey);
-    } catch (err: any) {
-      setFollowupError(err.message || `Could not ${action} follow-up.`);
+    } catch (err: unknown) {
+      setFollowupError(errorMessage(err) || `Could not ${action} follow-up.`);
     }
   };
 
@@ -909,8 +911,8 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("Could not fetch executive memory.");
       setExecutiveMemories(await res.json());
       setMemoryError(null);
-    } catch (err: any) {
-      setMemoryError(err.message || "Could not fetch executive memory.");
+    } catch (err: unknown) {
+      setMemoryError(errorMessage(err) || "Could not fetch executive memory.");
     }
   }, [handleAuthFailure, memoryExecutive]);
 
@@ -928,8 +930,8 @@ export default function DashboardPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.detail || "Could not update executive memory.");
       await fetchExecutiveMemories(apiKey, memoryExecutive);
-    } catch (err: any) {
-      setMemoryError(err.message || "Could not update executive memory.");
+    } catch (err: unknown) {
+      setMemoryError(errorMessage(err) || "Could not update executive memory.");
     }
   };
 
@@ -944,8 +946,8 @@ export default function DashboardPage() {
       }
       if (!res.ok) throw new Error("Could not fetch company goals.");
       setGoals(await res.json());
-    } catch (err: any) {
-      setGoalError(err.message || "Could not fetch company goals.");
+    } catch (err: unknown) {
+      setGoalError(errorMessage(err) || "Could not fetch company goals.");
     }
   }, [handleAuthFailure]);
 
@@ -984,8 +986,8 @@ export default function DashboardPage() {
       setGoalSuccessCriteria("");
       setGoalTargetDate("");
       await fetchGoals(apiKey);
-    } catch (err: any) {
-      setGoalError(err.message || "Could not create company goal.");
+    } catch (err: unknown) {
+      setGoalError(errorMessage(err) || "Could not create company goal.");
     } finally {
       setCreatingGoal(false);
     }
@@ -1019,8 +1021,8 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error(data?.detail || "Could not update goal status.");
       await fetchGoals(apiKey);
       await fetchDashboardData();
-    } catch (err: any) {
-      setGoalError(err.message || "Could not update goal status.");
+    } catch (err: unknown) {
+      setGoalError(errorMessage(err) || "Could not update goal status.");
     }
   };
 
@@ -1041,8 +1043,8 @@ export default function DashboardPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.detail || "Could not load goal lineage.");
       setGoalLineage((prev) => ({ ...prev, [goalId]: data }));
-    } catch (err: any) {
-      setGoalError(err.message || "Could not load goal lineage.");
+    } catch (err: unknown) {
+      setGoalError(errorMessage(err) || "Could not load goal lineage.");
     }
   };
 
@@ -1057,8 +1059,8 @@ export default function DashboardPage() {
       }
       if (!res.ok) throw new Error("Could not fetch meeting types.");
       setMeetingTypes(await res.json());
-    } catch (err: any) {
-      setLoadError(err.message || "Could not fetch meeting types.");
+    } catch (err: unknown) {
+      setLoadError(errorMessage(err) || "Could not fetch meeting types.");
     }
   }, [handleAuthFailure]);
 
@@ -1082,8 +1084,8 @@ export default function DashboardPage() {
       setStatus(await statusRes.json());
       setHistory(await historyRes.json());
       setLoadError(null);
-    } catch (err: any) {
-      setLoadError(err.message || "Could not connect to the backend.");
+    } catch (err: unknown) {
+      setLoadError(errorMessage(err) || "Could not connect to the backend.");
     }
   }, [apiKey, handleAuthFailure]);
 
@@ -1142,11 +1144,11 @@ export default function DashboardPage() {
         fetchResourceRequests(apiKey);
         fetchTreasury(apiKey);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (apiKey) fetchPendingActions(apiKey);
       setActionErrors((prev) => ({
         ...prev,
-        [id]: err.message || "An error occurred while processing this action.",
+        [id]: errorMessage(err) || "An error occurred while processing this action.",
       }));
     }
   };
@@ -1198,10 +1200,10 @@ export default function DashboardPage() {
         fetchResourceRequests(apiKey);
         fetchTreasury(apiKey);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionErrors((prev) => ({
         ...prev,
-        [action.id]: err.message || "Error while executing action.",
+        [action.id]: errorMessage(err) || "Error while executing action.",
       }));
       if (apiKey) fetchActionHistory(apiKey);
     } finally {
@@ -1253,10 +1255,10 @@ export default function DashboardPage() {
 
       if (apiKey) fetchResourceRequests(apiKey);
       await fetchDashboardData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setResourceErrors((prev) => ({
         ...prev,
-        [id]: err.message || "Could not update resource request.",
+        [id]: errorMessage(err) || "Could not update resource request.",
       }));
     }
   };
@@ -1282,10 +1284,10 @@ export default function DashboardPage() {
         throw new Error(detail?.detail || `Could not ${type} decision.`);
       }
       await fetchDashboardData();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setDecisionErrors((prev) => ({
         ...prev,
-        [id]: err.message || "Could not update decision approval.",
+        [id]: errorMessage(err) || "Could not update decision approval.",
       }));
     }
   };
@@ -1329,10 +1331,10 @@ export default function DashboardPage() {
         fetchPendingActions(apiKey);
         fetchActionHistory(apiKey);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setDecisionErrors((prev) => ({
         ...prev,
-        [id]: err.message || "Preparation failed.",
+        [id]: errorMessage(err) || "Preparation failed.",
       }));
       await fetchDashboardData();
     } finally {
@@ -1372,10 +1374,10 @@ export default function DashboardPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Could not load decision lineage.");
       setLineageResults((prev) => ({ ...prev, [id]: data }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setDecisionErrors((prev) => ({
         ...prev,
-        [id]: err.message || "Could not load decision lineage.",
+        [id]: errorMessage(err) || "Could not load decision lineage.",
       }));
     } finally {
       setLoadingLineageIds((prev) => {
@@ -1471,8 +1473,8 @@ export default function DashboardPage() {
         fetchPendingActions(apiKey);
         fetchActionHistory(apiKey);
       }
-    } catch (err: any) {
-      setError(err.message || "An unknown error occurred.");
+    } catch (err: unknown) {
+      setError(errorMessage(err) || "An unknown error occurred.");
     } finally {
       setLoading(false);
     }
