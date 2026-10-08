@@ -1255,6 +1255,32 @@ def record_action_spend(action_id: int, amount: float, currency: str, note: str 
     }
 
 
+def get_treasury_for_decision(decision_id: int) -> dict:
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT *
+            FROM treasury_entries
+            WHERE source_decision_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (decision_id,),
+        )
+        entries = [dict(row) for row in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT *
+            FROM treasury_reservations
+            WHERE source_decision_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (decision_id,),
+        )
+        reservations = [dict(row) for row in cursor.fetchall()]
+        return {"entries": entries, "reservations": reservations}
+
+
 # ===================================================================
 # FUNCTIES VOOR ACTIEVOORSTELLEN (ACTION QUEUE)
 # ===================================================================
@@ -1918,6 +1944,7 @@ def get_decision_lineage(decision_id: int) -> dict | None:
         "decision": decision,
         "actions": get_actions_for_decision(decision_id),
         "resource_requests": get_resource_requests_for_decision(decision_id),
+        "treasury": get_treasury_for_decision(decision_id),
     }
 
 
