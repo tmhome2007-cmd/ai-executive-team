@@ -89,6 +89,10 @@ def _get_workspace_root() -> str:
     expanded = os.path.expanduser(raw)
     absolute = os.path.abspath(expanded)
     os.makedirs(absolute, exist_ok=True)
+    try:
+        os.chmod(absolute, 0o700)
+    except OSError:
+        pass
     return os.path.realpath(absolute)
 
 
@@ -422,7 +426,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                     f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
                     f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
-                    f"<b>Content:</b>\n{escape_html(file_content[:500])}"
+                    "<b>Content:</b> retained locally; not copied to Telegram."
                 )
             except Exception as e:
                 print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
@@ -552,21 +556,29 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         page_title = None
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            # Service workers can bypass Playwright routing. Block them and
+            # route at CONTEXT level so popups/new pages/subresources inherit
+            # the same SSRF boundary.
+            context = browser.new_context(
+                service_workers="block",
+                accept_downloads=False,
+            )
+            page = context.new_page()
 
-            # Revalidate every navigation request, including redirects. Without
-            # this, an initially-safe public URL could redirect Chromium to a
-            # localhost/private-network target after the preflight check.
-            def _guard_navigation(route):
-                request = route.request
-                if request.is_navigation_request():
-                    reason = check_url_safety(request.url)
+            def _guard_network_request(route):
+                request_url = route.request.url
+                scheme = (urlparse(request_url).scheme or "").lower()
+                if scheme in {"http", "https"}:
+                    reason = check_url_safety(request_url)
                     if reason:
                         route.abort()
                         return
+                elif scheme not in {"data", "blob", "about"}:
+                    route.abort()
+                    return
                 route.continue_()
 
-            page.route("**/*", _guard_navigation)
+            context.route("**/*", _guard_network_request)
             page.goto(url, timeout=15000)
             page_title = page.title()
 
@@ -578,11 +590,14 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             browser.close()
 
         update_action_status(action_id, "executed")
-        result_summary = f"Navigated to '{url}' (page title: '{page_title}')" + (
+        result_summary = f"Navigated to '{url}'" + (
             f" and clicked '{click_selector}'" if click_selector else ""
         )
+        local_result_detail = result_summary + (
+            f" (page title: '{page_title}')" if page_title else ""
+        )
         record_execution_result(action_id, json.dumps({
-            "stdout": result_summary,
+            "stdout": local_result_detail,
             "screenshot_path": screenshot_path,
         }))
         mark_action_outcome_measurement_pending(action_id)
@@ -600,7 +615,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             "success": True,
             "mode": "live",
             "action_id": action_id,
-            "stdout": result_summary,
+            "stdout": local_result_detail,
             "screenshot_path": screenshot_path,
         }
 
@@ -724,7 +739,37 @@ def execute_action(action_id: int) -> dict:
             "detail": f"[DRY RUN] Command simulated: {action_detail}",
         }
 
-    # 5. LIVE EXECUTIE MODUS (Inclusief Time-out & Subprocess error handling)
+    # 5. LIVE RAW SHELL
+    # Path/regex analysis is defense-in-depth, not an OS sandbox. Programs can
+    # interpret option-embedded paths, access Keychain/processes/network, or
+    # perform effects that do not look like filesystem paths. Therefore raw
+    # shell is fail-closed in live mode unless the owner explicitly opts in.
+    if not getattr(config, "ALLOW_UNSAFE_RAW_SHELL", False):
+        block_reason = (
+            "Live raw shell execution is disabled by default because heuristic "
+            "command/path inspection is not a true OS sandbox. Use a structured "
+            "action or explicitly set ALLOW_UNSAFE_RAW_SHELL=True after accepting "
+            "the residual risk."
+        )
+        update_action_status(action_id, "blocked_dangerous")
+        record_execution_result(action_id, json.dumps({"error": f"Blocked: {block_reason}"}))
+        mark_action_outcome_execution_failed(action_id, f"Blocked before execution: {block_reason}")
+        try:
+            send_notification(
+                f"🚫 <b>RAW SHELL LIVE EXECUTION BLOCKED</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                "Use the local dashboard for details."
+            )
+        except Exception:
+            pass
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": f"Blocked: {block_reason}",
+            "blocked": True,
+        }
+
+    # Explicit unsafe opt-in path. Existing guards still run before this point.
     try:
         completed_process = subprocess.run(
             action_detail,
@@ -749,8 +794,8 @@ def execute_action(action_id: int) -> dict:
                 notification_text = (
                     f"⚡ <b>LIVE EXECUTION SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                    f"<b>Output:</b>\n{escape_html(completed_process.stdout[:500]) if completed_process.stdout else '(no output)'}"
+                    f"<b>Command:</b> <code>{escape_html(action_detail[:500])}</code>\n"
+                    "<b>Output:</b> retained locally; not copied to Telegram."
                 )
                 send_notification(notification_text)
             except Exception as e:
@@ -773,8 +818,7 @@ def execute_action(action_id: int) -> dict:
                 notification_text = (
                     f"❌ <b>EXECUTION FAILED</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                    f"<b>Error:</b>\n{escape_html(error_msg[:500])}"
+                    "<b>Error details:</b> retained locally; not copied to Telegram."
                 )
                 send_notification(notification_text)
             except Exception as e:
