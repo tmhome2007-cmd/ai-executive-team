@@ -193,6 +193,23 @@ interface FollowupStatus {
   message: string;
 }
 
+interface ExecutiveMemory {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  executive_key: string;
+  memory_kind: string;
+  lesson: string;
+  supporting_evidence?: string | null;
+  confidence: number;
+  is_active: number;
+  source_goal_id?: number | null;
+  source_decision_id?: number | null;
+  source_action_id?: number | null;
+  fingerprint: string;
+  sync_uuid: string;
+}
+
 interface ExecutionResult {
   success: boolean;
   mode: string;
@@ -646,6 +663,9 @@ export default function DashboardPage() {
   const [followupStatus, setFollowupStatus] = useState<FollowupStatus | null>(null);
   const [followupError, setFollowupError] = useState<string | null>(null);
   const [runningFollowup, setRunningFollowup] = useState(false);
+  const [memoryExecutive, setMemoryExecutive] = useState("ceo");
+  const [executiveMemories, setExecutiveMemories] = useState<ExecutiveMemory[]>([]);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [goalLineage, setGoalLineage] = useState<Record<number, GoalLineage>>({});
   const [goalTitle, setGoalTitle] = useState("");
@@ -864,6 +884,45 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchExecutiveMemories = useCallback(async (
+    currentKey: string,
+    executiveKey: string = memoryExecutive
+  ) => {
+    try {
+      const res = await fetch(`${API_BASE}/memory/${executiveKey}?active_only=true&limit=20`, {
+        headers: { "X-API-Key": currentKey },
+      });
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!res.ok) throw new Error("Could not fetch executive memory.");
+      setExecutiveMemories(await res.json());
+      setMemoryError(null);
+    } catch (err: any) {
+      setMemoryError(err.message || "Could not fetch executive memory.");
+    }
+  }, [handleAuthFailure, memoryExecutive]);
+
+  const handleMemoryStatus = async (memoryId: number, active: boolean) => {
+    if (!apiKey) return;
+    try {
+      const res = await fetch(`${API_BASE}/memory/${memoryId}/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({ active }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || "Could not update executive memory.");
+      await fetchExecutiveMemories(apiKey, memoryExecutive);
+    } catch (err: any) {
+      setMemoryError(err.message || "Could not update executive memory.");
+    }
+  };
+
   const fetchGoals = useCallback(async (currentKey: string) => {
     try {
       const res = await fetch(`${API_BASE}/goals?limit=100`, {
@@ -1011,8 +1070,9 @@ export default function DashboardPage() {
       fetchTreasury(apiKey);
       fetchGoals(apiKey);
       fetchFollowups(apiKey);
+      fetchExecutiveMemories(apiKey, memoryExecutive);
     }
-  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury, fetchGoals, fetchFollowups]);
+  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury, fetchGoals, fetchFollowups, fetchExecutiveMemories, memoryExecutive]);
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
     if (type === "approve") {
@@ -1461,6 +1521,81 @@ export default function DashboardPage() {
             {loadError}
           </div>
         )}
+
+        {/* Executive Memory */}
+        <div className="bg-gray-900 border border-sky-900/70 rounded-lg p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-sky-200">Executive Memory</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Structured historical lessons only. Memories are advisory and never override current evidence or owner-approved state.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 items-center">
+            <select
+              value={memoryExecutive}
+              onChange={(e) => setMemoryExecutive(e.target.value)}
+              className="bg-gray-950 border border-gray-700 rounded p-2 text-sm"
+            >
+              {AGENT_OPTIONS.map((agent) => (
+                <option key={agent.key} value={agent.key}>{agent.label}</option>
+              ))}
+            </select>
+            {apiKey && (
+              <button
+                type="button"
+                onClick={() => fetchExecutiveMemories(apiKey, memoryExecutive)}
+                className="px-3 py-1.5 bg-sky-800 hover:bg-sky-700 text-white text-xs rounded"
+              >
+                Refresh Memory
+              </button>
+            )}
+          </div>
+
+          {memoryError && (
+            <div className="text-xs text-red-300 border border-red-900 bg-red-950/40 rounded p-2">
+              {memoryError}
+            </div>
+          )}
+
+          {executiveMemories.length === 0 ? (
+            <p className="text-gray-500 text-sm">No active structured memories for this executive yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {executiveMemories.map((memory) => (
+                <div key={memory.id} className="bg-gray-950 border border-sky-900/50 rounded p-4 space-y-2">
+                  <div className="flex justify-between gap-3">
+                    <div className="text-sm font-semibold text-gray-200">
+                      #{memory.id} · {memory.memory_kind.replaceAll("_", " ")}
+                    </div>
+                    <div className="text-xs text-sky-300">
+                      confidence {(memory.confidence * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-300">{memory.lesson}</div>
+                  {memory.supporting_evidence && (
+                    <details className="text-xs text-gray-500">
+                      <summary className="cursor-pointer text-gray-400">Historical support</summary>
+                      <div className="mt-2 whitespace-pre-wrap">{memory.supporting_evidence}</div>
+                    </details>
+                  )}
+                  <div className="text-xs text-gray-500">
+                    {memory.source_goal_id ? `Goal #${memory.source_goal_id}` : ""}
+                    {memory.source_decision_id ? `${memory.source_goal_id ? " · " : ""}Decision #${memory.source_decision_id}` : ""}
+                    {memory.source_action_id ? ` · Action #${memory.source_action_id}` : ""}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleMemoryStatus(memory.id, false)}
+                    className="px-2.5 py-1 bg-gray-800 text-gray-300 text-xs rounded"
+                  >
+                    Deactivate Memory
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Autonomous Follow-Up */}
         <div className="bg-gray-900 border border-violet-900/70 rounded-lg p-6 space-y-4">
