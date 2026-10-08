@@ -34,6 +34,7 @@ jobs:
         run: bandit -r agents memory notifications tools workflows main.py config.py system_checks.py -ll
 
       - name: Audit Python dependencies
+        if: ${{ always() }}
         run: pip-audit
 
   frontend-security:
@@ -57,7 +58,9 @@ jobs:
         run: npm run lint
 
       - name: Build
+        if: ${{ always() }}
         run: npm run build
 
       - name: Audit high/critical npm vulnerabilities
+        if: ${{ always() }}
         run: npm audit --audit-level=high
