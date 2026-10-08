@@ -66,6 +66,18 @@ class Config:
     ALLOWED_BROWSER_DOMAINS: str = field(
         default_factory=lambda: os.getenv("ALLOWED_BROWSER_DOMAINS", "").strip()
     )
+    # Sync exports are integrity-authenticated. If no dedicated key is set,
+    # the API secret is used so tampered JSONL cannot silently grant authority
+    # or forge treasury history on import.
+    SYNC_HMAC_KEY: str = field(
+        default_factory=lambda: os.getenv("SYNC_HMAC_KEY", "").strip()
+    )
+    # Raw shell execution cannot be made strongly safe by path regexes alone.
+    # Keep live shell disabled unless the owner explicitly opts into the
+    # residual OS-level risk. Structured file/browser actions are unaffected.
+    ALLOW_UNSAFE_RAW_SHELL: bool = field(
+        default_factory=lambda: os.getenv("ALLOW_UNSAFE_RAW_SHELL", "false").lower() in ("true", "1", "yes")
+    )
 
 
 # 2. Centrale instantie
