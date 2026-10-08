@@ -1864,6 +1864,344 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 72: DYNAMIC CHECK — every action gets an outcome record with expectations
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_72
+    from memory.database import (
+        init_db as _init_db_72,
+        propose_action as _propose_72,
+        get_action_outcome as _get_outcome_72,
+    )
+
+    original_db_72 = _verify_config_72.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_72.DATABASE_PATH = os.path.join(temp_dir, "outcome.db")
+            _init_db_72()
+            action_id = _propose_72(
+                "COO",
+                "Create validation file",
+                "echo ok",
+                "shell",
+                expected_outcome="A validation artifact exists",
+                expected_impact="Creates a concrete artifact for review",
+                expected_cost_amount=2.5,
+                currency="EUR",
+            )
+            outcome = _get_outcome_72(action_id)
+            if (
+                outcome
+                and outcome["outcome_status"] == "not_started"
+                and outcome["expected_outcome"] == "A validation artifact exists"
+                and outcome["expected_cost_amount"] == 2.5
+                and outcome["currency"] == "EUR"
+            ):
+                log_pass("new action proposals persist expected outcome/impact/cost before execution")
+            else:
+                log_fail("Action outcome creation", f"Unexpected outcome row: {outcome}")
+    finally:
+        _verify_config_72.DATABASE_PATH = original_db_72
+except Exception as e:
+    log_fail("Action outcome creation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 73: DYNAMIC CHECK — live success starts measurement, not fake success
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_73
+    from memory.database import (
+        init_db as _init_db_73,
+        propose_action as _propose_73,
+        transition_action_status as _transition_73,
+        get_action_outcome as _get_outcome_73,
+    )
+    from workflows.action_executor import execute_action as _execute_73
+
+    original_db_73 = _verify_config_73.DATABASE_PATH
+    original_workspace_73 = _verify_config_73.WORKSPACE_ROOT
+    original_sandbox_73 = _verify_config_73.SANDBOX_MODE
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_73.DATABASE_PATH = os.path.join(temp_dir, "live-outcome.db")
+            _verify_config_73.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
+            _verify_config_73.SANDBOX_MODE = False
+            _init_db_73()
+
+            action_id = _propose_73(
+                "COO",
+                "Safe outcome execution test",
+                "printf outcome-test",
+                "shell",
+                expected_outcome="Command completes",
+            )
+            _transition_73(action_id, "approved", ("pending",))
+            result = _execute_73(action_id)
+            outcome = _get_outcome_73(action_id)
+
+            if result.get("success") and outcome and outcome["outcome_status"] == "measurement_pending":
+                log_pass("successful live execution moves business outcome to measurement_pending, not succeeded")
+            else:
+                log_fail("Live outcome transition", f"result={result}, outcome={outcome}")
+    finally:
+        _verify_config_73.DATABASE_PATH = original_db_73
+        _verify_config_73.WORKSPACE_ROOT = original_workspace_73
+        _verify_config_73.SANDBOX_MODE = original_sandbox_73
+except Exception as e:
+    log_fail("Live outcome transition check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 74: DYNAMIC CHECK — dry-run never fabricates a real business outcome
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_74
+    from memory.database import (
+        init_db as _init_db_74,
+        propose_action as _propose_74,
+        transition_action_status as _transition_74,
+        get_action_outcome as _get_outcome_74,
+    )
+    from workflows.action_executor import execute_action as _execute_74
+
+    original_db_74 = _verify_config_74.DATABASE_PATH
+    original_workspace_74 = _verify_config_74.WORKSPACE_ROOT
+    original_sandbox_74 = _verify_config_74.SANDBOX_MODE
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_74.DATABASE_PATH = os.path.join(temp_dir, "dry-outcome.db")
+            _verify_config_74.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
+            _verify_config_74.SANDBOX_MODE = True
+            _init_db_74()
+
+            action_id = _propose_74("COO", "Dry run", "printf dry-run", "shell")
+            _transition_74(action_id, "approved", ("pending",))
+            result = _execute_74(action_id)
+            outcome = _get_outcome_74(action_id)
+
+            if (
+                result.get("success")
+                and result.get("mode") == "dry_run"
+                and outcome
+                and outcome["outcome_status"] == "not_started"
+                and outcome["actual_outcome"] is None
+            ):
+                log_pass("sandbox execution leaves real-world outcome unmeasured")
+            else:
+                log_fail("Dry-run outcome isolation", f"result={result}, outcome={outcome}")
+    finally:
+        _verify_config_74.DATABASE_PATH = original_db_74
+        _verify_config_74.WORKSPACE_ROOT = original_workspace_74
+        _verify_config_74.SANDBOX_MODE = original_sandbox_74
+except Exception as e:
+    log_fail("Dry-run outcome isolation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 75: DYNAMIC CHECK — execution failure records failed business outcome
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_75
+    from memory.database import (
+        init_db as _init_db_75,
+        propose_action as _propose_75,
+        transition_action_status as _transition_75,
+        get_action_outcome as _get_outcome_75,
+    )
+    from workflows.action_executor import execute_action as _execute_75
+
+    original_db_75 = _verify_config_75.DATABASE_PATH
+    original_workspace_75 = _verify_config_75.WORKSPACE_ROOT
+    original_sandbox_75 = _verify_config_75.SANDBOX_MODE
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_75.DATABASE_PATH = os.path.join(temp_dir, "failed-outcome.db")
+            _verify_config_75.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
+            _verify_config_75.SANDBOX_MODE = False
+            _init_db_75()
+
+            action_id = _propose_75("COO", "Expected failure", "false", "shell")
+            _transition_75(action_id, "approved", ("pending",))
+            result = _execute_75(action_id)
+            outcome = _get_outcome_75(action_id)
+
+            if (
+                not result.get("success")
+                and outcome
+                and outcome["outcome_status"] == "failed"
+                and outcome["actual_outcome"]
+            ):
+                log_pass("failed live execution automatically records a failed outcome with reason")
+            else:
+                log_fail("Execution-failure outcome", f"result={result}, outcome={outcome}")
+    finally:
+        _verify_config_75.DATABASE_PATH = original_db_75
+        _verify_config_75.WORKSPACE_ROOT = original_workspace_75
+        _verify_config_75.SANDBOX_MODE = original_sandbox_75
+except Exception as e:
+    log_fail("Execution-failure outcome check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 76: DYNAMIC CHECK — outcome validation requires sane money/status values
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_76
+    from memory.database import (
+        init_db as _init_db_76,
+        propose_action as _propose_76,
+        update_action_outcome as _update_outcome_76,
+    )
+
+    original_db_76 = _verify_config_76.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_76.DATABASE_PATH = os.path.join(temp_dir, "validation.db")
+            _init_db_76()
+
+            missing_currency_rejected = False
+            try:
+                _propose_76(
+                    "CFO", "Cost validation", "echo ok", "shell",
+                    expected_cost_amount=1.0,
+                )
+            except ValueError:
+                missing_currency_rejected = True
+
+            action_id = _propose_76("CFO", "Outcome validation", "echo ok", "shell")
+            invalid_status_rejected = False
+            try:
+                _update_outcome_76(action_id, outcome_status="definitely_great")
+            except ValueError:
+                invalid_status_rejected = True
+
+            if missing_currency_rejected and invalid_status_rejected:
+                log_pass("outcome tracking rejects money without currency and invalid outcome statuses")
+            else:
+                log_fail(
+                    "Outcome validation",
+                    f"missing_currency={missing_currency_rejected}, invalid_status={invalid_status_rejected}",
+                )
+    finally:
+        _verify_config_76.DATABASE_PATH = original_db_76
+except Exception as e:
+    log_fail("Outcome validation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 77: DYNAMIC CHECK — outcome export/import survives different local IDs
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_77
+    from memory.database import (
+        init_db as _init_db_77,
+        propose_action as _propose_77,
+        update_action_outcome as _update_outcome_77,
+        export_history_to_jsonl as _export_77,
+        import_history_from_jsonl as _import_77,
+        get_action_history as _history_77,
+    )
+
+    original_db_77 = _verify_config_77.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_db = os.path.join(temp_dir, "source.db")
+            target_db = os.path.join(temp_dir, "target.db")
+            export_path = os.path.join(temp_dir, "history.jsonl")
+
+            _verify_config_77.DATABASE_PATH = source_db
+            _init_db_77()
+            action_id = _propose_77(
+                "CFO",
+                "Sync outcome",
+                "echo sync",
+                "shell",
+                expected_outcome="Evidence collected",
+                expected_cost_amount=3.0,
+                currency="EUR",
+            )
+            _update_outcome_77(
+                action_id,
+                outcome_status="partial",
+                actual_outcome="Some evidence collected",
+                actual_cost_amount=2.0,
+                currency="EUR",
+                next_recommendation="Collect the missing evidence",
+            )
+            _export_77(export_path)
+
+            _verify_config_77.DATABASE_PATH = target_db
+            _init_db_77()
+            summary = _import_77(export_path)
+            imported = next(
+                row for row in _history_77(limit=20)
+                if row["action_description"] == "Sync outcome"
+            )
+
+            if (
+                summary.get("outcomes_imported") == 1
+                and imported["outcome_status"] == "partial"
+                and imported["actual_outcome"] == "Some evidence collected"
+                and imported["actual_cost_amount"] == 2.0
+            ):
+                log_pass("action outcome data syncs by stable action UUID rather than local SQLite ID")
+            else:
+                log_fail("Outcome sync", f"summary={summary}, imported={imported}")
+    finally:
+        _verify_config_77.DATABASE_PATH = original_db_77
+except Exception as e:
+    log_fail("Outcome sync check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 78: STATIC CHECK — outcome API is authenticated and separates actual results
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_78 = f.read()
+
+    has_get = '"/actions/{action_id}/outcome"' in main_content_78
+    has_patch = '@app.patch(' in main_content_78 and "patch_action_outcome" in main_content_78
+    has_auth = main_content_78.count('"/actions/{action_id}/outcome"') >= 2 and "dependencies=[Depends(verify_api_key)]" in main_content_78
+    has_terminal_guard = "Actual business outcomes can only be recorded after a live" in main_content_78
+
+    if has_get and has_patch and has_auth and has_terminal_guard:
+        log_pass("authenticated outcome API exposes read/update endpoints with post-execution guard")
+    else:
+        log_fail(
+            "Outcome API",
+            f"get={has_get}, patch={has_patch}, auth={has_auth}, terminal_guard={has_terminal_guard}",
+        )
+except Exception as e:
+    log_fail("Outcome API check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 79: STATIC CHECK — dashboard can display and record measured outcomes
+# -------------------------------------------------------------------
+try:
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_79 = f.read()
+
+    required = [
+        "Outcome Tracking",
+        "Expected outcome",
+        "Actual outcome:",
+        "Record / update measured outcome",
+        "Save Outcome",
+        "/outcome",
+    ]
+    missing = [item for item in required if item not in dashboard_content_79]
+    if not missing:
+        log_pass("dashboard displays expectations and supports recording actual business outcomes")
+    else:
+        log_fail("Outcome dashboard UI", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Outcome dashboard UI check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
