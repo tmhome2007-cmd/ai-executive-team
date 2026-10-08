@@ -3358,6 +3358,29 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 103: STATIC/API GUARD — actual-cost currency may match reservation after approval
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_103 = f.read()
+
+    required = [
+        '"expected_cost_amount" in payload and action["status"] != "pending"',
+        '"actual_cost_amount" not in payload',
+        "Actual cost currency must match the approved treasury currency",
+        "supplied_currency != existing_currency",
+    ]
+    missing = [item for item in required if item not in main_content_103]
+
+    if not missing:
+        log_pass("actual cost may carry the matching approved currency while post-approval currency changes remain blocked")
+    else:
+        log_fail("Actual-cost currency gate", f"missing={missing}")
+except Exception as e:
+    log_fail("Actual-cost currency gate check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
