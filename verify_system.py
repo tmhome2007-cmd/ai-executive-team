@@ -2263,9 +2263,16 @@ try:
     with open("verify_system.py", "r", encoding="utf-8") as f:
         verify_content_81 = f.read()
 
+    check5_match = re.search(
+        r"# CHECK 5:.*?(?=# -------------------------------------------------------------------\n# CHECK 6:)",
+        verify_content_81,
+        re.DOTALL,
+    )
+    check5_block = check5_match.group(0) if check5_match else ""
     no_bad_live_auth = (
-        'requests.post("http://localhost:8000/decisions/trigger"' not in verify_content_81
-        and 'requests.get("http://localhost:8000/decisions/history' not in verify_content_81
+        "requests.get(" not in check5_block
+        and "requests.post(" not in check5_block
+        and "verify_api_key(request, None)" in check5_block
     )
     silences_executor_notifications = (
         "def suppress_executor_notifications" in verify_content_81
