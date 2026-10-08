@@ -33,6 +33,14 @@ jobs:
       - name: Container boundary unit tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
 
+      - name: Pre-pull verified worker image for live isolation tests
+        run: docker pull alpine:3.20
+
+      - name: Test live Docker worker network and filesystem boundary
+        env:
+          RUN_DOCKER_INTEGRATION: "1"
+        run: python -m unittest discover -s tests -p 'test_container_runtime.py' -v
+
       - name: System regression verification
         if: ${{ always() }}
         env:
