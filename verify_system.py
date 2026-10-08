@@ -2478,7 +2478,7 @@ try:
         meeting_content_85 = f.read()
 
     required_main = [
-        '"provenance_context"',
+        "provenance_context={",
         '"decision_sync_uuid": decision["sync_uuid"]',
         "provenance_mismatches",
         "Preparation created an action without the expected decision provenance",
