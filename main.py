@@ -78,6 +78,12 @@ from workflows.meeting import run_executive_meeting
 from workflows.meeting_types import MEETING_TYPES, VALID_MEETING_TYPES, resolve_meeting_agents
 from agents.executive_agents import EXECUTIVE_AGENTS, EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
+from workflows.action_control import (
+    ActionControlError,
+    approve_action_control,
+    reject_action_control,
+    execute_action_control,
+)
 from notifications.telegram_bot import send_notification, escape_html
 from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
 from config import config, set_sandbox_mode, validate_config, ConfigValidationError
@@ -2018,23 +2024,18 @@ def approve_action(action_id: int):
     if action is None:
         raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
 
-    _require_linked_goal_active(
-        action,
-        goal_id_key="source_goal_id",
-        operation="approve action",
-    )
-
     try:
-        return approve_action_with_treasury(action_id)
-    except ValueError as e:
+        return approve_action_control(action_id)
+    except ActionControlError as e:
         current = get_action_by_id(action_id)
         if current is None:
             raise HTTPException(status_code=404, detail=str(e))
         detail = str(e)
         status_code = 409 if (
-            "cannot be approved" in detail
-            or "Insufficient available treasury funds" in detail
+            "cannot be approved" in detail.lower()
+            or "insufficient available treasury funds" in detail.lower()
             or "race" in detail.lower()
+            or "linked company goal" in detail.lower()
         ) else 400
         raise HTTPException(status_code=status_code, detail=detail)
 
@@ -2052,8 +2053,8 @@ def reject_action(action_id: int):
         raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
 
     try:
-        return reject_action_with_treasury(action_id)
-    except ValueError as e:
+        return reject_action_control(action_id)
+    except ActionControlError as e:
         current = get_action_by_id(action_id)
         if current is None:
             raise HTTPException(status_code=404, detail=str(e))
@@ -2068,12 +2069,12 @@ def execute_approved_action(action_id: int):
     action = get_action_by_id(action_id)
     if action is None:
         raise HTTPException(status_code=404, detail="Action not found")
-    _require_linked_goal_active(
-        action,
-        goal_id_key="source_goal_id",
-        operation="execute action",
-    )
-    result = execute_action(action_id)
+    try:
+        result = execute_action_control(action_id)
+    except ActionControlError as e:
+        detail = str(e)
+        status_code = 409 if "linked company goal" in detail.lower() else 400
+        raise HTTPException(status_code=status_code, detail=detail)
     
     if not result.get("success", False):
         error_msg = result.get("error", "Execution failed")
