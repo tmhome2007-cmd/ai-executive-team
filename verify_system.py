@@ -3320,7 +3320,9 @@ try:
         "approve_action_with_treasury",
         "reject_action_with_treasury",
         "update_action_outcome_with_treasury",
-        "Expected cost/currency can only be changed while an action is pending",
+        "Expected cost can only be changed while an action is pending",
+        "After approval it may only accompany actual_cost_amount",
+        "Actual cost currency must match the approved treasury currency",
     ]
     required_db = [
         "CREATE TABLE IF NOT EXISTS treasury_entries",
