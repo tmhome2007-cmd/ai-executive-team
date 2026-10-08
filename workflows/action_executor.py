@@ -454,8 +454,8 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                 f"🚫 <b>FILE OPERATION BLOCKED — path outside workspace</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
                 f"<b>Operation:</b> {escape_html(operation)}\n"
-                f"<b>Path:</b> <code>{escape_html(file_path)}</code>\n"
-                f"<b>Reason:</b> {escape_html(confinement_reason)}"
+                f"<b>Path:</b> {_telegram_sensitive(file_path, code=True)}\n"
+                f"<b>Reason:</b> {_telegram_sensitive(confinement_reason)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}")
@@ -479,7 +479,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             send_notification(
                 f"🧪 <b>DRY RUN — FILE OPERATION</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Detail:</b> {escape_html(preview)}"
+                f"<b>Detail:</b> {_telegram_sensitive(preview)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}")
@@ -654,7 +654,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             send_notification(
                 f"❌ <b>FILE OPERATION FAILED</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Error:</b> {escape_html(error_msg)}"
+                f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
             print(f"Warning: Failed to send Telegram notification for action #{action_id}: {notify_err}")
@@ -705,8 +705,8 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"🚫 <b>BROWSER ACTION BLOCKED — unsafe URL</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>URL:</b> <code>{escape_html(url)}</code>\n"
-                f"<b>Reason:</b> {escape_html(url_block_reason)}"
+                f"<b>URL:</b> {_telegram_sensitive(url, code=True)}\n"
+                f"<b>Reason:</b> {_telegram_sensitive(url_block_reason)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}")
@@ -726,7 +726,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"🧪 <b>DRY RUN — BROWSER ACTION</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Detail:</b> {escape_html(preview)}"
+                f"<b>Detail:</b> {_telegram_sensitive(preview)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}")
@@ -797,8 +797,8 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"⚡ <b>BROWSER ACTION SUCCESSFUL</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Detail:</b> {escape_html(result_summary)}\n"
-                f"<b>Screenshot saved:</b> <code>{escape_html(screenshot_path)}</code>"
+                f"<b>Detail:</b> {_telegram_sensitive(result_summary)}\n"
+                f"<b>Screenshot saved:</b> {_telegram_sensitive(screenshot_path, code=True)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
@@ -820,7 +820,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"❌ <b>BROWSER ACTION FAILED</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Error:</b> {escape_html(error_msg)}"
+                f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
             print(f"Warning: Failed to send Telegram notification for action #{action_id}: {notify_err}")
@@ -890,8 +890,8 @@ def execute_action(action_id: int) -> dict:
             notification_text = (
                 f"🚫 <b>EXECUTION BLOCKED — dangerous command detected</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                f"<b>Reason:</b> {escape_html(block_reason)}"
+                f"<b>Command:</b> {_telegram_sensitive(action_detail, code=True)}\n"
+                f"<b>Reason:</b> {_telegram_sensitive(block_reason)}"
             )
             send_notification(notification_text)
         except Exception as e:
@@ -917,7 +917,7 @@ def execute_action(action_id: int) -> dict:
             notification_text = (
                 f"🧪 <b>DRY RUN EXECUTED</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                f"<b>Command:</b> {_telegram_sensitive(action_detail, code=True)}\n"
                 f"<b>Mode:</b> Sandbox (Dry-Run)"
             )
             send_notification(notification_text)
@@ -986,7 +986,7 @@ def execute_action(action_id: int) -> dict:
                 notification_text = (
                     f"⚡ <b>LIVE EXECUTION SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Command:</b> <code>{escape_html(action_detail[:500])}</code>\n"
+                    f"<b>Command:</b> {_telegram_sensitive(action_detail[:500], code=True)}\n"
                     "<b>Output:</b> retained locally; not copied to Telegram."
                 )
                 send_notification(notification_text)
@@ -1036,7 +1036,7 @@ def execute_action(action_id: int) -> dict:
                 f"❌ <b>EXECUTION FAILED (TIMEOUT)</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
                 f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                f"<b>Error:</b> {escape_html(error_msg)}"
+                f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram timeout notification for action #{action_id}: {e}")
@@ -1059,7 +1059,7 @@ def execute_action(action_id: int) -> dict:
                 f"❌ <b>EXECUTION FAILED (UNEXPECTED ERROR)</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
                 f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                f"<b>Error:</b> {escape_html(error_msg)}"
+                f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
             print(f"Warning: Failed to send Telegram error notification for action #{action_id}: {notify_err}")
