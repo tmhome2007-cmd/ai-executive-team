@@ -2202,6 +2202,52 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 80: DYNAMIC CHECK — crash recovery marks business outcome inconclusive
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_80
+    from memory.database import (
+        init_db as _init_db_80,
+        propose_action as _propose_80,
+        transition_action_status as _transition_80,
+        claim_action_for_execution as _claim_80,
+        recover_interrupted_actions as _recover_80,
+        get_action_outcome as _get_outcome_80,
+    )
+
+    original_db_80 = _verify_config_80.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_80.DATABASE_PATH = os.path.join(temp_dir, "crash-outcome.db")
+            _init_db_80()
+            action_id = _propose_80(
+                "COO",
+                "Interrupted outcome test",
+                "echo test",
+                "shell",
+                expected_outcome="External change occurs",
+            )
+            _transition_80(action_id, "approved", ("pending",))
+            _claim_80(action_id)
+            recovered = _recover_80()
+            outcome = _get_outcome_80(action_id)
+
+            if (
+                recovered == 1
+                and outcome
+                and outcome["outcome_status"] == "inconclusive"
+                and "unknown" in (outcome["actual_outcome"] or "").lower()
+            ):
+                log_pass("crash recovery records business outcome as inconclusive rather than guessing failure")
+            else:
+                log_fail("Crash outcome recovery", f"recovered={recovered}, outcome={outcome}")
+    finally:
+        _verify_config_80.DATABASE_PATH = original_db_80
+except Exception as e:
+    log_fail("Crash outcome recovery check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
