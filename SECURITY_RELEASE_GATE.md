@@ -27,7 +27,7 @@ native-glob integration tests, production Webpack build and full npm audit pass.
 A tool-free real CrewAI agent completes a synthetic task against local Ollama
 llama3.1 and resumes its saved result. This is not a ten-agent model-quality audit.
 Default Turbopack passes on prior CI; local sandbox worker binding is restricted.
-Final-head GitHub Actions results must be recorded separately after publication.
+GitHub Actions evidence for the final tested implementation is recorded below.
 
 ## Remaining blockers and limits
 
@@ -35,7 +35,7 @@ Final-head GitHub Actions results must be recorded separately after publication.
 2. **Deployment confinement.** Docker daemon/kernel trust and a writable workspace remain. Host preflight and URL/DNS checks cannot prove race-free confinement against concurrently hostile processes or DNS rebinding. Use a dedicated worker VM and verified network egress controls before exposing live tools to adversarial workloads. Local Docker tests are evidence of baseline boundaries, not proof of sandbox escape resistance.
 3. **External effects and reconciliation.** Local checkpoints cannot guarantee exactly-once external effects. Interrupted tools remain inconclusive and need owner inspection; provider idempotency keys are still required for future external integrations. Cached output does not itself prove model reasoning is correct. Manual crash/escape testing on the final deployment is still required.
 4. **Encryption deployment.** Optional backup encryption needs an owner-managed key and verified off-device recovery. This audit does not change production keys or delete older plaintext copies. Retention does not automatically delete legal/business approval history or copies exported outside configured directories.
-5. **Final CI.** The final combined changes require their own CI evidence. Prior run 37821956157 passed 150/150 checks, Docker isolation, Bandit, lint, default build and production npm audit, but failed the earlier npm/Chroma audits. The npm chain is now removed locally; Chroma is still expected to fail.
+5. **Final CI verified; dependency gate still fails.** Run 37826110515 on 08ee7ee passes backend compatibility, compilation, security tests, real Docker, 150/150 checks, Bandit and the complete frontend gate. Its only failing check is pip-audit with four Chroma advisories. The CI correction is verified.
 
 ## Release criteria
 
@@ -56,3 +56,22 @@ temporary directory with canonicalization. This is a test-portability correction
 Chroma pip-audit still reports four unique advisories with no fix versions.
 The corrected final code needs a fresh CI run, including the Docker steps that
 were skipped after the fixture failure.
+
+## Final implementation verification
+
+[Run 37826110515](https://github.com/tmhome2007-cmd/ai-executive-team/actions/runs/37826110515)
+on implementation commit `08ee7eef481f5d35ca00ba3a8bd1c4a35927803c` confirms:
+
+- Backend installation and pip check: pass.
+- Python compilation: pass.
+- Security suite: 27 discovered tests, 26 pass and the opt-in Docker test is
+  skipped in this initial pass; the separate real Docker test passes.
+- System regression: 150/150 pass.
+- Bandit medium/high: pass (21 reviewed SQL dispositions; low findings remain).
+- Frontend clean install, native adapter tests, lint and default production build: pass.
+- Both npm dependency audits: pass, zero vulnerabilities.
+- Python dependency audit: fails solely for four unique ChromaDB advisories.
+
+The follow-up commit recording this evidence changes documentation only.
+The release gate remains NOT CLEARED for the explicitly listed dependency and
+deployment requirements; no main merge or live business action was performed.
