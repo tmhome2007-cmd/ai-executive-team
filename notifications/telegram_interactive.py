@@ -346,17 +346,22 @@ def _run_listener_in_thread() -> None:
             await stop_event.wait()
             logger.info("Telegram interactive listener shutting down...")
 
-        except TelegramConflictError as e:
+        except TelegramConflictError:
             _state["last_error"] = (
-                f"Conflict: another process is already polling this bot token. "
-                f"Stop any other running instance of this app (check for zombie "
-                f"processes from a previous --reload restart) before retrying. ({e})"
+                "Conflict: another process is already polling this bot token. "
+                "Stop any other running instance of this app before retrying."
             )
-            logger.error(f"Telegram listener FAILED to start: {_state['last_error']}")
+            logger.error("Telegram listener failed to start because another poller is active.")
 
-        except Exception as e:
-            _state["last_error"] = f"Unexpected error during startup/runtime: {e}"
-            logger.error(f"Telegram listener FAILED/crashed: {e}", exc_info=True)
+        except Exception as exc:
+            _state["last_error"] = (
+                f"Unexpected Telegram listener error ({type(exc).__name__}); "
+                "transport details suppressed."
+            )
+            logger.error(
+                "Telegram listener failed/crashed (%s); transport details suppressed.",
+                type(exc).__name__,
+            )
 
         finally:
             # Ook bij een gedeeltelijke startup (initialize/start gelukt maar
@@ -381,9 +386,15 @@ def _run_listener_in_thread() -> None:
 
     try:
         loop.run_until_complete(_main())
-    except Exception as e:
-        _state["last_error"] = f"Listener thread crashed: {e}"
-        logger.error(f"Telegram listener thread crashed unexpectedly: {e}", exc_info=True)
+    except Exception as exc:
+        _state["last_error"] = (
+            f"Telegram listener thread crashed ({type(exc).__name__}); "
+            "transport details suppressed."
+        )
+        logger.error(
+            "Telegram listener thread crashed unexpectedly (%s); transport details suppressed.",
+            type(exc).__name__,
+        )
     finally:
         _state["started_successfully"] = False
         _state["application"] = None
