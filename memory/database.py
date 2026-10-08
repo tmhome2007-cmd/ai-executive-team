@@ -36,7 +36,8 @@ VALID_ACTION_STATUSES = {
 VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
 VALID_DECISION_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
 VALID_PREPARATION_STATUSES = {"not_started", "in_progress", "completed", "failed"}
-_ACTION_PROVENANCE_CONTEXT = threading.local()
+_ACTION_PROVENANCE_LOCK = threading.RLock()
+_ACTION_PROVENANCE_CONTEXT: dict | None = None
 
 VALID_OUTCOME_STATUSES = {
     "not_started",
@@ -489,32 +490,37 @@ def action_provenance_scope(
     phase: str = "preparation",
 ):
     """
-    Thread-local scope used while a tool-capable executive meeting is running.
-    Any propose_action() call in this worker thread automatically inherits the
-    source decision. The previous context is restored even when CrewAI raises.
+    Process-wide provenance scope for one serialized CrewAI execution.
+
+    CrewAI may invoke tools from an internal worker thread, so thread-local
+    state is not reliable here. Heavy executive meetings are already serialized
+    by workflows.execution_lock.EXECUTION_LOCK, which guarantees only one
+    tool-capable meeting can own this scope at a time.
     """
-    previous = getattr(_ACTION_PROVENANCE_CONTEXT, "value", None)
+    global _ACTION_PROVENANCE_CONTEXT
+
     scoped_value = {
         "decision_id": decision_id,
         "decision_sync_uuid": decision_sync_uuid,
         "phase": phase,
         "created_action_ids": [],
     }
-    _ACTION_PROVENANCE_CONTEXT.value = scoped_value
+
+    with _ACTION_PROVENANCE_LOCK:
+        if _ACTION_PROVENANCE_CONTEXT is not None:
+            raise RuntimeError("Action provenance scope is already active")
+        _ACTION_PROVENANCE_CONTEXT = scoped_value
+
     try:
         yield scoped_value
     finally:
-        if previous is None:
-            try:
-                delattr(_ACTION_PROVENANCE_CONTEXT, "value")
-            except AttributeError:
-                pass
-        else:
-            _ACTION_PROVENANCE_CONTEXT.value = previous
+        with _ACTION_PROVENANCE_LOCK:
+            _ACTION_PROVENANCE_CONTEXT = None
 
 
 def _current_action_provenance() -> dict | None:
-    return getattr(_ACTION_PROVENANCE_CONTEXT, "value", None)
+    with _ACTION_PROVENANCE_LOCK:
+        return _ACTION_PROVENANCE_CONTEXT
 
 
 # ===================================================================
@@ -595,7 +601,8 @@ def propose_action(
         conn.commit()
 
         if provenance is not None:
-            provenance.setdefault("created_action_ids", []).append(action_id)
+            with _ACTION_PROVENANCE_LOCK:
+                provenance.setdefault("created_action_ids", []).append(action_id)
 
         return action_id
 
