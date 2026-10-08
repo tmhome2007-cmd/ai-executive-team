@@ -438,7 +438,24 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
 
-    attempts = [t for t in _failed_auth_attempts.get(client_ip, []) if now - t < _LOCKOUT_WINDOW_SECONDS]
+    attempts = [
+        t for t in _failed_auth_attempts.get(client_ip, [])
+        if now - t < _LOCKOUT_WINDOW_SECONDS
+    ]
+
+    server_key = config.API_SECRET_KEY
+    is_valid = (
+        bool(server_key)
+        and x_api_key is not None
+        and hmac.compare_digest(x_api_key, server_key)
+    )
+
+    # A valid owner credential must never be denied because an attacker (or a
+    # broken local client) intentionally filled this IP's invalid-attempt
+    # bucket. Rate limiting applies only to invalid guesses.
+    if is_valid:
+        _failed_auth_attempts.pop(client_ip, None)
+        return True
 
     if len(attempts) >= _MAX_FAILED_ATTEMPTS:
         raise HTTPException(
@@ -446,20 +463,12 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
             detail="Too many failed authentication attempts. Try again later.",
         )
 
-    server_key = config.API_SECRET_KEY
-    is_valid = bool(server_key) and x_api_key is not None and hmac.compare_digest(x_api_key, server_key)
-
-    if not is_valid:
-        attempts.append(now)
-        _failed_auth_attempts[client_ip] = attempts
-        raise HTTPException(
-            status_code=401,
-            detail="Missing or invalid API key",
-        )
-
-    # Succesvolle poging: reset de teller voor dit IP.
-    _failed_auth_attempts.pop(client_ip, None)
-    return True
+    attempts.append(now)
+    _failed_auth_attempts[client_ip] = attempts
+    raise HTTPException(
+        status_code=401,
+        detail="Missing or invalid API key",
+    )
 
 
 def _require_linked_goal_active(
