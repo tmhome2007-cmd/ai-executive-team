@@ -62,7 +62,7 @@ Edit `.env` and set:
 | `ALLOWED_BROWSER_DOMAINS` | Optional. Comma-separated domain allowlist for browser actions (e.g. `wikipedia.org,github.com`). Empty = any public http/https domain allowed; internal/private addresses remain blocked. |
 | `CREWAI_DISABLE_TELEMETRY` | `true` by default for local-first privacy. |
 | `SYNC_HMAC_KEY` | Recommended dedicated shared key for authenticated cross-machine JSONL sync. If empty, the API secret is used. |
-| `ALLOW_UNSAFE_RAW_SHELL` | `False` by default. Live shell uses the isolated Docker worker if explicitly enabled; Docker must be installed with alpine:3.20 pre-pulled. |
+| `ALLOW_UNSAFE_RAW_SHELL` | `False` by default. Live shell uses the isolated Docker worker if explicitly enabled; Docker must be installed with the pinned Alpine image digest pre-pulled. |
 | `BIND_HOST` | `127.0.0.1` by default. Keep the API loopback-only unless you deliberately deploy a protected remote transport. |
 | `ALLOW_INSECURE_REMOTE_HTTP` | `False` by default. A non-loopback plaintext HTTP bind fails startup unless you explicitly accept that transport risk. |
 | `TELEGRAM_INCLUDE_SENSITIVE_DETAILS` | `False` by default. Action descriptions/details, paths, commands, URLs, errors, and transport details remain local unless explicitly enabled. |
