@@ -791,6 +791,20 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             ),
         )
 
+    trusted_browser_context = "\n".join(
+        part
+        for part in (
+            decision.get("task_description"),
+            decision.get("decision_outcome"),
+            goal.get("description") if goal else None,
+            goal.get("success_criteria") if goal else None,
+        )
+        if part
+    )
+    allowed_browser_urls = set(
+        re.findall(r'https?://[^\s<>"\')\]}]+', trusted_browser_context)
+    )
+
     preparation_prompt = (
         f"PHASE 2 — PREPARATION FOR APPROVED DECISION #{decision_id}\n\n"
         f"Original topic: {decision['topic']}\n\n"
@@ -815,7 +829,10 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         "propose, include an expected_outcome and expected_impact so we can measure "
         "whether it worked later. Include expected_cost_amount + currency ONLY when "
         "the supplied evidence supports a real cost; otherwise leave cost unknown. "
-        "Never invent access or credentials we do not have. For every missing resource "
+        "Never invent access or credentials we do not have. Never invent a domain or URL. "
+        "A browser action may only target an exact URL already present in the trusted "
+        "task/evidence, approved decision, or linked goal context; otherwise request the "
+        "missing exact URL/resource from the owner. For every missing resource "
         "or capability that genuinely blocks the approved plan, CALL "
         "propose_resource_request so the owner receives a structured request. For a "
         "non-budget request, OMIT amount and currency. For a budget request whose amount "
@@ -839,6 +856,7 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 "decision_id": decision_id,
                 "decision_sync_uuid": decision["sync_uuid"],
                 "phase": "preparation",
+                "allowed_browser_urls": sorted(allowed_browser_urls),
             },
         )
 
