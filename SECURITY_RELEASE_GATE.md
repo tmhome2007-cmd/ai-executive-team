@@ -87,3 +87,8 @@ rows representing four unique advisory IDs (PYSEC-2026-311 appears twice).
 The separate audit-tool installation also upgraded tomli/tomli-w incompatibly;
 the follow-up CI change installs application and tools together under the same
 constraints and adds `pip check`. That follow-up requires its own CI evidence.
+
+The follow-up CI correction is committed locally but its push was rejected by
+GitHub: the local credential lacks `workflow` scope. The published application
+head remains `4d08955`. Publishing workflow changes requires an appropriately
+authorized GitHub credential; never paste tokens into chat.
