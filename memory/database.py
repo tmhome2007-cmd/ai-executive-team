@@ -2314,6 +2314,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                        q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                        q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                        d.topic AS source_decision_topic,
+                       d.goal_id AS source_goal_id, g.title AS source_goal_title,
                        o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                        o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                        o.measured_at, o.next_recommendation, o.notes AS outcome_notes
@@ -2331,6 +2332,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                        q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                        q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                        d.topic AS source_decision_topic,
+                       d.goal_id AS source_goal_id, g.title AS source_goal_title,
                        o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                        o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                        o.measured_at, o.next_recommendation, o.notes AS outcome_notes
