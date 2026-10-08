@@ -15,6 +15,7 @@ import re
 import shlex
 import socket
 import subprocess
+import tempfile
 
 try:
     import resource  # Unix-only (macOS/Linux) — niet beschikbaar op Windows
@@ -416,8 +417,14 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
     # --- LIVE MODE: echte file I/O ---
     try:
         if operation == "read":
+            max_read_chars = 1024 * 1024
             with open(resolved_path, "r", encoding="utf-8") as f:
-                file_content = f.read()
+                file_content = f.read(max_read_chars + 1)
+            if len(file_content) > max_read_chars:
+                raise ValueError(
+                    "File exceeds the 1 MiB structured-read safety limit; "
+                    "use a narrower/local review method."
+                )
             update_action_status(action_id, "executed")
             record_execution_result(action_id, json.dumps({"stdout": file_content[:2000]}))
             mark_action_outcome_measurement_pending(action_id)
@@ -433,9 +440,31 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             return {"success": True, "mode": "live", "action_id": action_id, "stdout": file_content}
 
         elif operation in ("write", "append"):
-            mode = "w" if operation == "write" else "a"
-            with open(resolved_path, mode, encoding="utf-8") as f:
-                f.write(content)
+            parent_dir = os.path.dirname(resolved_path) or workspace_root
+            if operation == "write":
+                # Atomic replacement prevents a crash from leaving a partial
+                # configuration/document. Temp file lives in the same directory
+                # so os.replace() remains atomic on the same filesystem.
+                fd, temp_path = tempfile.mkstemp(prefix=".agent-write-", dir=parent_dir, text=True)
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as tmp:
+                        tmp.write(content)
+                        tmp.flush()
+                        os.fsync(tmp.fileno())
+                    os.chmod(temp_path, 0o600)
+                    os.replace(temp_path, resolved_path)
+                finally:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+            else:
+                with open(resolved_path, "a", encoding="utf-8") as out:
+                    out.write(content)
+                    out.flush()
+                    os.fsync(out.fileno())
+                try:
+                    os.chmod(resolved_path, 0o600)
+                except OSError:
+                    pass
             update_action_status(action_id, "executed")
             record_execution_result(action_id, json.dumps({"stdout": f"Wrote {len(content)} characters to {resolved_path}"}))
             mark_action_outcome_measurement_pending(action_id)
