@@ -1008,7 +1008,35 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if not action_match:
                         skipped += 1
                         continue
-                    row["action_id"] = action_match["id"]
+
+                    # init_db() maakt voor iedere actie al een lege outcome-row.
+                    # Bij sync moet echte remote outcome-data die placeholder
+                    # BIJWERKEN in plaats van botsen op action_id UNIQUE en stil
+                    # worden overgeslagen.
+                    local_action_id = action_match["id"]
+                    cursor.execute(
+                        "SELECT 1 FROM action_outcomes WHERE action_sync_uuid = ?",
+                        (row.get("action_sync_uuid"),),
+                    )
+                    if cursor.fetchone():
+                        importable_fields = [
+                            key for key in row.keys()
+                            if key not in {"action_id", "action_sync_uuid"}
+                        ]
+                        assignments = ", ".join(f"{key} = ?" for key in importable_fields)
+                        cursor.execute(
+                            f"""
+                            UPDATE action_outcomes
+                            SET {assignments}
+                            WHERE action_sync_uuid = ?
+                            """,
+                            tuple(row[key] for key in importable_fields)
+                            + (row.get("action_sync_uuid"),),
+                        )
+                        imported_outcomes += 1
+                        continue
+
+                    row["action_id"] = local_action_id
 
                 cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
                 if cursor.fetchone():
