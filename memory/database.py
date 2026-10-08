@@ -6,6 +6,7 @@ en actievoorstellen van het AI Executive Team.
 """
 
 import os
+import re
 import sqlite3
 import datetime
 import sys
@@ -86,10 +87,52 @@ _SECRET_LIKE_PATTERNS = (
     "xoxp-",
     "AIza",
     "-----BEGIN PRIVATE KEY-----",
+    "-----BEGIN RSA PRIVATE KEY-----",
     "password=",
+    "password:",
     "api_key=",
+    "api-key:",
     "token=",
+    "token:",
+    "authorization: bearer ",
 )
+
+_SECRET_REDACTION_REGEXES = (
+    re.compile(r"(?i)(authorization\s*:\s*bearer\s+)[^\s,;]+"),
+    re.compile(r"(?i)((?:password|api[_-]?key|access[_-]?token|refresh[_-]?token|secret)\s*[:=]\s*)[^\s,;]+"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\b(?:ghp_|github_pat_|xox[baprs]-|sk-)[A-Za-z0-9_\-]{12,}\b"),
+    re.compile(r"-----BEGIN (?:RSA )?PRIVATE KEY-----.*?-----END (?:RSA )?PRIVATE KEY-----", re.DOTALL),
+)
+
+
+def _redact_secret_like_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    redacted = value
+    for regex in _SECRET_REDACTION_REGEXES:
+        if regex.groups:
+            redacted = regex.sub(lambda m: f"{m.group(1)}[REDACTED]", redacted)
+        else:
+            redacted = regex.sub("[REDACTED]", redacted)
+    return redacted
+
+
+def _make_private_dir(path: str) -> None:
+    if not path:
+        return
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(path, 0o700)
+    except OSError:
+        pass
+
+
+def _make_private_file(path: str) -> None:
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def _reject_secret_like_text(*values: str | None) -> None:
@@ -165,10 +208,16 @@ def init_db() -> None:
     
     # 1. Zorg ervoor dat de map van de database bestaat
     if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
+        _make_private_dir(db_dir)
 
-    # 2. Verbind met de database en maak de tabellen aan
-    conn = sqlite3.connect(db_path)
+    # 2. Verbind met de database. WAL + busy_timeout make concurrent API,
+    # scheduler, and Telegram writers far less likely to collide with
+    # "database is locked"; FULL synchronous keeps durability conservative.
+    conn = sqlite3.connect(db_path, timeout=10.0)
+    conn.execute("PRAGMA busy_timeout = 10000")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = FULL")
+    conn.execute("PRAGMA foreign_keys = ON")
     cursor = conn.cursor()
     
     # Tabel 0: owner-defined company goals / missions.
@@ -510,6 +559,7 @@ def init_db() -> None:
 
     conn.commit()
     conn.close()
+    _make_private_file(db_path)
 
 
 @contextmanager
@@ -518,7 +568,9 @@ def get_connection():
     Context manager voor een veilige SQLite-verbinding.
     Stelt row_factory in op sqlite3.Row voor makkelijke toegang tot kolommen via sleutelnamen.
     """
-    conn = sqlite3.connect(config.DATABASE_PATH)
+    conn = sqlite3.connect(config.DATABASE_PATH, timeout=10.0)
+    conn.execute("PRAGMA busy_timeout = 10000")
+    conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -1369,6 +1421,9 @@ def log_decision(
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
     """
+    topic = _redact_secret_like_text(topic) or ""
+    task_description = _redact_secret_like_text(task_description) or ""
+    decision_outcome = _redact_secret_like_text(decision_outcome) or ""
     timestamp = datetime.datetime.now().isoformat()
     agents_str = ",".join(agents_involved)
     sandbox_flag = 1 if sandbox_mode else 0
@@ -2344,6 +2399,18 @@ def propose_action(
         raise ValueError(
             f"Unsupported action_type '{action_type}'. Allowed: {sorted(VALID_ACTION_TYPES)}"
         )
+    if len(action_description) > 4000 or len(action_detail) > 20000:
+        raise ValueError("Action proposal text exceeds safe persistence limits")
+    if expected_outcome is not None and len(expected_outcome) > 4000:
+        raise ValueError("expected_outcome exceeds safe persistence limit")
+    if expected_impact is not None and len(expected_impact) > 4000:
+        raise ValueError("expected_impact exceeds safe persistence limit")
+    _reject_secret_like_text(
+        action_description,
+        action_detail,
+        expected_outcome,
+        expected_impact,
+    )
     if expected_cost_amount is not None and expected_cost_amount < 0:
         raise ValueError("expected_cost_amount cannot be negative")
     if expected_cost_amount is not None and not currency:
@@ -2534,13 +2601,22 @@ def record_execution_result(action_id: int, result_detail_json: str) -> bool:
     blijft — niet alleen in het tijdelijke React-state van de sessie waarin
     de uitvoering plaatsvond.
     """
+    safe_result = _redact_secret_like_text(result_detail_json) or ""
+    max_result_chars = 32768
+    if len(safe_result) > max_result_chars:
+        safe_result = json.dumps({
+            "truncated": True,
+            "preview": safe_result[:max_result_chars],
+            "message": "Execution result exceeded persistence limit.",
+        })
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE action_queue
             SET result_detail = ?
             WHERE id = ?
-        """, (result_detail_json, action_id))
+        """, (safe_result, action_id))
 
         conn.commit()
         return cursor.rowcount > 0
@@ -3070,7 +3146,8 @@ def export_history_to_jsonl(export_path: str) -> dict:
     bestand — elke regel is {"table": "decisions"|"action_queue", ...velden...}.
     Retourneert {"decisions": aantal, "actions": aantal} als samenvatting.
     """
-    os.makedirs(os.path.dirname(export_path) or ".", exist_ok=True)
+    export_dir = os.path.dirname(export_path) or "."
+    _make_private_dir(export_dir)
 
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -3151,7 +3228,9 @@ def export_history_to_jsonl(export_path: str) -> dict:
         """)
         treasury_reservation_rows = [dict(row) for row in cursor.fetchall()]
 
-    with open(export_path, "w", encoding="utf-8") as f:
+    fd = os.open(export_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    _make_private_file(export_path)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         for row in goal_rows:
             row["_table"] = "company_goals"
             f.write(json.dumps(row) + "\n")
@@ -3592,7 +3671,7 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     """
     import datetime as _dt
 
-    os.makedirs(backup_dir, exist_ok=True)
+    _make_private_dir(backup_dir)
     timestamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     db_path = config.DATABASE_PATH
     backup_filename = f"executive_team_backup_{timestamp}.db"
@@ -3602,8 +3681,9 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     # Een rauwe bestandscopy kan midden in een actieve write/transactie een
     # inconsistente snapshot opleveren. sqlite3.Connection.backup() neemt een
     # transaction-consistente snapshot terwijl de bron-DB live mag blijven.
-    source = sqlite3.connect(db_path, timeout=5.0)
-    destination = sqlite3.connect(backup_path, timeout=5.0)
+    source = sqlite3.connect(db_path, timeout=10.0)
+    destination = sqlite3.connect(backup_path, timeout=10.0)
+    _make_private_file(backup_path)
     try:
         source.backup(destination)
         destination.commit()
