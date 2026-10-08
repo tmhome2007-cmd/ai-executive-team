@@ -98,9 +98,9 @@ class Config:
     ACTION_APPROVAL_HMAC_KEY: str = field(
         default_factory=lambda: os.getenv("ACTION_APPROVAL_HMAC_KEY", "").strip()
     )
-    # Raw shell execution cannot be made strongly safe by path regexes alone.
-    # Keep live shell disabled unless the owner explicitly opts into the
-    # residual OS-level risk. Structured file/browser actions are unaffected.
+    # Historical flag name retained for compatibility. When enabled, shell
+    # execution now uses the isolated Docker worker, never a host shell.
+    # Requires Docker and a pre-pulled worker image; otherwise fails closed.
     ALLOW_UNSAFE_RAW_SHELL: bool = field(
         default_factory=lambda: os.getenv("ALLOW_UNSAFE_RAW_SHELL", "false").lower() in ("true", "1", "yes")
     )
