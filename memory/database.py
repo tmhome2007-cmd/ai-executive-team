@@ -2331,6 +2331,13 @@ def propose_action(
         raise ValueError(
             f"Unsupported action_type '{action_type}'. Allowed: {sorted(VALID_ACTION_TYPES)}"
         )
+    _reject_secret_like_text(
+        proposed_by,
+        action_description,
+        action_detail,
+        expected_outcome,
+        expected_impact,
+    )
     if expected_cost_amount is not None and expected_cost_amount < 0:
         raise ValueError("expected_cost_amount cannot be negative")
     if expected_cost_amount is not None and not currency:
