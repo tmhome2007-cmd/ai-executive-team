@@ -37,3 +37,24 @@ button, input, select, textarea { outline-offset: 4px; }
 button:not(:disabled) { cursor: pointer; }
 [hidden] { display: none !important; }
 @media (max-width: 640px) { .command-card { padding: 18px; } }
+
+.office-intro { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+.office-presence { border: 1px solid #334155; border-radius: 24px; padding: 10px 14px; color: #cbd5e1; font-size: 12px; }
+.office-dot { display: inline-block; width: 6px; height: 6px; background: #5eead4; border-radius: 50%; margin-right: 8px; }
+.office-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; }
+.office-floor { border: 1px solid #334155; border-radius: 16px; padding: 20px; background: linear-gradient(135deg, #111827, #101a27); }
+.office-floor-number { color: #5eead4; font-size: 24px; font-weight: 600; border-right: 1px solid #334155; padding-right: 14px; }
+.office-rooms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.office-room { border: 1px solid #263244; border-radius: 12px; padding: 16px; background: #080f1c; }
+.office-desk { flex: 1 1 100px; min-width: 0; padding: 12px 6px; border: 1px solid transparent; border-radius: 12px; text-align: center; }
+.office-desk:hover { background: #172337; }
+.office-desk-selected { background: #133032; border-color: #2dd4bf; }
+.office-avatar { width: 56px; height: 56px; display: inline-block; flex-shrink: 0; }
+.office-inspector { align-self: start; position: sticky; top: 20px; overflow-wrap: anywhere; }
+.office-filter { border: 1px solid #334155; padding: 8px 12px; border-radius: 8px; font-size: 12px; color: #94a3b8; }
+.office-filter-active { background: #134e4a; color: #99f6e4; border-color: #2dd4bf; }
+.office-record { display: block; width: 100%; text-align: left; border-top: 1px solid #263244; padding: 12px 0; font-size: 14px; overflow-wrap: anywhere; }
+.office-record:hover { color: #5eead4; }
+.office-subheading { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin: 24px 0 12px; }
+@media (max-width: 1000px) { .office-layout { grid-template-columns: minmax(0, 1fr); } .office-inspector { position: static; } }
+@media (max-width: 640px) { .office-rooms { grid-template-columns: minmax(0, 1fr); } .office-floor { padding: 16px; } }

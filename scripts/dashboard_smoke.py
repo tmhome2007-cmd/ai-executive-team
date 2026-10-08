@@ -36,7 +36,7 @@ def main():
             '/decisions/history': [decision], '/actions/pending': [], '/actions/history': [action],
             '/resources/pending': [], '/goals': [], '/followups/open': [],
             '/workflows/autonomous-followup/status': {'success': None, 'message': 'No run recorded', 'last_run_time': None, 'scanned_goal_count': 0, 'created_event_ids': [], 'generated_decision_ids': [], 'resolved_event_ids': [], 'errors': []},
-            '/memory/ceo': [], '/meeting-types': {},
+            '/memory/ceo': [], '/memory/cfo': [], '/meeting-types': {},
             '/treasury/summary': {'currencies': {'EUR': {'available': 15, 'reserved': 5, 'cash_balance': 20}}},
         }
 
@@ -70,6 +70,29 @@ def main():
         assert page.locator('.report li').filter(has_text='Four checks passed.').count() == 1
         assert page.locator('.report script').count() == 0
         nav.get_by_role('button', name='Overview', exact=True).click()
+        nav.get_by_role('button', name='Virtual office', exact=True).click()
+        page.get_by_role('heading', name='Virtual office', exact=True).wait_for()
+        assert page.get_by_role('button', name='Inspect ', exact=False).count() == 11
+        page.get_by_role('button', name='Inspect CTO', exact=True).click()
+        inspector = page.get_by_role('complementary', name='Executive inspector')
+        assert inspector.get_by_text('Observed: Four checks passed', exact=True).is_visible()
+        assert inspector.get_by_text('executed · Decision #105', exact=True).is_visible()
+        page.get_by_role('button', name='Build floor', exact=True).click()
+        assert page.get_by_role('button', name='Inspect CEO', exact=True).count() == 0
+        page.get_by_role('button', name='Inspect CTO', exact=True).wait_for()
+        page.get_by_role('button', name='All floors', exact=True).click()
+        page.get_by_role('button', name='Inspect CFO', exact=True).click()
+        assert inspector.get_by_text('No actions for this executive in the loaded records.', exact=True).is_visible()
+        page.get_by_role('button', name='Review CFO memory →', exact=True).click()
+        assert page.get_by_role('heading', name='Executive Memory', exact=True).is_visible()
+        assert page.get_by_role('combobox').filter(visible=True).first.input_value() == 'cfo'
+        nav.get_by_role('button', name='Virtual office', exact=True).click()
+        page.screenshot(path='/private/tmp/virtual-office-desktop.png', full_page=True)
+        page.set_viewport_size({'width': 390, 'height': 844})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.screenshot(path='/private/tmp/virtual-office-mobile.png', full_page=True)
+        page.set_viewport_size({'width': 1440, 'height': 1000})
+        nav.get_by_role('button', name='Overview', exact=True).click()
         treasury_down[0] = True
         page.get_by_role('button', name='Refresh company data').click()
         page.get_by_role('alert').filter(has_text='Could not fetch treasury').wait_for()
@@ -87,7 +110,7 @@ def main():
         assert all(method == 'GET' for method in requests)
         assert not failures, failures
         browser.close()
-        print('PASS: all eight views, safe report formatting, unavailable/recovered data, mobile layout, memory-only authentication, and no mutations.')
+        print('PASS: all nine views, office profiles/floors and record linkage, safe report formatting, unavailable/recovered data, mobile layout, memory-only authentication, and no mutations.')
 
 
 if __name__ == '__main__':

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import VirtualOffice from "./components/virtual-office";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : "";
 
 const VIEWS = [
-  ["overview", "Overview"], ["goals", "Goals"], ["treasury", "Treasury"],
+  ["overview", "Overview"], ["office", "Virtual office"], ["goals", "Goals"], ["treasury", "Treasury"],
   ["decisions", "Decisions"], ["resources", "Resources"], ["actions", "Actions & results"],
   ["activity", "Executive activity"], ["system", "System health"],
 ] as const;
@@ -1642,6 +1643,16 @@ export default function DashboardPage() {
             <article className="command-card"><h2>Executive activity</h2><p className="text-sm text-gray-400">Research: {status?.success === true ? "Last run succeeded" : status?.success === false ? "Last run failed" : "No completed run"}</p><p className="text-sm text-gray-400 mt-2">Follow-up: {followupStatus?.message || "No run recorded"}</p><p className="text-sm mt-4">System: {healthError ? "Unavailable" : health?.status || "Checking…"}</p><button className="command-link" onClick={() => setView("activity")}>Review activity and memory →</button></article>
           </div>
         </section>
+        <div hidden={view !== "office"}>
+          <VirtualOffice decisions={history} actions={[...pendingActions, ...actionHistory.filter(a => !pendingActions.some(p => p.id === a.id))]}
+            resources={resourceRequests} followups={followups}
+            available={{ decisions: !!loadedSections.decisions && !loadError,
+              actions: !!loadedSections.pendingActions && !!loadedSections.actionHistory && !sectionErrors.pendingActions && !sectionErrors.actionHistory,
+              resources: !!loadedSections.resources && !sectionErrors.resources,
+              followups: !!loadedSections.followups && !followupError }}
+            errors={!!loadError || !!followupError || Object.values(sectionErrors).some(Boolean)}
+            onNavigate={setView} onMemory={(executive) => { setMemoryExecutive(executive); setView("activity"); }} />
+        </div>
         <section hidden={view !== "system"} className="command-card" aria-label="System health">
           <h2>System health</h2>{healthError && <p role="alert" className="text-amber-300">{healthError}</p>}
           {health ? <><p className="text-gray-400 mb-4">Overall: {health.status} · uptime {Math.floor(health.uptime_seconds / 60)} minutes. Telegram and browser are optional components.</p><div className="grid sm:grid-cols-2 gap-4">{Object.entries(health.components).map(([name, component]) => <div key={name} className="border border-gray-800 rounded-lg p-4"><h3 className="capitalize font-medium">{name.replaceAll("_", " ")}</h3><p className={component.ok ? "text-teal-300" : "text-amber-300"}>{component.ok ? "Ready" : "Not ready"}</p><p className="text-sm text-gray-400 mt-2">{component.message}</p></div>)}</div></> : <p>Waiting for a health response.</p>}
