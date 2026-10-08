@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import VirtualOffice from "./components/virtual-office";
+import CompanyRecords, { type ExecutiveProfile } from "./components/company-records";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : "";
 
 const VIEWS = [
-  ["overview", "Overview"], ["office", "Virtual office"], ["goals", "Goals"], ["treasury", "Treasury"],
+  ["overview", "Overview"], ["office", "Virtual office"], ["records", "Conversations & activity"], ["goals", "Goals"], ["treasury", "Treasury"],
   ["decisions", "Decisions"], ["resources", "Resources"], ["actions", "Actions & results"],
   ["activity", "Executive activity"], ["system", "System health"],
 ] as const;
@@ -597,6 +598,7 @@ function renderActionDetail(actionType: string | undefined, actionDetail: string
 
 export default function DashboardPage() {
   const [view, setView] = useState<DashboardView>("overview");
+  const [profiles, setProfiles] = useState<Record<string, ExecutiveProfile>>({});
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -621,6 +623,7 @@ export default function DashboardPage() {
     setKeyInput("");
     setLoadedSections({});
     setHealth(null);
+    setProfiles({});
   }, []);
 
   // --- Sandbox state ---
@@ -1158,12 +1161,29 @@ export default function DashboardPage() {
     } catch (err) { setHealthError(errorMessage(err) || "System health is unavailable."); }
   }, [handleAuthFailure]);
   useEffect(() => { if (apiKey) refreshHealth(apiKey); }, [apiKey, refreshHealth]);
+  const fetchProfiles = useCallback(async (currentKey: string, signal?: AbortSignal) => {
+    try {
+      const response = await fetch(`${API_BASE}/executives/profiles`, { headers: { "X-API-Key": currentKey }, signal });
+      if (response.status === 401) { handleAuthFailure(); return; }
+      if (!response.ok) throw new Error("Executive profiles unavailable. Restart the updated backend.");
+      const data = await response.json();
+      if (signal?.aborted) return;
+      setProfiles(data);
+      setSectionErrors(previous => ({ ...previous, profiles: "" }));
+    } catch (error) { if (!signal?.aborted) setSectionErrors(previous => ({ ...previous, profiles: errorMessage(error) })); }
+  }, [handleAuthFailure]);
+  useEffect(() => {
+    if (!apiKey) return;
+    const controller = new AbortController();
+    fetchProfiles(apiKey, controller.signal);
+    return () => controller.abort();
+  }, [apiKey, fetchProfiles]);
   const refreshAll = async () => {
     if (!apiKey) return;
     setRefreshing(true);
     try { await Promise.all([fetchDashboardData(), fetchPendingActions(apiKey), fetchActionHistory(apiKey),
       fetchResourceRequests(apiKey), fetchTreasury(apiKey), fetchGoals(apiKey), fetchFollowups(apiKey),
-      fetchExecutiveMemories(apiKey, memoryExecutive), refreshHealth(apiKey)]); }
+      fetchExecutiveMemories(apiKey, memoryExecutive), refreshHealth(apiKey), fetchProfiles(apiKey)]); }
     finally { setRefreshing(false); }
   };
 
@@ -1644,7 +1664,7 @@ export default function DashboardPage() {
           </div>
         </section>
         <div hidden={view !== "office"}>
-          <VirtualOffice decisions={history} actions={[...pendingActions, ...actionHistory.filter(a => !pendingActions.some(p => p.id === a.id))]}
+          <VirtualOffice profiles={profiles} onRecords={() => setView("records")} decisions={history} actions={[...pendingActions, ...actionHistory.filter(a => !pendingActions.some(p => p.id === a.id))]}
             resources={resourceRequests} followups={followups}
             available={{ decisions: !!loadedSections.decisions && !loadError,
               actions: !!loadedSections.pendingActions && !!loadedSections.actionHistory && !sectionErrors.pendingActions && !sectionErrors.actionHistory,
@@ -1653,6 +1673,7 @@ export default function DashboardPage() {
             errors={!!loadError || !!followupError || Object.values(sectionErrors).some(Boolean)}
             onNavigate={setView} onMemory={(executive) => { setMemoryExecutive(executive); setView("activity"); }} />
         </div>
+        {view === "records" && apiKey && <CompanyRecords apiKey={apiKey} decisions={history} profiles={profiles} onAuthFailure={handleAuthFailure} onNavigate={setView} />}
         <section hidden={view !== "system"} className="command-card" aria-label="System health">
           <h2>System health</h2>{healthError && <p role="alert" className="text-amber-300">{healthError}</p>}
           {health ? <><p className="text-gray-400 mb-4">Overall: {health.status} · uptime {Math.floor(health.uptime_seconds / 60)} minutes. Telegram and browser are optional components.</p><div className="grid sm:grid-cols-2 gap-4">{Object.entries(health.components).map(([name, component]) => <div key={name} className="border border-gray-800 rounded-lg p-4"><h3 className="capitalize font-medium">{name.replaceAll("_", " ")}</h3><p className={component.ok ? "text-teal-300" : "text-amber-300"}>{component.ok ? "Ready" : "Not ready"}</p><p className="text-sm text-gray-400 mt-2">{component.message}</p></div>)}</div></> : <p>Waiting for a health response.</p>}

@@ -17,6 +17,8 @@ BELANGRIJK — async ontwerp:
   asyncio.run() aan, wat crasht binnen een reeds actieve event loop.
 """
 
+from agents.executive_agents import get_executive_profiles
+
 import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
 
 
@@ -207,6 +209,8 @@ async def run_daily_research(workflow_run_id: str | None = None) -> dict:
             topic="Daily Research Findings",
             agents_involved=["CSO"] + [k.upper() for k in MEETING_AGENT_KEYS],
             task_description=research_summary,
+            individual_outputs=meeting_result.get("individual_outputs", {}),
+            executive_profiles=get_executive_profiles(),
             decision_outcome=meeting_result["final_decision"],
             sandbox_mode=config.SANDBOX_MODE,
             meeting_type="strategy",

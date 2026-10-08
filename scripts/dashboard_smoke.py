@@ -40,6 +40,19 @@ def main():
             '/treasury/summary': {'currencies': {'EUR': {'available': 15, 'reserved': 5, 'cash_balance': 20}}},
         }
 
+        fixtures['/executives/profiles'] = {
+            'ceo': {'name': 'Kai Akira', 'role': 'CEO', 'goal': 'Strategic alignment', 'backstory': 'Synthetic strategic personality'},
+            'cfo': {'name': 'Maya Chen', 'role': 'CFO', 'goal': 'Capital efficiency', 'backstory': 'Synthetic financial personality'},
+            'cto': {'name': 'Priya Raman', 'role': 'CTO', 'goal': 'Technical feasibility', 'backstory': 'Synthetic engineering personality'},
+        }
+        fixtures['/company/activity'] = {'items': [
+            {'event_key': 'outcome:60', 'timestamp': '2026-10-08T12:05:00', 'category': 'result', 'title': 'Outcome measured: partial', 'detail': 'Four checks passed', 'decision_id': 105, 'action_id': 60, 'resource_id': None, 'goal_id': None},
+        ]}
+        fixtures['/decisions/105/conversations'] = {'contributions': [
+            {'id': 1, 'executive_key': 'ceo', 'phase': 'decision', 'sequence': 1, 'captured_at': '2026-10-08T12:00:00', 'body': 'Published CEO recommendation <script>alert(1)</script>', 'profile': {'name': 'Kai Akira', 'role': 'CEO'}},
+            {'id': 2, 'executive_key': 'cto', 'phase': 'preparation', 'sequence': 1, 'captured_at': '2026-10-08T12:02:00', 'body': 'Published technical preparation', 'profile': {'name': 'Priya Raman', 'role': 'CTO'}},
+        ]}
+
         def respond(route):
             request = route.request
             requests.append(request.method)
@@ -93,6 +106,21 @@ def main():
         page.screenshot(path='/private/tmp/virtual-office-mobile.png', full_page=True)
         page.set_viewport_size({'width': 1440, 'height': 1000})
         nav.get_by_role('button', name='Overview', exact=True).click()
+        nav.get_by_role('button', name='Conversations & activity', exact=True).click()
+        page.get_by_text('Outcome measured: partial', exact=True).wait_for()
+        page.get_by_role('combobox', name='Meeting for contributions').select_option('105')
+        page.get_by_role('heading', name='Kai Akira', exact=True).wait_for()
+        assert page.get_by_text('Published CEO recommendation <script>alert(1)</script>', exact=True).is_visible()
+        assert page.locator('.contribution script').count() == 0
+        page.get_by_role('combobox', name='Contribution phase').select_option('preparation')
+        assert page.get_by_text('Published technical preparation', exact=True).is_visible()
+        assert page.get_by_role('heading', name='Kai Akira', exact=True).count() == 0
+        page.get_by_role('combobox', name='Contribution phase').select_option('all')
+        page.screenshot(path='/private/tmp/company-conversations-desktop.png', full_page=True)
+        page.set_viewport_size({'width': 390, 'height': 844})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.set_viewport_size({'width': 1440, 'height': 1000})
+        nav.get_by_role('button', name='Overview', exact=True).click()
         treasury_down[0] = True
         page.get_by_role('button', name='Refresh company data').click()
         page.get_by_role('alert').filter(has_text='Could not fetch treasury').wait_for()
@@ -110,7 +138,7 @@ def main():
         assert all(method == 'GET' for method in requests)
         assert not failures, failures
         browser.close()
-        print('PASS: all nine views, office profiles/floors and record linkage, safe report formatting, unavailable/recovered data, mobile layout, memory-only authentication, and no mutations.')
+        print('PASS: all ten views, executive names and published contributions, office profiles/floors and record linkage, safe report formatting, unavailable/recovered data, mobile layout, memory-only authentication, and no mutations.')
 
 
 if __name__ == '__main__':

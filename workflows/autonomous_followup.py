@@ -10,6 +10,8 @@ still require the existing human approval -> preparation -> action/resource
 approval gates before any real-world effect.
 """
 
+from agents.executive_agents import get_executive_profiles
+
 import asyncio
 import datetime
 from typing import Any
@@ -399,6 +401,8 @@ async def run_autonomous_followup() -> dict:
                     topic=f"Autonomous follow-up: {goal['title']}",
                     agents_involved=meeting.get("participants", ["cso", "coo", "ceo"]),
                     task_description=prompt,
+                    individual_outputs=meeting.get("individual_outputs", {}),
+                    executive_profiles=get_executive_profiles(),
                     decision_outcome=meeting.get("final_decision", ""),
                     sandbox_mode=config.SANDBOX_MODE,
                     goal_id=goal["id"],

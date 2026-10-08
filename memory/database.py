@@ -426,6 +426,22 @@ def init_db() -> None:
         cursor.execute("UPDATE decisions SET sync_uuid = ? WHERE id = ?", (str(uuid.uuid4()), row_id))
     conn.commit()
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS decision_contributions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            decision_id INTEGER NOT NULL REFERENCES decisions(id),
+            phase TEXT NOT NULL CHECK (phase IN ('decision', 'preparation')),
+            sequence INTEGER NOT NULL,
+            executive_key TEXT NOT NULL,
+            body TEXT NOT NULL,
+            profile_json TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            UNIQUE(decision_id, phase, sequence),
+            UNIQUE(decision_id, phase, executive_key)
+        )
+    """)
+    conn.commit()
+
     # Tabel 2: Action Approval Queue
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS action_queue (
@@ -1560,6 +1576,8 @@ def log_decision(
     goal_id: int | None = None,
     meeting_type: str = "strategy",
     workflow_key: str | None = None,
+    individual_outputs: dict[str, str] | None = None,
+    executive_profiles: dict | None = None,
 ) -> int:
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
@@ -1584,6 +1602,8 @@ def log_decision(
                 actual = tuple(previous[key] for key in ("topic", "agents_involved", "task_description", "decision_outcome", "sandbox_mode", "goal_id", "meeting_type"))
                 if actual != expected:
                     raise ValueError("Decision workflow key reused with different inputs")
+                _store_contributions(cursor, previous["id"], "decision", individual_outputs, executive_profiles)
+                conn.commit()
                 return previous["id"]
         if goal_id is not None:
             cursor.execute(
@@ -1610,6 +1630,7 @@ def log_decision(
         ))
         
         decision_id = cursor.lastrowid
+        _store_contributions(cursor, decision_id, "decision", individual_outputs, executive_profiles)
         cursor.execute(
             """
             INSERT OR IGNORE INTO decision_approvals (
@@ -1713,6 +1734,8 @@ def finish_decision_preparation(
     decision_id: int,
     success: bool,
     outcome: str | None = None,
+    individual_outputs: dict[str, str] | None = None,
+    executive_profiles: dict | None = None,
 ) -> bool:
     """Zet preparation atomair naar completed/failed en bewaart het plan."""
     target = "completed" if success else "failed"
@@ -1727,8 +1750,11 @@ def finish_decision_preparation(
             """,
             (target, now, outcome, decision_id),
         )
+        changed = cursor.rowcount == 1
+        if changed and success:
+            _store_contributions(cursor, decision_id, "preparation", individual_outputs, executive_profiles)
         conn.commit()
-        return cursor.rowcount == 1
+        return changed
 
 
 def has_daily_research_attempt_on(date_value: datetime.date) -> bool:
@@ -4035,3 +4061,100 @@ if __name__ == "__main__":
     for action in pending:
         print(action)
     print("=" * 60)
+
+
+# Contributions contain published, evidence-guarded outputs, never hidden model
+# reasoning or raw tool traces. They commit atomically with their parent result.
+def _store_contributions(cursor, decision_id, phase, outputs, profiles):
+    if outputs is None:
+        return
+    if not isinstance(outputs, dict) or len(outputs) > 11:
+        raise ValueError("Invalid executive contribution set")
+    allowed = {'ceo', 'cfo', 'coo', 'cso', 'cmo', 'cto', 'cpo', 'chro', 'general_counsel', 'board_director', 'cco'}
+    validated = []
+    for sequence, (key, body) in enumerate(outputs.items(), 1):
+        if key not in allowed or not isinstance(body, str) or len(body) > 100000:
+            raise ValueError("Invalid executive contribution")
+        profile = (profiles or {}).get(key, {})
+        if not isinstance(profile, dict) or set(profile) - {'name', 'role', 'goal', 'backstory'}:
+            raise ValueError("Invalid executive profile snapshot")
+        if any(not isinstance(value, str) or len(value) > 20000 for value in profile.values()):
+            raise ValueError("Invalid executive profile text")
+        _reject_secret_like_text(body, *profile.values())
+        validated.append((sequence, key, body, json.dumps(profile, sort_keys=True)))
+    existing = cursor.execute(
+        "SELECT sequence, executive_key, body, profile_json FROM decision_contributions WHERE decision_id = ? AND phase = ? ORDER BY sequence",
+        (decision_id, phase)).fetchall()
+    if existing:
+        if [tuple(row) for row in existing] != validated:
+            raise ValueError("Recorded executive contributions are immutable")
+        return
+    now = datetime.datetime.now().isoformat()
+    cursor.executemany(
+        "INSERT INTO decision_contributions (decision_id, phase, sequence, executive_key, body, profile_json, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(decision_id, phase, *row, now) for row in validated])
+
+
+def get_decision_contributions(decision_id: int) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, decision_id, phase, sequence, executive_key, body, profile_json, captured_at FROM decision_contributions WHERE decision_id = ? ORDER BY CASE phase WHEN 'decision' THEN 0 ELSE 1 END, sequence",
+            (decision_id,)).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item['profile'] = json.loads(item.pop('profile_json'))
+            result.append(item)
+        return result
+
+
+def get_company_activity(limit: int = 50, offset: int = 0) -> list[dict]:
+    if not 1 <= limit <= 100 or offset < 0:
+        raise ValueError("Invalid activity pagination")
+    # Existing status tables retain the latest transition, not every historical
+    # status. Each timeline item explicitly identifies that scope.
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT * FROM (
+                SELECT 'decision:' || id AS event_key, timestamp AS timestamp, 'meeting' AS category,
+                    'Meeting recorded' AS title, topic AS detail, id AS decision_id,
+                    NULL AS action_id, NULL AS resource_id, NULL AS goal_id FROM decisions
+                UNION ALL
+                SELECT 'contribution:' || id, captured_at, 'conversation',
+                    'Executive contribution recorded', executive_key || ' · ' || phase,
+                    decision_id, NULL, NULL, NULL FROM decision_contributions
+                UNION ALL
+                SELECT 'direction:' || a.decision_id, a.reviewed_at, 'approval',
+                    'Latest direction review: ' || a.status, d.topic,
+                    d.id, NULL, NULL, d.goal_id
+                    FROM decision_approvals a JOIN decisions d ON d.id = a.decision_id WHERE a.reviewed_at IS NOT NULL
+                UNION ALL
+                SELECT 'preparation:' || a.decision_id, a.prepared_at, 'preparation',
+                    'Latest preparation state: ' || a.preparation_status, d.topic,
+                    d.id, NULL, NULL, d.goal_id
+                    FROM decision_approvals a JOIN decisions d ON d.id = a.decision_id WHERE a.prepared_at IS NOT NULL
+                UNION ALL
+                SELECT 'proposal:' || id, timestamp, 'action', 'Action proposed', action_description,
+                    source_decision_id, id, NULL, NULL FROM action_queue
+                UNION ALL
+                SELECT 'action-state:' || id, reviewed_at, 'action', 'Latest action state: ' || status,
+                    action_description, source_decision_id, id, NULL, NULL FROM action_queue WHERE reviewed_at IS NOT NULL
+                UNION ALL
+                SELECT 'outcome:' || o.action_id, o.measured_at, 'result', 'Outcome measured: ' || o.outcome_status,
+                    o.actual_outcome, q.source_decision_id, q.id, NULL, NULL
+                    FROM action_outcomes o JOIN action_queue q ON q.id = o.action_id WHERE o.measured_at IS NOT NULL
+                UNION ALL
+                SELECT 'resource:' || id, COALESCE(fulfilled_at, reviewed_at, timestamp), 'resource',
+                    'Latest resource state: ' || status, resource_name, source_decision_id, NULL, id, NULL FROM resource_requests
+                UNION ALL
+                SELECT 'capital:' || id, timestamp, 'treasury', 'Capital ledger: ' || entry_type,
+                    CAST(amount AS TEXT) || ' ' || currency, source_decision_id, source_action_id, NULL, NULL FROM treasury_entries
+                UNION ALL
+                SELECT 'goal:' || id, updated_at, 'goal', 'Latest goal state: ' || status,
+                    title, NULL, NULL, NULL, id FROM company_goals
+                UNION ALL
+                SELECT 'followup:' || id, updated_at, 'followup', 'Latest follow-up state: ' || status,
+                    reason, source_decision_id, source_action_id, NULL, goal_id FROM followup_events
+            ) ORDER BY timestamp DESC, event_key DESC LIMIT ? OFFSET ?
+        """, (limit, offset)).fetchall()
+        return [dict(row) for row in rows]

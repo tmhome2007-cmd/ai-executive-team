@@ -58,3 +58,8 @@ button:not(:disabled) { cursor: pointer; }
 .office-subheading { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin: 24px 0 12px; }
 @media (max-width: 1000px) { .office-layout { grid-template-columns: minmax(0, 1fr); } .office-inspector { position: static; } }
 @media (max-width: 640px) { .office-rooms { grid-template-columns: minmax(0, 1fr); } .office-floor { padding: 16px; } }
+
+.contribution { border: 1px solid #263244; background: #080f1c; border-radius: 12px; padding: 20px; margin-top: 20px; overflow-wrap: anywhere; }
+.company-timeline { border-left: 1px solid #334155; margin: 24px 0 0 8px; padding-left: 24px; }
+.company-timeline li { position: relative; padding-bottom: 28px; }
+.company-timeline li::before { content: ""; position: absolute; left: -29px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: #5eead4; }

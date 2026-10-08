@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ExecutiveProfile } from "./company-records";
 
 type Destination = "decisions" | "actions" | "resources" | "activity";
 interface Decision {
@@ -23,7 +24,7 @@ const EXECUTIVES = [
   { key: "chro", title: "CHRO", name: "Chief Human Resources Officer", department: "Operations", initials: "HR", color: "#f9a8d4", remit: "People and organizational capacity" },
   { key: "cso", title: "CSO", name: "Chief Strategy Officer", department: "Growth", initials: "CS", color: "#a5b4fc", remit: "Research and strategy proposals" },
   { key: "cmo", title: "CMO", name: "Chief Marketing Officer", department: "Growth", initials: "CM", color: "#fdba74", remit: "Marketing and experiment design" },
-  { key: "cco", title: "CCO", name: "Chief Commercial Officer", department: "Growth", initials: "CC", color: "#bef264", remit: "Commercial opportunities" },
+  { key: "cco", title: "CCO", name: "Chief Compliance & Operations Officer", department: "Finance & risk", initials: "CC", color: "#bef264", remit: "Security compliance and risk-managed operations" },
   { key: "cto", title: "CTO", name: "Chief Technology Officer", department: "Product & technology", initials: "CT", color: "#67e8f9", remit: "Technical feasibility and implementation" },
   { key: "cpo", title: "CPO", name: "Chief Product Officer", department: "Product & technology", initials: "CP", color: "#d8b4fe", remit: "Product direction and customer value" },
 ];
@@ -43,7 +44,8 @@ function Avatar({ initials, color }: { initials: string; color: string }) {
   </svg>;
 }
 
-export default function VirtualOffice({ decisions, actions, resources, followups, available, errors, onNavigate, onMemory }: {
+export default function VirtualOffice({ decisions, actions, resources, followups, available, errors, onNavigate, onMemory, profiles, onRecords }: {
+  profiles: Record<string, ExecutiveProfile>; onRecords: () => void;
   decisions: Decision[]; actions: Action[]; resources: Resource[]; followups: Followup[];
   available: { decisions: boolean; actions: boolean; resources: boolean; followups: boolean };
   errors: boolean;
@@ -79,7 +81,7 @@ export default function VirtualOffice({ decisions, actions, resources, followups
               const active = actions.some(a => a.proposed_by.toLowerCase() === e.key && a.status === "executing");
               const proposals = actions.filter(a => a.proposed_by.toLowerCase() === e.key && a.status === "pending").length;
               return <button key={e.key} aria-label={`Inspect ${e.title}`} aria-pressed={selected === e.key} onClick={() => setSelected(e.key)} className={`office-desk ${selected === e.key ? "office-desk-selected" : ""}`}>
-                <Avatar initials={e.initials} color={e.color} /><strong className="block text-sm mt-2">{e.title}</strong>
+                <Avatar initials={e.initials} color={e.color} /><strong className="block text-sm mt-2">{profiles[e.key]?.name || e.title}</strong><span className="block text-xs text-gray-400">{e.title}</span>
                 <span className="block text-xs text-gray-400 mt-1">{!available.actions ? "State unavailable" : active ? "Executing" : proposals ? `${proposals} pending proposals` : "No active execution"}</span>
               </button>;
             })}</div>
@@ -91,8 +93,10 @@ export default function VirtualOffice({ decisions, actions, resources, followups
       </div>
       <aside className="command-card office-inspector" aria-label="Executive inspector">
         <div className="flex items-center gap-4"><Avatar initials={executive.initials} color={executive.color} /><div><p className="text-teal-300 text-xs">{executive.department}</p><h3 className="text-xl font-semibold">{executive.title}</h3></div></div>
-        <p className="font-medium mt-4">{executive.name}</p><p className="text-sm text-gray-400 mt-1">{executive.remit}</p>
+        <p className="font-medium mt-4">{profiles[selected]?.name || "Name unavailable until profiles load"}</p><p className="text-sm text-gray-400 mt-1">{profiles[selected]?.goal || executive.remit}</p>
         <button className="command-link" onClick={() => onMemory(selected)}>Review {executive.title} memory →</button>
+        {profiles[selected] && <details className="mt-4"><summary className="text-sm text-teal-300 cursor-pointer">Background & role personality</summary><p className="text-sm text-gray-400 whitespace-pre-wrap mt-3">{profiles[selected].backstory}</p></details>}
+        <button className="command-link block" onClick={onRecords}>Recorded contributions & timeline →</button>
         <h4 className="office-subheading">Action records</h4>
         {!available.actions ? <p className="text-sm text-gray-400">Actions unavailable.</p> : executiveActions.length === 0 ? <p className="text-sm text-gray-400">No actions for this executive in the loaded records.</p> : executiveActions.slice(0, 5).map(a => <button key={a.id} className="office-record" onClick={() => onNavigate("actions")}><span>#{a.id} · {a.action_description}</span><span className="text-xs text-teal-300 block mt-1">{a.status.replaceAll("_", " ")}{a.source_decision_id ? ` · Decision #${a.source_decision_id}` : ""}</span>{a.actual_outcome && <span className="block text-xs text-gray-400 mt-1">Observed: {a.actual_outcome}</span>}</button>)}
         <h4 className="office-subheading">Resource requests</h4>

@@ -27,8 +27,12 @@ from pydantic import BaseModel, Field
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
+from agents.executive_agents import get_executive_profiles
+
 from memory.database import (
     init_db,
+    get_decision_contributions,
+    get_company_activity,
     get_recent_decisions,
     log_decision,
     get_pending_actions,
@@ -906,6 +910,8 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         goal_id=request.goal_id,
         meeting_type=request.meeting_type,
         workflow_key=workflow_run_id,
+        individual_outputs=meeting_result.get("individual_outputs", {}),
+        executive_profiles=get_executive_profiles(),
     )
 
     try:
@@ -1497,7 +1503,9 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 ),
             )
 
-        finish_decision_preparation(decision_id, True, final_plan)
+        finish_decision_preparation(decision_id, True, final_plan,
+            individual_outputs=meeting_result.get("individual_outputs", {}),
+            executive_profiles=get_executive_profiles())
     except HTTPException:
         raise
     except ValueError as e:
@@ -2161,3 +2169,21 @@ if __name__ == "__main__":
     # "uvicorn main:app --reload" explicitly instead. Auto-reload can briefly
     # overlap workers, which is unsafe for the single Telegram poller.
     uvicorn.run("main:app", host=bind_host, port=8000, reload=False)
+
+@app.get("/executives/profiles", dependencies=[Depends(verify_api_key)])
+def executive_profiles():
+    return get_executive_profiles()
+
+
+@app.get("/decisions/{decision_id}/conversations", dependencies=[Depends(verify_api_key)])
+def decision_conversations(decision_id: int):
+    if get_decision_by_id(decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+    return {"decision_id": decision_id, "contributions": get_decision_contributions(decision_id),
+            "scope": "Published executive task outputs in task order; not a verbatim conversation or hidden reasoning."}
+
+
+@app.get("/company/activity", dependencies=[Depends(verify_api_key)])
+def company_activity(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return {"items": get_company_activity(limit, offset), "limit": limit, "offset": offset,
+            "scope": "Recorded meetings and contributions plus latest retained state transitions; not a complete transition audit log."}
