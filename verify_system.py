@@ -1748,6 +1748,7 @@ try:
         import_history_from_jsonl as _import_68,
         get_recent_decisions as _recent_68,
         transition_decision_approval as _transition_68,
+        _sync_record_signature as _sign_68,
     )
 
     original_db_68 = _verify_config_68.DATABASE_PATH
@@ -1766,6 +1767,7 @@ try:
                 "sandbox_mode": 1,
                 "sync_uuid": "verify-imported-decision-68",
             }
+            imported_row["_signature"] = _sign_68(imported_row)
             with open(export_path, "w", encoding="utf-8") as f:
                 f.write(json.dumps(imported_row) + "\n")
 
@@ -1940,11 +1942,13 @@ try:
     original_db_73 = _verify_config_73.DATABASE_PATH
     original_workspace_73 = _verify_config_73.WORKSPACE_ROOT
     original_sandbox_73 = _verify_config_73.SANDBOX_MODE
+    original_raw_shell_73 = _verify_config_73.ALLOW_UNSAFE_RAW_SHELL
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             _verify_config_73.DATABASE_PATH = os.path.join(temp_dir, "live-outcome.db")
             _verify_config_73.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
             _verify_config_73.SANDBOX_MODE = False
+            _verify_config_73.ALLOW_UNSAFE_RAW_SHELL = True
             _init_db_73()
 
             action_id = _propose_73(
@@ -1967,6 +1971,7 @@ try:
         _verify_config_73.DATABASE_PATH = original_db_73
         _verify_config_73.WORKSPACE_ROOT = original_workspace_73
         _verify_config_73.SANDBOX_MODE = original_sandbox_73
+        _verify_config_73.ALLOW_UNSAFE_RAW_SHELL = original_raw_shell_73
 except Exception as e:
     log_fail("Live outcome transition check crashed", str(e))
 
@@ -2034,11 +2039,13 @@ try:
     original_db_75 = _verify_config_75.DATABASE_PATH
     original_workspace_75 = _verify_config_75.WORKSPACE_ROOT
     original_sandbox_75 = _verify_config_75.SANDBOX_MODE
+    original_raw_shell_75 = _verify_config_75.ALLOW_UNSAFE_RAW_SHELL
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             _verify_config_75.DATABASE_PATH = os.path.join(temp_dir, "failed-outcome.db")
             _verify_config_75.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
             _verify_config_75.SANDBOX_MODE = False
+            _verify_config_75.ALLOW_UNSAFE_RAW_SHELL = True
             _init_db_75()
 
             action_id = _propose_75("COO", "Expected failure", "false", "shell")
@@ -2060,6 +2067,7 @@ try:
         _verify_config_75.DATABASE_PATH = original_db_75
         _verify_config_75.WORKSPACE_ROOT = original_workspace_75
         _verify_config_75.SANDBOX_MODE = original_sandbox_75
+        _verify_config_75.ALLOW_UNSAFE_RAW_SHELL = original_raw_shell_75
 except Exception as e:
     log_fail("Execution-failure outcome check crashed", str(e))
 
@@ -3297,11 +3305,13 @@ try:
                 summary.get("treasury_entries_imported") == 1
                 and summary.get("treasury_reservations_imported") == 1
                 and imported_decision["id"] != source_decision_id
+                and imported_action["status"] == "pending"
+                and reservation["status"] == "released"
                 and reservation["source_action_id"] == imported_action["id"]
                 and reservation["source_decision_id"] == imported_decision["id"]
                 and reservation["source_decision_sync_uuid"] == source_decision["sync_uuid"]
             ):
-                log_pass("treasury sync resolves local decision/action IDs from stable UUID provenance")
+                log_pass("treasury sync preserves provenance but does not transfer remote approval/spending authority")
             else:
                 log_fail(
                     "Treasury sync provenance",
