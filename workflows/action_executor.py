@@ -978,9 +978,9 @@ def execute_action(action_id: int) -> dict:
     # shell is fail-closed in live mode unless the owner explicitly opts in.
     if not getattr(config, "ALLOW_UNSAFE_RAW_SHELL", False):
         block_reason = (
-            "Live raw shell execution is disabled by default because heuristic "
+            "Live shell execution is disabled by default because heuristic "
             "command/path inspection is not a true OS sandbox. Use a structured "
-            "action or explicitly set ALLOW_UNSAFE_RAW_SHELL=True after accepting "
+            "action or explicitly set ALLOW_UNSAFE_RAW_SHELL=True to use Docker after accepting "
             "the residual risk."
         )
         update_action_status(action_id, "blocked_dangerous")
@@ -1001,18 +1001,10 @@ def execute_action(action_id: int) -> dict:
             "blocked": True,
         }
 
-    # Explicit unsafe opt-in path. Existing guards still run before this point.
+    # Explicit owner opt-in runs in a constrained Docker worker, never a host shell.
     try:
-        completed_process = subprocess.run(
-            action_detail,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30,  # 30 seconden time-out ter beveiliging
-            cwd=_get_workspace_root(),
-            env=_get_safe_subprocess_env(),  # GEEN secrets (.env) doorgeven aan het kindproces
-            preexec_fn=_limit_subprocess_resources if _RESOURCE_MODULE_AVAILABLE else None,
-        )
+        from workflows.container_executor import run_in_container
+        completed_process = run_in_container(action_detail, _get_workspace_root())
 
         if completed_process.returncode == 0:
             update_action_status(action_id, "executed")
