@@ -1386,6 +1386,22 @@ def transition_followup_event_status(
         return cursor.rowcount == 1
 
 
+def mark_followup_reasoning_attempt(event_id: int) -> bool:
+    """Record a reasoning attempt timestamp without resolving the event."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE followup_events
+            SET updated_at = ?
+            WHERE id = ? AND status = 'open' AND generated_decision_id IS NULL
+            """,
+            (datetime.datetime.now().isoformat(), event_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
 def create_followup_generated_decision(
     event_id: int,
     *,
