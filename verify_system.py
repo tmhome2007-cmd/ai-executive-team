@@ -4466,6 +4466,15 @@ try:
             ids = _create_memories_119(action_id)
             _outcome_119(
                 action_id,
+                outcome_status="failed",
+                actual_outcome="Validation failed with corrected details",
+                actual_impact="Uncertainty remains",
+                next_recommendation="Investigate the corrected failure evidence",
+            )
+            refreshed_ids = _create_memories_119(action_id)
+            refreshed = _memories_119("coo", active_only=True, limit=10)
+            _outcome_119(
+                action_id,
                 outcome_status="partial",
                 actual_outcome="Validation partially succeeded",
                 actual_impact="Some uncertainty remains",
@@ -4477,6 +4486,9 @@ try:
 
             if (
                 len(ids) == 2
+                and refreshed_ids == []
+                and len(refreshed) == 1
+                and "corrected details" in (refreshed[0]["supporting_evidence"] or "")
                 and len(corrected_ids) == 2
                 and len(coo) == 1
                 and coo[0]["memory_kind"] == "outcome_partial"
@@ -4489,7 +4501,7 @@ try:
             ):
                 log_pass("measured outcome memories preserve provenance and corrected outcomes supersede older active lessons")
             else:
-                log_fail("Outcome memory creation", f"ids={ids}, corrected_ids={corrected_ids}, coo={coo}, audit={coo_audit}")
+                log_fail("Outcome memory creation", f"ids={ids}, refreshed_ids={refreshed_ids}, refreshed={refreshed}, corrected_ids={corrected_ids}, coo={coo}, audit={coo_audit}")
     finally:
         _verify_config_119.DATABASE_PATH = original_db_119
 except Exception as e:
