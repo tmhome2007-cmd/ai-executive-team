@@ -55,11 +55,14 @@ Edit `.env` and set:
 | `OLLAMA_MODEL` | `llama3.1` |
 | `TELEGRAM_BOT_TOKEN` | From @BotFather on Telegram |
 | `TELEGRAM_CHAT_ID` | Your personal chat ID (see `getUpdates` method) |
-| `API_SECRET_KEY` | Any long random string — generate one with `openssl rand -hex 32`. Required for every mutating API endpoint. |
+| `API_SECRET_KEY` | Long random owner-control key — generate one with `openssl rand -hex 32`. Required for protected API access. |
 | `OPENAI_API_KEY` | Any non-empty placeholder string, e.g. `ollama-local-not-a-real-key` — required by CrewAI's OpenAI-compatible client even though Ollama never checks it |
 | `SANDBOX_MODE` | `True` to start. Can also be toggled live from the dashboard (see below) — no manual editing needed after initial setup. |
 | `WORKSPACE_ROOT` | `./workspace` by default. Every file operation and shell command touching a path is confined here — see Safety Architecture below. |
-| `ALLOWED_BROWSER_DOMAINS` | Optional. Comma-separated domain allowlist for browser actions (e.g. `wikipedia.org,github.com`). Empty = any http/https domain allowed. |
+| `ALLOWED_BROWSER_DOMAINS` | Optional. Comma-separated domain allowlist for browser actions (e.g. `wikipedia.org,github.com`). Empty = any public http/https domain allowed; internal/private addresses remain blocked. |
+| `CREWAI_DISABLE_TELEMETRY` | `true` by default for local-first privacy. |
+| `SYNC_HMAC_KEY` | Recommended dedicated shared key for authenticated cross-machine JSONL sync. If empty, the API secret is used. |
+| `ALLOW_UNSAFE_RAW_SHELL` | `False` by default. Live raw shell is not treated as safely sandboxed; structured actions are preferred. |
 
 ### Verify the setup
 
@@ -95,7 +98,9 @@ npm run dev
 ```
 
 Open `http://localhost:3000`. You'll be prompted for the `API_SECRET_KEY`
-from your `.env` — stored only in that browser tab's `sessionStorage`.
+from your `.env`. The dashboard keeps it in browser memory only; refreshing
+the page intentionally requires re-entry so a future XSS cannot recover a
+persisted control-plane credential.
 
 The dashboard shows: daily research status, a live Sandbox/Live mode toggle,
 pending actions (approve/reject/execute), full action history, an ad-hoc
@@ -119,7 +124,7 @@ require your explicit approval before anything happens:
 
 | Capability | Tool | Who has it | What it does |
 |---|---|---|---|
-| Shell commands | `propose_action` | COO, CTO | Runs a shell command via `subprocess` |
+| Shell commands | `propose_action` | COO, CTO | Proposal path retained for compatibility/testing. Live raw shell is blocked by default unless the owner explicitly opts into residual host-level risk. |
 | File read/write/append | `propose_file_operation` | COO, CFO, CTO, General Counsel | Structured file I/O — no shell involved, safer than a raw command |
 | Browser navigate + click | `propose_browser_action` | COO | Navigates to a URL and optionally clicks one element, screenshots the result |
 
@@ -137,14 +142,17 @@ This is the part worth understanding before flipping to Live mode:
 - **Danger-pattern blocklist**: known catastrophic commands (`rm -rf /`,
   fork bombs, `curl | bash`, `sudo`, etc.) are blocked outright, in both
   sandbox and live mode.
-- **Workspace confinement**: every path-like token in a shell command or
-  file operation is resolved to an absolute path and checked against
-  `WORKSPACE_ROOT`. A command referencing anything outside it — via an
-  absolute path or `../` traversal — is blocked before execution, not just
-  the ones that look obviously dangerous.
-- **URL safety**: browser actions can only navigate to `http`/`https` URLs.
-  `javascript:`, `file:`, and `data:` schemes are blocked outright. An
-  optional domain allowlist can restrict navigation further.
+- **Structured workspace confinement**: file operations resolve paths inside
+  `WORKSPACE_ROOT`; writes are atomic and owner-only. Raw shell path parsing
+  remains heuristic defense-in-depth and is therefore **not** considered a
+  security sandbox.
+- **Live raw shell default-off**: raw shell can access OS resources in ways
+  string/path inspection cannot reliably model. Live shell execution fails
+  closed unless the owner explicitly sets `ALLOW_UNSAFE_RAW_SHELL=True`.
+- **URL/network safety**: browser actions validate every HTTP(S) request,
+  including redirects and subresources, block service workers/downloads, and
+  reject loopback/private/link-local targets. Research revalidates redirects,
+  restricts ports/content types, and caps response bodies.
 - **Execution lock**: only one heavy CrewAI run (a meeting or research cycle)
   executes at a time, system-wide — prevents a scheduled run and a manual
   one from overlapping and doubling CPU/heat load.
@@ -155,17 +163,26 @@ This is the part worth understanding before flipping to Live mode:
   and the agent is told to stop.
 - **`max_iter=5`** on every agent: a hard cap on reasoning/tool-call
   iterations per task, independent of the guard above.
-- **Daily research runs with tool-less agents**: the automated daily
-  research meeting uses `EXECUTIVE_AGENTS_NO_TOOLS` — genuine tool-less
-  clones of CFO/General Counsel/COO — so routine research can never
-  spontaneously generate action proposals, regardless of what the prompt
-  says. Ad-hoc decisions you trigger yourself still get full-tooled agents.
+- **Reasoning is tool-free**: daily research, ad-hoc decisions, and autonomous
+  reasoning use `EXECUTIVE_AGENTS_NO_TOOLS`. Tool-capable executives are used
+  only after the owner approves a decision and explicitly starts preparation;
+  resulting actions/resources still require their own owner gates.
 - **In-progress guard**: daily research cannot run twice concurrently, even
   if two triggers land close together (a real race condition this project
   hit once, now structurally prevented).
-- **Auth**: every mutating endpoint requires `X-API-Key`. Read-only
-  endpoints (`/decisions/history`, `/workflows/daily-research/status`) are
-  intentionally left open.
+- **Auth**: sensitive read and write API surfaces require `X-API-Key`.
+  The backend binds loopback by default and CORS is restricted to the local
+  dashboard origins.
+- **Telegram owner identity**: action buttons are accepted only from the
+  configured owner's private Telegram chat/user. Telegram uses the same
+  treasury/goal-aware action-control functions as the API.
+- **Local-first telemetry**: CrewAI telemetry is disabled by project default.
+  A non-local Ollama URL produces a privacy warning because prompts/context
+  would leave the machine.
+- **Authenticated sync, local authority**: JSONL sync rows are HMAC-signed.
+  Remote approved/executing actions do not import as local execution
+  authority, and remote active reservations do not import as local spending
+  authority.
 
 ## Project structure
 
@@ -206,8 +223,7 @@ executive-dashboard/             — Next.js dashboard (separate npm project)
 - Fine-tuning (originally planned) requires an NVIDIA GPU and hasn't been
   pursued given Apple Silicon hardware — current quality relies on
   prompt/backstory engineering and `max_iter` tuning instead.
-- The workspace-confinement path check is heuristic shell-string parsing,
-  not a full sandbox — a genuinely adversarial, obfuscated command could
-  potentially find an edge case. "Don't approve what you haven't read"
-  remains the primary safety net; the automated guards are defense in depth
-  on top of that, not a replacement for it.
+- Raw shell is not a full sandbox and is disabled for live execution by
+  default. The intended long-term execution boundary is a disposable local
+  container/VM sandbox for side-effecting activities, while the executive
+  control plane remains on the host.
