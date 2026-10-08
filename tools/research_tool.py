@@ -55,6 +55,12 @@ def _is_safe_research_url(url: str) -> str | None:
     if not parsed.hostname:
         return "URL has no valid hostname"
 
+    if parsed.username is not None or parsed.password is not None:
+        return "Credentials embedded in URLs are not allowed"
+
+    if parsed.port is not None and parsed.port not in {80, 443}:
+        return f"Research URL port {parsed.port} is not allowed"
+
     try:
         resolved_addresses = {
             info[4][0]
@@ -106,6 +112,7 @@ def _get_safe_response(url: str, headers: dict, timeout: float = 10.0, max_redir
             headers=headers,
             timeout=timeout,
             allow_redirects=False,
+            stream=True,
         )
 
         if response.is_redirect or response.is_permanent_redirect:
@@ -143,10 +150,39 @@ class PageReaderTool(BaseTool):
             response = _get_safe_response(url, headers=headers, timeout=10)
             
             if response.status_code != 200:
+                response.close()
                 return f"Error: Received status code {response.status_code} for URL {url}"
 
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            if not any(kind in content_type for kind in ("text/html", "text/plain", "application/xhtml+xml")):
+                response.close()
+                return f"Error: Unsupported content type '{content_type or 'unknown'}'."
+
+            # Never materialize an arbitrarily large attacker-controlled body.
+            # Read at most 1 MiB, then parse only that bounded prefix.
+            max_bytes = 1024 * 1024
+            body = bytearray()
+            too_large = False
+            for chunk in response.iter_content(chunk_size=16384):
+                if not chunk:
+                    continue
+                remaining = max_bytes - len(body)
+                if remaining <= 0:
+                    too_large = True
+                    break
+                body.extend(chunk[:remaining])
+                if len(chunk) > remaining:
+                    too_large = True
+                    break
+            response.close()
+            if too_large:
+                return "Error: Response body exceeded the 1 MiB research safety limit."
+
+            encoding = response.encoding or "utf-8"
+            text_body = bytes(body).decode(encoding, errors="replace")
+
             # Structureer de HTML-tekst met BeautifulSoup
-            soup = BeautifulSoup(response.text, "html.parser")
+            soup = BeautifulSoup(text_body, "html.parser")
             paragraphs = [p.get_text() for p in soup.find_all("p")]
             full_text = " ".join(paragraphs).strip()
 
