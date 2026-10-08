@@ -431,7 +431,11 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                     f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
                     f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
-                    f"<b>Content:</b>\n{escape_html(file_content[:500])}"
+                    (
+                        f"<b>Content:</b>\n{escape_html(file_content[:500])}"
+                        if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+                        else "<b>Content:</b> <i>hidden for privacy — inspect locally</i>"
+                    )
                 )
             except Exception as e:
                 print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
@@ -722,7 +726,11 @@ def execute_action(action_id: int) -> dict:
             notification_text = (
                 f"🚫 <b>EXECUTION BLOCKED — dangerous command detected</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                (
+                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                    if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+                    else "<b>Command:</b> <i>hidden for privacy — inspect locally</i>\n"
+                )
                 f"<b>Reason:</b> {escape_html(block_reason)}"
             )
             send_notification(notification_text)
@@ -749,7 +757,11 @@ def execute_action(action_id: int) -> dict:
             notification_text = (
                 f"🧪 <b>DRY RUN EXECUTED</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                (
+                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                    if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+                    else "<b>Command:</b> <i>hidden for privacy — inspect locally</i>\n"
+                )
                 f"<b>Mode:</b> Sandbox (Dry-Run)"
             )
             send_notification(notification_text)
@@ -851,8 +863,16 @@ def execute_action(action_id: int) -> dict:
                 notification_text = (
                     f"⚡ <b>LIVE EXECUTION SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
+                    (
                     f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                    f"<b>Output:</b>\n{escape_html(completed_process.stdout[:500]) if completed_process.stdout else '(no output)'}"
+                    if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+                    else "<b>Command:</b> <i>hidden for privacy — inspect locally</i>\n"
+                )
+                    (
+                        f"<b>Output:</b>\n{escape_html(completed_process.stdout[:500]) if completed_process.stdout else '(no output)'}"
+                        if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+                        else "<b>Output:</b> <i>hidden for privacy — inspect locally</i>"
+                    )
                 )
                 send_notification(notification_text)
             except Exception as e:
@@ -875,7 +895,11 @@ def execute_action(action_id: int) -> dict:
                 notification_text = (
                     f"❌ <b>EXECUTION FAILED</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
+                    (
                     f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                    if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+                    else "<b>Command:</b> <i>hidden for privacy — inspect locally</i>\n"
+                )
                     f"<b>Error:</b>\n{escape_html(error_msg[:500])}"
                 )
                 send_notification(notification_text)
@@ -901,7 +925,11 @@ def execute_action(action_id: int) -> dict:
             send_notification(
                 f"❌ <b>EXECUTION FAILED (TIMEOUT)</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                (
+                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                    if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+                    else "<b>Command:</b> <i>hidden for privacy — inspect locally</i>\n"
+                )
                 f"<b>Error:</b> {escape_html(error_msg)}"
             )
         except Exception as e:
@@ -924,7 +952,11 @@ def execute_action(action_id: int) -> dict:
             send_notification(
                 f"❌ <b>EXECUTION FAILED (UNEXPECTED ERROR)</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                (
+                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                    if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+                    else "<b>Command:</b> <i>hidden for privacy — inspect locally</i>\n"
+                )
                 f"<b>Error:</b> {escape_html(error_msg)}"
             )
         except Exception as notify_err:
