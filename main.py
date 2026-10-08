@@ -2094,7 +2094,7 @@ if __name__ == "__main__":
     # te brute-forcen vanaf een ander toestel. Alleen bewust overschrijven
     # via BIND_HOST in .env als je écht vanaf een ander apparaat op hetzelfde
     # netwerk bij het dashboard moet kunnen (en dan met extra voorzichtigheid).
-    bind_host = os.getenv("BIND_HOST", "127.0.0.1")
+    bind_host = config.BIND_HOST
     # Stable single-process default. For active development, run
     # "uvicorn main:app --reload" explicitly instead. Auto-reload can briefly
     # overlap workers, which is unsafe for the single Telegram poller.
