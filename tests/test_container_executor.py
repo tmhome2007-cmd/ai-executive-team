@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from workflows.container_executor import (
-    ContainerExecutionError, run_in_container, WORKER_IMAGE,
+    ContainerExecutionError, ContainerTimeoutError, run_in_container, WORKER_IMAGE,
 )
 
 
@@ -58,7 +58,7 @@ class ContainerWorkerTests(unittest.TestCase):
             with patch("workflows.container_executor.shutil.which", return_value="/usr/bin/docker"), patch(
                 "workflows.container_executor.subprocess.run", side_effect=execute
             ) as mocked:
-                with self.assertRaises(ContainerExecutionError):
+                with self.assertRaises(ContainerTimeoutError):
                     run_in_container("echo safe", root)
                 self.assertEqual(mocked.call_count, 2)
                 original_args = mocked.call_args_list[0].args[0]
