@@ -267,17 +267,32 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             return
 
         refreshed = get_action_by_id(action_id) or action
+        include_details = bool(
+            getattr(config, "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", False)
+        )
         if result.get("blocked"):
-            footer = f"🚫 <b>BLOCKED</b>: {escape_html(result.get('error', 'Unknown reason'))}"
+            footer = "🚫 <b>BLOCKED</b>"
+            if include_details:
+                footer += f": {escape_html(result.get('error', 'Unknown reason'))}"
+            else:
+                footer += " — details retained locally."
         elif result.get("success") and result.get("mode") == "dry_run":
-            footer = f"🧪 <b>EXECUTED (DRY RUN)</b>\n{escape_html(result.get('detail', ''))}"
+            footer = "🧪 <b>EXECUTED (DRY RUN)</b>"
+            if include_details:
+                footer += f"\n{escape_html(result.get('detail', ''))}"
+            else:
+                footer += "\nSimulation details retained locally."
         elif result.get("success"):
             footer = (
                 "⚡ <b>EXECUTED SUCCESSFULLY</b>\n"
                 "Execution output is retained locally and is not copied to Telegram."
             )
         else:
-            footer = f"❌ <b>EXECUTION FAILED</b>: {escape_html(result.get('error', 'Unknown error'))}"
+            footer = "❌ <b>EXECUTION FAILED</b>"
+            if include_details:
+                footer += f": {escape_html(result.get('error', 'Unknown error'))}"
+            else:
+                footer += " — error details retained locally."
 
         new_text = format_action_message(refreshed, footer=footer)
         new_keyboard = None
