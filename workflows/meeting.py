@@ -5,6 +5,9 @@ Module voor het uitvoeren van een sequentieel overleg tussen meerdere CrewAI exe
 Agents bouwen voort op elkaars antwoorden en leveren zowel een individuele als gezamenlijke uitkomst.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 import json
 import re
 import sys
