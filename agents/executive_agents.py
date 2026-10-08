@@ -4,6 +4,9 @@ agents/executive_agents.py
 Module die de LLM-instantie en alle 10 Executive Agenten definieert voor de CrewAI workflows.
 Exposeert de 'EXECUTIVE_AGENTS' dictionary met sleutels voor elke bestuursrol.
 """
+
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
 from tools.action_proposal_tool import ProposeActionTool
 from tools.file_operation_tool import ProposeFileOperationTool
 from tools.browser_action_tool import ProposeBrowserActionTool
