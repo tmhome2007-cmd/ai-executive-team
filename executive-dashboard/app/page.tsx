@@ -1139,6 +1139,108 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Structured Resource / Capability Requests */}
+        <div className="bg-gray-900 border border-indigo-900/70 rounded-lg p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-indigo-200">
+              Resource & Capability Requests ({resourceRequests.length})
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Approval does not grant access or execute anything. Mark fulfilled only after you provide the resource separately.
+            </p>
+          </div>
+
+          {resourceRequests.length === 0 ? (
+            <p className="text-gray-500 text-sm">No resource requests awaiting owner action.</p>
+          ) : (
+            <div className="space-y-4">
+              {resourceRequests.map((resource) => (
+                <div
+                  key={resource.id}
+                  className="bg-gray-950 border border-indigo-900/70 rounded-md p-4 space-y-3"
+                >
+                  <div className="flex justify-between gap-3">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-xs bg-indigo-950 border border-indigo-800 text-indigo-300 rounded px-2 py-0.5 uppercase">
+                        {resource.resource_type}
+                      </span>
+                      {statusBadge(resource.status)}
+                      <span className="text-xs text-gray-500">
+                        requested by {resource.requested_by}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {new Date(resource.timestamp).toLocaleString("en-US")}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="font-semibold text-gray-200">{resource.resource_name}</div>
+                    <div className="text-sm text-gray-400 mt-1 whitespace-pre-wrap">
+                      {resource.reason}
+                    </div>
+                  </div>
+
+                  {resource.required_for && (
+                    <div className="text-xs">
+                      <span className="text-gray-500">Required for:</span>{" "}
+                      <span className="text-gray-300">{resource.required_for}</span>
+                    </div>
+                  )}
+
+                  {resource.amount !== null && resource.amount !== undefined && (
+                    <div className="text-xs">
+                      <span className="text-gray-500">Requested budget:</span>{" "}
+                      <span className="text-gray-300">
+                        {resource.amount} {resource.currency || ""}
+                      </span>
+                    </div>
+                  )}
+
+                  {resource.source_decision_id && (
+                    <div className="text-xs text-cyan-300">
+                      Source: Decision #{resource.source_decision_id}
+                      {resource.source_decision_topic
+                        ? ` — ${resource.source_decision_topic}`
+                        : ""}
+                    </div>
+                  )}
+
+                  {resourceErrors[resource.id] && (
+                    <div className="text-xs text-red-300 border border-red-900 bg-red-950/40 rounded p-2">
+                      {resourceErrors[resource.id]}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleResourceDecision(resource.id, "approve")}
+                      disabled={resource.status !== "pending"}
+                      className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded disabled:opacity-40"
+                    >
+                      Approve Resource
+                    </button>
+                    <button
+                      onClick={() => handleResourceDecision(resource.id, "reject")}
+                      disabled={!["pending", "approved"].includes(resource.status)}
+                      className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded disabled:opacity-40"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => handleResourceDecision(resource.id, "fulfill")}
+                      disabled={resource.status !== "approved"}
+                      className="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-xs rounded disabled:opacity-40"
+                    >
+                      Mark Fulfilled
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Pending Actions section */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
           <div className="flex items-center justify-between">
