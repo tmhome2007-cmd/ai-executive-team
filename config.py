@@ -49,6 +49,13 @@ class Config:
     TELEGRAM_CHAT_ID: str = field(
         default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", "").strip()
     )
+    # Telegram is an external data channel. Keep paths/commands/error details
+    # local unless the owner explicitly opts in.
+    TELEGRAM_INCLUDE_SENSITIVE_DETAILS: bool = field(
+        default_factory=lambda: os.getenv(
+            "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", "false"
+        ).lower() in ("true", "1", "yes")
+    )
 
     # API Beveiliging Key
     API_SECRET_KEY: str = field(
@@ -78,6 +85,16 @@ class Config:
     # residual OS-level risk. Structured file/browser actions are unaffected.
     ALLOW_UNSAFE_RAW_SHELL: bool = field(
         default_factory=lambda: os.getenv("ALLOW_UNSAFE_RAW_SHELL", "false").lower() in ("true", "1", "yes")
+    )
+    # Local-only by default. A non-loopback bind exposes the API key over the
+    # network; refuse it unless the owner explicitly acknowledges transport risk.
+    BIND_HOST: str = field(
+        default_factory=lambda: os.getenv("BIND_HOST", "127.0.0.1").strip()
+    )
+    ALLOW_INSECURE_REMOTE_HTTP: bool = field(
+        default_factory=lambda: os.getenv(
+            "ALLOW_INSECURE_REMOTE_HTTP", "false"
+        ).lower() in ("true", "1", "yes")
     )
 
 
@@ -194,6 +211,15 @@ def validate_config() -> list[str]:
         errors.append(
             f"OLLAMA_BASE_URL ('{config.OLLAMA_BASE_URL}') ziet er niet uit als "
             "een geldige URL — verwacht iets als http://localhost:11434."
+        )
+
+    loopback_hosts = {"127.0.0.1", "localhost", "::1"}
+    if config.BIND_HOST not in loopback_hosts and not config.ALLOW_INSECURE_REMOTE_HTTP:
+        errors.append(
+            "BIND_HOST is non-loopback while ALLOW_INSECURE_REMOTE_HTTP is false. "
+            "That would expose X-API-Key traffic over plaintext HTTP. Keep the API "
+            "loopback-only, put it behind TLS/private tunneling, or explicitly opt "
+            "in only if you accept the transport risk."
         )
 
     else:
