@@ -1977,6 +1977,31 @@ try:
                 log_pass("successful live execution moves business outcome to measurement_pending, not succeeded")
             else:
                 log_fail("Live outcome transition", f"result={result}, outcome={outcome}")
+
+            from workflows.container_executor import ContainerTimeoutError as _ContainerTimeout_73
+            timeout_action_id = _propose_73(
+                "COO",
+                "Timed-out effect must require manual review",
+                "printf timeout-test",
+                "shell",
+                expected_outcome="Command completes",
+            )
+            _transition_73(timeout_action_id, "approved", ("pending",))
+            with suppress_executor_notifications(), _patch_73(
+                "workflows.container_executor.run_in_container",
+                side_effect=_ContainerTimeout_73("Container timeout"),
+            ):
+                timeout_result = _execute_73(timeout_action_id)
+            timeout_outcome = _get_outcome_73(timeout_action_id)
+            if (
+                not timeout_result.get("success")
+                and timeout_outcome
+                and timeout_outcome["outcome_status"] == "inconclusive"
+                and "Manually inspect" in (timeout_outcome.get("next_recommendation") or "")
+            ):
+                log_pass("Timed-out live worker remains inconclusive and requires manual inspection before retry")
+            else:
+                log_fail("Timed-out live outcome safety", f"result={timeout_result}, outcome={timeout_outcome}")
     finally:
         _verify_config_73.DATABASE_PATH = original_db_73
         _verify_config_73.WORKSPACE_ROOT = original_workspace_73
