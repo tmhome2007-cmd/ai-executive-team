@@ -96,6 +96,16 @@ interface DecisionLineage {
   resource_requests: ResourceRequest[];
 }
 
+interface TreasuryCurrencySummary {
+  cash_balance: number;
+  reserved: number;
+  available: number;
+}
+
+interface TreasurySummary {
+  currencies: Record<string, TreasuryCurrencySummary>;
+}
+
 interface ExecutionResult {
   success: boolean;
   mode: string;
@@ -544,6 +554,12 @@ export default function DashboardPage() {
   const [actionHistory, setActionHistory] = useState<PendingAction[]>([]);
   const [resourceRequests, setResourceRequests] = useState<ResourceRequest[]>([]);
   const [resourceErrors, setResourceErrors] = useState<Record<number, string>>({});
+  const [treasury, setTreasury] = useState<TreasurySummary>({ currencies: {} });
+  const [fundAmount, setFundAmount] = useState("");
+  const [fundCurrency, setFundCurrency] = useState("");
+  const [fundNote, setFundNote] = useState("");
+  const [fundingTreasury, setFundingTreasury] = useState(false);
+  const [treasuryMessage, setTreasuryMessage] = useState<string | null>(null);
   const [actionErrors, setActionErrors] = useState<Record<number, string>>({});
   const [executionResults, setExecutionResults] = useState<Record<number, ExecutionResult>>({});
   const [executingIds, setExecutingIds] = useState<Set<number>>(new Set());
@@ -623,6 +639,67 @@ export default function DashboardPage() {
     }
   }, [handleAuthFailure]);
 
+  const fetchTreasury = useCallback(async (currentKey: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/treasury/summary`, {
+        headers: { "X-API-Key": currentKey },
+      });
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      if (!res.ok) throw new Error("Could not fetch treasury.");
+      setTreasury(await res.json());
+    } catch (err) {
+      console.error("Error fetching treasury:", err);
+    }
+  }, [handleAuthFailure]);
+
+  const handleFundTreasury = async () => {
+    if (!apiKey) return;
+    const amount = Number(fundAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setTreasuryMessage("Enter an amount greater than zero.");
+      return;
+    }
+    if (!/^[A-Za-z]{3}$/.test(fundCurrency.trim())) {
+      setTreasuryMessage("Enter a 3-letter currency code such as EUR or USD.");
+      return;
+    }
+
+    setFundingTreasury(true);
+    setTreasuryMessage(null);
+    try {
+      const res = await fetch(`${API_BASE}/treasury/fund`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          amount,
+          currency: fundCurrency.trim().toUpperCase(),
+          note: fundNote.trim() || null,
+        }),
+      });
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || "Could not add treasury funding.");
+
+      setFundAmount("");
+      setFundNote("");
+      setTreasuryMessage("Funding recorded.");
+      await fetchTreasury(apiKey);
+    } catch (err: any) {
+      setTreasuryMessage(err.message || "Could not add treasury funding.");
+    } finally {
+      setFundingTreasury(false);
+    }
+  };
+
   const fetchDashboardData = useCallback(async () => {
     try {
       const [statusRes, historyRes] = await Promise.all([
@@ -654,8 +731,9 @@ export default function DashboardPage() {
       fetchPendingActions(apiKey);
       fetchActionHistory(apiKey);
       fetchResourceRequests(apiKey);
+      fetchTreasury(apiKey);
     }
-  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests]);
+  }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury]);
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
     if (type === "approve") {
@@ -696,6 +774,7 @@ export default function DashboardPage() {
         fetchPendingActions(apiKey);
         fetchActionHistory(apiKey);
         fetchResourceRequests(apiKey);
+        fetchTreasury(apiKey);
       }
     } catch (err: any) {
       if (apiKey) fetchPendingActions(apiKey);
@@ -751,6 +830,7 @@ export default function DashboardPage() {
         fetchPendingActions(apiKey);
         fetchActionHistory(apiKey);
         fetchResourceRequests(apiKey);
+        fetchTreasury(apiKey);
       }
     } catch (err: any) {
       setActionErrors((prev) => ({
@@ -1101,6 +1181,76 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Company Treasury */}
+        <div className="bg-gray-900 border border-emerald-900/70 rounded-lg p-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-emerald-200">Company Treasury</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Cash is real recorded capital. Reserved funds are earmarked for approved paid actions but are not spent yet.
+            </p>
+          </div>
+
+          {Object.keys(treasury.currencies).length === 0 ? (
+            <p className="text-gray-500 text-sm">No company capital recorded yet.</p>
+          ) : (
+            <div className="grid sm:grid-cols-3 gap-3">
+              {Object.entries(treasury.currencies).map(([currency, values]) => (
+                <div key={currency} className="bg-gray-950 border border-gray-800 rounded p-3">
+                  <div className="font-semibold text-gray-200">{currency}</div>
+                  <div className="mt-2 text-xs space-y-1">
+                    <div><span className="text-gray-500">Cash:</span> {values.cash_balance.toFixed(2)}</div>
+                    <div><span className="text-gray-500">Reserved:</span> {values.reserved.toFixed(2)}</div>
+                    <div><span className="text-gray-500">Available:</span> {values.available.toFixed(2)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="border-t border-gray-800 pt-4">
+            <div className="text-sm font-medium text-gray-300 mb-2">Record owner funding</div>
+            <div className="grid sm:grid-cols-3 gap-2">
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={fundAmount}
+                onChange={(e) => setFundAmount(e.target.value)}
+                placeholder="Amount"
+                className="bg-gray-950 border border-gray-700 rounded p-2 text-sm"
+              />
+              <input
+                value={fundCurrency}
+                onChange={(e) => setFundCurrency(e.target.value.toUpperCase())}
+                placeholder="Currency (EUR)"
+                maxLength={3}
+                className="bg-gray-950 border border-gray-700 rounded p-2 text-sm uppercase"
+              />
+              <input
+                value={fundNote}
+                onChange={(e) => setFundNote(e.target.value)}
+                placeholder="Note (optional)"
+                maxLength={500}
+                className="bg-gray-950 border border-gray-700 rounded p-2 text-sm"
+              />
+            </div>
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleFundTreasury}
+                disabled={fundingTreasury}
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs rounded disabled:opacity-50"
+              >
+                {fundingTreasury ? "Recording..." : "Add Funding"}
+              </button>
+              {treasuryMessage && <span className="text-xs text-gray-300">{treasuryMessage}</span>}
+            </div>
+            <p className="text-xs text-gray-600 mt-2">
+              This records capital in the internal ledger only; it does not transfer money or connect a bank account.
+            </p>
+          </div>
+        </div>
+
         {/* Daily research status card */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
           <div className="flex justify-between items-start">
@@ -1289,6 +1439,18 @@ export default function DashboardPage() {
                     <div className="bg-gray-900 border border-gray-800 rounded p-3 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
                       {renderActionDetail(action.action_type, action.action_detail)}
                     </div>
+
+                    {action.expected_cost_amount !== null && action.expected_cost_amount !== undefined && (
+                      <div className="text-xs border border-emerald-900/60 bg-emerald-950/20 rounded px-2 py-1">
+                        <span className="text-gray-500">Expected cost:</span>{" "}
+                        <span className="text-emerald-300">
+                          {action.expected_cost_amount} {action.currency || ""}
+                        </span>
+                        {action.status === "approved" && (
+                          <span className="text-gray-500"> · treasury reserved</span>
+                        )}
+                      </div>
+                    )}
 
                     {/* Error message for this action */}
                     {actionErrors[action.id] && (
