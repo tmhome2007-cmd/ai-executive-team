@@ -2222,22 +2222,10 @@ def approve_action_with_treasury(action_id: int) -> dict:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("BEGIN IMMEDIATE")
-        cursor.execute(
-            """
-            SELECT q.id, q.status, q.sync_uuid, q.source_decision_id,
-                   q.source_decision_sync_uuid,
-                   o.expected_cost_amount, o.currency
-            FROM action_queue q
-            LEFT JOIN action_outcomes o ON o.action_id = q.id
-            WHERE q.id = ?
-            """,
-            (action_id,),
-        )
-        row = cursor.fetchone()
-        if row is None:
+        action = _action_row_for_approval(cursor, action_id)
+        if action is None:
             conn.rollback()
             raise ValueError("Action not found")
-        action = dict(row)
         if action["status"] != "pending":
             conn.rollback()
             raise ValueError(f"Action cannot be approved from status '{action['status']}'")
@@ -2303,13 +2291,14 @@ def approve_action_with_treasury(action_id: int) -> dict:
             )
             reservation_id = cursor.lastrowid
 
+        approval_seal = _action_approval_seal(action)
         cursor.execute(
             """
             UPDATE action_queue
-            SET status = 'approved', reviewed_at = ?
+            SET status = 'approved', reviewed_at = ?, approval_seal = ?
             WHERE id = ? AND status = 'pending'
             """,
-            (now, action_id),
+            (now, approval_seal, action_id),
         )
         if cursor.rowcount != 1:
             conn.rollback()
@@ -2343,7 +2332,7 @@ def reject_action_with_treasury(action_id: int) -> dict:
         cursor.execute(
             """
             UPDATE action_queue
-            SET status = 'rejected', reviewed_at = ?
+            SET status = 'rejected', reviewed_at = ?, approval_seal = NULL
             WHERE id = ? AND status IN ('pending', 'approved')
             """,
             (now, action_id),
