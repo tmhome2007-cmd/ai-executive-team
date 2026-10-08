@@ -11,6 +11,7 @@ import datetime
 import sys
 import uuid
 import json
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -35,6 +36,8 @@ VALID_ACTION_STATUSES = {
 VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
 VALID_DECISION_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
 VALID_PREPARATION_STATUSES = {"not_started", "in_progress", "completed", "failed"}
+_ACTION_PROVENANCE_CONTEXT = threading.local()
+
 VALID_OUTCOME_STATUSES = {
     "not_started",
     "measurement_pending",
@@ -52,6 +55,7 @@ _SYNC_TABLE_COLUMNS = {
     "action_queue": {
         "timestamp", "proposed_by", "action_description", "action_detail",
         "status", "reviewed_at", "action_type", "result_detail", "sync_uuid",
+        "source_decision_sync_uuid", "source_phase",
     },
     "action_outcomes": {
         "action_sync_uuid", "expected_outcome", "expected_impact",
@@ -149,6 +153,25 @@ def init_db() -> None:
 
     try:
         cursor.execute("ALTER TABLE action_queue ADD COLUMN sync_uuid TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    # Provenance: koppelt iedere actie die uit een voorbereiding komt aan
+    # de oorspronkelijke beslissing. source_decision_id is lokaal gemak;
+    # source_decision_sync_uuid is de stabiele cross-machine identiteit.
+    try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN source_decision_id INTEGER")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN source_decision_sync_uuid TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN source_phase TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass
@@ -443,6 +466,43 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
 
 
 # ===================================================================
+# ACTION PROVENANCE CONTEXT
+# ===================================================================
+
+@contextmanager
+def action_provenance_scope(
+    decision_id: int,
+    decision_sync_uuid: str,
+    phase: str = "preparation",
+):
+    """
+    Thread-local scope used while a tool-capable executive meeting is running.
+    Any propose_action() call in this worker thread automatically inherits the
+    source decision. The previous context is restored even when CrewAI raises.
+    """
+    previous = getattr(_ACTION_PROVENANCE_CONTEXT, "value", None)
+    _ACTION_PROVENANCE_CONTEXT.value = {
+        "decision_id": decision_id,
+        "decision_sync_uuid": decision_sync_uuid,
+        "phase": phase,
+    }
+    try:
+        yield
+    finally:
+        if previous is None:
+            try:
+                delattr(_ACTION_PROVENANCE_CONTEXT, "value")
+            except AttributeError:
+                pass
+        else:
+            _ACTION_PROVENANCE_CONTEXT.value = previous
+
+
+def _current_action_provenance() -> dict | None:
+    return getattr(_ACTION_PROVENANCE_CONTEXT, "value", None)
+
+
+# ===================================================================
 # FUNCTIES VOOR ACTIEVOORSTELLEN (ACTION QUEUE)
 # ===================================================================
 
@@ -478,12 +538,25 @@ def propose_action(
 
     timestamp = datetime.datetime.now().isoformat()
     new_sync_uuid = str(uuid.uuid4())
+    provenance = _current_action_provenance()
+    source_decision_id = provenance.get("decision_id") if provenance else None
+    source_decision_sync_uuid = provenance.get("decision_sync_uuid") if provenance else None
+    source_phase = provenance.get("phase") if provenance else None
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO action_queue (timestamp, proposed_by, action_description, action_detail, status, action_type, sync_uuid)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?)
-        """, (timestamp, proposed_by, action_description, action_detail, action_type, new_sync_uuid))
+            INSERT INTO action_queue (
+                timestamp, proposed_by, action_description, action_detail,
+                status, action_type, sync_uuid,
+                source_decision_id, source_decision_sync_uuid, source_phase
+            )
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+        """, (
+            timestamp, proposed_by, action_description, action_detail,
+            action_type, new_sync_uuid,
+            source_decision_id, source_decision_sync_uuid, source_phase,
+        ))
         
         action_id = cursor.lastrowid
         cursor.execute(
@@ -524,10 +597,13 @@ def get_actions_after_id(action_id: int) -> list[dict]:
             """
             SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
+                   q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
+                   d.topic AS source_decision_topic,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
+            LEFT JOIN decisions d ON d.id = q.source_decision_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.id > ?
             ORDER BY q.id ASC
@@ -546,10 +622,13 @@ def get_pending_actions() -> list[dict]:
         cursor.execute("""
             SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
+                   q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
+                   d.topic AS source_decision_topic,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
+            LEFT JOIN decisions d ON d.id = q.source_decision_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.status IN ('pending', 'approved', 'executing')
             ORDER BY q.timestamp DESC
@@ -839,16 +918,56 @@ def get_action_by_id(action_id: int) -> dict | None:
         cursor.execute("""
             SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
+                   q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
+                   d.topic AS source_decision_topic,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
+            LEFT JOIN decisions d ON d.id = q.source_decision_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.id = ?
         """, (action_id,))
 
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def get_actions_for_decision(decision_id: int) -> list[dict]:
+    """Return all actions explicitly linked to one decision, oldest first."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT q.id, q.timestamp, q.proposed_by, q.action_description,
+                   q.action_detail, q.status, q.reviewed_at, q.action_type,
+                   q.result_detail, q.sync_uuid, q.source_decision_id,
+                   q.source_decision_sync_uuid, q.source_phase,
+                   d.topic AS source_decision_topic,
+                   o.expected_outcome, o.expected_impact, o.expected_cost_amount,
+                   o.currency, o.outcome_status, o.actual_outcome, o.actual_impact,
+                   o.actual_cost_amount, o.measured_at, o.next_recommendation,
+                   o.notes AS outcome_notes
+            FROM action_queue q
+            LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN action_outcomes o ON o.action_id = q.id
+            WHERE q.source_decision_id = ?
+            ORDER BY q.timestamp ASC
+            """,
+            (decision_id,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_decision_lineage(decision_id: int) -> dict | None:
+    """Build the full decision → preparation → actions → outcomes chain."""
+    decision = get_decision_by_id(decision_id)
+    if decision is None:
+        return None
+    return {
+        "decision": decision,
+        "actions": get_actions_for_decision(decision_id),
+    }
 
 
 def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | None = None) -> list[dict]:
@@ -874,6 +993,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                        o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                        o.measured_at, o.next_recommendation, o.notes AS outcome_notes
                 FROM action_queue q
+                LEFT JOIN decisions d ON d.id = q.source_decision_id
                 LEFT JOIN action_outcomes o ON o.action_id = q.id
                 WHERE q.status = ?
                 ORDER BY q.timestamp DESC
@@ -887,6 +1007,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                        o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                        o.measured_at, o.next_recommendation, o.notes AS outcome_notes
                 FROM action_queue q
+                LEFT JOIN decisions d ON d.id = q.source_decision_id
                 LEFT JOIN action_outcomes o ON o.action_id = q.id
                 ORDER BY q.timestamp DESC
                 LIMIT ? OFFSET ?
@@ -926,7 +1047,13 @@ def export_history_to_jsonl(export_path: str) -> dict:
         cursor.execute("SELECT * FROM decisions")
         decision_rows = [dict(row) for row in cursor.fetchall()]
 
-        cursor.execute("SELECT * FROM action_queue")
+        cursor.execute("""
+            SELECT
+                timestamp, proposed_by, action_description, action_detail,
+                status, reviewed_at, action_type, result_detail, sync_uuid,
+                source_decision_sync_uuid, source_phase
+            FROM action_queue
+        """)
         action_rows = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute("""
@@ -1034,6 +1161,20 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row.get("action_type") not in VALID_ACTION_TYPES:
                         skipped += 1
                         continue
+
+                    source_decision_sync_uuid = row.get("source_decision_sync_uuid")
+                    if source_decision_sync_uuid:
+                        cursor.execute(
+                            "SELECT id FROM decisions WHERE sync_uuid = ?",
+                            (source_decision_sync_uuid,),
+                        )
+                        source_decision = cursor.fetchone()
+                        if not source_decision:
+                            # Never create a provenance link to the wrong local ID.
+                            # Import the decision first, then retry this export.
+                            skipped += 1
+                            continue
+                        row["source_decision_id"] = source_decision["id"]
                 if table == "action_outcomes":
                     if row.get("outcome_status") not in VALID_OUTCOME_STATUSES:
                         skipped += 1
