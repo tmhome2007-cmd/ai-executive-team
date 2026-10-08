@@ -80,6 +80,15 @@ class ContainerWorkerTests(unittest.TestCase):
             finally:
                 sock.close()
 
+    def test_mount_option_injection_path_rejected(self):
+        with tempfile.TemporaryDirectory() as parent:
+            unsafe = Path(parent) / "workspace,target=/host"
+            unsafe.mkdir()
+            with patch("workflows.container_executor.subprocess.run") as invoked:
+                with self.assertRaises(ContainerExecutionError):
+                    run_in_container("echo hello", str(unsafe))
+                invoked.assert_not_called()
+
     def test_empty_command_rejected(self):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(ContainerExecutionError):
