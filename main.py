@@ -1416,14 +1416,38 @@ def patch_action_outcome(action_id: int, request: OutcomeUpdateRequest):
     if not payload:
         raise HTTPException(status_code=400, detail="No outcome fields supplied.")
 
-    if {"expected_cost_amount", "currency"}.intersection(payload) and action["status"] != "pending":
+    if "expected_cost_amount" in payload and action["status"] != "pending":
         raise HTTPException(
             status_code=409,
             detail=(
-                "Expected cost/currency can only be changed while an action is pending. "
+                "Expected cost can only be changed while an action is pending. "
                 "Once approved, the treasury reservation is authoritative."
             ),
         )
+
+    # currency serves two purposes in this endpoint:
+    # - before approval it may set/change the expected-cost currency;
+    # - after execution it may accompany actual_cost_amount, but it must match
+    #   the already-approved/reserved currency and may not silently re-denominate it.
+    if "currency" in payload and action["status"] != "pending":
+        if "actual_cost_amount" not in payload:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Currency can only be changed while an action is pending. "
+                    "After approval it may only accompany actual_cost_amount."
+                ),
+            )
+        existing_currency = (action.get("currency") or "").strip().upper()
+        supplied_currency = payload["currency"].strip().upper()
+        if existing_currency and supplied_currency != existing_currency:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Actual cost currency must match the approved treasury currency "
+                    f"({existing_currency})."
+                ),
+            )
 
     monetary_fields = {"expected_cost_amount", "actual_cost_amount"}
     if monetary_fields.intersection(payload) and not (
