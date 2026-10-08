@@ -52,6 +52,31 @@ VALID_OUTCOME_STATUSES = {
     "inconclusive",
 }
 
+_SECRET_LIKE_PATTERNS = (
+    "sk-",
+    "ghp_",
+    "github_pat_",
+    "xoxb-",
+    "xoxp-",
+    "AIza",
+    "-----BEGIN PRIVATE KEY-----",
+    "password=",
+    "api_key=",
+    "token=",
+)
+
+
+def _reject_secret_like_text(*values: str | None) -> None:
+    combined = "\n".join(value for value in values if value)
+    lowered = combined.lower()
+    for pattern in _SECRET_LIKE_PATTERNS:
+        if pattern.lower() in lowered:
+            raise ValueError(
+                "Potential secret detected. Store credentials in the configured secret/plugin "
+                "system and record only a non-secret description here."
+            )
+
+
 _SYNC_TABLE_COLUMNS = {
     "decisions": {
         "timestamp", "topic", "agents_involved", "task_description",
@@ -581,6 +606,7 @@ def propose_resource_request(
 ) -> int:
     if resource_type not in VALID_RESOURCE_TYPES:
         raise ValueError(f"Unsupported resource_type: {resource_type}")
+    _reject_secret_like_text(resource_name, reason, required_for)
     if not resource_name.strip() or not reason.strip():
         raise ValueError("resource_name and reason are required")
     if amount is not None:
@@ -709,6 +735,8 @@ def transition_resource_request_status(
         raise ValueError(f"Invalid resource request allowed_from: {allowed_from}")
     if new_status == "fulfilled" and not (fulfillment_note or "").strip():
         raise ValueError("fulfillment_note is required when marking a request fulfilled")
+    if fulfillment_note is not None:
+        _reject_secret_like_text(fulfillment_note)
 
     now = datetime.datetime.now().isoformat()
     placeholders = ", ".join("?" for _ in allowed_from)
