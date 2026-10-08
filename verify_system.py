@@ -967,7 +967,7 @@ try:
         with tempfile.TemporaryDirectory() as temp_dir:
             _verify_config.DATABASE_PATH = os.path.join(temp_dir, "state_machine.db")
             _verify_init_db()
-            test_id = _verify_propose_action("CFO", "state test", "echo ok", "shell")
+            test_id = _verify_propose_action("COO", "state test", "echo ok", "shell")
 
             first_approve = _verify_transition_action_status(test_id, "approved", ("pending",))
             second_approve = _verify_transition_action_status(test_id, "approved", ("pending",))
@@ -2092,13 +2092,13 @@ try:
             missing_currency_rejected = False
             try:
                 _propose_76(
-                    "CFO", "Cost validation", "echo ok", "shell",
+                    "COO", "Cost validation", "echo ok", "shell",
                     expected_cost_amount=1.0,
                 )
             except ValueError:
                 missing_currency_rejected = True
 
-            action_id = _propose_76("CFO", "Outcome validation", "echo ok", "shell")
+            action_id = _propose_76("COO", "Outcome validation", "echo ok", "shell")
             invalid_status_rejected = False
             try:
                 _update_outcome_76(action_id, outcome_status="definitely_great")
@@ -2142,7 +2142,7 @@ try:
             _verify_config_77.DATABASE_PATH = source_db
             _init_db_77()
             action_id = _propose_77(
-                "CFO",
+                "COO",
                 "Sync outcome",
                 "echo sync",
                 "shell",
@@ -3090,13 +3090,13 @@ try:
             _init_db_98()
             _fund_98("funding", 100, "EUR", "Owner capital")
             first = _propose_98(
-                "CFO", "Paid test action", "echo paid", "shell",
+                "COO", "Paid test action", "echo paid", "shell",
                 expected_cost_amount=60, currency="EUR",
             )
             approval = _approve_98(first)
 
             second = _propose_98(
-                "CFO", "Too expensive test", "echo expensive", "shell",
+                "COO", "Too expensive test", "echo expensive", "shell",
                 expected_cost_amount=50, currency="EUR",
             )
             blocked = False
@@ -3148,7 +3148,7 @@ try:
             _init_db_99()
             _fund_99("funding", 100, "EUR", "Owner capital")
             action_id = _propose_99(
-                "CFO", "Reservable action", "echo reserve", "shell",
+                "COO", "Reservable action", "echo reserve", "shell",
                 expected_cost_amount=35, currency="EUR",
             )
             _approve_99(action_id)
@@ -3198,7 +3198,7 @@ try:
             _init_db_100()
             _fund_100("funding", 100, "EUR", "Owner capital")
             action_id = _propose_100(
-                "CFO", "Measured paid action", "echo measured", "shell",
+                "COO", "Measured paid action", "echo measured", "shell",
                 expected_cost_amount=60, currency="EUR",
             )
             _approve_100(action_id)
@@ -3280,7 +3280,7 @@ try:
             _fund_101("funding", 80, "EUR", "Owner capital")
             with _scope_101(source_decision_id, source_decision["sync_uuid"], "preparation"):
                 source_action_id = _propose_101(
-                    "CFO", "Synced paid action", "echo sync-money", "shell",
+                    "COO", "Synced paid action", "echo sync-money", "shell",
                     expected_cost_amount=20, currency="EUR",
                 )
             _approve_101(source_action_id)
@@ -3478,7 +3478,7 @@ try:
                 "preparation",
             ):
                 cleanup_action_id = _propose_action_104(
-                    "CFO",
+                    "COO",
                     "Unexecuted paid goal work",
                     "printf no-run",
                     "shell",
@@ -3628,7 +3628,7 @@ try:
             _fund_106("funding", 100, "EUR", "Owner capital")
             with _scope_106(decision_id, decision["sync_uuid"], "preparation"):
                 action_id = _propose_106(
-                    "CFO",
+                    "COO",
                     "Goal-linked paid action",
                     "printf goal-lineage",
                     "shell",
@@ -5142,11 +5142,11 @@ try:
             _fund_132("funding", 100, "EUR", "Owner test capital")
             with _scope_132(decision_id, decision["sync_uuid"], "preparation"):
                 paid_id = _propose_132(
-                    "CFO", "Paid controlled action", "printf controlled", "shell",
+                    "COO", "Paid controlled action", "printf controlled", "shell",
                     expected_cost_amount=20, currency="EUR",
                 )
                 paused_id = _propose_132(
-                    "CFO", "Goal-gated action", "printf paused", "shell"
+                    "COO", "Goal-gated action", "printf paused", "shell"
                 )
 
             approved = _approve_132(paid_id)
@@ -5218,7 +5218,7 @@ try:
             _fund_133("funding", 50, "EUR", "Owner capital")
             with _scope_133(decision_id, decision["sync_uuid"], "preparation"):
                 action_id = _propose_133(
-                    "CFO", "Remote approved action", "printf sync", "shell",
+                    "COO", "Remote approved action", "printf sync", "shell",
                     expected_cost_amount=10, currency="EUR",
                 )
             _approve_133(action_id)
