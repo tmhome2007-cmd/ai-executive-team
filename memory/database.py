@@ -2767,9 +2767,6 @@ def export_history_to_jsonl(export_path: str) -> dict:
         for row in goal_rows:
             row["_table"] = "company_goals"
             f.write(json.dumps(row) + "\n")
-        for row in followup_rows:
-            row["_table"] = "followup_events"
-            f.write(json.dumps(row) + "\n")
         for row in decision_rows:
             row["_table"] = "decisions"
             f.write(json.dumps(row) + "\n")
@@ -2787,6 +2784,9 @@ def export_history_to_jsonl(export_path: str) -> dict:
             f.write(json.dumps(row) + "\n")
         for row in treasury_reservation_rows:
             row["_table"] = "treasury_reservations"
+            f.write(json.dumps(row) + "\n")
+        for row in followup_rows:
+            row["_table"] = "followup_events"
             f.write(json.dumps(row) + "\n")
 
     return {
@@ -2921,38 +2921,6 @@ def import_history_from_jsonl(import_path: str) -> dict:
                             continue
                         row["goal_id"] = goal_row["id"]
 
-                if table == "followup_events":
-                    if row.get("event_type") not in VALID_FOLLOWUP_EVENT_TYPES:
-                        skipped += 1
-                        continue
-                    if row.get("status") not in VALID_FOLLOWUP_STATUSES:
-                        skipped += 1
-                        continue
-                    if row.get("severity") not in VALID_FOLLOWUP_SEVERITIES:
-                        skipped += 1
-                        continue
-
-                    for uuid_key, table_name, id_key in (
-                        ("goal_sync_uuid", "company_goals", "goal_id"),
-                        ("source_action_sync_uuid", "action_queue", "source_action_id"),
-                        ("source_decision_sync_uuid", "decisions", "source_decision_id"),
-                        ("generated_decision_sync_uuid", "decisions", "generated_decision_id"),
-                    ):
-                        foreign_uuid = row.get(uuid_key)
-                        if foreign_uuid:
-                            cursor.execute(
-                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",
-                                (foreign_uuid,),
-                            )
-                            foreign_row = cursor.fetchone()
-                            if not foreign_row:
-                                skipped += 1
-                                row = None
-                                break
-                            row[id_key] = foreign_row["id"]
-                    if row is None:
-                        continue
-
                 if table == "action_queue":
                     if row.get("status") not in VALID_ACTION_STATUSES:
                         skipped += 1
@@ -3069,6 +3037,38 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         continue
 
                     row["action_id"] = local_action_id
+
+                if table == "followup_events":
+                    if row.get("event_type") not in VALID_FOLLOWUP_EVENT_TYPES:
+                        skipped += 1
+                        continue
+                    if row.get("status") not in VALID_FOLLOWUP_STATUSES:
+                        skipped += 1
+                        continue
+                    if row.get("severity") not in VALID_FOLLOWUP_SEVERITIES:
+                        skipped += 1
+                        continue
+
+                    for uuid_key, table_name, id_key in (
+                        ("goal_sync_uuid", "company_goals", "goal_id"),
+                        ("source_action_sync_uuid", "action_queue", "source_action_id"),
+                        ("source_decision_sync_uuid", "decisions", "source_decision_id"),
+                        ("generated_decision_sync_uuid", "decisions", "generated_decision_id"),
+                    ):
+                        foreign_uuid = row.get(uuid_key)
+                        if foreign_uuid:
+                            cursor.execute(
+                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",
+                                (foreign_uuid,),
+                            )
+                            foreign_row = cursor.fetchone()
+                            if not foreign_row:
+                                skipped += 1
+                                row = None
+                                break
+                            row[id_key] = foreign_row["id"]
+                    if row is None:
+                        continue
 
                 cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
                 if cursor.fetchone():
