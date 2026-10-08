@@ -141,6 +141,46 @@ def _apply_evidence_guard(source_text: str, output_text: str) -> tuple[str, List
     return warning + output_text, unsupported
 
 
+def _find_memory_evidence_leaks(memory_text: str, output_text: str) -> List[str]:
+    """
+    Detects copied historical-memory language inside an Evidence-Supported
+    section. Memory may inform reasoning, but memory-only facts must not be
+    presented under a current-evidence heading.
+    """
+    if not memory_text or not output_text:
+        return []
+
+    evidence_match = re.search(
+        r"(?is)(?:\*\*)?evidence[- ]supported(?: findings| assessment)?(?:\*\*)?\s*[:\n]*(.*?)(?=\n\s*(?:\*\*)?(?:historical context|assumptions|material disagreements|recommendation|evidence needed|next validation step|approval gate)(?:\*\*)?|\Z)",
+        output_text,
+    )
+    if not evidence_match:
+        return []
+
+    evidence_section = re.sub(r"\s+", " ", evidence_match.group(1).lower())
+    normalized_memory = re.sub(r"\s+", " ", memory_text.lower())
+
+    # Build distinctive word windows from memory and flag exact reuse. This is
+    # intentionally conservative: it catches copied memory claims without
+    # pretending to solve general semantic entailment.
+    words = re.findall(r"[a-z0-9][a-z0-9'_-]*", normalized_memory)
+    leaks: List[str] = []
+    seen = set()
+    for size in (10, 8, 6):
+        for i in range(0, max(0, len(words) - size + 1)):
+            phrase = " ".join(words[i:i + size])
+            if len(phrase) < 45 or phrase in seen:
+                continue
+            if phrase in evidence_section:
+                leaks.append(phrase)
+                seen.add(phrase)
+                if len(leaks) >= 5:
+                    return leaks
+        if leaks:
+            break
+    return leaks
+
+
 def run_executive_meeting(
     topic: str,
     task_description: str,
@@ -205,6 +245,7 @@ def run_executive_meeting(
 
     tasks: List[Task] = []
     agent_instances = []
+    role_memory_blocks: Dict[str, str] = {}
 
     memory_enabled = True if memory_context is None else bool(memory_context.get("enabled", True))
     memory_goal_id = None if memory_context is None else memory_context.get("goal_id")
@@ -246,6 +287,7 @@ def run_executive_meeting(
         agent_obj = agents_source[key]
         agent_instances.append(agent_obj)
         role_memory = _memory_block(key)
+        role_memory_blocks[key] = role_memory
 
         if index == 0:
             # De eerste agent start de discussie
@@ -254,7 +296,11 @@ def run_executive_meeting(
                 + (f"{role_memory}\n\n" if role_memory else "")
                 + f"{EVIDENCE_DISCIPLINE}\n\n"
                 "Response structure:\n"
-                "1. Evidence-supported assessment\n"
+                + (
+                    "0. Historical context — ONLY lessons from executive memory; explicitly state that this is not current evidence.\n"
+                    if role_memory else ""
+                )
+                + "1. Evidence-supported assessment — ONLY facts independently present in the current task/evidence; do not repeat memory-only facts here.\n"
                 "2. Assumptions / unknowns\n"
                 "3. Recommendation\n"
                 "4. Evidence needed before committing money or taking real-world action"
@@ -282,19 +328,24 @@ def run_executive_meeting(
                 "say so explicitly in one sentence rather than restating prior points in different words. "
                 "Do not inherit an unsupported claim merely because a previous executive said it. "
                 "If a prior executive introduced an unsupported number or company fact, explicitly reject or label it as unverified. "
-                "Structure your response as: Evidence-supported assessment; Assumptions / unknowns; Recommendation; Evidence needed before action."
+                + (
+                    "When historical memory is present, start with a 'Historical context' section containing ONLY remembered lessons and explicitly label them not-current-evidence. "
+                    if role_memory else ""
+                )
+                + "Structure the remaining response as: Evidence-supported assessment (current task/evidence only; no memory-only facts); Assumptions / unknowns; Recommendation; Evidence needed before action."
             )
             if key == "ceo":
                 description += (
                     "\n\nCEO FINAL-SYNTHESIS RULES:\n"
                     "- Do not copy or concatenate previous executives' answers.\n"
-                    "- Produce a concise decision brief that synthesizes only the strongest evidence-backed points and material disagreements.\n"
+                    "- If historical memory is present, include a separate Historical context section BEFORE Evidence-Supported Findings and never place memory-only facts under Evidence-Supported Findings.\n"
+                    "- Produce a concise decision brief that synthesizes only the strongest CURRENT-evidence-backed points and material disagreements.\n"
                     "- Explicitly list unsupported assumptions and missing evidence.\n"
                     "- If the evidence is insufficient for a real-world commitment, recommend the next research/validation step instead of pretending the decision is ready.\n"
                     "- End with an Approval Gate stating exactly what the human owner is being asked to approve now, if anything."
                 )
                 expected_output = (
-                    "A concise CEO decision brief with: Evidence-supported findings; Material disagreements/risks; "
+                    "A concise CEO decision brief with: Historical context when memory exists; Evidence-supported findings from current evidence only; Material disagreements/risks; "
                     "Assumptions/unknowns; Recommendation; Next validation step; Approval Gate. "
                     "No copied executive prose and no unsupported precise figures."
                 )
@@ -400,6 +451,34 @@ def run_executive_meeting(
         if warnings:
             individual_quality_warnings[key] = warnings
 
+    memory_evidence_leaks: Dict[str, List[str]] = {}
+    for key, guarded_output in guarded_individual_outputs.items():
+        leaks = _find_memory_evidence_leaks(
+            role_memory_blocks.get(key, ""),
+            guarded_output,
+        )
+        if leaks:
+            memory_evidence_leaks[key] = leaks
+
+    final_memory_text = role_memory_blocks.get(agent_keys[-1], "") if agent_keys else ""
+    final_memory_leaks = _find_memory_evidence_leaks(
+        final_memory_text,
+        guarded_final_decision,
+    )
+    if final_memory_leaks:
+        memory_evidence_leaks["final_decision"] = final_memory_leaks
+
+    if memory_evidence_leaks:
+        leaking_roles = ", ".join(sorted(memory_evidence_leaks.keys()))
+        guarded_final_decision = (
+            "⚠️ MEMORY/EVIDENCE SEPARATION WARNING — Historical executive memory "
+            "was repeated inside an Evidence-Supported section "
+            f"(affected: {leaking_roles}). Treat those memory-derived statements "
+            "as historical context only, not current evidence. Revalidate them "
+            "against the current task before approval.\n\n"
+            + guarded_final_decision
+        )
+
     repeated_analysis = find_repeated_analysis(individual_outputs)
     if repeated_analysis:
         repeated_roles = ", ".join(sorted(repeated_analysis.keys()))
@@ -418,6 +497,7 @@ def run_executive_meeting(
             "unsupported_quantitative_claims": quality_warnings,
             "individual_outputs": individual_quality_warnings,
             "repeated_analysis": repeated_analysis,
+            "memory_evidence_leaks": memory_evidence_leaks,
         },
         "proposed_action_ids": provenance_created_action_ids,
         "proposed_resource_request_ids": provenance_created_resource_request_ids,
