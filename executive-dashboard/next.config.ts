@@ -1,5 +1,11 @@
 import type { NextConfig } from "next";
 
+// Keep browser egress aligned with the API URL embedded in the client build.
+const apiUrl = new URL(process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000");
+if (!["http:", "https:"].includes(apiUrl.protocol) || apiUrl.username || apiUrl.password) {
+  throw new Error("NEXT_PUBLIC_API_BASE must be an HTTP(S) URL without credentials");
+}
+
 const isDevelopment = process.env.NODE_ENV !== "production";
 const scriptSrc = isDevelopment
   ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
@@ -22,7 +28,7 @@ const securityHeaders = [
       "font-src 'self' data:",
       "style-src 'self' 'unsafe-inline'",
       scriptSrc,
-      "connect-src 'self' http://127.0.0.1:8000 http://localhost:8000",
+      `connect-src 'self' ${apiUrl.origin}`,
     ].join("; "),
   },
 ];
