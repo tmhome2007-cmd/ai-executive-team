@@ -35,6 +35,14 @@ VALID_ACTION_STATUSES = {
 VALID_ACTION_TYPES = {"shell", "file_operation", "browser_action"}
 VALID_DECISION_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
 VALID_PREPARATION_STATUSES = {"not_started", "in_progress", "completed", "failed"}
+VALID_OUTCOME_STATUSES = {
+    "not_started",
+    "measurement_pending",
+    "succeeded",
+    "failed",
+    "partial",
+    "inconclusive",
+}
 
 _SYNC_TABLE_COLUMNS = {
     "decisions": {
@@ -44,6 +52,12 @@ _SYNC_TABLE_COLUMNS = {
     "action_queue": {
         "timestamp", "proposed_by", "action_description", "action_detail",
         "status", "reviewed_at", "action_type", "result_detail", "sync_uuid",
+    },
+    "action_outcomes": {
+        "action_sync_uuid", "expected_outcome", "expected_impact",
+        "expected_cost_amount", "currency", "outcome_status", "actual_outcome",
+        "actual_impact", "actual_cost_amount", "measured_at",
+        "next_recommendation", "notes", "updated_at", "sync_uuid",
     },
 }
 
@@ -163,6 +177,53 @@ def init_db() -> None:
         conn.commit()
     except sqlite3.OperationalError:
         pass
+
+    # Tabel 4: business-outcome tracking per action. Technische execution
+    # (stdout/screenshot/etc.) blijft in action_queue.result_detail; deze tabel
+    # meet of het BEDRIJFSDOEL van de actie werkelijk werd bereikt.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS action_outcomes (
+            action_id INTEGER PRIMARY KEY,
+            action_sync_uuid TEXT NOT NULL UNIQUE,
+            expected_outcome TEXT,
+            expected_impact TEXT,
+            expected_cost_amount REAL,
+            currency TEXT,
+            outcome_status TEXT NOT NULL DEFAULT 'not_started',
+            actual_outcome TEXT,
+            actual_impact TEXT,
+            actual_cost_amount REAL,
+            measured_at TEXT,
+            next_recommendation TEXT,
+            notes TEXT,
+            updated_at TEXT NOT NULL,
+            sync_uuid TEXT NOT NULL UNIQUE
+        )
+    """)
+
+    # Backfill: iedere bestaande actie krijgt een outcome-record. We doen
+    # bewust GEEN aannames over oude expected/actual outcomes.
+    cursor.execute("""
+        SELECT id, sync_uuid
+        FROM action_queue
+        WHERE sync_uuid IS NOT NULL
+    """)
+    for action_id, action_sync_uuid in cursor.fetchall():
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO action_outcomes (
+                action_id, action_sync_uuid, outcome_status,
+                updated_at, sync_uuid
+            ) VALUES (?, ?, 'not_started', ?, ?)
+            """,
+            (
+                action_id,
+                action_sync_uuid,
+                datetime.datetime.now().isoformat(),
+                str(uuid.uuid4()),
+            ),
+        )
+    conn.commit()
 
     # Bestaande beslissingen van vóór Phase 2 krijgen veilig 'pending':
     # niets uit oude historie wordt stilzwijgend als goedgekeurd behandeld.
@@ -386,7 +447,14 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
 # ===================================================================
 
 def propose_action(
-    proposed_by: str, action_description: str, action_detail: str, action_type: str = "shell"
+    proposed_by: str,
+    action_description: str,
+    action_detail: str,
+    action_type: str = "shell",
+    expected_outcome: str | None = None,
+    expected_impact: str | None = None,
+    expected_cost_amount: float | None = None,
+    currency: str | None = None,
 ) -> int:
     """
     Voegt een voorgestelde actie toe aan de action_queue met de status 'pending'.
@@ -399,6 +467,14 @@ def propose_action(
         raise ValueError(
             f"Unsupported action_type '{action_type}'. Allowed: {sorted(VALID_ACTION_TYPES)}"
         )
+    if expected_cost_amount is not None and expected_cost_amount < 0:
+        raise ValueError("expected_cost_amount cannot be negative")
+    if expected_cost_amount is not None and not currency:
+        raise ValueError("currency is required when expected_cost_amount is provided")
+    if currency is not None:
+        currency = currency.strip().upper()
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("currency must be a 3-letter code such as EUR or USD")
 
     timestamp = datetime.datetime.now().isoformat()
     new_sync_uuid = str(uuid.uuid4())
@@ -409,8 +485,27 @@ def propose_action(
             VALUES (?, ?, ?, ?, 'pending', ?, ?)
         """, (timestamp, proposed_by, action_description, action_detail, action_type, new_sync_uuid))
         
+        action_id = cursor.lastrowid
+        cursor.execute(
+            """
+            INSERT INTO action_outcomes (
+                action_id, action_sync_uuid, expected_outcome, expected_impact,
+                expected_cost_amount, currency, outcome_status, updated_at, sync_uuid
+            ) VALUES (?, ?, ?, ?, ?, ?, 'not_started', ?, ?)
+            """,
+            (
+                action_id,
+                new_sync_uuid,
+                expected_outcome,
+                expected_impact,
+                expected_cost_amount,
+                currency,
+                datetime.datetime.now().isoformat(),
+                str(uuid.uuid4()),
+            ),
+        )
         conn.commit()
-        return cursor.lastrowid
+        return action_id
 
 
 def get_latest_action_id() -> int:
@@ -427,11 +522,15 @@ def get_actions_after_id(action_id: int) -> list[dict]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT id, timestamp, proposed_by, action_description, action_detail,
-                   status, reviewed_at, action_type, result_detail, sync_uuid
-            FROM action_queue
-            WHERE id > ?
-            ORDER BY id ASC
+            SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
+                   q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
+                   o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
+                   o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
+                   o.measured_at, o.next_recommendation, o.notes AS outcome_notes
+            FROM action_queue q
+            LEFT JOIN action_outcomes o ON o.action_id = q.id
+            WHERE q.id > ?
+            ORDER BY q.id ASC
             """,
             (action_id,),
         )
@@ -445,10 +544,15 @@ def get_pending_actions() -> list[dict]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid
-            FROM action_queue
-            WHERE status IN ('pending', 'approved', 'executing')
-            ORDER BY timestamp DESC
+            SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
+                   q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
+                   o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
+                   o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
+                   o.measured_at, o.next_recommendation, o.notes AS outcome_notes
+            FROM action_queue q
+            LEFT JOIN action_outcomes o ON o.action_id = q.id
+            WHERE q.status IN ('pending', 'approved', 'executing')
+            ORDER BY q.timestamp DESC
         """)
         
         rows = cursor.fetchall()
@@ -536,6 +640,133 @@ def record_execution_result(action_id: int, result_detail_json: str) -> bool:
         conn.commit()
         return cursor.rowcount > 0
 
+def get_action_outcome(action_id: int) -> dict | None:
+    """Retourneert de business-outcome tracking voor één actie."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT o.*
+            FROM action_outcomes o
+            WHERE o.action_id = ?
+            """,
+            (action_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def update_action_outcome(
+    action_id: int,
+    *,
+    expected_outcome: str | None = None,
+    expected_impact: str | None = None,
+    expected_cost_amount: float | None = None,
+    currency: str | None = None,
+    outcome_status: str | None = None,
+    actual_outcome: str | None = None,
+    actual_impact: str | None = None,
+    actual_cost_amount: float | None = None,
+    next_recommendation: str | None = None,
+    notes: str | None = None,
+) -> dict | None:
+    """
+    Werkt outcomevelden bij zonder technische execution-resultaten te
+    overschrijven. Alleen expliciet meegegeven waarden worden gewijzigd.
+    """
+    if outcome_status is not None and outcome_status not in VALID_OUTCOME_STATUSES:
+        raise ValueError(f"Unsupported outcome status: {outcome_status}")
+    if expected_cost_amount is not None and expected_cost_amount < 0:
+        raise ValueError("expected_cost_amount cannot be negative")
+    if actual_cost_amount is not None and actual_cost_amount < 0:
+        raise ValueError("actual_cost_amount cannot be negative")
+    if currency is not None:
+        currency = currency.strip().upper()
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("currency must be a 3-letter code such as EUR or USD")
+
+    fields = {
+        "expected_outcome": expected_outcome,
+        "expected_impact": expected_impact,
+        "expected_cost_amount": expected_cost_amount,
+        "currency": currency,
+        "outcome_status": outcome_status,
+        "actual_outcome": actual_outcome,
+        "actual_impact": actual_impact,
+        "actual_cost_amount": actual_cost_amount,
+        "next_recommendation": next_recommendation,
+        "notes": notes,
+    }
+    updates = {key: value for key, value in fields.items() if value is not None}
+    if not updates:
+        return get_action_outcome(action_id)
+
+    terminal_business_statuses = {"succeeded", "failed", "partial", "inconclusive"}
+    if outcome_status in terminal_business_statuses:
+        updates["measured_at"] = datetime.datetime.now().isoformat()
+    updates["updated_at"] = datetime.datetime.now().isoformat()
+
+    assignments = ", ".join(f"{key} = ?" for key in updates)
+    values = list(updates.values()) + [action_id]
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",
+            values,
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+
+    return get_action_outcome(action_id)
+
+
+def mark_action_outcome_measurement_pending(action_id: int) -> bool:
+    """
+    Na succesvolle LIVE execution begint pas de businessmeting. Dit zegt
+    nadrukkelijk NIET dat het gewenste resultaat al behaald is.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE action_outcomes
+            SET outcome_status = 'measurement_pending',
+                updated_at = ?
+            WHERE action_id = ?
+              AND outcome_status = 'not_started'
+            """,
+            (datetime.datetime.now().isoformat(), action_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def mark_action_outcome_execution_failed(action_id: int, reason: str) -> bool:
+    """Legt vast dat het businessdoel niet kon worden bereikt door execution failure."""
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE action_outcomes
+            SET outcome_status = 'failed',
+                actual_outcome = ?,
+                measured_at = ?,
+                updated_at = ?,
+                next_recommendation = COALESCE(
+                    next_recommendation,
+                    'Review the execution failure before proposing a retry.'
+                )
+            WHERE action_id = ?
+              AND outcome_status IN ('not_started', 'measurement_pending')
+            """,
+            (reason, now, now, action_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
 def recover_interrupted_actions() -> int:
     """
     Markeer acties die na een procesherstart nog op 'executing' staan als
@@ -554,18 +785,48 @@ def recover_interrupted_actions() -> int:
     })
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT id FROM action_queue WHERE status = 'executing'")
+        interrupted_ids = [row[0] for row in cursor.fetchall()]
+        if not interrupted_ids:
+            return 0
+
+        placeholders = ", ".join("?" for _ in interrupted_ids)
         cursor.execute(
-            """
+            f"""
             UPDATE action_queue
             SET status = 'execution_failed',
                 reviewed_at = ?,
                 result_detail = ?
-            WHERE status = 'executing'
+            WHERE id IN ({placeholders})
             """,
-            (reviewed_at, result_detail),
+            (reviewed_at, result_detail, *interrupted_ids),
+        )
+        recovered_count = cursor.rowcount
+
+        # Een crash betekent dat het echte effect ONBEKEND is. Niet automatisch
+        # 'failed' noemen: er kan een gedeeltelijk extern effect zijn geweest.
+        cursor.execute(
+            f"""
+            UPDATE action_outcomes
+            SET outcome_status = 'inconclusive',
+                actual_outcome = ?,
+                measured_at = ?,
+                updated_at = ?,
+                next_recommendation = COALESCE(
+                    next_recommendation,
+                    'Manually inspect the real-world state before proposing any retry.'
+                )
+            WHERE action_id IN ({placeholders})
+            """,
+            (
+                "Execution was interrupted; the real-world business outcome is unknown.",
+                reviewed_at,
+                reviewed_at,
+                *interrupted_ids,
+            ),
         )
         conn.commit()
-        return cursor.rowcount
+        return recovered_count
 
 
 def get_action_by_id(action_id: int) -> dict | None:
@@ -576,9 +837,14 @@ def get_action_by_id(action_id: int) -> dict | None:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid
-            FROM action_queue
-            WHERE id = ?
+            SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
+                   q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
+                   o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
+                   o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
+                   o.measured_at, o.next_recommendation, o.notes AS outcome_notes
+            FROM action_queue q
+            LEFT JOIN action_outcomes o ON o.action_id = q.id
+            WHERE q.id = ?
         """, (action_id,))
 
         row = cursor.fetchone()
@@ -602,17 +868,27 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
         cursor = conn.cursor()
         if status_filter:
             cursor.execute("""
-                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid
-                FROM action_queue
-                WHERE status = ?
-                ORDER BY timestamp DESC
+                SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
+                       q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
+                       o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
+                       o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
+                       o.measured_at, o.next_recommendation, o.notes AS outcome_notes
+                FROM action_queue q
+                LEFT JOIN action_outcomes o ON o.action_id = q.id
+                WHERE q.status = ?
+                ORDER BY q.timestamp DESC
                 LIMIT ? OFFSET ?
             """, (status_filter, limit, offset))
         else:
             cursor.execute("""
-                SELECT id, timestamp, proposed_by, action_description, action_detail, status, reviewed_at, action_type, result_detail, sync_uuid
-                FROM action_queue
-                ORDER BY timestamp DESC
+                SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
+                       q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
+                       o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
+                       o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
+                       o.measured_at, o.next_recommendation, o.notes AS outcome_notes
+                FROM action_queue q
+                LEFT JOIN action_outcomes o ON o.action_id = q.id
+                ORDER BY q.timestamp DESC
                 LIMIT ? OFFSET ?
             """, (limit, offset))
 
@@ -653,6 +929,16 @@ def export_history_to_jsonl(export_path: str) -> dict:
         cursor.execute("SELECT * FROM action_queue")
         action_rows = [dict(row) for row in cursor.fetchall()]
 
+        cursor.execute("""
+            SELECT
+                action_sync_uuid, expected_outcome, expected_impact,
+                expected_cost_amount, currency, outcome_status, actual_outcome,
+                actual_impact, actual_cost_amount, measured_at,
+                next_recommendation, notes, updated_at, sync_uuid
+            FROM action_outcomes
+        """)
+        outcome_rows = [dict(row) for row in cursor.fetchall()]
+
     with open(export_path, "w", encoding="utf-8") as f:
         for row in decision_rows:
             row["_table"] = "decisions"
@@ -660,8 +946,15 @@ def export_history_to_jsonl(export_path: str) -> dict:
         for row in action_rows:
             row["_table"] = "action_queue"
             f.write(json.dumps(row) + "\n")
+        for row in outcome_rows:
+            row["_table"] = "action_outcomes"
+            f.write(json.dumps(row) + "\n")
 
-    return {"decisions": len(decision_rows), "actions": len(action_rows)}
+    return {
+        "decisions": len(decision_rows),
+        "actions": len(action_rows),
+        "outcomes": len(outcome_rows),
+    }
 
 
 def import_history_from_jsonl(import_path: str) -> dict:
@@ -677,6 +970,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
     imported_decisions = 0
     imported_actions = 0
+    imported_outcomes = 0
     skipped = 0
 
     with get_connection() as conn:
@@ -720,6 +1014,9 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         "timestamp", "proposed_by", "action_description", "action_detail",
                         "status", "action_type", "sync_uuid",
                     },
+                    "action_outcomes": {
+                        "action_sync_uuid", "outcome_status", "updated_at", "sync_uuid",
+                    },
                 }[table]
 
                 if (
@@ -737,6 +1034,51 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row.get("action_type") not in VALID_ACTION_TYPES:
                         skipped += 1
                         continue
+                if table == "action_outcomes":
+                    if row.get("outcome_status") not in VALID_OUTCOME_STATUSES:
+                        skipped += 1
+                        continue
+                    cursor.execute(
+                        "SELECT id FROM action_queue WHERE sync_uuid = ?",
+                        (row.get("action_sync_uuid"),),
+                    )
+                    action_match = cursor.fetchone()
+                    if not action_match:
+                        skipped += 1
+                        continue
+
+                    # init_db() maakt voor iedere actie al een lege outcome-row.
+                    # Bij sync moet echte remote outcome-data die placeholder
+                    # BIJWERKEN in plaats van botsen op action_id UNIQUE en stil
+                    # worden overgeslagen.
+                    local_action_id = action_match["id"]
+                    cursor.execute(
+                        "SELECT sync_uuid FROM action_outcomes WHERE action_sync_uuid = ?",
+                        (row.get("action_sync_uuid"),),
+                    )
+                    existing_outcome = cursor.fetchone()
+                    if existing_outcome:
+                        if existing_outcome["sync_uuid"] == sync_uuid_value:
+                            skipped += 1
+                            continue
+                        importable_fields = [
+                            key for key in row.keys()
+                            if key not in {"action_id", "action_sync_uuid"}
+                        ]
+                        assignments = ", ".join(f"{key} = ?" for key in importable_fields)
+                        cursor.execute(
+                            f"""
+                            UPDATE action_outcomes
+                            SET {assignments}
+                            WHERE action_sync_uuid = ?
+                            """,
+                            tuple(row[key] for key in importable_fields)
+                            + (row.get("action_sync_uuid"),),
+                        )
+                        imported_outcomes += 1
+                        continue
+
+                    row["action_id"] = local_action_id
 
                 cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
                 if cursor.fetchone():
@@ -770,14 +1112,17 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         """,
                         (imported_decision_id,),
                     )
-                else:
+                elif table == "action_queue":
                     imported_actions += 1
+                else:
+                    imported_outcomes += 1
 
         conn.commit()
 
     return {
         "decisions_imported": imported_decisions,
         "actions_imported": imported_actions,
+        "outcomes_imported": imported_outcomes,
         "skipped_existing": skipped,
     }
 

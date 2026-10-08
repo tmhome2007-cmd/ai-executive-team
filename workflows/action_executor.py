@@ -27,6 +27,8 @@ from memory.database import (
     update_action_status,
     record_execution_result,
     claim_action_for_execution,
+    mark_action_outcome_measurement_pending,
+    mark_action_outcome_execution_failed,
     VALID_ACTION_TYPES,
 )
 from notifications.telegram_bot import send_notification, escape_html
@@ -356,6 +358,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
         update_action_status(action_id, "execution_failed")
         error_msg = f"Malformed file_operation action_detail: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
         return {
             "success": False,
             "action_id": action_id,
@@ -369,6 +372,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
     if confinement_reason:
         update_action_status(action_id, "blocked_dangerous")
         record_execution_result(action_id, json.dumps({"error": f"Blocked: {confinement_reason}"}))
+        mark_action_outcome_execution_failed(action_id, f"Blocked before execution: {confinement_reason}")
         try:
             send_notification(
                 f"🚫 <b>FILE OPERATION BLOCKED — path outside workspace</b>\n\n"
@@ -412,6 +416,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                 file_content = f.read()
             update_action_status(action_id, "executed")
             record_execution_result(action_id, json.dumps({"stdout": file_content[:2000]}))
+            mark_action_outcome_measurement_pending(action_id)
             try:
                 send_notification(
                     f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
@@ -429,6 +434,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                 f.write(content)
             update_action_status(action_id, "executed")
             record_execution_result(action_id, json.dumps({"stdout": f"Wrote {len(content)} characters to {resolved_path}"}))
+            mark_action_outcome_measurement_pending(action_id)
             try:
                 send_notification(
                     f"⚡ <b>FILE {operation.upper()} SUCCESSFUL</b>\n\n"
@@ -442,13 +448,16 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
 
         else:
             update_action_status(action_id, "execution_failed")
-            record_execution_result(action_id, json.dumps({"error": f"Unknown operation: {operation}"}))
-            return {"success": False, "action_id": action_id, "error": f"Unknown operation: {operation}"}
+            error_msg = f"Unknown operation: {operation}"
+            record_execution_result(action_id, json.dumps({"error": error_msg}))
+            mark_action_outcome_execution_failed(action_id, error_msg)
+            return {"success": False, "action_id": action_id, "error": error_msg}
 
     except Exception as e:
         update_action_status(action_id, "execution_failed")
         error_msg = f"File operation failed: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
         try:
             send_notification(
                 f"❌ <b>FILE OPERATION FAILED</b>\n\n"
@@ -488,6 +497,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         update_action_status(action_id, "execution_failed")
         error_msg = f"Malformed browser_action action_detail: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
         return {
             "success": False,
             "action_id": action_id,
@@ -498,6 +508,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
     if url_block_reason:
         update_action_status(action_id, "blocked_dangerous")
         record_execution_result(action_id, json.dumps({"error": f"Blocked: {url_block_reason}"}))
+        mark_action_outcome_execution_failed(action_id, f"Blocked before execution: {url_block_reason}")
         try:
             send_notification(
                 f"🚫 <b>BROWSER ACTION BLOCKED — unsafe URL</b>\n\n"
@@ -574,6 +585,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             "stdout": result_summary,
             "screenshot_path": screenshot_path,
         }))
+        mark_action_outcome_measurement_pending(action_id)
         try:
             send_notification(
                 f"⚡ <b>BROWSER ACTION SUCCESSFUL</b>\n\n"
@@ -596,6 +608,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         update_action_status(action_id, "execution_failed")
         error_msg = f"Browser action failed: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
         try:
             send_notification(
                 f"❌ <b>BROWSER ACTION FAILED</b>\n\n"
@@ -642,6 +655,7 @@ def execute_action(action_id: int) -> dict:
         update_action_status(action_id, "execution_failed")
         error_msg = f"Unsupported action_type '{action_type}'"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
         return {"success": False, "action_id": action_id, "error": error_msg}
 
     # Gestructureerde bestandsoperaties gaan een volledig eigen, veiligere pad
@@ -663,6 +677,7 @@ def execute_action(action_id: int) -> dict:
     if block_reason:
         update_action_status(action_id, "blocked_dangerous")
         record_execution_result(action_id, json.dumps({"error": f"Blocked: {block_reason}"}))
+        mark_action_outcome_execution_failed(action_id, f"Blocked before execution: {block_reason}")
 
         try:
             notification_text = (
@@ -728,6 +743,7 @@ def execute_action(action_id: int) -> dict:
                 "stdout": completed_process.stdout,
                 "stderr": completed_process.stderr,
             }))
+            mark_action_outcome_measurement_pending(action_id)
 
             try:
                 notification_text = (
@@ -751,6 +767,7 @@ def execute_action(action_id: int) -> dict:
             update_action_status(action_id, "execution_failed")
             error_msg = completed_process.stderr or f"Command exited with return code {completed_process.returncode}"
             record_execution_result(action_id, json.dumps({"error": error_msg, "stdout": completed_process.stdout, "stderr": completed_process.stderr}))
+            mark_action_outcome_execution_failed(action_id, error_msg)
 
             try:
                 notification_text = (
@@ -776,6 +793,7 @@ def execute_action(action_id: int) -> dict:
         update_action_status(action_id, "execution_failed")
         error_msg = "Command timed out after 30 seconds."
         record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
 
         try:
             send_notification(
@@ -798,6 +816,7 @@ def execute_action(action_id: int) -> dict:
         update_action_status(action_id, "execution_failed")
         error_msg = f"Unexpected error during execution: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
 
         try:
             send_notification(

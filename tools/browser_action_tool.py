@@ -34,6 +34,23 @@ class BrowserActionInput(BaseModel):
         ...,
         description="A short, human-readable explanation of why this browser action is being proposed."
     )
+    expected_outcome: str | None = Field(
+        default=None,
+        description="What observable result should follow from this browser action if it succeeds."
+    )
+    expected_impact: str | None = Field(
+        default=None,
+        description="Qualitative business/operational impact expected from the browser action."
+    )
+    expected_cost_amount: float | None = Field(
+        default=None,
+        ge=0,
+        description="Expected monetary cost only when known from evidence; otherwise leave empty."
+    )
+    currency: str | None = Field(
+        default=None,
+        description="3-letter currency code such as EUR or USD when expected_cost_amount is known."
+    )
 
 
 class ProposeBrowserActionTool(BaseTool):
@@ -51,7 +68,16 @@ class ProposeBrowserActionTool(BaseTool):
     def __init__(self, role: str, **data):
         super().__init__(role=role, **data)
 
-    def _run(self, url: str, reason: str, click_selector: Optional[str] = None) -> str:
+    def _run(
+        self,
+        url: str,
+        reason: str,
+        click_selector: Optional[str] = None,
+        expected_outcome: str | None = None,
+        expected_impact: str | None = None,
+        expected_cost_amount: float | None = None,
+        currency: str | None = None,
+    ) -> str:
         # LLMs frequently write the literal string "null" (or "none", "n/a",
         # empty string) instead of actually omitting an optional field. Treat
         # all of these as "no selector provided" so we never try to click an
@@ -77,6 +103,10 @@ class ProposeBrowserActionTool(BaseTool):
             action_description=description,
             action_detail=action_detail_json,
             action_type="browser_action",
+            expected_outcome=expected_outcome,
+            expected_impact=expected_impact,
+            expected_cost_amount=expected_cost_amount,
+            currency=currency,
         )
 
         summary = f"[navigate] {url}" + (f"\n[click] {click_selector}" if click_selector else "")

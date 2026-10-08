@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 import asyncio
 import datetime
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException, Query, Depends, Header, Request
 import hmac
 import time
@@ -43,6 +43,8 @@ from memory.database import (
     recover_interrupted_actions,
     get_latest_action_id,
     get_actions_after_id,
+    get_action_outcome,
+    update_action_outcome,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -566,10 +568,13 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         "review. IMPORTANT: if you decide a proposal is needed, CALL the actual tool. "
         "Do not print, imitate, or describe a JSON/function-call payload in your answer. "
         "A textual pseudo-call is invalid and will fail preparation verification. "
-        "Never claim a proposed action has executed. Never invent access or "
-        "credentials we do not have. Missing capabilities must be listed explicitly "
-        "as resource/access requests. Minimize actions: do not propose anything that "
-        "is not necessary to prepare the approved direction."
+        "Never claim a proposed action has executed. For every action you actually "
+        "propose, include an expected_outcome and expected_impact so we can measure "
+        "whether it worked later. Include expected_cost_amount + currency ONLY when "
+        "the supplied evidence supports a real cost; otherwise leave cost unknown. "
+        "Never invent access or credentials we do not have. Missing capabilities must "
+        "be listed explicitly as resource/access requests. Minimize actions: do not "
+        "propose anything that is not necessary to prepare the approved direction."
     )
 
     try:
@@ -734,6 +739,21 @@ def get_stats():
     return stats
 
 
+class OutcomeUpdateRequest(BaseModel):
+    expected_outcome: Optional[str] = None
+    expected_impact: Optional[str] = None
+    expected_cost_amount: Optional[float] = Field(default=None, ge=0)
+    currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    outcome_status: Optional[
+        Literal["succeeded", "failed", "partial", "inconclusive"]
+    ] = None
+    actual_outcome: Optional[str] = None
+    actual_impact: Optional[str] = None
+    actual_cost_amount: Optional[float] = Field(default=None, ge=0)
+    next_recommendation: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class SandboxModeRequest(BaseModel):
     enabled: bool
 
@@ -829,6 +849,83 @@ def read_action_history(
                 detail=f"Invalid action status filter '{status}'.",
             )
     return get_action_history(limit, offset, status)
+
+
+@app.get(
+    "/actions/{action_id}/outcome",
+    summary="Get Action Business Outcome",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_action_outcome(action_id: int):
+    """Return the expected/actual business outcome separately from execution logs."""
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action not found.")
+    outcome = get_action_outcome(action_id)
+    if outcome is None:
+        raise HTTPException(status_code=404, detail="Outcome record not found.")
+    return outcome
+
+
+@app.patch(
+    "/actions/{action_id}/outcome",
+    summary="Update Action Business Outcome",
+    dependencies=[Depends(verify_api_key)],
+)
+def patch_action_outcome(action_id: int, request: OutcomeUpdateRequest):
+    """
+    Record expected or actual business results. Terminal outcome judgments are
+    allowed only after a LIVE action reached a terminal execution state.
+    """
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action not found.")
+
+    payload = request.model_dump(exclude_none=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No outcome fields supplied.")
+
+    monetary_fields = {"expected_cost_amount", "actual_cost_amount"}
+    if monetary_fields.intersection(payload) and not (
+        payload.get("currency") or action.get("currency")
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="currency is required when recording a monetary amount.",
+        )
+
+    terminal_result_fields = {
+        "outcome_status",
+        "actual_outcome",
+        "actual_impact",
+        "actual_cost_amount",
+        "next_recommendation",
+    }
+    if terminal_result_fields.intersection(payload):
+        if action["status"] not in {"executed", "execution_failed", "blocked_dangerous"}:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Actual business outcomes can only be recorded after a live "
+                    f"action reaches a terminal execution state; current status is '{action['status']}'."
+                ),
+            )
+        if payload.get("outcome_status") and not (
+            payload.get("actual_outcome") or action.get("actual_outcome")
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="actual_outcome is required when setting a terminal outcome status.",
+            )
+
+    try:
+        updated = update_action_outcome(action_id, **payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Outcome record not found.")
+    return updated
 
 
 @app.post(
