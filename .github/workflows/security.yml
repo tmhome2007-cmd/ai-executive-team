@@ -33,6 +33,15 @@ jobs:
       - name: Container boundary unit tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
 
+      - name: System regression verification
+        env:
+          API_SECRET_KEY: "ci-local-regression-placeholder-1234567890"
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
+          SANDBOX_MODE: "true"
+          ALLOW_UNSAFE_RAW_SHELL: "false"
+        run: python verify_system.py
+
       - name: Bandit medium/high findings
         run: bandit -r agents memory notifications tools workflows main.py config.py system_checks.py -ll
 
