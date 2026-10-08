@@ -25,6 +25,8 @@ from memory.database import (
     get_company_goal,
     get_decision_by_id,
     link_followup_generated_decision,
+    claim_followup_meeting_attempt,
+    record_followup_meeting_failure,
     log_decision,
 )
 from notifications.telegram_bot import send_notification_async, escape_html
@@ -302,24 +304,46 @@ async def run_autonomous_followup() -> dict:
 
             if not created:
                 existing_event_ids.append(event_id)
-                continue
+                if not candidate.get("meeting_required"):
+                    continue
+                existing_event = get_followup_event(event_id)
+                if (
+                    existing_event is None
+                    or existing_event.get("generated_decision_id") is not None
+                    or not claim_followup_meeting_attempt(event_id, min_retry_seconds=900)
+                ):
+                    continue
+                try:
+                    await send_notification_async(
+                        "🔁 <b>FOLLOW-UP REASONING RETRY</b>\n\n"
+                        f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
+                        f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
+                        "A previous reasoning attempt failed; retrying after backoff."
+                    )
+                except Exception:
+                    pass
+            else:
+                created_event_ids.append(event_id)
 
-            created_event_ids.append(event_id)
+                try:
+                    await send_notification_async(
+                        "🔁 <b>AUTONOMOUS FOLLOW-UP</b>\n\n"
+                        f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
+                        f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
+                        f"<b>Severity:</b> {escape_html(candidate['severity'])}\n\n"
+                        f"{escape_html(candidate['reason'])}"
+                    )
+                except Exception:
+                    # Notification failure must never change persisted follow-up state.
+                    pass
 
-            try:
-                await send_notification_async(
-                    "🔁 <b>AUTONOMOUS FOLLOW-UP</b>\n\n"
-                    f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
-                    f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
-                    f"<b>Severity:</b> {escape_html(candidate['severity'])}\n\n"
-                    f"{escape_html(candidate['reason'])}"
-                )
-            except Exception:
-                # Notification failure must never change persisted follow-up state.
-                pass
+                if not candidate.get("meeting_required"):
+                    continue
 
-            if not candidate.get("meeting_required"):
-                continue
+                # New reasoning events are claimed immediately. The same atomic
+                # claim function is used for future retries after backoff.
+                if not claim_followup_meeting_attempt(event_id, min_retry_seconds=0):
+                    continue
 
             try:
                 prompt = _followup_meeting_prompt(goal, candidate, lineage)
@@ -359,6 +383,12 @@ async def run_autonomous_followup() -> dict:
                 except Exception:
                     pass
             except Exception as exc:
+                try:
+                    record_followup_meeting_failure(event_id, str(exc))
+                except Exception as persist_exc:
+                    errors.append(
+                        f"Could not persist retryable failure for event #{event_id}: {persist_exc}"
+                    )
                 errors.append(
                     f"Follow-up meeting for event #{event_id} failed: {exc}"
                 )
