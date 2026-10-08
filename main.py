@@ -51,6 +51,13 @@ from memory.database import (
     transition_resource_request_status,
     propose_resource_request,
     action_provenance_scope,
+    add_treasury_entry,
+    get_treasury_summary,
+    get_treasury_history,
+    get_treasury_reservation_for_action,
+    approve_action_with_treasury,
+    reject_action_with_treasury,
+    update_action_outcome_with_treasury,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -273,6 +280,12 @@ class ResourceFulfillmentRequest(BaseModel):
             "Never include passwords, API keys, tokens, or other secret values."
         ),
     )
+
+
+class TreasuryFundingRequest(BaseModel):
+    amount: float = Field(gt=0)
+    currency: str = Field(min_length=3, max_length=3)
+    note: Optional[str] = Field(default=None, max_length=500)
 
 
 class PreparationResponse(BaseModel):
@@ -1129,6 +1142,77 @@ def favicon():
     return Response(status_code=204)
 
 # ===================================================================
+# COMPANY TREASURY ENDPOINTS
+# ===================================================================
+
+@app.get(
+    "/treasury/summary",
+    summary="Get Company Treasury Summary",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_treasury_summary(currency: Optional[str] = None):
+    try:
+        return get_treasury_summary(currency)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get(
+    "/treasury/history",
+    summary="Get Treasury Ledger History",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_treasury_history(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    return get_treasury_history(limit=limit, offset=offset)
+
+
+@app.post(
+    "/treasury/fund",
+    summary="Add Owner Funding to Treasury",
+    description=(
+        "Records owner-provided capital. This is an accounting entry only and "
+        "does not move money or connect a bank account."
+    ),
+    dependencies=[Depends(verify_api_key)],
+)
+def fund_treasury(request: TreasuryFundingRequest):
+    try:
+        entry_id = add_treasury_entry(
+            "funding",
+            request.amount,
+            request.currency,
+            request.note or "Owner funding",
+        )
+        return {
+            "entry_id": entry_id,
+            "entry_type": "funding",
+            "amount": request.amount,
+            "currency": request.currency.strip().upper(),
+            "treasury": get_treasury_summary(request.currency),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get(
+    "/treasury/actions/{action_id}/reservation",
+    summary="Get Action Treasury Reservation",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_action_treasury_reservation(action_id: int):
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action not found.")
+    return {
+        "action_id": action_id,
+        "reservation": get_treasury_reservation_for_action(action_id),
+    }
+
+
+# ===================================================================
 # SYSTEM ENDPOINTS
 # ===================================================================
 
@@ -1332,6 +1416,15 @@ def patch_action_outcome(action_id: int, request: OutcomeUpdateRequest):
     if not payload:
         raise HTTPException(status_code=400, detail="No outcome fields supplied.")
 
+    if {"expected_cost_amount", "currency"}.intersection(payload) and action["status"] != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Expected cost/currency can only be changed while an action is pending. "
+                "Once approved, the treasury reservation is authoritative."
+            ),
+        )
+
     monetary_fields = {"expected_cost_amount", "actual_cost_amount"}
     if monetary_fields.intersection(payload) and not (
         payload.get("currency") or action.get("currency")
@@ -1366,7 +1459,7 @@ def patch_action_outcome(action_id: int, request: OutcomeUpdateRequest):
             )
 
     try:
-        updated = update_action_outcome(action_id, **payload)
+        updated = update_action_outcome_with_treasury(action_id, **payload)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1387,15 +1480,19 @@ def approve_action(action_id: int):
     if action is None:
         raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
 
-    success = transition_action_status(action_id, "approved", ("pending",))
-    if not success:
+    try:
+        return approve_action_with_treasury(action_id)
+    except ValueError as e:
         current = get_action_by_id(action_id)
-        current_status = current["status"] if current else "unknown"
-        raise HTTPException(
-            status_code=409,
-            detail=f"Action cannot be approved from status '{current_status}'.",
-        )
-    return {"action_id": action_id, "status": "approved"}
+        if current is None:
+            raise HTTPException(status_code=404, detail=str(e))
+        detail = str(e)
+        status_code = 409 if (
+            "cannot be approved" in detail
+            or "Insufficient available treasury funds" in detail
+            or "race" in detail.lower()
+        ) else 400
+        raise HTTPException(status_code=status_code, detail=detail)
 
 
 @app.post(
@@ -1410,15 +1507,13 @@ def reject_action(action_id: int):
     if action is None:
         raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
 
-    success = transition_action_status(action_id, "rejected", ("pending", "approved"))
-    if not success:
+    try:
+        return reject_action_with_treasury(action_id)
+    except ValueError as e:
         current = get_action_by_id(action_id)
-        current_status = current["status"] if current else "unknown"
-        raise HTTPException(
-            status_code=409,
-            detail=f"Action cannot be rejected from status '{current_status}'.",
-        )
-    return {"action_id": action_id, "status": "rejected"}
+        if current is None:
+            raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e))
 @app.post(
     "/actions/{action_id}/execute",
     summary="Execute Approved Action",
