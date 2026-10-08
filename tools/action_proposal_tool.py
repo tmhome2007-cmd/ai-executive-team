@@ -5,6 +5,9 @@ CrewAI tool waarmee agenten acties voorstellen in plaats van ze direct uit te vo
 Slaat voorstellen op in de action_queue database en stuurt een Telegram-notificatie.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 from typing import Type
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
