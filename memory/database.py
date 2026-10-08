@@ -2668,9 +2668,11 @@ def transition_action_status(
     allowed_from: tuple[str, ...],
 ) -> bool:
     """
-    Atomische compare-and-set statusovergang. De UPDATE slaagt alleen wanneer
-    de rij op het moment van schrijven nog in één van allowed_from staat.
-    Dit sluit races tussen dashboard/Telegram-knoppen en dubbele requests.
+    Atomic compare-and-set status transition.
+
+    Direct approval remains available for internal/test paths, but it is
+    integrity-sealed and refuses paid actions so treasury reservation cannot
+    be bypassed. User-facing approvals use approve_action_with_treasury().
     """
     if new_status not in VALID_ACTION_STATUSES:
         raise ValueError(f"Unsupported action status: {new_status}")
@@ -2679,25 +2681,115 @@ def transition_action_status(
 
     reviewed_at = datetime.datetime.now().isoformat()
     placeholders = ", ".join("?" for _ in allowed_from)
-    params = (new_status, reviewed_at, action_id, *allowed_from)
 
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+
+        approval_seal = None
+        if new_status == "approved":
+            action = _action_row_for_approval(cursor, action_id)
+            if action is None or action["status"] not in allowed_from:
+                conn.rollback()
+                return False
+            amount = action.get("expected_cost_amount")
+            if amount is not None and float(amount) > 0:
+                conn.rollback()
+                raise ValueError(
+                    "Paid actions must use treasury-aware approval; direct status "
+                    "approval is not permitted."
+                )
+            approval_seal = _action_approval_seal(action)
+
+        params = (new_status, reviewed_at, approval_seal, action_id, *allowed_from)
         cursor.execute(
             f"""
             UPDATE action_queue
-            SET status = ?, reviewed_at = ?
+            SET status = ?, reviewed_at = ?,
+                approval_seal = CASE
+                    WHEN ? IS NOT NULL THEN ?
+                    WHEN ? = 'rejected' THEN NULL
+                    ELSE approval_seal
+                END
             WHERE id = ? AND status IN ({placeholders})
             """,
-            params,
+            (
+                new_status,
+                reviewed_at,
+                approval_seal,
+                approval_seal,
+                new_status,
+                action_id,
+                *allowed_from,
+            ),
         )
-        conn.commit()
-        return cursor.rowcount == 1
+        changed = cursor.rowcount == 1
+        if changed:
+            conn.commit()
+        else:
+            conn.rollback()
+        return changed
 
 
 def claim_action_for_execution(action_id: int) -> bool:
-    """Reserveert een approved actie atomair voor exact één executor."""
-    return transition_action_status(action_id, "executing", ("approved",))
+    """
+    Atomically verify the owner's approval seal and claim exactly one action.
+
+    If any authority-bearing action field changed after approval, the action is
+    returned to pending and any active treasury reservation is released in the
+    same transaction. The owner must then review and approve the new payload.
+    """
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        action = _action_row_for_approval(cursor, action_id)
+        if action is None or action["status"] != "approved":
+            conn.rollback()
+            return False
+
+        supplied_seal = action.get("approval_seal")
+        expected_seal = _action_approval_seal(action)
+        if (
+            not isinstance(supplied_seal, str)
+            or not supplied_seal
+            or not hmac.compare_digest(supplied_seal, expected_seal)
+        ):
+            cursor.execute(
+                """
+                UPDATE action_queue
+                SET status = 'pending', reviewed_at = NULL, approval_seal = NULL
+                WHERE id = ? AND status = 'approved'
+                """,
+                (action_id,),
+            )
+            cursor.execute(
+                """
+                UPDATE treasury_reservations
+                SET status = 'released', released_at = ?
+                WHERE source_action_id = ? AND status = 'active'
+                """,
+                (now, action_id),
+            )
+            conn.commit()
+            raise ValueError(
+                "Action approval integrity check failed; payload changed or "
+                "approval seal is missing. Owner re-approval is required."
+            )
+
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'executing', reviewed_at = ?
+            WHERE id = ? AND status = 'approved' AND approval_seal = ?
+            """,
+            (now, action_id, supplied_seal),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return False
+        conn.commit()
+        return True
 
 
 def record_execution_result(action_id: int, result_detail_json: str) -> bool:
