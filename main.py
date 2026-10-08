@@ -64,8 +64,12 @@ from memory.database import (
     update_company_goal,
     transition_company_goal_status,
     get_company_goal_lineage,
+    get_followup_event,
+    get_followup_events,
+    transition_followup_event_status,
 )
 from workflows.daily_research import run_daily_research
+from workflows.autonomous_followup import run_autonomous_followup
 from workflows.meeting import run_executive_meeting
 from agents.executive_agents import EXECUTIVE_AGENTS, EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
@@ -81,6 +85,17 @@ LAST_RUN_STATUS = {
     "success": None,
     "database_id": None,
     "message": "No run yet.",
+}
+
+LAST_FOLLOWUP_STATUS = {
+    "last_run_time": None,
+    "success": None,
+    "scanned_goal_count": 0,
+    "created_event_ids": [],
+    "generated_decision_ids": [],
+    "resolved_event_ids": [],
+    "errors": [],
+    "message": "No autonomous follow-up run yet.",
 }
 
 
@@ -126,6 +141,43 @@ async def scheduled_research_job():
             "success": False,
             "database_id": None,
             "message": f"Scheduled job crashed with error: {str(e)}",
+        }
+
+
+async def scheduled_autonomous_followup_job():
+    """
+    Hourly autonomous follow-up. The deterministic watcher may create
+    owner-facing follow-up items and TOOL-FREE pending decisions only.
+    It cannot approve, prepare, fulfill, reserve, execute, or measure anything.
+    """
+    global LAST_FOLLOWUP_STATUS
+    now_iso = datetime.datetime.now().isoformat()
+    try:
+        result = await run_autonomous_followup()
+        LAST_FOLLOWUP_STATUS = {
+            "last_run_time": now_iso,
+            "success": result.get("success", False),
+            "scanned_goal_count": result.get("scanned_goal_count", 0),
+            "created_event_ids": result.get("created_event_ids", []),
+            "generated_decision_ids": result.get("generated_decision_ids", []),
+            "resolved_event_ids": result.get("resolved_event_ids", []),
+            "errors": result.get("errors", []),
+            "message": (
+                "Autonomous follow-up scan completed."
+                if result.get("success", False)
+                else "Autonomous follow-up scan completed with errors."
+            ),
+        }
+    except Exception as exc:
+        LAST_FOLLOWUP_STATUS = {
+            "last_run_time": now_iso,
+            "success": False,
+            "scanned_goal_count": 0,
+            "created_event_ids": [],
+            "generated_decision_ids": [],
+            "resolved_event_ids": [],
+            "errors": [str(exc)],
+            "message": f"Autonomous follow-up job crashed: {exc}",
         }
 
 
@@ -183,6 +235,15 @@ async def lifespan(app: FastAPI):
         coalesce=True,
     )
     scheduler.add_job(
+        scheduled_autonomous_followup_job,
+        trigger=IntervalTrigger(hours=1),
+        id="autonomous_followup_interval_job",
+        replace_existing=True,
+        next_run_time=datetime.datetime.now() + datetime.timedelta(minutes=2),
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
         lambda: backup_database(keep_last=7),
         trigger=IntervalTrigger(hours=24),
         id="daily_database_backup_job",
@@ -190,7 +251,10 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     app.state.scheduler = scheduler
-    logger.info("Scheduler started: immediate daily-research catch-up check + 15 min interval + daily DB backup (24h interval).")
+    logger.info(
+        "Scheduler started: daily-research catch-up every 15 min, autonomous "
+        "follow-up every 1h (first scan after 2 min), daily DB backup every 24h."
+    )
 
     # Eén backup bij het opstarten, zodat je niet 24 uur moet wachten op de
     # eerste veiligheidskopie na een verse installatie.
@@ -481,6 +545,107 @@ async def trigger_daily_research():
         final_decision=result.get("meeting_result", {}).get("final_decision"),
         message=msg,
     )
+
+
+# ===================================================================
+# AUTONOMOUS FOLLOW-UP
+# ===================================================================
+
+@app.get(
+    "/workflows/autonomous-followup/status",
+    summary="Get Autonomous Follow-Up Status",
+    dependencies=[Depends(verify_api_key)],
+)
+def get_autonomous_followup_status():
+    return LAST_FOLLOWUP_STATUS
+
+
+@app.post(
+    "/workflows/autonomous-followup/trigger",
+    summary="Run Autonomous Follow-Up Scan Now",
+    dependencies=[Depends(verify_api_key)],
+)
+async def trigger_autonomous_followup():
+    global LAST_FOLLOWUP_STATUS
+    now_iso = datetime.datetime.now().isoformat()
+    try:
+        result = await run_autonomous_followup()
+    except Exception as exc:
+        LAST_FOLLOWUP_STATUS = {
+            "last_run_time": now_iso,
+            "success": False,
+            "scanned_goal_count": 0,
+            "created_event_ids": [],
+            "generated_decision_ids": [],
+            "resolved_event_ids": [],
+            "errors": [str(exc)],
+            "message": f"Manual autonomous follow-up scan crashed: {exc}",
+        }
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    LAST_FOLLOWUP_STATUS = {
+        "last_run_time": now_iso,
+        "success": result.get("success", False),
+        "scanned_goal_count": result.get("scanned_goal_count", 0),
+        "created_event_ids": result.get("created_event_ids", []),
+        "generated_decision_ids": result.get("generated_decision_ids", []),
+        "resolved_event_ids": result.get("resolved_event_ids", []),
+        "errors": result.get("errors", []),
+        "message": "Manual autonomous follow-up scan completed.",
+    }
+    return result
+
+
+@app.get(
+    "/followups/open",
+    summary="List Open Follow-Up Items",
+    dependencies=[Depends(verify_api_key)],
+)
+def list_open_followups(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    return get_followup_events(statuses=("open",), limit=limit, offset=offset)
+
+
+@app.get(
+    "/followups/history",
+    summary="List Follow-Up History",
+    dependencies=[Depends(verify_api_key)],
+)
+def list_followup_history(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    return get_followup_events(limit=limit, offset=offset)
+
+
+@app.post(
+    "/followups/{event_id}/resolve",
+    summary="Resolve Follow-Up Item",
+    dependencies=[Depends(verify_api_key)],
+)
+def resolve_followup(event_id: int):
+    current = get_followup_event(event_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Follow-up event not found.")
+    if not transition_followup_event_status(event_id, "resolved", ("open",)):
+        raise HTTPException(status_code=409, detail="Follow-up event is not open.")
+    return {"event_id": event_id, "status": "resolved"}
+
+
+@app.post(
+    "/followups/{event_id}/dismiss",
+    summary="Dismiss Follow-Up Item",
+    dependencies=[Depends(verify_api_key)],
+)
+def dismiss_followup(event_id: int):
+    current = get_followup_event(event_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Follow-up event not found.")
+    if not transition_followup_event_status(event_id, "dismissed", ("open",)):
+        raise HTTPException(status_code=409, detail="Follow-up event is not open.")
+    return {"event_id": event_id, "status": "dismissed"}
 
 
 # ===================================================================
