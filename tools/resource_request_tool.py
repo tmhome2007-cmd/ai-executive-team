@@ -39,11 +39,18 @@ class ResourceRequestInput(BaseModel):
     amount: float | None = Field(
         default=None,
         ge=0,
-        description="Requested amount for budget requests only. Leave empty if unknown.",
+        description=(
+            "Requested numeric amount for budget requests only. OMIT this field for "
+            "non-budget requests or when the amount is unknown. Never send text like "
+            "'Unknown — evidence required'."
+        ),
     )
     currency: str | None = Field(
         default=None,
-        description="3-letter currency code for a known budget amount.",
+        description=(
+            "3-letter currency code only when a numeric budget amount is known. "
+            "OMIT this field otherwise; never use placeholder text."
+        ),
     )
 
 
@@ -53,7 +60,8 @@ class ProposeResourceRequestTool(BaseTool):
         "Use this to create a structured request for a missing capability/resource "
         "such as access, credentials, a plugin, data, budget, service, or hardware. "
         "This does NOT grant access, spend money, connect anything, or store secrets. "
-        "Never put an API key/password/token in any field."
+        "Never put an API key/password/token in any field. For non-budget resources "
+        "omit amount/currency entirely; for unknown budget amounts omit them too."
     )
     args_schema: Type[BaseModel] = ResourceRequestInput
     role: str
