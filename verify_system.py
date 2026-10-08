@@ -3393,6 +3393,17 @@ try:
         get_company_goal as _get_goal_104,
         transition_company_goal_status as _transition_goal_104,
         update_company_goal as _update_goal_104,
+        log_decision as _decision_104,
+        get_decision_by_id as _get_decision_104,
+        action_provenance_scope as _scope_104,
+        propose_action as _propose_action_104,
+        propose_resource_request as _propose_resource_104,
+        transition_resource_request_status as _resource_status_104,
+        get_resource_request_by_id as _get_resource_104,
+        add_treasury_entry as _fund_104,
+        approve_action_with_treasury as _approve_action_104,
+        get_action_by_id as _get_action_104,
+        get_treasury_summary as _treasury_104,
     )
 
     original_db_104 = _verify_config_104.DATABASE_PATH
@@ -3430,6 +3441,50 @@ try:
             except ValueError as exc:
                 invalid_transition_blocked = "cannot transition" in str(exc)
 
+            cleanup_goal_id = _create_goal_104(
+                "Closure cleanup", "Mission", "Criteria", status="active"
+            )
+            cleanup_decision_id = _decision_104(
+                "Cleanup decision", ["cfo"], "Task", "Outcome", True, goal_id=cleanup_goal_id
+            )
+            cleanup_decision = _get_decision_104(cleanup_decision_id)
+            _fund_104("funding", 50, "EUR", "Cleanup capital")
+            with _scope_104(
+                cleanup_decision_id,
+                cleanup_decision["sync_uuid"],
+                "preparation",
+            ):
+                cleanup_action_id = _propose_action_104(
+                    "CFO",
+                    "Unexecuted paid goal work",
+                    "printf no-run",
+                    "shell",
+                    expected_cost_amount=20,
+                    currency="EUR",
+                )
+                cleanup_resource_id = _propose_resource_104(
+                    "COO",
+                    "access",
+                    "Test access",
+                    "Needed only for this goal",
+                )
+            _approve_action_104(cleanup_action_id)
+            _resource_status_104(cleanup_resource_id, "approved", ("pending",))
+            _transition_goal_104(
+                cleanup_goal_id,
+                "completed",
+                "Owner closes the goal and cancels remaining work.",
+            )
+            cleanup_action = _get_action_104(cleanup_action_id)
+            cleanup_resource = _get_resource_104(cleanup_resource_id)
+            cleanup_treasury = _treasury_104("EUR")["currencies"]["EUR"]
+            cleanup_ok = (
+                cleanup_action["status"] == "rejected"
+                and cleanup_resource["status"] == "rejected"
+                and cleanup_treasury
+                    == {"cash_balance": 50.0, "reserved": 0.0, "available": 50.0}
+            )
+
             if (
                 draft["status"] == "draft"
                 and active["status"] == "active"
@@ -3439,14 +3494,15 @@ try:
                 and completed["completion_note"]
                 and edit_blocked
                 and invalid_transition_blocked
+                and cleanup_ok
             ):
-                log_pass("company goal lifecycle is explicit, owner-controlled, and terminal goals are immutable")
+                log_pass("company goal lifecycle is owner-controlled and terminal closure cancels unexecuted work/releases capital")
             else:
                 log_fail(
                     "Company goal lifecycle",
                     f"draft={draft}, active={active}, paused={paused}, resumed={resumed}, "
                     f"completed={completed}, edit_blocked={edit_blocked}, "
-                    f"invalid_transition_blocked={invalid_transition_blocked}",
+                    f"invalid_transition_blocked={invalid_transition_blocked}, cleanup_ok={cleanup_ok}",
                 )
     finally:
         _verify_config_104.DATABASE_PATH = original_db_104
@@ -3726,6 +3782,8 @@ try:
         "VALID_GOAL_PRIORITIES",
         "goal_sync_uuid",
         "get_company_goal_lineage",
+        "Goal cannot be closed while a linked action is executing",
+        "Terminal goal closure cancels unexecuted goal-specific work",
         '"company_goals": {',
         '"goals_imported"',
     ]
