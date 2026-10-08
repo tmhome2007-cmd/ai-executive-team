@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import secrets
+import stat
 import subprocess
 
 WORKER_IMAGE = "alpine:3.20"
@@ -25,6 +26,23 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
     root = Path(workspace_root).resolve(strict=True)
     if not root.is_dir() or root.is_symlink():
         raise ContainerExecutionError("Invalid workspace directory")
+    # A host Unix socket or device node within the bind mount could expose
+    # host services (including Docker itself) to otherwise isolated code.
+    # Check before launch; a dedicated workspace with no concurrent writers
+    # remains a deployment requirement to avoid TOCTOU races.
+    scanned = 0
+    for directory, subdirs, files in os.walk(root, followlinks=False):
+        for name in subdirs + files:
+            scanned += 1
+            if scanned > 10000:
+                raise ContainerExecutionError("Workspace too large for safe preflight")
+            entry = Path(directory) / name
+            try:
+                mode = entry.lstat().st_mode
+            except OSError as exc:
+                raise ContainerExecutionError("Workspace preflight failed") from exc
+            if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode) or stat.S_ISLNK(mode)):
+                raise ContainerExecutionError("Special host file in workspace mount")
     if not hasattr(os, "getuid") or os.getuid() == 0:
         raise ContainerExecutionError("Requires non-root Unix host identity")
     docker = shutil.which("docker")
@@ -33,7 +51,7 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
     container_name = "executive-worker-" + secrets.token_hex(12)
     args = [
         docker, "run", "--rm", "--name", container_name, "--pull=never",
-        "--network=none", "--read-only",
+        "--network=none", "--ipc=none", "--read-only",
         "--cap-drop=ALL", "--security-opt=no-new-privileges",
         "--pids-limit=64", "--memory=256m", "--cpus=1",
         f"--user={os.getuid()}:{os.getgid()}",
