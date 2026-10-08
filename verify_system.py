@@ -5940,8 +5940,8 @@ try:
     dependabot_ok_148 = 'package-ecosystem: "github-actions"' in dependabot_148
     csp_ok_148 = (
         'const isDevelopment = process.env.NODE_ENV !== "production"' in csp_148
-        and '? "script-src \\'self\\' \\'unsafe-inline\\' \\'unsafe-eval\\'"' in csp_148
-        and ': "script-src \\'self\\' \\'unsafe-inline\\'"' in csp_148
+        and "script-src 'self' 'unsafe-inline' 'unsafe-eval'" in csp_148
+        and "script-src 'self' 'unsafe-inline'" in csp_148
     )
 
     if ci_ok_148 and dependabot_ok_148 and csp_ok_148:
