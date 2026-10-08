@@ -2934,6 +2934,42 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 95: STATIC CHECK — resource pseudo-calls get one strict real-tool retry
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_95 = f.read()
+    with open("tools/resource_request_tool.py", "r", encoding="utf-8") as f:
+        resource_tool_content_95 = f.read()
+
+    required_main = [
+        "COMPATIBILITY RETRY — YOUR PREVIOUS RESPONSE WAS INVALID",
+        "Invoke propose_resource_request NOW",
+        "Printed JSON is never",
+        "retry_action_mismatch",
+        "retry_resource_mismatch",
+        "pseudo_resource_call",
+        "pseudo_action_call",
+    ]
+    missing_main = [item for item in required_main if item not in main_content_95]
+    tool_guidance = (
+        "OMIT this field" in resource_tool_content_95
+        and "Never send text like" in resource_tool_content_95
+        and "omit amount/currency entirely" in resource_tool_content_95
+    )
+
+    if not missing_main and tool_guidance:
+        log_pass("printed resource pseudo-calls get one strict retry that still requires a real tool invocation")
+    else:
+        log_fail(
+            "Resource pseudo-call compatibility retry",
+            f"missing_main={missing_main}, tool_guidance={tool_guidance}",
+        )
+except Exception as e:
+    log_fail("Resource pseudo-call compatibility retry check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
