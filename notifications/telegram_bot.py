@@ -27,6 +27,9 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from config import config
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def escape_html(text: str) -> str:
@@ -64,9 +67,12 @@ async def send_notification_async(message: str) -> None:
             text=message,
             parse_mode="HTML"
         )
-        print("Telegram notificatie succesvol verzonden!")
-    except Exception as e:
-        print(f"Failed to send Telegram notification: {e}")
+        logger.info("Telegram notification sent successfully.")
+    except Exception as exc:
+        logger.error(
+            "Telegram notification failed (%s). Sensitive transport details are suppressed.",
+            type(exc).__name__,
+        )
         raise
 
 
@@ -104,10 +110,13 @@ async def send_notification_with_keyboard_async(
             parse_mode="HTML",
             reply_markup=reply_markup,
         )
-        print("Telegram notificatie (met knoppen) succesvol verzonden!")
+        logger.info("Telegram notification with keyboard sent successfully.")
         return sent_message.message_id
-    except Exception as e:
-        print(f"Failed to send Telegram notification with keyboard: {e}")
+    except Exception as exc:
+        logger.error(
+            "Telegram keyboard notification failed (%s). Sensitive transport details are suppressed.",
+            type(exc).__name__,
+        )
         raise
 
 
