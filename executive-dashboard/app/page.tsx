@@ -6,6 +6,31 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").r
 
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : "";
 
+const VIEWS = [
+  ["overview", "Overview"], ["goals", "Goals"], ["treasury", "Treasury"],
+  ["decisions", "Decisions"], ["resources", "Resources"], ["actions", "Actions & results"],
+  ["activity", "Executive activity"], ["system", "System health"],
+] as const;
+type DashboardView = typeof VIEWS[number][0];
+interface SystemHealth {
+  status: string;
+  uptime_seconds: number;
+  components: Record<string, { ok: boolean; message: string }>;
+}
+
+// Model text stays React text: headings and lists never execute HTML or links.
+function Report({ text }: { text: string }) {
+  const inline = (line: string) => line.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={i}>{part.slice(2, -2)}</strong> : part);
+  return <div className="report">{text.split(/\r?\n/).map((line, i) => {
+    if (!line.trim()) return null;
+    if (/^\s*#{1,6}\s/.test(line)) return <h4 key={i}>{inline(line.replace(/^\s*#{1,6}\s+/, ""))}</h4>;
+    if (/^\s*[-*+]\s+/.test(line)) return <ul key={i}><li>{inline(line.replace(/^\s*[-*+]\s+/, ""))}</li></ul>;
+    return <p key={i}>{inline(line)}</p>;
+  })}</div>;
+}
+
 // --- Types ---
 
 interface DecisionHistoryItem {
@@ -570,6 +595,12 @@ function renderActionDetail(actionType: string | undefined, actionDetail: string
 }
 
 export default function DashboardPage() {
+  const [view, setView] = useState<DashboardView>("overview");
+  const [health, setHealth] = useState<SystemHealth | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [sectionErrors, setSectionErrors] = useState<Record<string, string>>({});
+  const [loadedSections, setLoadedSections] = useState<Record<string, boolean>>({});
   // --- Auth gate state ---
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState("");
@@ -587,6 +618,8 @@ export default function DashboardPage() {
   const handleAuthFailure = useCallback(() => {
     setApiKey(null);
     setKeyInput("");
+    setLoadedSections({});
+    setHealth(null);
   }, []);
 
   // --- Sandbox state ---
@@ -727,8 +760,10 @@ export default function DashboardPage() {
       // Backend returns all active states: pending, approved, executing.
       // Terminal actions belong only in Action History.
       setPendingActions(data);
+      setLoadedSections((prev) => ({ ...prev, pendingActions: true }));
+      setSectionErrors((prev) => ({ ...prev, pendingActions: "" }));
     } catch (err: unknown) {
-      console.error("Error fetching pending actions:", err);
+      setSectionErrors((prev) => ({ ...prev, pendingActions: errorMessage(err) || "Could not load pending actions." }));
     }
   }, [handleAuthFailure]);
 
@@ -751,8 +786,10 @@ export default function DashboardPage() {
 
       const data: PendingAction[] = await res.json();
       setActionHistory(data);
+      setLoadedSections((prev) => ({ ...prev, actionHistory: true }));
+      setSectionErrors((prev) => ({ ...prev, actionHistory: "" }));
     } catch (err: unknown) {
-      console.error("Error fetching action history:", err);
+      setSectionErrors((prev) => ({ ...prev, actionHistory: errorMessage(err) || "Could not load action history." }));
     }
   }, [handleAuthFailure]);
 
@@ -767,8 +804,10 @@ export default function DashboardPage() {
       }
       if (!res.ok) throw new Error("Could not fetch resource requests.");
       setResourceRequests(await res.json());
+      setLoadedSections((prev) => ({ ...prev, resources: true }));
+      setSectionErrors((prev) => ({ ...prev, resources: "" }));
     } catch (err) {
-      console.error("Error fetching resource requests:", err);
+      setSectionErrors((prev) => ({ ...prev, resources: errorMessage(err) || "Could not load resource requests." }));
     }
   }, [handleAuthFailure]);
 
@@ -783,8 +822,10 @@ export default function DashboardPage() {
       }
       if (!res.ok) throw new Error("Could not fetch treasury.");
       setTreasury(await res.json());
+      setLoadedSections((prev) => ({ ...prev, treasury: true }));
+      setSectionErrors((prev) => ({ ...prev, treasury: "" }));
     } catch (err) {
-      console.error("Error fetching treasury:", err);
+      setSectionErrors((prev) => ({ ...prev, treasury: errorMessage(err) || "Could not load treasury." }));
     }
   }, [handleAuthFailure]);
 
@@ -851,6 +892,7 @@ export default function DashboardPage() {
         throw new Error("Could not fetch autonomous follow-up state.");
       }
       setFollowups(await itemsRes.json());
+      setLoadedSections((prev) => ({ ...prev, followups: true }));
       setFollowupStatus(await statusRes.json());
       setFollowupError(null);
     } catch (err: unknown) {
@@ -946,6 +988,7 @@ export default function DashboardPage() {
       }
       if (!res.ok) throw new Error("Could not fetch company goals.");
       setGoals(await res.json());
+      setLoadedSections((prev) => ({ ...prev, goals: true }));
     } catch (err: unknown) {
       setGoalError(errorMessage(err) || "Could not fetch company goals.");
     }
@@ -1083,6 +1126,7 @@ export default function DashboardPage() {
       }
       setStatus(await statusRes.json());
       setHistory(await historyRes.json());
+      setLoadedSections((prev) => ({ ...prev, decisions: true }));
       setLoadError(null);
     } catch (err: unknown) {
       setLoadError(errorMessage(err) || "Could not connect to the backend.");
@@ -1102,6 +1146,25 @@ export default function DashboardPage() {
       fetchMeetingTypes(apiKey);
     }
   }, [apiKey, fetchDashboardData, fetchPendingActions, fetchActionHistory, fetchResourceRequests, fetchTreasury, fetchGoals, fetchFollowups, fetchExecutiveMemories, fetchMeetingTypes, memoryExecutive]);
+
+  const refreshHealth = useCallback(async (currentKey: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/system/health`, { headers: { "X-API-Key": currentKey } });
+      if (response.status === 401) { handleAuthFailure(); return; }
+      if (!response.ok) throw new Error("System health is unavailable.");
+      setHealth(await response.json());
+      setHealthError(null);
+    } catch (err) { setHealthError(errorMessage(err) || "System health is unavailable."); }
+  }, [handleAuthFailure]);
+  useEffect(() => { if (apiKey) refreshHealth(apiKey); }, [apiKey, refreshHealth]);
+  const refreshAll = async () => {
+    if (!apiKey) return;
+    setRefreshing(true);
+    try { await Promise.all([fetchDashboardData(), fetchPendingActions(apiKey), fetchActionHistory(apiKey),
+      fetchResourceRequests(apiKey), fetchTreasury(apiKey), fetchGoals(apiKey), fetchFollowups(apiKey),
+      fetchExecutiveMemories(apiKey, memoryExecutive), refreshHealth(apiKey)]); }
+    finally { setRefreshing(false); }
+  };
 
   const handleActionDecision = async (id: number, type: "approve" | "reject") => {
     if (type === "approve") {
@@ -1540,13 +1603,49 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto p-6 space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold">AI Executive Team Dashboard</h1>
-          <p className="text-gray-400 mt-1">
-            Overview of autonomous decisions and daily research status.
-          </p>
-        </div>
+      <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div><p className="text-xs tracking-widest uppercase text-teal-300 mb-2">AI Executive Team · Company dashboard v2</p>
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Company command center</h1>
+            <p className="text-gray-400 mt-2">Set direction. Review proposals. Measure what happened.</p></div>
+          <button onClick={refreshAll} disabled={refreshing} className="border border-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-800 disabled:opacity-50">{refreshing ? "Refreshing…" : "Refresh company data"}</button>
+        </header>
+        <nav aria-label="Company views" className="flex flex-wrap gap-2 border-b border-gray-800 pb-4">
+          {VIEWS.map(([key, label]) => <button key={key} aria-current={view === key ? "page" : undefined}
+            onClick={() => setView(key)} className={`rounded-lg px-3 py-2 text-sm transition-colors ${view === key ? "bg-teal-300 text-gray-950 font-semibold" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}>{label}</button>)}
+        </nav>
+        {Object.entries(sectionErrors).filter(([, error]) => error).map(([key, error]) => <p role="alert" key={key} className="text-amber-200 border border-amber-800 rounded-lg p-3">{error} Previously loaded data may be stale. Use Refresh company data to retry.</p>)}
+        <section hidden={view !== "overview"} aria-label="Company overview" className="space-y-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {([
+              ["Active goals", !loadedSections.goals || goalError ? "Unavailable" : goals.filter(g => g.status === "active").length, "goals", "Current loaded goals"],
+              ["Actions to review", !loadedSections.pendingActions || sectionErrors.pendingActions ? "Unavailable" : pendingActions.filter(a => a.status === "pending").length, "actions", "Approval and execution are separate"],
+              ["Resources needed", !loadedSections.resources || sectionErrors.resources ? "Unavailable" : resourceRequests.length, "resources", "Access, data and capital requests"],
+              ["Open follow-ups", !loadedSections.followups || followupError ? "Unavailable" : followups.filter(f => f.status === "open").length, "activity", "Observations and owner review"],
+            ] as const).map(([label, value, target, note]) => <button key={label} onClick={() => setView(target)} className="text-left bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-teal-600">
+              <span className="text-sm text-gray-400">{label}</span><strong className="block text-3xl my-3">{value}</strong><span className="text-xs text-gray-500">{note}</span></button>)}
+          </div>
+          <div className="grid lg:grid-cols-2 gap-6">
+            <article className="command-card"><h2>Treasury available</h2><p className="text-sm text-gray-400 mb-4">Available capital after reservations, kept separate by currency.</p>
+              {!loadedSections.treasury || sectionErrors.treasury ? <p>Treasury unavailable.</p> : Object.keys(treasury.currencies).length === 0 ? <p className="text-gray-400">No funding recorded. Add capital in Treasury.</p> : Object.entries(treasury.currencies).map(([currency, balance]) => <div className="flex justify-between border-t border-gray-800 py-3" key={currency}><strong>{currency}</strong><span>{balance.available.toLocaleString(undefined, { maximumFractionDigits: 2 })} available · {balance.reserved} reserved</span></div>)}
+              <button className="command-link" onClick={() => setView("treasury")}>Manage treasury →</button>
+            </article>
+            <article className="command-card"><h2>Needs your attention</h2><p className="text-sm text-gray-400 mb-4">Recent decisions awaiting direction approval and actions ready to execute.</p>
+              {!loadedSections.decisions || loadError ? <p>Decisions unavailable.</p> : history.filter(d => d.approval_status === "pending").slice(0, 3).map(d => <button key={d.id} className="block text-left py-2 command-link" onClick={() => setView("decisions")}>Decision #{d.id} · {d.topic}</button>)}
+              {pendingActions.filter(a => a.status === "approved").slice(0, 3).map(a => <button key={a.id} className="block text-left py-2 command-link" onClick={() => setView("actions")}>Ready for execution · #{a.id} {a.action_description}</button>)}
+              <p className="text-xs text-gray-500 mt-3">Decision summaries cover the latest 20 records. Review each view for details.</p>
+            </article>
+            <article className="command-card"><h2>Recent experiment results</h2><p className="text-sm text-gray-400 mb-4">Execution is distinct from a measured business outcome.</p>
+              {!loadedSections.actionHistory || sectionErrors.actionHistory ? <p>Results unavailable.</p> : actionHistory.filter(a => a.actual_outcome).length === 0 ? <p className="text-gray-400">No measured results in the latest 20 actions. Record observations in Actions & results.</p> : actionHistory.filter(a => a.actual_outcome).slice(0, 3).map(a => <div key={a.id} className="border-t border-gray-800 py-3"><p className="font-medium">#{a.id} · {a.action_description}</p><p className="text-teal-300 text-xs my-1">{a.outcome_status?.replaceAll("_", " ")}</p><p className="text-sm text-gray-400">{a.actual_outcome}</p></div>)}
+              <button className="command-link" onClick={() => setView("actions")}>Review actions and outcomes →</button>
+            </article>
+            <article className="command-card"><h2>Executive activity</h2><p className="text-sm text-gray-400">Research: {status?.success === true ? "Last run succeeded" : status?.success === false ? "Last run failed" : "No completed run"}</p><p className="text-sm text-gray-400 mt-2">Follow-up: {followupStatus?.message || "No run recorded"}</p><p className="text-sm mt-4">System: {healthError ? "Unavailable" : health?.status || "Checking…"}</p><button className="command-link" onClick={() => setView("activity")}>Review activity and memory →</button></article>
+          </div>
+        </section>
+        <section hidden={view !== "system"} className="command-card" aria-label="System health">
+          <h2>System health</h2>{healthError && <p role="alert" className="text-amber-300">{healthError}</p>}
+          {health ? <><p className="text-gray-400 mb-4">Overall: {health.status} · uptime {Math.floor(health.uptime_seconds / 60)} minutes. Telegram and browser are optional components.</p><div className="grid sm:grid-cols-2 gap-4">{Object.entries(health.components).map(([name, component]) => <div key={name} className="border border-gray-800 rounded-lg p-4"><h3 className="capitalize font-medium">{name.replaceAll("_", " ")}</h3><p className={component.ok ? "text-teal-300" : "text-amber-300"}>{component.ok ? "Ready" : "Not ready"}</p><p className="text-sm text-gray-400 mt-2">{component.message}</p></div>)}</div></> : <p>Waiting for a health response.</p>}
+        </section>
 
         {loadError && (
           <div className="p-4 bg-red-950 border-l-4 border-red-500 text-red-300 rounded">
@@ -1555,6 +1654,7 @@ export default function DashboardPage() {
         )}
 
         {/* Executive Memory */}
+        <section hidden={view !== "activity"} className="space-y-6">
         <div className="bg-gray-900 border border-sky-900/70 rounded-lg p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-sky-200">Executive Memory</h2>
@@ -1629,7 +1729,9 @@ export default function DashboardPage() {
           )}
         </div>
 
+        </section>
         {/* Autonomous Follow-Up */}
+        <section hidden={view !== "activity"} className="space-y-6">
         <div className="bg-gray-900 border border-violet-900/70 rounded-lg p-6 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -1720,7 +1822,9 @@ export default function DashboardPage() {
           )}
         </div>
 
+        </section>
         {/* Company Goals / Missions */}
+        <section hidden={view !== "goals"} className="space-y-6">
         <div className="bg-gray-900 border border-amber-900/70 rounded-lg p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-amber-200">Company Goals / Missions</h2>
@@ -1874,7 +1978,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        </section>
         {/* Company Treasury */}
+        <section hidden={view !== "treasury"} className="space-y-6">
         <div className="bg-gray-900 border border-emerald-900/70 rounded-lg p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-emerald-200">Company Treasury</h2>
@@ -1944,7 +2050,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        </section>
         {/* Daily research status card */}
+        <section hidden={view !== "activity"} className="space-y-6">
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
           <div className="flex justify-between items-start">
             <h2 className="text-lg font-semibold">Daily Research Status</h2>
@@ -1982,7 +2090,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        </section>
         {/* Structured Resource / Capability Requests */}
+        <section hidden={view !== "resources"} className="space-y-6">
         <div className="bg-gray-900 border border-indigo-900/70 rounded-lg p-6 space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-indigo-200">
@@ -2090,7 +2200,9 @@ export default function DashboardPage() {
           )}
         </div>
 
+        </section>
         {/* Pending Actions section */}
+        <section hidden={view !== "actions"} className="space-y-6">
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">
@@ -2236,7 +2348,9 @@ export default function DashboardPage() {
           )}
         </div>
 
+        </section>
         {/* Ad-hoc decision trigger form */}
+        <section hidden={view !== "decisions"} className="space-y-6">
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
           <h2 className="text-lg font-semibold">Start New Ad-Hoc Decision</h2>
 
@@ -2280,7 +2394,7 @@ export default function DashboardPage() {
               <div>
                 <h4 className="font-semibold text-gray-200 mb-1">Final Decision:</h4>
                 <div className="bg-gray-950 rounded-md p-4 text-sm text-gray-200 whitespace-pre-wrap border border-gray-800">
-                  {result.final_decision}
+                  <Report text={result.final_decision} />
                 </div>
               </div>
 
@@ -2432,7 +2546,9 @@ export default function DashboardPage() {
           </form>
         </div>
 
+        </section>
         {/* Decision history */}
+        <section hidden={view !== "decisions"} className="space-y-6">
         <div>
           <h2 className="text-xl font-bold mb-4">Decision History</h2>
           <div className="space-y-4">
@@ -2496,9 +2612,7 @@ export default function DashboardPage() {
                       </span>
                     ))}
                   </p>
-                  <p className="text-sm text-gray-300 mt-3 whitespace-pre-wrap">
-                    {isExpanded ? item.decision_outcome : preview}
-                  </p>
+                  <div className="text-sm text-gray-300 mt-3"><Report text={isExpanded ? item.decision_outcome : preview} /></div>
                   {item.decision_outcome.length > 150 && (
                     <button
                       onClick={() => toggleHistoryExpand(item.id)}
@@ -2656,6 +2770,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        </section>
+        <section hidden={view !== "actions"} className="space-y-6">
         {/* Action history — full audit trail across every status, unlike
             Pending Actions above, which only shows still-actionable items */}
         <div>
@@ -2766,6 +2882,7 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
+        </section>
       </div>
     </div>
   );

@@ -24,3 +24,16 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.command-card { background: #111827; border: 1px solid #263244; border-radius: 12px; padding: 24px; min-width: 0; }
+.command-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+.command-link { color: #5eead4; font-size: 14px; margin-top: 14px; }
+.command-link:hover { text-decoration: underline; }
+.report { overflow-wrap: anywhere; white-space: normal; line-height: 1.7; }
+.report p, .report ul { margin-bottom: 10px; }
+.report ul { list-style: disc; padding-left: 22px; }
+.report h4 { font-weight: 600; margin: 18px 0 8px; }
+button, input, select, textarea { outline-offset: 4px; }
+button:not(:disabled) { cursor: pointer; }
+[hidden] { display: none !important; }
+@media (max-width: 640px) { .command-card { padding: 18px; } }

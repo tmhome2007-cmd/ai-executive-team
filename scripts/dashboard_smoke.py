@@ -1,0 +1,94 @@
+"""Dashboard navigation/privacy smoke test with synthetic API responses only.
+Start the production dashboard on localhost:3000 before running this script.
+"""
+import json
+from urllib.parse import urlsplit
+from playwright.sync_api import sync_playwright
+
+API = 'http://127.0.0.1:8001'
+
+
+def main():
+    with sync_playwright() as runtime:
+        browser = runtime.chromium.launch()
+        page = browser.new_page(viewport={'width': 1440, 'height': 1000})
+        page.set_default_timeout(8000)
+        failures = []
+        page.on('pageerror', lambda error: failures.append(str(error)))
+        treasury_down = [False]
+        requests = []
+        decision = {'id': 105, 'topic': 'Synthetic landing page experiment',
+                    'timestamp': '2026-10-08T12:00:00', 'meeting_type': 'strategy',
+                    'agents_involved': 'ceo', 'task_description': 'Synthetic evidence',
+                    'decision_outcome': '**Expected vs Actual**\n\n* Four checks passed.\n<script>alert(1)</script>',
+                    'sandbox_mode': 1, 'approval_status': 'pending', 'preparation_status': 'not_started'}
+        action = {'id': 60, 'timestamp': '2026-10-08T12:01:00', 'proposed_by': 'cto',
+                  'action_description': 'Synthetic experiment', 'action_detail': 'Test only',
+                  'status': 'executed', 'reviewed_at': None, 'actual_outcome': 'Four checks passed',
+                  'outcome_status': 'partial', 'source_decision_id': 105}
+        fixtures = {
+            '/system/sandbox-status': {'sandbox_mode': True},
+            '/system/health': {'status': 'healthy', 'uptime_seconds': 120, 'components': {
+                'ollama': {'ok': True, 'message': 'Local inference ready'},
+                'database': {'ok': True, 'message': 'Writable'},
+                'telegram_configured': {'ok': False, 'message': 'Optional; disabled'}}},
+            '/workflows/daily-research/status': {'success': None, 'last_run_time': None, 'message': 'Not run'},
+            '/decisions/history': [decision], '/actions/pending': [], '/actions/history': [action],
+            '/resources/pending': [], '/goals': [], '/followups/open': [],
+            '/workflows/autonomous-followup/status': {'success': None, 'message': 'No run recorded', 'last_run_time': None, 'scanned_goal_count': 0, 'created_event_ids': [], 'generated_decision_ids': [], 'resolved_event_ids': [], 'errors': []},
+            '/memory/ceo': [], '/meeting-types': {},
+            '/treasury/summary': {'currencies': {'EUR': {'available': 15, 'reserved': 5, 'cash_balance': 20}}},
+        }
+
+        def respond(route):
+            request = route.request
+            requests.append(request.method)
+            path = urlsplit(request.url).path
+            if path == '/treasury/summary' and treasury_down[0]:
+                route.fulfill(status=503, headers={'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'}, content_type='application/json', body='{}')
+                return
+            assert request.method == 'GET', 'Navigation must never approve or execute an action'
+            assert request.headers.get('x-api-key') == 'synthetic-dashboard-key'
+            route.fulfill(status=200, headers={'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'}, content_type='application/json', body=json.dumps(fixtures.get(path, {})))
+
+        page.route(API + '/**', respond)
+        page.goto('http://127.0.0.1:3000/')
+        page.get_by_placeholder('API Key').fill('synthetic-dashboard-key')
+        page.get_by_role('button', name='Confirm').click()
+        page.get_by_role('heading', name='Company command center').wait_for()
+        page.get_by_text('15 available · 5 reserved').wait_for()
+        nav = page.get_by_role('navigation', name='Company views')
+        for name, heading in [('Goals', 'Company Goals / Missions'), ('Treasury', 'Company Treasury'),
+                              ('Resources', 'Resource & Capability Requests (0)'),
+                              ('Actions & results', 'Action History'),
+                              ('Executive activity', 'Executive Memory'), ('System health', 'System health')]:
+            nav.get_by_role('button', name=name, exact=True).click()
+            assert page.get_by_role('heading', name=heading, exact=True).is_visible()
+        nav.get_by_role('button', name='Decisions', exact=True).click()
+        assert page.get_by_text('<script>alert(1)</script>', exact=True).is_visible()
+        assert page.locator('.report strong').filter(has_text='Expected vs Actual').count() == 1
+        assert page.locator('.report li').filter(has_text='Four checks passed.').count() == 1
+        assert page.locator('.report script').count() == 0
+        nav.get_by_role('button', name='Overview', exact=True).click()
+        treasury_down[0] = True
+        page.get_by_role('button', name='Refresh company data').click()
+        page.get_by_role('alert').filter(has_text='Could not fetch treasury').wait_for()
+        assert page.get_by_text('Treasury unavailable.', exact=True).is_visible()
+        treasury_down[0] = False
+        page.get_by_role('button', name='Refresh company data').click()
+        page.get_by_text('15 available · 5 reserved').wait_for()
+        assert page.evaluate('Object.keys(localStorage).length + Object.keys(sessionStorage).length') == 0
+        page.screenshot(path='/private/tmp/company-dashboard-v2-desktop.png', full_page=True)
+        page.set_viewport_size({'width': 390, 'height': 844})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.screenshot(path='/private/tmp/company-dashboard-v2-mobile.png', full_page=True)
+        page.reload()
+        page.get_by_role('heading', name='Access Required').wait_for()
+        assert all(method == 'GET' for method in requests)
+        assert not failures, failures
+        browser.close()
+        print('PASS: all eight views, safe report formatting, unavailable/recovered data, mobile layout, memory-only authentication, and no mutations.')
+
+
+if __name__ == '__main__':
+    main()
