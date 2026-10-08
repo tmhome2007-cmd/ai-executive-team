@@ -16,7 +16,7 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").r
 
 export default function CompanyRecords({ apiKey, decisions, profiles, onAuthFailure, onNavigate }: {
   apiKey: string; decisions: Decision[]; profiles: Record<string, ExecutiveProfile>;
-  onAuthFailure: () => void; onNavigate: (view: "decisions" | "actions" | "resources" | "goals" | "activity" | "treasury") => void;
+  onAuthFailure: () => void; onNavigate: (view: "decisions" | "actions" | "resources" | "goals" | "activity" | "treasury" | "boards") => void;
 }) {
   const [items, setItems] = useState<Activity[]>([]);
   const [contributions, setContributions] = useState<Contribution[]>([]);
@@ -93,7 +93,7 @@ export default function CompanyRecords({ apiKey, decisions, profiles, onAuthFail
       {!timelineLoading && !timelineError && items.length === 0 && <p className="text-gray-400">No company activity recorded yet.</p>}
       <ol className="company-timeline">{items.map(item => <li key={item.event_key}>
         <p className="text-xs text-gray-500 uppercase tracking-wide">{item.category} · <time>{new Date(item.timestamp).toLocaleString()}</time></p><h4 className="font-medium mt-1">{item.title}</h4><p className="text-sm text-gray-400 mt-1 break-words">{item.detail}</p>
-        <div className="flex flex-wrap gap-x-4">{item.decision_id && <button className="command-link" onClick={() => { setDecisionId(String(item.decision_id)); setPhase("all"); }}>Contributions for decision #{item.decision_id} ↑</button>}{item.decision_id && <button className="command-link" onClick={() => onNavigate("decisions")}>Decision #{item.decision_id} →</button>}{item.action_id && <button className="command-link" onClick={() => onNavigate("actions")}>Action #{item.action_id} →</button>}{item.resource_id && <button className="command-link" onClick={() => onNavigate("resources")}>Resource #{item.resource_id} →</button>}{item.category === "treasury" && <button className="command-link" onClick={() => onNavigate("treasury")}>Treasury →</button>}{item.goal_id && <button className="command-link" onClick={() => onNavigate("goals")}>Goal #{item.goal_id} →</button>}</div>
+        <div className="flex flex-wrap gap-x-4">{item.decision_id && <button className="command-link" onClick={() => { setDecisionId(String(item.decision_id)); setPhase("all"); }}>Contributions for decision #{item.decision_id} ↑</button>}{item.decision_id && <button className="command-link" onClick={() => onNavigate("decisions")}>Decision #{item.decision_id} →</button>}{item.action_id && <button className="command-link" onClick={() => onNavigate("actions")}>Action #{item.action_id} →</button>}{item.resource_id && <button className="command-link" onClick={() => onNavigate("resources")}>Resource #{item.resource_id} →</button>}{item.category === "task" && <button className="command-link" onClick={() => onNavigate("boards")}>Company board →</button>}{item.category === "treasury" && <button className="command-link" onClick={() => onNavigate("treasury")}>Treasury →</button>}{item.goal_id && <button className="command-link" onClick={() => onNavigate("goals")}>Goal #{item.goal_id} →</button>}</div>
       </li>)}</ol>
       {timelineLoading && <p className="text-gray-400">Loading activity…</p>}{hasMore && !timelineError && <button disabled={timelineLoading} className="office-filter" onClick={() => setOffset(o => o + 50)}>Load older activity</button>}
     </article>

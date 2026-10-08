@@ -63,3 +63,9 @@ button:not(:disabled) { cursor: pointer; }
 .company-timeline { border-left: 1px solid #334155; margin: 24px 0 0 8px; padding-left: 24px; }
 .company-timeline li { position: relative; padding-bottom: 28px; }
 .company-timeline li::before { content: ""; position: absolute; left: -29px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: #5eead4; }
+
+.agile-input { display: block; margin-top: 8px; background: #080f1c; border: 1px solid #334155; border-radius: 8px; padding: 9px 12px; max-width: 100%; }
+.agile-columns { align-items: start; display: grid; grid-template-columns: repeat(6, minmax(220px, 1fr)); gap: 16px; overflow-x: auto; padding-bottom: 12px; }
+.agile-column { background: #101827; border: 1px solid #263244; border-radius: 12px; padding: 16px; min-height: 380px; max-height: 680px; overflow-y: auto; }
+.agile-task { background: #080f1c; border: 1px solid #334155; border-radius: 10px; padding: 14px; margin-bottom: 12px; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .agile-columns { grid-template-columns: minmax(0, 1fr); } .agile-column { min-height: 100px; max-height: 540px; } }

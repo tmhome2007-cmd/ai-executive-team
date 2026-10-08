@@ -2187,3 +2187,74 @@ def decision_conversations(decision_id: int):
 def company_activity(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
     return {"items": get_company_activity(limit, offset), "limit": limit, "offset": offset,
             "scope": "Recorded meetings and contributions plus latest retained state transitions; not a complete transition audit log."}
+
+
+# Owner-controlled planning boards. A task transition never executes an action.
+from memory.agile import create_board, list_boards, list_tasks, create_task, update_task, create_roadmap_board
+
+
+class BoardCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    kind: Literal['development', 'company']
+
+
+class AgileTaskCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default='', max_length=10000)
+    acceptance_criteria: str = Field(default='', max_length=10000)
+    assignee: str = Field(default='owner', max_length=40)
+    priority: Literal['critical', 'high', 'medium', 'low'] = 'medium'
+    goal_id: Optional[int] = Field(default=None, ge=1)
+    decision_id: Optional[int] = Field(default=None, ge=1)
+    action_id: Optional[int] = Field(default=None, ge=1)
+
+
+class AgileTaskUpdateRequest(AgileTaskCreateRequest):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    expected_version: int = Field(ge=1)
+    status: Literal['backlog', 'ready', 'in_progress', 'review', 'done', 'blocked'] = 'backlog'
+    blocked_reason: str = Field(default='', max_length=2000)
+    completion_note: str = Field(default='', max_length=10000)
+
+
+def _agile_call(callback, *args, **kwargs):
+    try:
+        return callback(*args, **kwargs)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.get('/boards', dependencies=[Depends(verify_api_key)])
+def get_agile_boards(limit: int = Query(default=100, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return list_boards(limit, offset)
+
+
+@app.post('/boards', dependencies=[Depends(verify_api_key)])
+def post_agile_board(request: BoardCreateRequest):
+    return {'id': _agile_call(create_board, request.name, request.kind)}
+
+
+@app.get('/boards/{board_id}/tasks', dependencies=[Depends(verify_api_key)])
+def get_agile_tasks(board_id: int, limit: int = Query(default=100, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return _agile_call(list_tasks, board_id, limit, offset)
+
+
+@app.post('/boards/{board_id}/tasks', dependencies=[Depends(verify_api_key)])
+def post_agile_task(board_id: int, request: AgileTaskCreateRequest):
+    return _agile_call(create_task, board_id, **request.model_dump())
+
+
+@app.patch('/tasks/{task_id}', dependencies=[Depends(verify_api_key)])
+def patch_agile_task(task_id: int, request: AgileTaskUpdateRequest):
+    fields = request.model_dump(exclude_unset=True)
+    version = fields.pop('expected_version')
+    return _agile_call(update_task, task_id, version, **fields)
+
+
+@app.post('/boards/roadmap', dependencies=[Depends(verify_api_key)])
+def post_development_roadmap():
+    return _agile_call(create_roadmap_board)

@@ -442,6 +442,10 @@ def init_db() -> None:
     """)
     conn.commit()
 
+    from memory.agile import init_agile
+    init_agile(cursor)
+    conn.commit()
+
     # Tabel 2: Action Approval Queue
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS action_queue (
@@ -4149,6 +4153,10 @@ def get_company_activity(limit: int = 50, offset: int = 0) -> list[dict]:
                 UNION ALL
                 SELECT 'capital:' || id, timestamp, 'treasury', 'Capital ledger: ' || entry_type,
                     CAST(amount AS TEXT) || ' ' || currency, source_decision_id, source_action_id, NULL, NULL FROM treasury_entries
+                UNION ALL
+                SELECT 'task:' || t.id, t.updated_at, 'task', 'Latest company task state: ' || t.status,
+                    t.title, t.decision_id, t.action_id, NULL, t.goal_id
+                    FROM agile_tasks t JOIN agile_boards b ON b.id = t.board_id WHERE b.kind = 'company'
                 UNION ALL
                 SELECT 'goal:' || id, updated_at, 'goal', 'Latest goal state: ' || status,
                     title, NULL, NULL, NULL, id FROM company_goals

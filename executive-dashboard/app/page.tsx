@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import VirtualOffice from "./components/virtual-office";
+import AgileBoard from "./components/agile-board";
 import CompanyRecords, { type ExecutiveProfile } from "./components/company-records";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -9,7 +10,7 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").r
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : "";
 
 const VIEWS = [
-  ["overview", "Overview"], ["office", "Virtual office"], ["records", "Conversations & activity"], ["goals", "Goals"], ["treasury", "Treasury"],
+  ["overview", "Overview"], ["boards", "Agile boards"], ["office", "Virtual office"], ["records", "Conversations & activity"], ["goals", "Goals"], ["treasury", "Treasury"],
   ["decisions", "Decisions"], ["resources", "Resources"], ["actions", "Actions & results"],
   ["activity", "Executive activity"], ["system", "System health"],
 ] as const;
@@ -1673,6 +1674,7 @@ export default function DashboardPage() {
             errors={!!loadError || !!followupError || Object.values(sectionErrors).some(Boolean)}
             onNavigate={setView} onMemory={(executive) => { setMemoryExecutive(executive); setView("activity"); }} />
         </div>
+        {view === "boards" && apiKey && <AgileBoard apiKey={apiKey} profiles={profiles} onAuthFailure={handleAuthFailure} onNavigate={setView} />}
         {view === "records" && apiKey && <CompanyRecords apiKey={apiKey} decisions={history} profiles={profiles} onAuthFailure={handleAuthFailure} onNavigate={setView} />}
         <section hidden={view !== "system"} className="command-card" aria-label="System health">
           <h2>System health</h2>{healthError && <p role="alert" className="text-amber-300">{healthError}</p>}
