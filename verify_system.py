@@ -1961,7 +1961,15 @@ try:
                 expected_outcome="Command completes",
             )
             _transition_73(action_id, "approved", ("pending",))
-            with suppress_executor_notifications():
+            from unittest.mock import patch as _patch_73
+            from subprocess import CompletedProcess as _CompletedProcess_73
+            # The worker image is deliberately not pulled in CI. Simulate a
+            # successful *isolated* execution to exercise the business-state
+            # transition without running any host command or network request.
+            with suppress_executor_notifications(), _patch_73(
+                "workflows.container_executor.run_in_container",
+                return_value=_CompletedProcess_73(["docker"], 0, "outcome-test", ""),
+            ):
                 result = _execute_73(action_id)
             outcome = _get_outcome_73(action_id)
 
