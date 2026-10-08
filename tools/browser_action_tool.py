@@ -128,7 +128,7 @@ class ProposeBrowserActionTool(BaseTool):
                 action_detail=summary,
             )
         except Exception as e:
-            print(f"Warning: Failed to send Telegram notification for browser action proposal #{action_id}: {e}")
+            print(f"Warning: Telegram browser-proposal notification failed ({type(e).__name__}); transport details suppressed.")
 
         return (
             f"Browser action proposal logged successfully with ID #{action_id}. "
