@@ -575,7 +575,7 @@ export default function DashboardPage() {
   const [keyInput, setKeyInput] = useState("");
 
   // Keep the privileged control-plane API key in memory only. Persisting it
-  // in sessionStorage/localStorage would let any future XSS or compromised
+  // in browser persistence would let any future XSS or compromised
   // browser-side dependency read a credential that can authorize real-world
   // actions. A refresh intentionally requires re-entry.
   const handleKeySubmit = (e: React.FormEvent) => {
