@@ -625,6 +625,68 @@ def transition_company_goal_status(
     now = datetime.datetime.now().isoformat()
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+
+        if new_status in {"completed", "abandoned"}:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM action_queue q
+                JOIN decisions d ON d.id = q.source_decision_id
+                WHERE d.goal_id = ? AND q.status = 'executing'
+                """,
+                (goal_id,),
+            )
+            if int(cursor.fetchone()["count"] or 0) > 0:
+                conn.rollback()
+                raise ValueError(
+                    "Goal cannot be closed while a linked action is executing; "
+                    "review the real-world result first"
+                )
+
+            # Terminal goal closure cancels unexecuted goal-specific work and
+            # releases its reserved capital so treasury cannot remain stranded.
+            cursor.execute(
+                """
+                UPDATE treasury_reservations
+                SET status = 'released', released_at = ?
+                WHERE status = 'active'
+                  AND source_action_id IN (
+                      SELECT q.id
+                      FROM action_queue q
+                      JOIN decisions d ON d.id = q.source_decision_id
+                      WHERE d.goal_id = ?
+                        AND q.status IN ('pending', 'approved')
+                  )
+                """,
+                (now, goal_id),
+            )
+            cursor.execute(
+                """
+                UPDATE action_queue
+                SET status = 'rejected', reviewed_at = ?
+                WHERE id IN (
+                    SELECT q.id
+                    FROM action_queue q
+                    JOIN decisions d ON d.id = q.source_decision_id
+                    WHERE d.goal_id = ?
+                      AND q.status IN ('pending', 'approved')
+                )
+                """,
+                (now, goal_id),
+            )
+            cursor.execute(
+                """
+                UPDATE resource_requests
+                SET status = 'rejected', reviewed_at = ?
+                WHERE source_decision_id IN (
+                    SELECT id FROM decisions WHERE goal_id = ?
+                )
+                  AND status IN ('pending', 'approved')
+                """,
+                (now, goal_id),
+            )
+
         cursor.execute(
             """
             UPDATE company_goals
