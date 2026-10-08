@@ -294,6 +294,7 @@ def run_executive_meeting(
     MEETING_TIMEOUT_SECONDS = 600  # 10 minuten
 
     provenance_created_action_ids: List[int] = []
+    provenance_created_resource_request_ids: List[int] = []
 
     def _kickoff_under_execution_lock():
         # De worker zelf houdt de globale lock vast. Als de HTTP-aanroeper na
@@ -310,6 +311,9 @@ def run_executive_meeting(
                     result = crew.kickoff()
                     provenance_created_action_ids.extend(
                         provenance_scope.get("created_action_ids", [])
+                    )
+                    provenance_created_resource_request_ids.extend(
+                        provenance_scope.get("created_resource_request_ids", [])
                     )
                     return result
             return crew.kickoff()
@@ -372,6 +376,7 @@ def run_executive_meeting(
             "repeated_analysis": repeated_analysis,
         },
         "proposed_action_ids": provenance_created_action_ids,
+        "proposed_resource_request_ids": provenance_created_resource_request_ids,
     }
 
 
