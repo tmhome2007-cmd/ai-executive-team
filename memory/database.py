@@ -1386,6 +1386,109 @@ def transition_followup_event_status(
         return cursor.rowcount == 1
 
 
+def create_followup_generated_decision(
+    event_id: int,
+    *,
+    topic: str,
+    agents_involved: list[str],
+    task_description: str,
+    decision_outcome: str,
+    sandbox_mode: bool,
+    meeting_type: str = "strategy",
+) -> tuple[int, bool]:
+    """
+    Atomically create and link the pending decision for one reasoning follow-up.
+    This closes the crash window where a decision could be committed but the
+    follow-up link failed, causing a duplicate decision on the next retry.
+    """
+    if meeting_type not in VALID_MEETING_TYPES:
+        raise ValueError(f"Unsupported meeting type: {meeting_type}")
+
+    topic = _redact_secret_like_text(topic) or ""
+    task_description = _redact_secret_like_text(task_description) or ""
+    decision_outcome = _redact_secret_like_text(decision_outcome) or ""
+    now = datetime.datetime.now().isoformat()
+    decision_sync_uuid = str(uuid.uuid4())
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute(
+            """
+            SELECT f.status, f.generated_decision_id, f.goal_id,
+                   g.sync_uuid AS goal_sync_uuid, g.status AS goal_status
+            FROM followup_events f
+            LEFT JOIN company_goals g ON g.id = f.goal_id
+            WHERE f.id = ?
+            """,
+            (event_id,),
+        )
+        event = cursor.fetchone()
+        if event is None:
+            conn.rollback()
+            raise ValueError("Follow-up event not found")
+        if event["generated_decision_id"] is not None:
+            existing_id = int(event["generated_decision_id"])
+            conn.rollback()
+            return existing_id, False
+        if event["status"] != "open":
+            conn.rollback()
+            raise ValueError(
+                f"Follow-up event cannot generate a decision from status '{event['status']}'"
+            )
+        if event["goal_id"] is not None and event["goal_status"] != "active":
+            current = event["goal_status"] or "missing"
+            conn.rollback()
+            raise ValueError(
+                f"Linked company goal #{event['goal_id']} must be active "
+                f"before follow-up reasoning (currently '{current}')"
+            )
+
+        cursor.execute(
+            """
+            INSERT INTO decisions (
+                timestamp, topic, agents_involved, task_description, decision_outcome,
+                sandbox_mode, sync_uuid, goal_id, goal_sync_uuid, meeting_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                now,
+                topic,
+                ",".join(agents_involved),
+                task_description,
+                decision_outcome,
+                1 if sandbox_mode else 0,
+                decision_sync_uuid,
+                event["goal_id"],
+                event["goal_sync_uuid"],
+                meeting_type,
+            ),
+        )
+        decision_id = int(cursor.lastrowid)
+        cursor.execute(
+            """
+            INSERT INTO decision_approvals (
+                decision_id, status, reviewed_at, preparation_status, prepared_at
+            ) VALUES (?, 'pending', NULL, 'not_started', NULL)
+            """,
+            (decision_id,),
+        )
+        cursor.execute(
+            """
+            UPDATE followup_events
+            SET generated_decision_id = ?, generated_decision_sync_uuid = ?, updated_at = ?
+            WHERE id = ? AND status = 'open' AND generated_decision_id IS NULL
+            """,
+            (decision_id, decision_sync_uuid, now, event_id),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            raise ValueError("Follow-up decision link race detected")
+
+        conn.commit()
+        return decision_id, True
+
+
 def link_followup_generated_decision(event_id: int, decision_id: int) -> bool:
     decision = get_decision_by_id(decision_id)
     if decision is None:
