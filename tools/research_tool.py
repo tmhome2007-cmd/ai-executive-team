@@ -17,6 +17,9 @@ link-local adressen — dit vangt ook DNS-rebinding-achtige trucs op waarbij
 een op het oog extern domein toch naar 127.0.0.1 wijst.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 import ipaddress
 import socket
 from urllib.parse import urlparse
