@@ -111,7 +111,7 @@ class ProposeResourceRequestTool(BaseTool):
                 "Pending owner review. No access has been granted and no secret was stored."
             )
         except Exception as e:
-            print(f"Warning: Failed to send resource request notification #{request_id}: {e}")
+            print(f"Warning: Telegram resource-request notification failed ({type(e).__name__}); transport details suppressed.")
 
         return (
             f"Resource request logged successfully with ID #{request_id}. "
