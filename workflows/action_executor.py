@@ -1067,7 +1067,7 @@ def execute_action(action_id: int) -> dict:
             send_notification(
                 f"❌ <b>EXECUTION FAILED (TIMEOUT)</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                f"<b>Command:</b> {_telegram_sensitive(action_detail, code=True)}\n"
                 f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as e:
@@ -1090,7 +1090,7 @@ def execute_action(action_id: int) -> dict:
             send_notification(
                 f"❌ <b>EXECUTION FAILED (UNEXPECTED ERROR)</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                f"<b>Command:</b> {_telegram_sensitive(action_detail, code=True)}\n"
                 f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
