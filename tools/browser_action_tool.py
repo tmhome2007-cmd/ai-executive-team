@@ -10,6 +10,9 @@ dit voert niets zelf uit, het logt alleen het voorstel voor menselijke
 goedkeuring.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 import json
 from typing import Type, Optional
 from pydantic import BaseModel, Field
