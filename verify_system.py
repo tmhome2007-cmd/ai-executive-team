@@ -3014,6 +3014,350 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 97: DYNAMIC CHECK — treasury funding and multi-currency summary
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_97
+    from memory.database import (
+        init_db as _init_db_97,
+        add_treasury_entry as _fund_97,
+        get_treasury_summary as _summary_97,
+    )
+
+    original_db_97 = _verify_config_97.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_97.DATABASE_PATH = os.path.join(temp_dir, "treasury-summary.db")
+            _init_db_97()
+            _fund_97("funding", 100, "eur", "Owner capital")
+            _fund_97("funding", 25, "USD", "Separate USD capital")
+            summary = _summary_97()
+
+            eur = summary["currencies"]["EUR"]
+            usd = summary["currencies"]["USD"]
+            if (
+                eur == {"cash_balance": 100.0, "reserved": 0.0, "available": 100.0}
+                and usd == {"cash_balance": 25.0, "reserved": 0.0, "available": 25.0}
+            ):
+                log_pass("treasury keeps currencies separate and derives cash/reserved/available balances")
+            else:
+                log_fail("Treasury multi-currency summary", f"summary={summary}")
+    finally:
+        _verify_config_97.DATABASE_PATH = original_db_97
+except Exception as e:
+    log_fail("Treasury summary check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 98: DYNAMIC CHECK — paid-action approval reserves funds and blocks overspend
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_98
+    from memory.database import (
+        init_db as _init_db_98,
+        add_treasury_entry as _fund_98,
+        propose_action as _propose_98,
+        approve_action_with_treasury as _approve_98,
+        get_treasury_summary as _summary_98,
+        get_action_by_id as _get_action_98,
+    )
+
+    original_db_98 = _verify_config_98.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_98.DATABASE_PATH = os.path.join(temp_dir, "treasury-reserve.db")
+            _init_db_98()
+            _fund_98("funding", 100, "EUR", "Owner capital")
+            first = _propose_98(
+                "CFO", "Paid test action", "echo paid", "shell",
+                expected_cost_amount=60, currency="EUR",
+            )
+            approval = _approve_98(first)
+
+            second = _propose_98(
+                "CFO", "Too expensive test", "echo expensive", "shell",
+                expected_cost_amount=50, currency="EUR",
+            )
+            blocked = False
+            try:
+                _approve_98(second)
+            except ValueError as exc:
+                blocked = "Insufficient available treasury funds" in str(exc)
+
+            summary = _summary_98("EUR")["currencies"]["EUR"]
+            second_action = _get_action_98(second)
+            if (
+                approval["status"] == "approved"
+                and approval["reserved_amount"] == 60.0
+                and summary == {"cash_balance": 100.0, "reserved": 60.0, "available": 40.0}
+                and blocked
+                and second_action["status"] == "pending"
+            ):
+                log_pass("paid-action approval atomically reserves treasury and refuses overspending")
+            else:
+                log_fail(
+                    "Treasury approval reservation",
+                    f"approval={approval}, summary={summary}, blocked={blocked}, second={second_action}",
+                )
+    finally:
+        _verify_config_98.DATABASE_PATH = original_db_98
+except Exception as e:
+    log_fail("Treasury approval reservation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 99: DYNAMIC CHECK — rejecting approved action releases reservation
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_99
+    from memory.database import (
+        init_db as _init_db_99,
+        add_treasury_entry as _fund_99,
+        propose_action as _propose_99,
+        approve_action_with_treasury as _approve_99,
+        reject_action_with_treasury as _reject_99,
+        get_treasury_summary as _summary_99,
+        get_treasury_reservation_for_action as _reservation_99,
+    )
+
+    original_db_99 = _verify_config_99.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_99.DATABASE_PATH = os.path.join(temp_dir, "treasury-release.db")
+            _init_db_99()
+            _fund_99("funding", 100, "EUR", "Owner capital")
+            action_id = _propose_99(
+                "CFO", "Reservable action", "echo reserve", "shell",
+                expected_cost_amount=35, currency="EUR",
+            )
+            _approve_99(action_id)
+            rejected = _reject_99(action_id)
+            summary = _summary_99("EUR")["currencies"]["EUR"]
+            reservation = _reservation_99(action_id)
+
+            if (
+                rejected["status"] == "rejected"
+                and rejected["reservation_released"]
+                and reservation["status"] == "released"
+                and summary == {"cash_balance": 100.0, "reserved": 0.0, "available": 100.0}
+            ):
+                log_pass("rejecting an approved paid action releases its reserved capital")
+            else:
+                log_fail(
+                    "Treasury reservation release",
+                    f"rejected={rejected}, reservation={reservation}, summary={summary}",
+                )
+    finally:
+        _verify_config_99.DATABASE_PATH = original_db_99
+except Exception as e:
+    log_fail("Treasury reservation release check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 100: DYNAMIC CHECK — actual cost and treasury spend commit together exactly once
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_100
+    from memory.database import (
+        init_db as _init_db_100,
+        add_treasury_entry as _fund_100,
+        propose_action as _propose_100,
+        approve_action_with_treasury as _approve_100,
+        update_action_status as _status_100,
+        update_action_outcome_with_treasury as _outcome_100,
+        get_treasury_summary as _summary_100,
+        get_treasury_reservation_for_action as _reservation_100,
+        get_treasury_history as _history_100,
+    )
+
+    original_db_100 = _verify_config_100.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_100.DATABASE_PATH = os.path.join(temp_dir, "treasury-spend.db")
+            _init_db_100()
+            _fund_100("funding", 100, "EUR", "Owner capital")
+            action_id = _propose_100(
+                "CFO", "Measured paid action", "echo measured", "shell",
+                expected_cost_amount=60, currency="EUR",
+            )
+            _approve_100(action_id)
+            _status_100(action_id, "executed")
+            outcome = _outcome_100(
+                action_id,
+                actual_cost_amount=45,
+                currency="EUR",
+                outcome_status="succeeded",
+                actual_outcome="Completed for less than reserved amount",
+            )
+            summary = _summary_100("EUR")["currencies"]["EUR"]
+            reservation = _reservation_100(action_id)
+            spends = [
+                row for row in _history_100(limit=20)
+                if row["entry_type"] == "spend" and row["source_action_id"] == action_id
+            ]
+
+            duplicate_blocked = False
+            try:
+                _outcome_100(action_id, actual_cost_amount=45, currency="EUR")
+            except ValueError as exc:
+                duplicate_blocked = "already been recorded" in str(exc)
+
+            if (
+                outcome["actual_cost_amount"] == 45
+                and summary == {"cash_balance": 55.0, "reserved": 0.0, "available": 55.0}
+                and reservation["status"] == "consumed"
+                and len(spends) == 1
+                and spends[0]["amount"] == 45
+                and duplicate_blocked
+            ):
+                log_pass("measured actual cost consumes reservation and records treasury spend exactly once")
+            else:
+                log_fail(
+                    "Treasury actual spend",
+                    f"outcome={outcome}, summary={summary}, reservation={reservation}, "
+                    f"spends={spends}, duplicate_blocked={duplicate_blocked}",
+                )
+    finally:
+        _verify_config_100.DATABASE_PATH = original_db_100
+except Exception as e:
+    log_fail("Treasury actual-spend check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 101: DYNAMIC CHECK — treasury sync resolves decision/action provenance by UUID
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_101
+    from memory.database import (
+        init_db as _init_db_101,
+        log_decision as _decision_101,
+        get_decision_by_id as _get_decision_101,
+        action_provenance_scope as _scope_101,
+        propose_action as _propose_101,
+        add_treasury_entry as _fund_101,
+        approve_action_with_treasury as _approve_101,
+        export_history_to_jsonl as _export_101,
+        import_history_from_jsonl as _import_101,
+        get_action_history as _actions_101,
+        get_recent_decisions as _decisions_101,
+        get_treasury_reservation_for_action as _reservation_101,
+    )
+
+    original_db_101 = _verify_config_101.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_db = os.path.join(temp_dir, "treasury-source.db")
+            target_db = os.path.join(temp_dir, "treasury-target.db")
+            export_path = os.path.join(temp_dir, "treasury-sync.jsonl")
+
+            _verify_config_101.DATABASE_PATH = source_db
+            _init_db_101()
+            source_decision_id = _decision_101(
+                "Treasury sync decision", ["cfo"], "Evidence", "Direction", True
+            )
+            source_decision = _get_decision_101(source_decision_id)
+            _fund_101("funding", 80, "EUR", "Owner capital")
+            with _scope_101(source_decision_id, source_decision["sync_uuid"], "preparation"):
+                source_action_id = _propose_101(
+                    "CFO", "Synced paid action", "echo sync-money", "shell",
+                    expected_cost_amount=20, currency="EUR",
+                )
+            _approve_101(source_action_id)
+            _export_101(export_path)
+
+            _verify_config_101.DATABASE_PATH = target_db
+            _init_db_101()
+            _decision_101("Local-only decision", ["ceo"], "Local", "Local", True)
+            summary = _import_101(export_path)
+
+            imported_decision = next(
+                row for row in _decisions_101(limit=20)
+                if row["sync_uuid"] == source_decision["sync_uuid"]
+            )
+            imported_action = next(
+                row for row in _actions_101(limit=20)
+                if row["action_description"] == "Synced paid action"
+            )
+            reservation = _reservation_101(imported_action["id"])
+
+            if (
+                summary.get("treasury_entries_imported") == 1
+                and summary.get("treasury_reservations_imported") == 1
+                and imported_decision["id"] != source_decision_id
+                and reservation["source_action_id"] == imported_action["id"]
+                and reservation["source_decision_id"] == imported_decision["id"]
+                and reservation["source_decision_sync_uuid"] == source_decision["sync_uuid"]
+            ):
+                log_pass("treasury sync resolves local decision/action IDs from stable UUID provenance")
+            else:
+                log_fail(
+                    "Treasury sync provenance",
+                    f"summary={summary}, decision={imported_decision}, "
+                    f"action={imported_action}, reservation={reservation}",
+                )
+    finally:
+        _verify_config_101.DATABASE_PATH = original_db_101
+except Exception as e:
+    log_fail("Treasury sync check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 102: STATIC CHECK — treasury API, dashboard, and lineage are integrated
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_102 = f.read()
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content_102 = f.read()
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_102 = f.read()
+
+    required_main = [
+        '"/treasury/summary"',
+        '"/treasury/history"',
+        '"/treasury/fund"',
+        '"/treasury/actions/{action_id}/reservation"',
+        "approve_action_with_treasury",
+        "reject_action_with_treasury",
+        "update_action_outcome_with_treasury",
+        "Expected cost/currency can only be changed while an action is pending",
+    ]
+    required_db = [
+        "CREATE TABLE IF NOT EXISTS treasury_entries",
+        "CREATE TABLE IF NOT EXISTS treasury_reservations",
+        "BEGIN IMMEDIATE",
+        "Insufficient available treasury funds",
+        "get_treasury_for_decision",
+        '"treasury": get_treasury_for_decision(decision_id)',
+    ]
+    required_dashboard = [
+        "Company Treasury",
+        "Cash:",
+        "Reserved:",
+        "Available:",
+        "Add Funding",
+        "/treasury/summary",
+        "/treasury/fund",
+        "treasury reserved",
+    ]
+
+    missing_main = [item for item in required_main if item not in main_content_102]
+    missing_db = [item for item in required_db if item not in db_content_102]
+    missing_dashboard = [item for item in required_dashboard if item not in dashboard_content_102]
+
+    if not missing_main and not missing_db and not missing_dashboard:
+        log_pass("treasury API, atomic approval gates, dashboard, and decision lineage are integrated")
+    else:
+        log_fail(
+            "Treasury integration",
+            f"missing_main={missing_main}, missing_db={missing_db}, "
+            f"missing_dashboard={missing_dashboard}",
+        )
+except Exception as e:
+    log_fail("Treasury integration check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
