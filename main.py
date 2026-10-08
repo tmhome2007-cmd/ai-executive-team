@@ -67,6 +67,10 @@ from memory.database import (
     get_followup_event,
     get_followup_events,
     transition_followup_event_status,
+    get_executive_memories,
+    set_executive_memory_active,
+    create_decision_memories,
+    create_action_outcome_memories,
 )
 from workflows.daily_research import run_daily_research
 from workflows.autonomous_followup import run_autonomous_followup
@@ -355,6 +359,10 @@ class GoalUpdateRequest(BaseModel):
 class GoalStatusRequest(BaseModel):
     status: Literal["active", "paused", "completed", "abandoned"]
     completion_note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ExecutiveMemoryStatusRequest(BaseModel):
+    active: bool
 
 
 class PreparationRequest(BaseModel):
@@ -786,6 +794,11 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             # Decision meetings are reasoning-only. Tool-capable agents belong
             # in the separate preparation/execution phase after human approval.
             agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
+            memory_context={
+                "enabled": True,
+                "goal_id": request.goal_id,
+                "limit": 5,
+            },
         )
     except ValueError as e:
         raise HTTPException(
@@ -866,6 +879,11 @@ def approve_decision(decision_id: int):
     except Exception as notify_err:
         logger.warning(f"Decision approval notification failed: {notify_err}")
 
+    try:
+        create_decision_memories(decision_id, "approved")
+    except Exception as memory_err:
+        logger.warning(f"Decision approval memory creation failed: {memory_err}")
+
     return {
         "decision_id": decision_id,
         "approval_status": "approved",
@@ -903,6 +921,11 @@ def reject_decision(decision_id: int):
         )
     except Exception as notify_err:
         logger.warning(f"Decision rejection notification failed: {notify_err}")
+
+    try:
+        create_decision_memories(decision_id, "rejected")
+    except Exception as memory_err:
+        logger.warning(f"Decision rejection memory creation failed: {memory_err}")
 
     return {"decision_id": decision_id, "approval_status": "rejected"}
 
@@ -1022,6 +1045,11 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 "decision_sync_uuid": decision["sync_uuid"],
                 "phase": "preparation",
                 "allowed_browser_urls": sorted(allowed_browser_urls),
+            },
+            memory_context={
+                "enabled": True,
+                "goal_id": decision.get("goal_id"),
+                "limit": 5,
             },
         )
 
@@ -1522,6 +1550,42 @@ def read_decision_lineage(decision_id: int):
     return lineage
 
 
+# ===================================================================
+# EXECUTIVE MEMORY
+# ===================================================================
+
+@app.get(
+    "/memory/{executive_key}",
+    summary="Get Structured Executive Memory",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_executive_memory(
+    executive_key: str,
+    active_only: bool = True,
+    limit: int = Query(default=20, ge=1, le=100),
+    goal_id: Optional[int] = None,
+):
+    if executive_key not in EXECUTIVE_AGENTS:
+        raise HTTPException(status_code=404, detail="Executive role not found.")
+    return get_executive_memories(
+        executive_key,
+        active_only=active_only,
+        limit=limit,
+        goal_id=goal_id,
+    )
+
+
+@app.post(
+    "/memory/{memory_id}/status",
+    summary="Activate or Deactivate Executive Memory",
+    dependencies=[Depends(verify_api_key)],
+)
+def change_executive_memory_status(memory_id: int, request: ExecutiveMemoryStatusRequest):
+    if not set_executive_memory_active(memory_id, request.active):
+        raise HTTPException(status_code=404, detail="Executive memory not found.")
+    return {"memory_id": memory_id, "active": request.active}
+
+
 @app.get(
     "/decisions/history",
     summary="Get Decision History",
@@ -1896,6 +1960,13 @@ def patch_action_outcome(action_id: int, request: OutcomeUpdateRequest):
 
     if updated is None:
         raise HTTPException(status_code=404, detail="Outcome record not found.")
+
+    if updated.get("outcome_status") in {"succeeded", "failed", "partial", "inconclusive"}:
+        try:
+            create_action_outcome_memories(action_id)
+        except Exception as memory_err:
+            logger.warning(f"Action outcome memory creation failed: {memory_err}")
+
     return updated
 
 
