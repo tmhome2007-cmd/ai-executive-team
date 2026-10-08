@@ -2595,6 +2595,345 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
+# CHECK 88: DYNAMIC CHECK — resource request state machine is owner-gated
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_88
+    from memory.database import (
+        init_db as _init_db_88,
+        propose_resource_request as _propose_resource_88,
+        get_resource_request_by_id as _get_resource_88,
+        transition_resource_request_status as _transition_resource_88,
+    )
+
+    original_db_88 = _verify_config_88.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_88.DATABASE_PATH = os.path.join(temp_dir, "resources.db")
+            _init_db_88()
+            request_id = _propose_resource_88(
+                "COO", "access", "Gmail access",
+                "Needed to inspect approved customer replies",
+                "Approved outreach follow-up",
+            )
+            pending = _get_resource_88(request_id)
+            fulfilled_too_early = _transition_resource_88(
+                request_id, "fulfilled", ("approved",), "Plugin connected"
+            )
+            approved = _transition_resource_88(request_id, "approved", ("pending",))
+            fulfilled = _transition_resource_88(
+                request_id, "fulfilled", ("approved",), "Gmail plugin connected"
+            )
+            final = _get_resource_88(request_id)
+
+            if (
+                pending["status"] == "pending"
+                and not fulfilled_too_early
+                and approved
+                and fulfilled
+                and final["status"] == "fulfilled"
+                and final["fulfillment_note"] == "Gmail plugin connected"
+            ):
+                log_pass("resource requests require explicit owner approval before fulfillment")
+            else:
+                log_fail(
+                    "Resource request state machine",
+                    f"pending={pending}, early={fulfilled_too_early}, approved={approved}, "
+                    f"fulfilled={fulfilled}, final={final}",
+                )
+    finally:
+        _verify_config_88.DATABASE_PATH = original_db_88
+except Exception as e:
+    log_fail("Resource request state machine check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 89: DYNAMIC CHECK — resource provenance survives cross-thread tool behavior
+# -------------------------------------------------------------------
+try:
+    import threading as _threading_89
+    from config import config as _verify_config_89
+    from memory.database import (
+        init_db as _init_db_89,
+        log_decision as _log_decision_89,
+        get_decision_by_id as _get_decision_89,
+        action_provenance_scope as _scope_89,
+        propose_resource_request as _propose_resource_89,
+        get_resource_request_by_id as _get_resource_89,
+    )
+
+    original_db_89 = _verify_config_89.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_89.DATABASE_PATH = os.path.join(temp_dir, "resource-provenance.db")
+            _init_db_89()
+            decision_id = _log_decision_89(
+                "Resource provenance", ["coo"], "Evidence", "Direction", True
+            )
+            decision = _get_decision_89(decision_id)
+            created = []
+
+            def _resource_tool_thread():
+                created.append(
+                    _propose_resource_89(
+                        "COO", "data", "Market research dataset",
+                        "Needed to validate demand", "Market validation",
+                    )
+                )
+
+            with _scope_89(decision_id, decision["sync_uuid"], "preparation") as scope:
+                worker = _threading_89.Thread(target=_resource_tool_thread)
+                worker.start()
+                worker.join()
+                scoped_ids = list(scope.get("created_resource_request_ids", []))
+
+            resource = _get_resource_89(created[0]) if created else None
+            if (
+                resource
+                and scoped_ids == created
+                and resource["source_decision_id"] == decision_id
+                and resource["source_decision_sync_uuid"] == decision["sync_uuid"]
+                and resource["source_phase"] == "preparation"
+            ):
+                log_pass("resource requests retain decision provenance across CrewAI-style worker threads")
+            else:
+                log_fail(
+                    "Resource provenance",
+                    f"created={created}, scoped={scoped_ids}, resource={resource}",
+                )
+    finally:
+        _verify_config_89.DATABASE_PATH = original_db_89
+except Exception as e:
+    log_fail("Resource provenance check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 90: DYNAMIC CHECK — budget validation and secret rejection are fail-closed
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_90
+    from memory.database import (
+        init_db as _init_db_90,
+        propose_resource_request as _propose_resource_90,
+        transition_resource_request_status as _transition_resource_90,
+    )
+
+    original_db_90 = _verify_config_90.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_90.DATABASE_PATH = os.path.join(temp_dir, "resource-validation.db")
+            _init_db_90()
+
+            budget_without_currency_rejected = False
+            try:
+                _propose_resource_90(
+                    "CFO", "budget", "Validation budget", "Run experiment", amount=10
+                )
+            except ValueError:
+                budget_without_currency_rejected = True
+
+            secret_request_rejected = False
+            try:
+                _propose_resource_90(
+                    "CTO", "credential", "API access",
+                    "Use token=super-secret-value for the service",
+                )
+            except ValueError:
+                secret_request_rejected = True
+
+            request_id = _propose_resource_90(
+                "CFO", "budget", "Validation budget", "Run experiment",
+                amount=10, currency="EUR",
+            )
+            _transition_resource_90(request_id, "approved", ("pending",))
+            secret_fulfillment_rejected = False
+            try:
+                _transition_resource_90(
+                    request_id,
+                    "fulfilled",
+                    ("approved",),
+                    "Configured api_key=super-secret-value",
+                )
+            except ValueError:
+                secret_fulfillment_rejected = True
+
+            if (
+                budget_without_currency_rejected
+                and secret_request_rejected
+                and secret_fulfillment_rejected
+            ):
+                log_pass("resource storage rejects malformed budgets and obvious secret-like values")
+            else:
+                log_fail(
+                    "Resource validation",
+                    f"budget={budget_without_currency_rejected}, "
+                    f"request_secret={secret_request_rejected}, "
+                    f"fulfillment_secret={secret_fulfillment_rejected}",
+                )
+    finally:
+        _verify_config_90.DATABASE_PATH = original_db_90
+except Exception as e:
+    log_fail("Resource validation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 91: DYNAMIC CHECK — resource requests sync by stable decision UUID
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_91
+    from memory.database import (
+        init_db as _init_db_91,
+        log_decision as _log_decision_91,
+        get_decision_by_id as _get_decision_91,
+        action_provenance_scope as _scope_91,
+        propose_resource_request as _propose_resource_91,
+        export_history_to_jsonl as _export_91,
+        import_history_from_jsonl as _import_91,
+        get_resource_requests as _resources_91,
+        get_recent_decisions as _decisions_91,
+    )
+
+    original_db_91 = _verify_config_91.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_db = os.path.join(temp_dir, "resource-source.db")
+            target_db = os.path.join(temp_dir, "resource-target.db")
+            export_path = os.path.join(temp_dir, "resource-sync.jsonl")
+
+            _verify_config_91.DATABASE_PATH = source_db
+            _init_db_91()
+            source_decision_id = _log_decision_91(
+                "Synced resource decision", ["cto"], "Evidence", "Direction", True
+            )
+            source_decision = _get_decision_91(source_decision_id)
+            with _scope_91(source_decision_id, source_decision["sync_uuid"], "preparation"):
+                _propose_resource_91(
+                    "CTO", "plugin", "GitHub plugin",
+                    "Needed for approved repository work", "Implementation",
+                )
+            _export_91(export_path)
+
+            _verify_config_91.DATABASE_PATH = target_db
+            _init_db_91()
+            _log_decision_91("Local-only decision", ["ceo"], "Local", "Local", True)
+            summary = _import_91(export_path)
+
+            imported_decision = next(
+                row for row in _decisions_91(limit=20)
+                if row["sync_uuid"] == source_decision["sync_uuid"]
+            )
+            imported_resource = next(
+                row for row in _resources_91(limit=20)
+                if row["resource_name"] == "GitHub plugin"
+            )
+
+            if (
+                summary.get("resource_requests_imported") == 1
+                and imported_decision["id"] != source_decision_id
+                and imported_resource["source_decision_id"] == imported_decision["id"]
+                and imported_resource["source_decision_sync_uuid"] == source_decision["sync_uuid"]
+            ):
+                log_pass("resource request sync resolves source decisions by stable UUID across machines")
+            else:
+                log_fail(
+                    "Resource request sync",
+                    f"summary={summary}, decision={imported_decision}, resource={imported_resource}",
+                )
+    finally:
+        _verify_config_91.DATABASE_PATH = original_db_91
+except Exception as e:
+    log_fail("Resource request sync check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 92: DYNAMIC CHECK — tool-capable roster has resource tool; reasoning roster stays tool-free
+# -------------------------------------------------------------------
+try:
+    from agents.executive_agents import EXECUTIVE_AGENTS as _agents_92, EXECUTIVE_AGENTS_NO_TOOLS as _no_tools_92
+
+    missing_resource_tool = []
+    reasoning_with_tools = []
+    for key, agent in _agents_92.items():
+        tool_names = {getattr(tool, "name", "") for tool in (getattr(agent, "tools", None) or [])}
+        if "propose_resource_request" not in tool_names:
+            missing_resource_tool.append(key)
+    for key, agent in _no_tools_92.items():
+        if getattr(agent, "tools", None):
+            reasoning_with_tools.append(key)
+
+    if not missing_resource_tool and not reasoning_with_tools:
+        log_pass("every preparation executive can request resources while reasoning-only executives remain tool-free")
+    else:
+        log_fail(
+            "Resource tool roster separation",
+            f"missing_resource_tool={missing_resource_tool}, reasoning_with_tools={reasoning_with_tools}",
+        )
+except Exception as e:
+    log_fail("Resource tool roster separation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 93: STATIC CHECK — preparation and API enforce structured resource review
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_93 = f.read()
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_93 = f.read()
+
+    required_main = [
+        "propose_resource_request",
+        'meeting_result.get("proposed_resource_request_ids", [])',
+        "resource_provenance_mismatches",
+        '"/resources/pending"',
+        '"/resources/{request_id}/approve"',
+        '"/resources/{request_id}/reject"',
+        '"/resources/{request_id}/fulfill"',
+        "Resource must be approved before it can be marked fulfilled",
+    ]
+    missing = [item for item in required_main if item not in main_content_93]
+    meeting_tracks_ids = (
+        "created_resource_request_ids" in meeting_content_93
+        and '"proposed_resource_request_ids"' in meeting_content_93
+    )
+
+    if not missing and meeting_tracks_ids:
+        log_pass("preparation creates exact provenance-checked resource requests with separate owner review endpoints")
+    else:
+        log_fail(
+            "Structured resource API/preparation",
+            f"missing={missing}, meeting_tracks_ids={meeting_tracks_ids}",
+        )
+except Exception as e:
+    log_fail("Structured resource API/preparation check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 94: STATIC CHECK — dashboard exposes resource approval/fulfillment and lineage
+# -------------------------------------------------------------------
+try:
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_94 = f.read()
+
+    required = [
+        "Resource & Capability Requests",
+        "Approve Resource",
+        "Mark Fulfilled",
+        "Do NOT paste passwords, API keys, tokens",
+        "linked_resource_request_count",
+        "resource_requests",
+        "/resources/pending",
+    ]
+    missing = [item for item in required if item not in dashboard_content_94]
+    if not missing:
+        log_pass("dashboard supports structured resource review, safe fulfillment notes, and decision lineage")
+    else:
+        log_fail("Resource request dashboard", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Resource request dashboard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
 # OVERALL SUMMARY & EXIT STATUS
 # -------------------------------------------------------------------
 print("\n" + "=" * 60)
