@@ -44,6 +44,9 @@ from memory.database import (
     get_action_outcome,
     update_action_outcome,
     get_decision_lineage,
+    get_resource_request_by_id,
+    get_resource_requests,
+    transition_resource_request_status,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -254,6 +257,17 @@ class PreparationRequest(BaseModel):
         default_factory=lambda: ["coo", "cto", "ceo"],
         min_length=1,
         max_length=11,
+    )
+
+
+class ResourceFulfillmentRequest(BaseModel):
+    fulfillment_note: str = Field(
+        min_length=1,
+        max_length=500,
+        description=(
+            "Describe where/how the resource was provided, e.g. 'Gmail plugin connected'. "
+            "Never include passwords, API keys, tokens, or other secret values."
+        ),
     )
 
 
@@ -571,8 +585,11 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         "propose, include an expected_outcome and expected_impact so we can measure "
         "whether it worked later. Include expected_cost_amount + currency ONLY when "
         "the supplied evidence supports a real cost; otherwise leave cost unknown. "
-        "Never invent access or credentials we do not have. Missing capabilities must "
-        "be listed explicitly as resource/access requests. Minimize actions: do not "
+        "Never invent access or credentials we do not have. For every missing resource "
+        "or capability that genuinely blocks the approved plan, CALL "
+        "propose_resource_request so the owner receives a structured request. Do not "
+        "put passwords, API keys, tokens, or secret values in any tool field. Merely "
+        "listing a missing capability in prose is not a structured request. Minimize actions: do not "
         "propose anything that is not necessary to prepare the approved direction."
     )
 
@@ -595,6 +612,7 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         participants = meeting_result.get("participants", [])
         final_plan = meeting_result.get("final_decision", "")
         proposed_action_ids = meeting_result.get("proposed_action_ids", [])
+        proposed_resource_request_ids = meeting_result.get("proposed_resource_request_ids", [])
         new_actions = [
             action
             for action_id in proposed_action_ids
@@ -629,18 +647,49 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 ),
             )
 
+        new_resource_requests = [
+            resource_request
+            for request_id in proposed_resource_request_ids
+            if (resource_request := get_resource_request_by_id(request_id)) is not None
+        ]
+        resource_provenance_mismatches = [
+            resource_request for resource_request in new_resource_requests
+            if (
+                resource_request.get("source_decision_id") != decision_id
+                or resource_request.get("source_decision_sync_uuid") != decision["sync_uuid"]
+                or resource_request.get("source_phase") != "preparation"
+            )
+        ]
+        if len(new_resource_requests) != len(proposed_resource_request_ids):
+            resource_provenance_mismatches.append(
+                {"error": "Created resource request ID missing from database"}
+            )
+        if resource_provenance_mismatches:
+            finish_decision_preparation(
+                decision_id,
+                False,
+                "Preparation failed provenance verification; orphan/mismatched resource request detected.",
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Preparation created a resource request without the expected decision provenance. "
+                    "Preparation was marked failed; do not fulfill the orphan request."
+                ),
+            )
+
         # Some local models occasionally PRINT a function-call-shaped JSON
         # object instead of actually invoking the CrewAI tool. That must never
         # count as a successful preparation run: no DB action means no proposal
         # was really created and therefore no human approval gate exists.
         pseudo_tool_call = bool(
             re.search(
-                r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action)"|'
-                r'\bpropose_(?:action|file_operation|browser_action)\s*\()',
+                r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action|resource_request)"|'
+                r'\bpropose_(?:action|file_operation|browser_action|resource_request)\s*\()',
                 final_plan,
             )
         )
-        if pseudo_tool_call and not new_actions:
+        if pseudo_tool_call and not (new_actions or new_resource_requests):
             finish_decision_preparation(
                 decision_id,
                 False,
@@ -675,8 +724,8 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         send_notification(
             f"🧭 <b>PREPARATION COMPLETE</b>\n\n"
             f"<b>Source decision:</b> #{decision_id}\n\n"
-            "Any concrete actions proposed by executives are still waiting in "
-            "the normal action approval queue."
+            "Any concrete actions and resource requests proposed by executives are "
+            "still waiting for separate owner review."
         )
     except Exception as notify_err:
         logger.warning(f"Preparation completion notification failed: {notify_err}")
@@ -688,6 +737,89 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         individual_outputs=meeting_result.get("individual_outputs", {}),
         quality_warnings=meeting_result.get("quality_warnings", {}),
     )
+
+
+@app.get(
+    "/resources/pending",
+    summary="Get Pending Resource Requests",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_pending_resource_requests():
+    return get_resource_requests(statuses=("pending", "approved"), limit=100)
+
+
+@app.get(
+    "/resources/history",
+    summary="Get Resource Request History",
+    dependencies=[Depends(verify_api_key)],
+)
+def read_resource_request_history(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    return get_resource_requests(limit=limit, offset=offset)
+
+
+@app.post(
+    "/resources/{request_id}/approve",
+    summary="Approve Resource Request",
+    dependencies=[Depends(verify_api_key)],
+)
+def approve_resource_request(request_id: int):
+    current = get_resource_request_by_id(request_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Resource request not found.")
+    if not transition_resource_request_status(request_id, "approved", ("pending",)):
+        refreshed = get_resource_request_by_id(request_id)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Resource request cannot be approved from status '{refreshed.get('status') if refreshed else 'unknown'}'.",
+        )
+    return get_resource_request_by_id(request_id)
+
+
+@app.post(
+    "/resources/{request_id}/reject",
+    summary="Reject Resource Request",
+    dependencies=[Depends(verify_api_key)],
+)
+def reject_resource_request(request_id: int):
+    current = get_resource_request_by_id(request_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Resource request not found.")
+    if not transition_resource_request_status(request_id, "rejected", ("pending", "approved")):
+        refreshed = get_resource_request_by_id(request_id)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Resource request cannot be rejected from status '{refreshed.get('status') if refreshed else 'unknown'}'.",
+        )
+    return get_resource_request_by_id(request_id)
+
+
+@app.post(
+    "/resources/{request_id}/fulfill",
+    summary="Mark Resource Request Fulfilled",
+    dependencies=[Depends(verify_api_key)],
+)
+def fulfill_resource_request(request_id: int, request: ResourceFulfillmentRequest):
+    current = get_resource_request_by_id(request_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Resource request not found.")
+    if not transition_resource_request_status(
+        request_id,
+        "fulfilled",
+        ("approved",),
+        fulfillment_note=request.fulfillment_note,
+    ):
+        refreshed = get_resource_request_by_id(request_id)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Resource must be approved before it can be marked fulfilled "
+                f"(current status '{refreshed.get('status') if refreshed else 'unknown'}')."
+            ),
+        )
+    return get_resource_request_by_id(request_id)
 
 
 @app.get(
