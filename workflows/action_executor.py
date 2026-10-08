@@ -946,7 +946,7 @@ def execute_action(action_id: int) -> dict:
 
     # 4. SANDBOX / DRY RUN MODUS
     if config.SANDBOX_MODE:
-        print(f"[DRY RUN] Would execute: {action_detail}")
+        print(f"[DRY RUN] Action #{action_id} simulated; details retained in local action state.")
         update_action_status(action_id, "executed_dry_run")
         record_execution_result(
             action_id,
