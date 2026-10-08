@@ -80,6 +80,11 @@ class Config:
     SYNC_HMAC_KEY: str = field(
         default_factory=lambda: os.getenv("SYNC_HMAC_KEY", "").strip()
     )
+    # Optional dedicated key for binding owner approvals to the exact action
+    # payload. Falls back to SYNC_HMAC_KEY, then API_SECRET_KEY.
+    ACTION_APPROVAL_HMAC_KEY: str = field(
+        default_factory=lambda: os.getenv("ACTION_APPROVAL_HMAC_KEY", "").strip()
+    )
     # Raw shell execution cannot be made strongly safe by path regexes alone.
     # Keep live shell disabled unless the owner explicitly opts into the
     # residual OS-level risk. Structured file/browser actions are unaffected.
