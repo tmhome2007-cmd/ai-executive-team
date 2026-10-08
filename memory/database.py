@@ -467,6 +467,14 @@ def propose_action(
         raise ValueError(
             f"Unsupported action_type '{action_type}'. Allowed: {sorted(VALID_ACTION_TYPES)}"
         )
+    if expected_cost_amount is not None and expected_cost_amount < 0:
+        raise ValueError("expected_cost_amount cannot be negative")
+    if expected_cost_amount is not None and not currency:
+        raise ValueError("currency is required when expected_cost_amount is provided")
+    if currency is not None:
+        currency = currency.strip().upper()
+        if len(currency) != 3 or not currency.isalpha():
+            raise ValueError("currency must be a 3-letter code such as EUR or USD")
 
     timestamp = datetime.datetime.now().isoformat()
     new_sync_uuid = str(uuid.uuid4())
