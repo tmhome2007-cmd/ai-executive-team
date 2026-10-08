@@ -41,8 +41,6 @@ from memory.database import (
     claim_decision_for_preparation,
     finish_decision_preparation,
     recover_interrupted_actions,
-    get_latest_action_id,
-    get_actions_after_id,
     get_action_outcome,
     update_action_outcome,
     get_decision_lineage,
@@ -579,8 +577,6 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
     )
 
     try:
-        action_snapshot_id = get_latest_action_id()
-
         meeting_result = run_executive_meeting(
             topic=f"Preparation for Decision #{decision_id}",
             task_description=preparation_prompt,
@@ -598,12 +594,17 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
         participants = meeting_result.get("participants", [])
         final_plan = meeting_result.get("final_decision", "")
-        new_actions = get_actions_after_id(action_snapshot_id)
+        proposed_action_ids = meeting_result.get("proposed_action_ids", [])
+        new_actions = [
+            action
+            for action_id in proposed_action_ids
+            if (action := get_action_by_id(action_id)) is not None
+        ]
 
-        # Fail closed if any action created during this preparation escaped the
-        # scoped provenance context. We never guess/reassign provenance after
-        # the fact because concurrent/background work could otherwise be linked
-        # to the wrong business decision.
+        # Fail closed if any action explicitly created by THIS preparation
+        # escaped or mismatched the scoped provenance context. Because the
+        # meeting returns its exact created IDs, unrelated concurrent actions
+        # can never be mistaken for preparation output.
         provenance_mismatches = [
             action for action in new_actions
             if (
@@ -612,6 +613,8 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 or action.get("source_phase") != "preparation"
             )
         ]
+        if len(new_actions) != len(proposed_action_ids):
+            provenance_mismatches.append({"error": "Created action ID missing from database"})
         if provenance_mismatches:
             finish_decision_preparation(
                 decision_id,
