@@ -331,7 +331,12 @@ def get_decision_by_id(decision_id: int) -> dict | None:
                 a.reviewed_at AS approval_reviewed_at,
                 COALESCE(a.preparation_status, 'not_started') AS preparation_status,
                 a.prepared_at,
-                a.preparation_outcome
+                a.preparation_outcome,
+                (
+                    SELECT COUNT(*)
+                    FROM action_queue q
+                    WHERE q.source_decision_id = d.id
+                ) AS linked_action_count
             FROM decisions d
             LEFT JOIN decision_approvals a ON a.decision_id = d.id
             WHERE d.id = ?
@@ -454,7 +459,12 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
                 a.reviewed_at AS approval_reviewed_at,
                 COALESCE(a.preparation_status, 'not_started') AS preparation_status,
                 a.prepared_at,
-                a.preparation_outcome
+                a.preparation_outcome,
+                (
+                    SELECT COUNT(*)
+                    FROM action_queue q
+                    WHERE q.source_decision_id = d.id
+                ) AS linked_action_count
             FROM decisions d
             LEFT JOIN decision_approvals a ON a.decision_id = d.id
             ORDER BY d.timestamp DESC
