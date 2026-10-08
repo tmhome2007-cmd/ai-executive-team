@@ -83,6 +83,8 @@ def build_action_keyboard(action_id: int, status: str) -> Optional[InlineKeyboar
     - approved   -> Execute / Reject
     - alles anders (rejected/executed/blocked/...) -> geen knoppen (eindstatus)
     """
+    if not getattr(config, "TELEGRAM_ALLOW_REMOTE_CONTROL", False):
+        return None
     if status == "pending":
         return InlineKeyboardMarkup([[
             InlineKeyboardButton("✅ Approve", callback_data=f"approve:{action_id}"),
@@ -97,9 +99,17 @@ def build_action_keyboard(action_id: int, status: str) -> Optional[InlineKeyboar
 
 
 def _telegram_safe_action_detail(action: dict) -> str:
-    """Return enough detail for remote review without exporting file contents."""
+    """Keep third-party transport details local unless explicitly opted in."""
     action_type = action.get("action_type", "shell")
     raw = action.get("action_detail", "") or ""
+    include_sensitive = bool(
+        getattr(config, "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", False)
+    )
+    if not include_sensitive:
+        return (
+            f"[{action_type}] sensitive action detail retained locally; "
+            "review in the local dashboard before approval"
+        )
     if action_type == "file_operation":
         try:
             detail = json.loads(raw)
@@ -133,10 +143,18 @@ def format_action_message(action: dict, footer: str = "") -> str:
     command output. Telegram is a control surface, not a data-export channel.
     """
     safe_detail = _telegram_safe_action_detail(action)
+    include_sensitive = bool(
+        getattr(config, "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", False)
+    )
+    safe_description = (
+        action["action_description"]
+        if include_sensitive
+        else "Action description retained locally; review in the local dashboard."
+    )
     text = (
         f"⏳ <b>ACTION PROPOSAL #{action['id']}</b>\n\n"
         f"<b>Proposed By:</b> {escape_html(action['proposed_by'])}\n"
-        f"<b>Description:</b> {escape_html(action['action_description'])}\n"
+        f"<b>Description:</b> {escape_html(safe_description)}\n"
         f"<b>Detail:</b> <code>{escape_html(safe_detail)}</code>\n"
         f"<b>Status:</b> {escape_html(action['status'])}"
     )
@@ -171,6 +189,17 @@ def send_proposal_notification(
 # ------------------------------------------------------------------
 async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
+
+    if not getattr(config, "TELEGRAM_ALLOW_REMOTE_CONTROL", False):
+        try:
+            await query.answer(
+                "Remote control is disabled. Review and act from the local dashboard.",
+                show_alert=True,
+            )
+        except Exception:
+            pass
+        logger.warning("Blocked Telegram action callback because remote control is disabled.")
+        return
 
     # KRITIEKE CONTROLE: verifieer dat dit bericht ECHT van de eigenaar komt.
     # Zonder deze check zou ELKE Telegram-gebruiker die deze bot vindt en een
