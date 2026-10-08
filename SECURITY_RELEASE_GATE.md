@@ -7,7 +7,7 @@
 - Frontend ESLint and production build pass on hardening commits after typing fixes.
 - Docker-worker unit tests pass on CI commit `bbb180e`.
 - New CI runs now attempt dependency audits even when lint/Bandit fails.
-- Full-system regression verification passed **149/149 checks** on the dependency-updated branch (workflow 37812997279).
+- Full-system regression verification passed **150/150 checks**, alongside all 12 isolated/unit security tests and the live Docker boundary test (workflow 37818629298).
 
 ## Remediations committed
 - Centralized authority/approval bindings, imported-sync authority restrictions, fail-closed network/file controls, private artifact defaults: see `FOUNDATION_AUDIT.md`.
@@ -21,7 +21,7 @@
 - Two-worker SQLite approval-claim concurrency test added.
 - Persistent step claim ledger and crash reconciliation primitive added and initialized at backend startup; it is not yet integrated with every workflow step.
 - GitHub Actions use pinned immutable SHAs, verified against upstream release-tag commit references.
-- SQLite backups now reject zero/negative retention counts and symlink backup directories. An on-disk restore/integrity regression test and SQL status injection tests have been added; verify the latest run before release.
+- SQLite backups now reject zero/negative retention counts and symlink backup directories. An on-disk restore/integrity regression test and SQL status injection tests **passed** (CI run 37818629298; 12 unit tests plus 150/150 full-system checks).
 
 ## Open release blockers
 1. **HIGH — unresolved npm dev-tooling advisory.** Production dependency audit (`npm audit --omit=dev --audit-level=high`) passes on workflow 37812997279, but the full development-tooling audit fails. The one-time updater committed Next.js and eslint-config-next 16.3.8 plus a regenerated lockfile; that updater passed lint/build and reduced npm audit from one critical/eight high to five high. Remaining findings are in the `eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces` development tooling chain. The upstream `braces` advisory has no patched release. Do not blindly downgrade eslint-config-next to v14 or report the audit clean. Recheck production-only vs development dependency exposure and document any risk acceptance.
