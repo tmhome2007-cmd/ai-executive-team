@@ -253,10 +253,16 @@ def validate_config() -> list[str]:
                 "leave this machine. Keep the model local or explicitly opt in."
             )
         elif ollama_host not in {"localhost", "127.0.0.1", "::1"}:
-            warnings.append(
-                "Remote LLM transport is explicitly enabled. Executive prompts, "
-                "memory, and research context may leave this machine."
-            )
+            if urlparse(config.OLLAMA_BASE_URL).scheme.lower() != "https":
+                errors.append(
+                    "Remote LLM transport must use HTTPS. Plaintext HTTP would expose "
+                    "executive prompts, memory, and research context in transit."
+                )
+            else:
+                warnings.append(
+                    "Remote LLM transport is explicitly enabled. Executive prompts, "
+                    "memory, and research context may leave this machine."
+                )
     except Exception:
         pass
 
