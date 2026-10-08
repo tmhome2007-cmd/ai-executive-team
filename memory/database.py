@@ -40,7 +40,7 @@ VALID_RESOURCE_REQUEST_STATUSES = {"pending", "approved", "rejected", "fulfilled
 VALID_RESOURCE_TYPES = {
     "access", "credential", "plugin", "data", "budget", "service", "hardware", "other"
 }
-VALID_TREASURY_ENTRY_TYPES = {"funding", "spend", "refund", "adjustment"}
+VALID_TREASURY_ENTRY_TYPES = {"funding", "spend", "refund"}
 VALID_TREASURY_RESERVATION_STATUSES = {"active", "released", "consumed"}
 _ACTION_PROVENANCE_LOCK = threading.RLock()
 _ACTION_PROVENANCE_CONTEXT: dict | None = None
@@ -880,7 +880,6 @@ def get_treasury_summary(currency: str | None = None) -> dict:
                    SUM(CASE
                        WHEN entry_type IN ('funding', 'refund') THEN amount
                        WHEN entry_type = 'spend' THEN -amount
-                       WHEN entry_type = 'adjustment' THEN amount
                        ELSE 0
                    END) AS cash_balance
             FROM treasury_entries
@@ -1043,7 +1042,6 @@ def approve_action_with_treasury(action_id: int) -> dict:
                     CASE
                         WHEN entry_type IN ('funding', 'refund') THEN amount
                         WHEN entry_type = 'spend' THEN -amount
-                        WHEN entry_type = 'adjustment' THEN amount
                         ELSE 0
                     END
                 ), 0) AS cash_balance
@@ -1685,7 +1683,6 @@ def update_action_outcome_with_treasury(
                     CASE
                         WHEN entry_type IN ('funding', 'refund') THEN amount
                         WHEN entry_type = 'spend' THEN -amount
-                        WHEN entry_type = 'adjustment' THEN amount
                         ELSE 0
                     END
                 ), 0) AS cash_balance
