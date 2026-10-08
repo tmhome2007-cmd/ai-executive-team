@@ -13,9 +13,11 @@ from memory.database import (
 class AtomicActionClaimTests(unittest.TestCase):
     def test_two_workers_cannot_claim_same_approved_action(self):
         previous = config.DATABASE_PATH
+        previous_key = config.ACTION_APPROVAL_HMAC_KEY
         with tempfile.TemporaryDirectory() as temp:
             try:
                 config.DATABASE_PATH = os.path.join(temp, "claims.db")
+                config.ACTION_APPROVAL_HMAC_KEY = "ci-concurrency-test-only-key-not-production"
                 init_db()
                 action_id = propose_action("COO", "Concurrency test", "printf hello", "shell")
                 self.assertTrue(transition_action_status(action_id, "approved", ("pending",)))
@@ -27,6 +29,7 @@ class AtomicActionClaimTests(unittest.TestCase):
                 self.assertEqual(get_action_by_id(action_id)["status"], "executing")
             finally:
                 config.DATABASE_PATH = previous
+                config.ACTION_APPROVAL_HMAC_KEY = previous_key
 
 
 if __name__ == "__main__":
