@@ -73,6 +73,12 @@ class Config:
     WORKSPACE_ROOT: str = field(
         default_factory=lambda: os.getenv("WORKSPACE_ROOT", "./workspace").strip()
     )
+    SCREENSHOT_RETENTION_COUNT: int = field(
+        default_factory=lambda: max(
+            1,
+            int(os.getenv("SCREENSHOT_RETENTION_COUNT", "50")),
+        )
+    )
     SANDBOX_MODE: bool = field(
         default_factory=lambda: os.getenv("SANDBOX_MODE", "true").lower() in ("true", "1", "yes")
     )
