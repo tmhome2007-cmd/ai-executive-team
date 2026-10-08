@@ -12,7 +12,7 @@
 ## Remediations committed
 - Centralized authority/approval bindings, imported-sync authority restrictions, fail-closed network/file controls, private artifact defaults: see `FOUNDATION_AUDIT.md`.
 - Live raw-shell execution replaced by a Docker CLI invocation with fixed flags: network disabled, read-only container root, non-root UID, no capabilities, no-new-privileges, PID/RAM/CPU/timeout bounds, only workspace bind mount, Docker socket never passed, offline image selection; fails closed if Docker unavailable.
-- Docker worker unit tests validate fixed CLI boundaries. A new real Docker CI integration test has **passed** on workflow 37818189443 (network disabled, non-root UID, read-only container root, host paths absent). This is stronger evidence, but still not a dedicated adversarial penetration test or proof against kernel/daemon exploits.
+- Docker worker unit tests validate fixed CLI boundaries. Real Docker CI integration tests **passed**, including pinned image digest (workflow 37818443981), network disabled, non-root UID, read-only root and host paths absent. This is stronger evidence, not proof against kernel/daemon exploits.
 - Owner-sensitive dry-run command details no longer printed verbatim to the console.
 - Dashboard explicit-any ESLint errors repaired.
 - Timed-out Docker worker attempts forced removal by unique name.
@@ -21,6 +21,7 @@
 - Two-worker SQLite approval-claim concurrency test added.
 - Persistent step claim ledger and crash reconciliation primitive added and initialized at backend startup; it is not yet integrated with every workflow step.
 - GitHub Actions use pinned immutable SHAs, verified against upstream release-tag commit references.
+- SQLite backups now reject zero/negative retention counts and symlink backup directories. An on-disk restore/integrity regression test and SQL status injection tests have been added; verify the latest run before release.
 
 ## Open release blockers
 1. **HIGH — unresolved npm dev-tooling advisory.** Production dependency audit (`npm audit --omit=dev --audit-level=high`) passes on workflow 37812997279, but the full development-tooling audit fails. The one-time updater committed Next.js and eslint-config-next 16.3.8 plus a regenerated lockfile; that updater passed lint/build and reduced npm audit from one critical/eight high to five high. Remaining findings are in the `eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces` development tooling chain. The upstream `braces` advisory has no patched release. Do not blindly downgrade eslint-config-next to v14 or report the audit clean. Recheck production-only vs development dependency exposure and document any risk acceptance.
