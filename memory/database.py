@@ -1026,6 +1026,22 @@ def create_decision_memories(decision_id: int, approval_status: str) -> list[int
         for key in (decision.get("agents_involved") or "").split(",")
         if key.strip()
     ]:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE executive_memories
+                SET is_active = 0, updated_at = ?
+                WHERE executive_key = ?
+                  AND source_decision_id = ?
+                  AND memory_kind IN ('decision_approved', 'decision_rejected')
+                  AND memory_kind != ?
+                  AND is_active = 1
+                """,
+                (datetime.datetime.now().isoformat(), executive_key, decision_id, kind),
+            )
+            conn.commit()
+
         memory_id, created = create_executive_memory(
             executive_key=executive_key,
             memory_kind=kind,
@@ -1084,6 +1100,22 @@ def create_action_outcome_memories(action_id: int) -> list[int]:
         if key.strip()
     ]
     for executive_key in roles:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE executive_memories
+                SET is_active = 0, updated_at = ?
+                WHERE executive_key = ?
+                  AND source_action_id = ?
+                  AND memory_kind LIKE 'outcome_%'
+                  AND memory_kind != ?
+                  AND is_active = 1
+                """,
+                (datetime.datetime.now().isoformat(), executive_key, action_id, kind),
+            )
+            conn.commit()
+
         memory_id, created = create_executive_memory(
             executive_key=executive_key,
             memory_kind=kind,
