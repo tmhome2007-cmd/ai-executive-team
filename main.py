@@ -805,12 +805,16 @@ def fulfill_resource_request(request_id: int, request: ResourceFulfillmentReques
     current = get_resource_request_by_id(request_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Resource request not found.")
-    if not transition_resource_request_status(
-        request_id,
-        "fulfilled",
-        ("approved",),
-        fulfillment_note=request.fulfillment_note,
-    ):
+    try:
+        fulfilled = transition_resource_request_status(
+            request_id,
+            "fulfilled",
+            ("approved",),
+            fulfillment_note=request.fulfillment_note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not fulfilled:
         refreshed = get_resource_request_by_id(request_id)
         raise HTTPException(
             status_code=409,
