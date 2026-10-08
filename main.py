@@ -208,6 +208,17 @@ async def lifespan(app: FastAPI):
     # Initialiseer de database
     init_db()
 
+    # Durable step checkpoints: interrupted effects require explicit human
+    # reconciliation, never automatic replay on a server restart.
+    from workflows.step_checkpoints import init_step_checkpoints, reconcile_interrupted_steps
+    init_step_checkpoints()
+    uncertain_steps = reconcile_interrupted_steps()
+    if uncertain_steps:
+        logger.warning(
+            "Recovered %s interrupted workflow step(s) as inconclusive; manual review required.",
+            uncertain_steps,
+        )
+
     # Als een vorige procesrun tijdens een echte actie crashte, is het
     # real-world resultaat per definitie onzeker. Nooit automatisch retryen:
     # markeer zulke 'executing' acties als failed voor menselijke review.
