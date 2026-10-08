@@ -587,6 +587,10 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 page.wait_for_timeout(1000)  # korte pauze zodat de klik-actie zichtbaar effect heeft voordat de screenshot wordt genomen
 
             page.screenshot(path=screenshot_path)
+            try:
+                os.chmod(screenshot_path, 0o600)
+            except OSError:
+                pass
             browser.close()
 
         update_action_status(action_id, "executed")
