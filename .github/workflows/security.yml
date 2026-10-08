@@ -30,6 +30,9 @@ jobs:
         run: |
           python -m compileall -q agents config.py logging_config.py main.py memory notifications system_checks.py tools workflows privacy_bootstrap.py
 
+      - name: Container boundary unit tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
       - name: Bandit medium/high findings
         run: bandit -r agents memory notifications tools workflows main.py config.py system_checks.py -ll
 
