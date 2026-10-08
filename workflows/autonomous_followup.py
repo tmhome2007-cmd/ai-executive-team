@@ -24,8 +24,7 @@ from memory.database import (
     transition_followup_event_status,
     get_company_goal,
     get_decision_by_id,
-    link_followup_generated_decision,
-    log_decision,
+    create_followup_generated_decision,
 )
 from notifications.telegram_bot import send_notification_async, escape_html
 from workflows.meeting import run_executive_meeting
@@ -302,21 +301,30 @@ async def run_autonomous_followup() -> dict:
 
             if not created:
                 existing_event_ids.append(event_id)
-                continue
-
-            created_event_ids.append(event_id)
-
-            try:
-                await send_notification_async(
-                    "🔁 <b>AUTONOMOUS FOLLOW-UP</b>\n\n"
-                    f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
-                    f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
-                    f"<b>Severity:</b> {escape_html(candidate['severity'])}\n\n"
-                    f"{escape_html(candidate['reason'])}"
-                )
-            except Exception:
-                # Notification failure must never change persisted follow-up state.
-                pass
+                existing_event = get_followup_event(event_id)
+                # Reasoning events that previously failed BEFORE generating a
+                # decision are retryable. Existing alerts or already-linked
+                # reasoning events remain deduplicated.
+                if (
+                    not candidate.get("meeting_required")
+                    or existing_event is None
+                    or existing_event.get("status") != "open"
+                    or existing_event.get("generated_decision_id") is not None
+                ):
+                    continue
+            else:
+                created_event_ids.append(event_id)
+                try:
+                    await send_notification_async(
+                        "🔁 <b>AUTONOMOUS FOLLOW-UP</b>\n\n"
+                        f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
+                        f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
+                        f"<b>Severity:</b> {escape_html(candidate['severity'])}\n\n"
+                        f"{escape_html(candidate['reason'])}"
+                    )
+                except Exception:
+                    # Notification failure must never change persisted follow-up state.
+                    pass
 
             if not candidate.get("meeting_required"):
                 continue
@@ -337,27 +345,27 @@ async def run_autonomous_followup() -> dict:
                     evidence_text=prompt,
                     meeting_type=followup_meeting_type,
                 )
-                decision_id = log_decision(
+                decision_id, decision_created = create_followup_generated_decision(
+                    event_id,
                     topic=f"Autonomous follow-up: {goal['title']}",
                     agents_involved=meeting.get("participants", ["cso", "coo", "ceo"]),
                     task_description=prompt,
                     decision_outcome=meeting.get("final_decision", ""),
                     sandbox_mode=config.SANDBOX_MODE,
-                    goal_id=goal["id"],
                     meeting_type=followup_meeting_type,
                 )
-                link_followup_generated_decision(event_id, decision_id)
                 generated_decision_ids.append(decision_id)
 
-                try:
-                    await send_notification_async(
+                if decision_created:
+                    try:
+                        await send_notification_async(
                         "🧠 <b>FOLLOW-UP DECISION READY</b>\n\n"
                         f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
                         f"<b>Decision:</b> #{decision_id}\n"
                         "Status: pending owner approval. No preparation or execution occurred."
-                    )
-                except Exception:
-                    pass
+                        )
+                    except Exception:
+                        pass
             except Exception as exc:
                 errors.append(
                     f"Follow-up meeting for event #{event_id} failed: {exc}"
