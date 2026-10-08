@@ -75,6 +75,7 @@ from memory.database import (
 from workflows.daily_research import run_daily_research
 from workflows.autonomous_followup import run_autonomous_followup
 from workflows.meeting import run_executive_meeting
+from workflows.meeting_types import MEETING_TYPES, VALID_MEETING_TYPES, resolve_meeting_agents
 from agents.executive_agents import EXECUTIVE_AGENTS, EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
 from notifications.telegram_bot import send_notification, escape_html
@@ -325,13 +326,18 @@ class DailyResearchResponse(BaseModel):
 class DecisionRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=200)
     task_description: str = Field(min_length=1, max_length=12000)
-    agent_keys: list[str] = Field(default_factory=lambda: ["cfo", "ceo"], min_length=1, max_length=11)
+    meeting_type: Literal[
+        "strategy", "operating_review", "incident",
+        "capital_allocation", "retrospective", "planning"
+    ] = "strategy"
+    agent_keys: Optional[list[str]] = Field(default=None, min_length=1, max_length=11)
     goal_id: Optional[int] = Field(default=None, ge=1)
 
 
 class DecisionResponse(BaseModel):
     database_id: int
     topic: str
+    meeting_type: str
     goal_id: Optional[int] = None
     final_decision: str
     participants: list[str]
@@ -756,6 +762,25 @@ def read_goal_lineage(goal_id: int):
     return lineage
 
 
+@app.get(
+    "/meeting-types",
+    summary="List Executive Meeting Types",
+    dependencies=[Depends(verify_api_key)],
+)
+def list_meeting_types():
+    return {
+        key: {
+            "label": value["label"],
+            "default_agents": value["default_agents"],
+            "required_agents": value["required_agents"],
+            "evidence_focus": value["evidence_focus"],
+            "output_contract": value["output_contract"],
+            "approval_posture": value["approval_posture"],
+        }
+        for key, value in MEETING_TYPES.items()
+    }
+
+
 @app.post(
     "/decisions/trigger",
     response_model=DecisionResponse,
@@ -766,6 +791,13 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     """Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op."""
     goal = None
     meeting_task = request.task_description
+    try:
+        resolved_agent_keys = resolve_meeting_agents(
+            request.meeting_type,
+            request.agent_keys,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if request.goal_id is not None:
         goal = get_company_goal(request.goal_id)
         if goal is None:
@@ -790,7 +822,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         meeting_result = run_executive_meeting(
             topic=request.topic,
             task_description=meeting_task,
-            agent_keys=request.agent_keys,
+            agent_keys=resolved_agent_keys,
             # Decision meetings are reasoning-only. Tool-capable agents belong
             # in the separate preparation/execution phase after human approval.
             agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
@@ -799,6 +831,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
                 "goal_id": request.goal_id,
                 "limit": 5,
             },
+            meeting_type=request.meeting_type,
         )
     except ValueError as e:
         raise HTTPException(
@@ -821,6 +854,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         decision_outcome=final_decision,
         sandbox_mode=config.SANDBOX_MODE,
         goal_id=request.goal_id,
+        meeting_type=request.meeting_type,
     )
 
     try:
@@ -833,6 +867,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     return DecisionResponse(
         database_id=db_id,
         topic=request.topic,
+        meeting_type=request.meeting_type,
         goal_id=request.goal_id,
         final_decision=final_decision,
         participants=participants,
@@ -1051,6 +1086,7 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 "goal_id": decision.get("goal_id"),
                 "limit": 5,
             },
+            meeting_type="planning",
         )
 
     def _load_created_items(meeting_result: dict):

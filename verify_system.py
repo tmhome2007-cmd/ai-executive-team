@@ -776,14 +776,27 @@ except Exception as e:
 try:
     with open("workflows/meeting.py", "r", encoding="utf-8") as f:
         meeting_content_29 = f.read()
+    with open("workflows/meeting_types.py", "r", encoding="utf-8") as f:
+        meeting_types_content_29 = f.read()
 
-    required_evidence_phrases = [
+    required_meeting_phrases = [
         "Unknown — evidence required",
         "Never invent or present as factual",
         "Do not inherit an unsupported claim",
-        "Evidence needed before committing money or taking real-world action",
+        "Required response structure:",
     ]
-    missing = [p for p in required_evidence_phrases if p not in meeting_content_29]
+    missing = [
+        p for p in required_meeting_phrases
+        if p not in meeting_content_29
+    ]
+    if "Evidence needed before committing money or taking real-world action" not in meeting_content_29:
+        # Phase 10 intentionally replaced the old generic section with
+        # centralized meeting-type-specific response contracts.
+        if (
+            '"response_structure"' not in meeting_types_content_29
+            or "Evidence-section rule:" not in meeting_types_content_29
+        ):
+            missing.append("centralized meeting-type evidence/output structure")
 
     if not missing:
         log_pass("executive meeting prompts enforce evidence/assumption separation and reject inherited unsupported claims")
@@ -4751,6 +4764,294 @@ try:
         )
 except Exception as e:
     log_fail("Executive memory evidence-separation guard check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 125: DYNAMIC CHECK — meeting type profiles resolve safe defaults and required roles
+# -------------------------------------------------------------------
+try:
+    from workflows.meeting_types import (
+        VALID_MEETING_TYPES as _valid_mt_125,
+        get_meeting_type_profile as _profile_125,
+        resolve_meeting_agents as _resolve_125,
+        meeting_type_prompt as _prompt_125,
+    )
+
+    expected_125 = {
+        "strategy", "operating_review", "incident",
+        "capital_allocation", "retrospective", "planning",
+    }
+    strategy_agents_125 = _resolve_125("strategy", None)
+    capital_agents_125 = _resolve_125("capital_allocation", None)
+    incident_prompt_125 = _prompt_125("incident")
+    rejected_missing_cfo_125 = False
+    try:
+        _resolve_125("capital_allocation", ["cso", "ceo"])
+    except ValueError:
+        rejected_missing_cfo_125 = True
+
+    if (
+        _valid_mt_125 == expected_125
+        and strategy_agents_125 == _profile_125("strategy")["default_agents"]
+        and "cfo" in capital_agents_125
+        and "ceo" in capital_agents_125
+        and rejected_missing_cfo_125
+        and "Urgency never bypasses authority" in incident_prompt_125
+    ):
+        log_pass("meeting type profiles provide deterministic defaults, required-role validation, and authority-safe prompts")
+    else:
+        log_fail(
+            "Meeting type profile behavior",
+            f"valid={_valid_mt_125}, strategy={strategy_agents_125}, capital={capital_agents_125}, rejected={rejected_missing_cfo_125}",
+        )
+except Exception as e:
+    log_fail("Meeting type profile check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 126: DYNAMIC CHECK — decision meeting type persists and validates
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_126
+    from memory.database import (
+        init_db as _init_db_126,
+        log_decision as _decision_126,
+        get_decision_by_id as _get_126,
+    )
+
+    original_db_126 = _verify_config_126.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_126.DATABASE_PATH = os.path.join(temp_dir, "meeting-types.db")
+            _init_db_126()
+
+            decision_id_126 = _decision_126(
+                "Capital allocation test",
+                ["cfo", "ceo"],
+                "Assess a hypothetical allocation.",
+                "Recommend no spend without evidence.",
+                True,
+                meeting_type="capital_allocation",
+            )
+            row_126 = _get_126(decision_id_126)
+
+            invalid_rejected_126 = False
+            try:
+                _decision_126(
+                    "Invalid type",
+                    ["ceo"],
+                    "Test",
+                    "Test",
+                    True,
+                    meeting_type="imaginary_board_mode",
+                )
+            except ValueError:
+                invalid_rejected_126 = True
+
+            if (
+                row_126
+                and row_126["meeting_type"] == "capital_allocation"
+                and invalid_rejected_126
+            ):
+                log_pass("decision meeting type persists and unsupported types fail closed")
+            else:
+                log_fail("Meeting type persistence", f"row={row_126}, invalid_rejected={invalid_rejected_126}")
+    finally:
+        _verify_config_126.DATABASE_PATH = original_db_126
+except Exception as e:
+    log_fail("Meeting type persistence check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 127: DYNAMIC CHECK — meeting type survives cross-machine sync
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_127
+    from memory.database import (
+        init_db as _init_db_127,
+        log_decision as _decision_127,
+        export_history_to_jsonl as _export_127,
+        import_history_from_jsonl as _import_127,
+        get_recent_decisions as _recent_127,
+    )
+
+    original_db_127 = _verify_config_127.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_db_127 = os.path.join(temp_dir, "source.db")
+            target_db_127 = os.path.join(temp_dir, "target.db")
+            export_path_127 = os.path.join(temp_dir, "meeting-types.jsonl")
+
+            _verify_config_127.DATABASE_PATH = source_db_127
+            _init_db_127()
+            _decision_127(
+                "Retrospective sync",
+                ["coo", "ceo"],
+                "Review measured outcome.",
+                "Lesson only.",
+                True,
+                meeting_type="retrospective",
+            )
+            _export_127(export_path_127)
+
+            _verify_config_127.DATABASE_PATH = target_db_127
+            _init_db_127()
+            summary_127 = _import_127(export_path_127)
+            imported_127 = _recent_127(limit=10)
+
+            if (
+                summary_127.get("decisions_imported") == 1
+                and imported_127
+                and imported_127[0]["meeting_type"] == "retrospective"
+            ):
+                log_pass("meeting type sync preserves decision semantics across machines")
+            else:
+                log_fail("Meeting type sync", f"summary={summary_127}, imported={imported_127}")
+    finally:
+        _verify_config_127.DATABASE_PATH = original_db_127
+except Exception as e:
+    log_fail("Meeting type sync check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 128: STATIC CHECK — API and autonomous workflows use explicit meeting types
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_128 = f.read()
+    with open("workflows/autonomous_followup.py", "r", encoding="utf-8") as f:
+        followup_content_128 = f.read()
+    with open("workflows/daily_research.py", "r", encoding="utf-8") as f:
+        daily_content_128 = f.read()
+
+    required_main_128 = [
+        '"/meeting-types"',
+        "resolve_meeting_agents(",
+        "meeting_type=request.meeting_type",
+        'meeting_type="planning"',
+    ]
+    required_followup_128 = [
+        '"retrospective"',
+        "followup_meeting_type",
+        "meeting_type=followup_meeting_type",
+    ]
+    required_daily_128 = [
+        'meeting_type="strategy"',
+    ]
+
+    missing_128 = {
+        "main": [x for x in required_main_128 if x not in main_content_128],
+        "followup": [x for x in required_followup_128 if x not in followup_content_128],
+        "daily": [x for x in required_daily_128 if x not in daily_content_128],
+    }
+    if all(not values for values in missing_128.values()):
+        log_pass("decision API, preparation, autonomous follow-up, and daily research use explicit meeting types")
+    else:
+        log_fail("Meeting type workflow integration", f"missing={missing_128}")
+except Exception as e:
+    log_fail("Meeting type workflow integration check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 129: STATIC CHECK — meeting policy and dashboard are integrated without expanding authority
+# -------------------------------------------------------------------
+try:
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_129 = f.read()
+    with open("workflows/meeting_types.py", "r", encoding="utf-8") as f:
+        types_content_129 = f.read()
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_129 = f.read()
+    with open("memory/database.py", "r", encoding="utf-8") as f:
+        db_content_129 = f.read()
+
+    required_meeting_129 = [
+        "meeting_type_prompt(meeting_type)",
+        '"meeting_type": meeting_type',
+    ]
+    required_types_129 = [
+        '"strategy"',
+        '"operating_review"',
+        '"incident"',
+        '"capital_allocation"',
+        '"retrospective"',
+        '"planning"',
+        "The meeting type changes reasoning structure only",
+        "Urgency never bypasses authority",
+        "Treasury reservation/spend remains separate",
+    ]
+    required_dashboard_129 = [
+        "Meeting Type",
+        "selectedMeetingType",
+        "/meeting-types",
+        "meeting_type: selectedMeetingType",
+    ]
+    required_db_129 = [
+        "meeting_type TEXT NOT NULL DEFAULT 'strategy'",
+        "ALTER TABLE decisions ADD COLUMN meeting_type",
+        '"meeting_type"',
+    ]
+
+    missing_129 = {
+        "meeting": [x for x in required_meeting_129 if x not in meeting_content_129],
+        "types": [x for x in required_types_129 if x not in types_content_129],
+        "dashboard": [x for x in required_dashboard_129 if x not in dashboard_content_129],
+        "database": [x for x in required_db_129 if x not in db_content_129],
+    }
+    if all(not values for values in missing_129.values()):
+        log_pass("meeting types shape reasoning/output while existing human, treasury, resource, and execution authority remains separate")
+    else:
+        log_fail("Meeting type integration", f"missing={missing_129}")
+except Exception as e:
+    log_fail("Meeting type integration check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 130: DYNAMIC/STATIC CHECK — incident hypotheses stay out of Known Facts
+# -------------------------------------------------------------------
+try:
+    from workflows.meeting import _find_incident_fact_speculation as _incident_leaks_130
+    from workflows.meeting_types import get_meeting_type_profile as _profile_130
+
+    bad_130 = (
+        "**Known Facts**\n"
+        "- Users cannot access the service.\n"
+        "- We cannot rule out infrastructure issues that may have caused the outage.\n\n"
+        "**Impact / Unknowns**\n"
+        "- Root cause is unknown."
+    )
+    good_130 = (
+        "**Known Facts**\n"
+        "- Users cannot access the service.\n"
+        "- Root cause is unknown.\n\n"
+        "**Impact / Unknowns**\n"
+        "- Infrastructure issues are a possible hypothesis, but this has not been verified."
+    )
+
+    bad_leaks_130 = _incident_leaks_130(bad_130)
+    good_leaks_130 = _incident_leaks_130(good_130)
+    incident_profile_130 = _profile_130("incident")
+
+    with open("workflows/meeting.py", "r", encoding="utf-8") as fh:
+        meeting_content_130 = fh.read()
+
+    static_ok_130 = all([
+        "INCIDENT EVIDENCE-SEPARATION WARNING" in meeting_content_130,
+        "incident_fact_speculation" in meeting_content_130,
+        "Known Facts; Impact / Unknowns; Containment Recommendation; Recovery Path; Approval Gate."
+            == incident_profile_130["response_structure"],
+        "Known Facts must contain ONLY established facts" in incident_profile_130["evidence_section_rule"],
+    ])
+
+    if bad_leaks_130 and not good_leaks_130 and static_ok_130:
+        log_pass("incident meetings enforce Known Facts separation and detect speculative hypotheses in current-evidence sections")
+    else:
+        log_fail(
+            "Incident evidence-separation guard",
+            f"bad={bad_leaks_130}, good={good_leaks_130}, static={static_ok_130}",
+        )
+except Exception as e:
+    log_fail("Incident evidence-separation guard check crashed", str(e))
 
 
 # -------------------------------------------------------------------

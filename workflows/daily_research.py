@@ -148,6 +148,7 @@ async def run_daily_research() -> dict:
                 task_description="CSO failed to genuinely invoke the research tool after 3 attempts.",
                 decision_outcome="No meeting was held. Manual review needed.",
                 sandbox_mode=config.SANDBOX_MODE,
+                meeting_type="strategy",
             )
             try:
                 await send_notification_async(
@@ -180,6 +181,7 @@ async def run_daily_research() -> dict:
             ),
             agent_keys=MEETING_AGENT_KEYS,
             agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
+            meeting_type="strategy",
         )
 
         db_id = log_decision(
@@ -188,6 +190,7 @@ async def run_daily_research() -> dict:
             task_description=research_summary,
             decision_outcome=meeting_result["final_decision"],
             sandbox_mode=config.SANDBOX_MODE,
+            meeting_type="strategy",
         )
 
         try:

@@ -21,6 +21,7 @@ if str(project_root) not in sys.path:
 
 from agents.executive_agents import EXECUTIVE_AGENTS
 from workflows.execution_lock import EXECUTION_LOCK
+from workflows.meeting_types import get_meeting_type_profile, meeting_type_prompt
 from memory.database import action_provenance_scope, get_executive_memories
 
 
@@ -181,6 +182,42 @@ def _find_memory_evidence_leaks(memory_text: str, output_text: str) -> List[str]
     return leaks
 
 
+def _find_incident_fact_speculation(output_text: str) -> List[str]:
+    """
+    Incident meetings must keep speculative causes/impacts out of the Known Facts
+    section. Hypotheses belong under Impact / Unknowns.
+    """
+    if not output_text:
+        return []
+
+    match = re.search(
+        r"(?is)(?:\*\*)?(?:known facts|evidence[- ]supported(?: findings| assessment)?)(?:\*\*)?\s*[:\n]*(.*?)(?=\n\s*(?:\*\*)?(?:impact\s*/\s*unknowns|assumptions\s*/\s*unknowns|containment recommendation|recommendation|recovery path|approval gate)(?:\*\*)?|\Z)",
+        output_text,
+    )
+    if not match:
+        return []
+
+    section = re.sub(r"\s+", " ", match.group(1).lower())
+    speculative_patterns = [
+        r"cannot rule out",
+        r"\bmay have\b",
+        r"\bmight have\b",
+        r"\bcould have\b",
+        r"\bmay be\b",
+        r"\bmight be\b",
+        r"\bcould be\b",
+        r"\bpotential(?:ly)?\b",
+        r"\bperhaps\b",
+        r"\bpossibly\b",
+    ]
+
+    leaks: List[str] = []
+    for pattern in speculative_patterns:
+        if re.search(pattern, section):
+            leaks.append(pattern)
+    return leaks
+
+
 def run_executive_meeting(
     topic: str,
     task_description: str,
@@ -189,6 +226,7 @@ def run_executive_meeting(
     evidence_text: str | None = None,
     provenance_context: Dict[str, Any] | None = None,
     memory_context: Dict[str, Any] | None = None,
+    meeting_type: str = "strategy",
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -208,6 +246,8 @@ def run_executive_meeting(
             zodat propose_* tools de juiste beslissing atomair erven.
         memory_context (dict, optioneel): controls structured historical memory
             retrieval. Memory is advisory only and is never added to evidence_text.
+        meeting_type (str): policy profile controlling evidence focus/output contract.
+            It never expands tool or approval authority.
 
     Returns:
         Dict[str, Any]: Een dictionary met 'final_decision', 'participants' en 'individual_outputs'.
@@ -216,6 +256,9 @@ def run_executive_meeting(
 
     if agents_source is None:
         agents_source = EXECUTIVE_AGENTS
+
+    meeting_profile = get_meeting_type_profile(meeting_type)
+    meeting_policy = meeting_type_prompt(meeting_type)
 
     # Werk op een lokale kopie zodat CEO-reordering nooit de lijst van de
     # aanroeper (bijv. Pydantic request state) in-place verandert.
@@ -251,6 +294,17 @@ def run_executive_meeting(
     memory_goal_id = None if memory_context is None else memory_context.get("goal_id")
     memory_limit = 5 if memory_context is None else int(memory_context.get("limit", 5))
     memory_limit = max(0, min(memory_limit, 8))
+
+    def _meeting_response_structure(role_memory: str) -> str:
+        prefix = (
+            "Historical Context; "
+            if role_memory else ""
+        )
+        return (
+            prefix
+            + meeting_profile["response_structure"]
+            + " Keep historical memory separate from current evidence."
+        )
 
     def _memory_block(executive_key: str) -> str:
         if not memory_enabled or memory_limit == 0:
@@ -293,17 +347,21 @@ def run_executive_meeting(
             # De eerste agent start de discussie
             description = (
                 f"{task_description}\n\n"
+                + f"{meeting_policy}\n\n"
                 + (f"{role_memory}\n\n" if role_memory else "")
                 + f"{EVIDENCE_DISCIPLINE}\n\n"
-                "Response structure:\n"
+                "Required response structure:\n"
+                + _meeting_response_structure(role_memory)
+                + "\n"
                 + (
-                    "0. Historical context — ONLY lessons from executive memory; explicitly state that this is not current evidence.\n"
+                    "Historical Context must contain ONLY remembered lessons and must be explicitly labeled not-current-evidence.\n"
                     if role_memory else ""
                 )
-                + "1. Evidence-supported assessment — ONLY facts independently present in the current task/evidence; do not repeat memory-only facts here.\n"
-                "2. Assumptions / unknowns\n"
-                "3. Recommendation\n"
-                "4. Evidence needed before committing money or taking real-world action"
+                + (
+                    meeting_profile.get("evidence_section_rule", "")
+                    + "\n"
+                    if meeting_profile.get("evidence_section_rule") else ""
+                )
             )
             expected_output = (
                 "A role-specific assessment that clearly separates evidence, assumptions/unknowns, "
@@ -318,6 +376,7 @@ def run_executive_meeting(
             # Vervolgentaken ontvangen de historie van vorige taken als context
             description = (
                 f"{task_description}\n\n"
+                + f"{meeting_policy}\n\n"
                 + (f"{role_memory}\n\n" if role_memory else "")
                 + f"{EVIDENCE_DISCIPLINE}\n\n"
                 "Instruction: Consider the perspectives already shared by your fellow executives above, "
@@ -332,7 +391,13 @@ def run_executive_meeting(
                     "When historical memory is present, start with a 'Historical context' section containing ONLY remembered lessons and explicitly label them not-current-evidence. "
                     if role_memory else ""
                 )
-                + "Structure the remaining response as: Evidence-supported assessment (current task/evidence only; no memory-only facts); Assumptions / unknowns; Recommendation; Evidence needed before action."
+                + "Use this meeting-type response structure exactly: "
+                + _meeting_response_structure(role_memory)
+                + ". "
+                + (
+                    meeting_profile.get("evidence_section_rule", "") + " "
+                    if meeting_profile.get("evidence_section_rule") else ""
+                )
             )
             if key == "ceo":
                 description += (
@@ -342,12 +407,15 @@ def run_executive_meeting(
                     "- Produce a concise decision brief that synthesizes only the strongest CURRENT-evidence-backed points and material disagreements.\n"
                     "- Explicitly list unsupported assumptions and missing evidence.\n"
                     "- If the evidence is insufficient for a real-world commitment, recommend the next research/validation step instead of pretending the decision is ready.\n"
-                    "- End with an Approval Gate stating exactly what the human owner is being asked to approve now, if anything."
+                    "- End with an Approval Gate stating exactly what the human owner is being asked to approve now, if anything.\n"
+                    f"- Meeting-type contract: {meeting_profile['output_contract']}\n"
+                    f"- Required response structure: {meeting_profile['response_structure']}"
                 )
                 expected_output = (
-                    "A concise CEO decision brief with: Historical context when memory exists; Evidence-supported findings from current evidence only; Material disagreements/risks; "
-                    "Assumptions/unknowns; Recommendation; Next validation step; Approval Gate. "
-                    "No copied executive prose and no unsupported precise figures."
+                    "A concise CEO decision brief following this exact meeting-type structure: "
+                    f"{_meeting_response_structure(role_memory)} "
+                    "No copied executive prose, no unsupported precise figures, and no speculative "
+                    "hypotheses inside current-evidence / known-facts sections."
                 )
             else:
                 expected_output = (
@@ -479,6 +547,26 @@ def run_executive_meeting(
             + guarded_final_decision
         )
 
+    incident_fact_speculation: Dict[str, List[str]] = {}
+    if meeting_type == "incident":
+        for key, guarded_output in guarded_individual_outputs.items():
+            leaks = _find_incident_fact_speculation(guarded_output)
+            if leaks:
+                incident_fact_speculation[key] = leaks
+        final_incident_leaks = _find_incident_fact_speculation(guarded_final_decision)
+        if final_incident_leaks:
+            incident_fact_speculation["final_decision"] = final_incident_leaks
+
+        if incident_fact_speculation:
+            affected = ", ".join(sorted(incident_fact_speculation.keys()))
+            guarded_final_decision = (
+                "⚠️ INCIDENT EVIDENCE-SEPARATION WARNING — Speculative possibilities "
+                "appeared inside a Known Facts/current-evidence section "
+                f"(affected: {affected}). Treat those statements as hypotheses/unknowns "
+                "until independently verified.\n\n"
+                + guarded_final_decision
+            )
+
     repeated_analysis = find_repeated_analysis(individual_outputs)
     if repeated_analysis:
         repeated_roles = ", ".join(sorted(repeated_analysis.keys()))
@@ -492,12 +580,14 @@ def run_executive_meeting(
     return {
         "final_decision": guarded_final_decision,
         "participants": agent_keys,
+        "meeting_type": meeting_type,
         "individual_outputs": guarded_individual_outputs,
         "quality_warnings": {
             "unsupported_quantitative_claims": quality_warnings,
             "individual_outputs": individual_quality_warnings,
             "repeated_analysis": repeated_analysis,
             "memory_evidence_leaks": memory_evidence_leaks,
+            "incident_fact_speculation": incident_fact_speculation,
         },
         "proposed_action_ids": provenance_created_action_ids,
         "proposed_resource_request_ids": provenance_created_resource_request_ids,
