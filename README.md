@@ -65,7 +65,10 @@ Edit `.env` and set:
 | `ALLOW_UNSAFE_RAW_SHELL` | `False` by default. Live raw shell is not treated as safely sandboxed; structured actions are preferred. |
 | `BIND_HOST` | `127.0.0.1` by default. Keep the API loopback-only unless you deliberately deploy a protected remote transport. |
 | `ALLOW_INSECURE_REMOTE_HTTP` | `False` by default. A non-loopback plaintext HTTP bind fails startup unless you explicitly accept that transport risk. |
-| `TELEGRAM_INCLUDE_SENSITIVE_DETAILS` | `False` by default. Execution paths, commands, URLs, errors, and transport details remain local; proposal details needed for informed approval are still shown. |
+| `TELEGRAM_INCLUDE_SENSITIVE_DETAILS` | `False` by default. Action descriptions/details, paths, commands, URLs, errors, and transport details remain local unless explicitly enabled. |
+| `TELEGRAM_ALLOW_REMOTE_CONTROL` | `False` by default. Telegram is notification-only unless the owner explicitly enables remote Approve/Reject/Execute. |
+| `ALLOW_REMOTE_LLM` | `False` by default. Non-loopback model endpoints are blocked unless explicitly enabled; enabled remote endpoints must use HTTPS. |
+| `SCREENSHOT_RETENTION_COUNT` | Number of private browser screenshots retained in the workspace (default `50`). Oldest action screenshots are pruned. |
 
 ### Verify the setup
 
@@ -178,9 +181,11 @@ This is the part worth understanding before flipping to Live mode:
   The backend binds loopback by default and CORS is restricted to the local
   dashboard origins. Invalid guesses are rate-limited without allowing an
   attacker to lock out a request that presents the correct owner key.
-- **External-channel privacy**: Telegram remains useful for owner review, but
-  execution paths/commands/URLs/errors are retained locally by default.
-  Transport-library exception details are suppressed from logs.
+- **External-channel privacy**: Telegram is notification-only by default.
+  Remote Approve/Reject/Execute requires explicit opt-in, and action
+  descriptions/paths/commands/URLs/errors stay local unless sensitive-detail
+  egress is separately enabled. Transport-library exception details and
+  unauthorized sender identifiers are suppressed from logs.
 - **Filesystem race resistance**: structured file I/O walks the workspace using
   descriptor-relative `O_NOFOLLOW` operations, rejects special/multi-hard-link
   targets, caps reads/writes, and preserves atomic owner-only writes.
@@ -190,9 +195,10 @@ This is the part worth understanding before flipping to Live mode:
 - **Telegram owner identity**: action buttons are accepted only from the
   configured owner's private Telegram chat/user. Telegram uses the same
   treasury/goal-aware action-control functions as the API.
-- **Local-first telemetry**: CrewAI telemetry is disabled by project default.
-  A non-local Ollama URL produces a privacy warning because prompts/context
-  would leave the machine.
+- **Local-first telemetry/model transport**: CrewAI telemetry is disabled by
+  project default. A non-local Ollama URL fails startup unless the owner
+  explicitly enables remote LLM transport, and remote model endpoints must
+  use HTTPS because prompts/context may leave the machine.
 - **Authenticated sync, local authority**: JSONL sync rows are HMAC-signed.
   Remote approved/executing actions do not import as local execution
   authority, and remote active reservations do not import as local spending
@@ -241,6 +247,14 @@ executive-dashboard/             — Next.js dashboard (separate npm project)
   default. The intended long-term execution boundary is a disposable local
   container/VM sandbox for side-effecting activities, while the executive
   control plane remains on the host.
+- SQLite state, backups and sync exports are owner-permission protected and
+  sync exports are integrity-authenticated, but they are not application-level
+  encrypted at rest. Use full-disk encryption now; add authenticated encrypted
+  exports/backups later rather than inventing custom crypto.
+- Durable business state is persisted, but long multi-step executive workflows
+  are not yet checkpointed at every step. The next foundation milestone should
+  add explicit run/step checkpoints plus idempotency keys so a crash/resume
+  never repeats a completed side effect.
 
 ## Automated security checks
 
@@ -251,3 +265,7 @@ compiles the backend, runs Bandit, audits Python dependencies with
 also watches Python, npm, and GitHub Actions dependencies. CrewAI remains
 deliberately protected from automatic major/minor upgrades because runtime
 stability and tool behavior must be revalidated manually.
+
+## Foundation audit
+
+See [FOUNDATION_AUDIT.md](FOUNDATION_AUDIT.md) for the pre-frontend security/privacy audit, residual risks, and architecture lessons from comparable agent systems.
