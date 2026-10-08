@@ -21,6 +21,7 @@ if str(project_root) not in sys.path:
 
 from agents.executive_agents import EXECUTIVE_AGENTS
 from workflows.execution_lock import EXECUTION_LOCK
+from memory.database import action_provenance_scope
 
 
 EVIDENCE_DISCIPLINE = """
@@ -146,6 +147,7 @@ def run_executive_meeting(
     agent_keys: List[str],
     agents_source: Dict[str, Any] = None,
     evidence_text: str | None = None,
+    provenance_context: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -160,6 +162,9 @@ def run_executive_meeting(
             kwantitatieve guard claims valideert. Standaard task_description.
             Hiermee kan een preparation prompt een eerder besluit tonen zonder
             dat cijfers uit dat besluit automatisch als bewezen evidence gelden.
+        provenance_context (dict, optioneel): bronbeslissing voor tool-acties.
+            Wanneer aanwezig wordt de context IN de CrewAI worker thread gezet,
+            zodat propose_* tools de juiste beslissing atomair erven.
 
     Returns:
         Dict[str, Any]: Een dictionary met 'final_decision', 'participants' en 'individual_outputs'.
@@ -288,12 +293,25 @@ def run_executive_meeting(
     # blijft hangen.
     MEETING_TIMEOUT_SECONDS = 600  # 10 minuten
 
+    provenance_created_action_ids: List[int] = []
+
     def _kickoff_under_execution_lock():
         # De worker zelf houdt de globale lock vast. Als de HTTP-aanroeper na
         # de timeout terugkeert terwijl CrewAI intern nog doorloopt, blijft de
         # lock dus bezet tot die echte run klaar is en kan geen tweede zware
         # crew-run er bovenop starten.
         with EXECUTION_LOCK:
+            if provenance_context:
+                with action_provenance_scope(
+                    decision_id=int(provenance_context["decision_id"]),
+                    decision_sync_uuid=str(provenance_context["decision_sync_uuid"]),
+                    phase=str(provenance_context.get("phase", "preparation")),
+                ) as provenance_scope:
+                    result = crew.kickoff()
+                    provenance_created_action_ids.extend(
+                        provenance_scope.get("created_action_ids", [])
+                    )
+                    return result
             return crew.kickoff()
 
     executor = ThreadPoolExecutor(max_workers=1)
@@ -353,6 +371,7 @@ def run_executive_meeting(
             "individual_outputs": individual_quality_warnings,
             "repeated_analysis": repeated_analysis,
         },
+        "proposed_action_ids": provenance_created_action_ids,
     }
 
 

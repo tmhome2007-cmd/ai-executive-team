@@ -41,10 +41,9 @@ from memory.database import (
     claim_decision_for_preparation,
     finish_decision_preparation,
     recover_interrupted_actions,
-    get_latest_action_id,
-    get_actions_after_id,
     get_action_outcome,
     update_action_outcome,
+    get_decision_lineage,
 )
 from workflows.daily_research import run_daily_research
 from workflows.meeting import run_executive_meeting
@@ -578,8 +577,6 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
     )
 
     try:
-        action_snapshot_id = get_latest_action_id()
-
         meeting_result = run_executive_meeting(
             topic=f"Preparation for Decision #{decision_id}",
             task_description=preparation_prompt,
@@ -588,11 +585,49 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             # Only the ORIGINAL task/evidence is evidence for quantitative
             # validation. The approved recommendation is direction, not proof.
             evidence_text=decision["task_description"],
+            provenance_context={
+                "decision_id": decision_id,
+                "decision_sync_uuid": decision["sync_uuid"],
+                "phase": "preparation",
+            },
         )
 
         participants = meeting_result.get("participants", [])
         final_plan = meeting_result.get("final_decision", "")
-        new_actions = get_actions_after_id(action_snapshot_id)
+        proposed_action_ids = meeting_result.get("proposed_action_ids", [])
+        new_actions = [
+            action
+            for action_id in proposed_action_ids
+            if (action := get_action_by_id(action_id)) is not None
+        ]
+
+        # Fail closed if any action explicitly created by THIS preparation
+        # escaped or mismatched the scoped provenance context. Because the
+        # meeting returns its exact created IDs, unrelated concurrent actions
+        # can never be mistaken for preparation output.
+        provenance_mismatches = [
+            action for action in new_actions
+            if (
+                action.get("source_decision_id") != decision_id
+                or action.get("source_decision_sync_uuid") != decision["sync_uuid"]
+                or action.get("source_phase") != "preparation"
+            )
+        ]
+        if len(new_actions) != len(proposed_action_ids):
+            provenance_mismatches.append({"error": "Created action ID missing from database"})
+        if provenance_mismatches:
+            finish_decision_preparation(
+                decision_id,
+                False,
+                "Preparation failed provenance verification; orphan/mismatched action detected.",
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Preparation created an action without the expected decision provenance. "
+                    "Preparation was marked failed; do not approve the orphan action."
+                ),
+            )
 
         # Some local models occasionally PRINT a function-call-shaped JSON
         # object instead of actually invoking the CrewAI tool. That must never
@@ -653,6 +688,22 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         individual_outputs=meeting_result.get("individual_outputs", {}),
         quality_warnings=meeting_result.get("quality_warnings", {}),
     )
+
+
+@app.get(
+    "/decisions/{decision_id}/lineage",
+    summary="Get Decision-to-Outcome Lineage",
+    description=(
+        "Returns the full auditable chain for one decision: approval/preparation, "
+        "all linked action proposals, execution state, and measured outcomes."
+    ),
+    dependencies=[Depends(verify_api_key)],
+)
+def read_decision_lineage(decision_id: int):
+    lineage = get_decision_lineage(decision_id)
+    if lineage is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+    return lineage
 
 
 @app.get(

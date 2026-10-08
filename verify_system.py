@@ -1853,8 +1853,7 @@ try:
         main_content_71 = f.read()
 
     required = [
-        "get_latest_action_id()",
-        "get_actions_after_id(action_snapshot_id)",
+        'meeting_result.get("proposed_action_ids", [])',
         "pseudo_tool_call = bool(",
         "tool-call imitation",
         "Preparation agent described/printed a propose_* tool call",
@@ -1862,7 +1861,7 @@ try:
     missing = [p for p in required if p not in main_content_71]
 
     if not missing:
-        log_pass("Phase 2 verifies that printed propose_* pseudo-calls created a real action_queue proposal")
+        log_pass("Phase 2 verifies fake textual tool calls against the exact action IDs created by that meeting")
     else:
         log_fail("Phase 2 fake-tool-call guard", f"Missing: {missing}")
 except Exception as e:
@@ -2291,6 +2290,308 @@ try:
         )
 except Exception as e:
     log_fail("Verification repeatability check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 82: DYNAMIC CHECK — provenance scope attaches decision identity only in scope
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_82
+    from memory.database import (
+        init_db as _init_db_82,
+        log_decision as _log_decision_82,
+        get_decision_by_id as _get_decision_82,
+        action_provenance_scope as _scope_82,
+        propose_action as _propose_82,
+        get_action_by_id as _get_action_82,
+    )
+
+    original_db_82 = _verify_config_82.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_82.DATABASE_PATH = os.path.join(temp_dir, "provenance.db")
+            _init_db_82()
+            decision_id = _log_decision_82(
+                "Provenance test", ["ceo"], "Evidence", "Direction", True
+            )
+            decision = _get_decision_82(decision_id)
+
+            with _scope_82(decision_id, decision["sync_uuid"], "preparation"):
+                linked_id = _propose_82("COO", "Linked action", "echo linked", "shell")
+            unlinked_id = _propose_82("COO", "Independent action", "echo free", "shell")
+
+            linked = _get_action_82(linked_id)
+            unlinked = _get_action_82(unlinked_id)
+
+            if (
+                linked["source_decision_id"] == decision_id
+                and linked["source_decision_sync_uuid"] == decision["sync_uuid"]
+                and linked["source_phase"] == "preparation"
+                and linked["source_decision_topic"] == "Provenance test"
+                and unlinked["source_decision_id"] is None
+                and unlinked["source_decision_sync_uuid"] is None
+            ):
+                log_pass("action provenance scope links preparation actions without contaminating independent actions")
+            else:
+                log_fail(
+                    "Action provenance scope",
+                    f"linked={linked}, unlinked={unlinked}",
+                )
+    finally:
+        _verify_config_82.DATABASE_PATH = original_db_82
+except Exception as e:
+    log_fail("Action provenance scope check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 83: DYNAMIC CHECK — lineage reconstructs decision → action → outcome
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_83
+    from memory.database import (
+        init_db as _init_db_83,
+        log_decision as _log_decision_83,
+        get_decision_by_id as _get_decision_83,
+        action_provenance_scope as _scope_83,
+        propose_action as _propose_83,
+        update_action_outcome as _update_outcome_83,
+        get_decision_lineage as _lineage_83,
+    )
+
+    original_db_83 = _verify_config_83.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_83.DATABASE_PATH = os.path.join(temp_dir, "lineage.db")
+            _init_db_83()
+            decision_id = _log_decision_83(
+                "Lineage test", ["ceo"], "Evidence", "Approved direction", True
+            )
+            decision = _get_decision_83(decision_id)
+            with _scope_83(decision_id, decision["sync_uuid"], "preparation"):
+                action_id = _propose_83(
+                    "COO",
+                    "Measure lineage",
+                    "echo lineage",
+                    "shell",
+                    expected_outcome="Trace is visible",
+                )
+            _update_outcome_83(
+                action_id,
+                outcome_status="partial",
+                actual_outcome="Trace captured but execution not part of this unit test",
+            )
+            lineage = _lineage_83(decision_id)
+
+            if (
+                lineage
+                and lineage["decision"]["id"] == decision_id
+                and len(lineage["actions"]) == 1
+                and lineage["actions"][0]["id"] == action_id
+                and lineage["actions"][0]["outcome_status"] == "partial"
+                and lineage["actions"][0]["actual_outcome"]
+            ):
+                log_pass("decision lineage reconstructs linked action and measured business outcome")
+            else:
+                log_fail("Decision lineage reconstruction", f"lineage={lineage}")
+    finally:
+        _verify_config_83.DATABASE_PATH = original_db_83
+except Exception as e:
+    log_fail("Decision lineage reconstruction check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 84: DYNAMIC CHECK — provenance sync resolves different local decision IDs
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_84
+    from memory.database import (
+        init_db as _init_db_84,
+        log_decision as _log_decision_84,
+        get_decision_by_id as _get_decision_84,
+        action_provenance_scope as _scope_84,
+        propose_action as _propose_84,
+        export_history_to_jsonl as _export_84,
+        import_history_from_jsonl as _import_84,
+        get_action_history as _history_84,
+        get_recent_decisions as _decisions_84,
+    )
+
+    original_db_84 = _verify_config_84.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_db = os.path.join(temp_dir, "source.db")
+            target_db = os.path.join(temp_dir, "target.db")
+            export_path = os.path.join(temp_dir, "provenance.jsonl")
+
+            _verify_config_84.DATABASE_PATH = source_db
+            _init_db_84()
+            source_decision_id = _log_decision_84(
+                "Synced source decision", ["ceo"], "Evidence", "Direction", True
+            )
+            source_decision = _get_decision_84(source_decision_id)
+            with _scope_84(source_decision_id, source_decision["sync_uuid"], "preparation"):
+                _propose_84("COO", "Synced linked action", "echo sync", "shell")
+            _export_84(export_path)
+
+            _verify_config_84.DATABASE_PATH = target_db
+            _init_db_84()
+            # Force local IDs to differ from the source machine.
+            _log_decision_84("Local-only decision", ["ceo"], "Local", "Local", True)
+            summary = _import_84(export_path)
+
+            imported_decision = next(
+                row for row in _decisions_84(limit=20)
+                if row["sync_uuid"] == source_decision["sync_uuid"]
+            )
+            imported_action = next(
+                row for row in _history_84(limit=20)
+                if row["action_description"] == "Synced linked action"
+            )
+
+            if (
+                summary.get("decisions_imported") == 1
+                and summary.get("actions_imported") == 1
+                and imported_decision["id"] != source_decision_id
+                and imported_action["source_decision_id"] == imported_decision["id"]
+                and imported_action["source_decision_sync_uuid"] == source_decision["sync_uuid"]
+                and imported_action["source_decision_topic"] == "Synced source decision"
+            ):
+                log_pass("cross-machine sync resolves provenance by stable decision UUID, not foreign local ID")
+            else:
+                log_fail(
+                    "Cross-machine provenance sync",
+                    f"summary={summary}, imported_decision={imported_decision}, imported_action={imported_action}",
+                )
+    finally:
+        _verify_config_84.DATABASE_PATH = original_db_84
+except Exception as e:
+    log_fail("Cross-machine provenance sync check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 85: STATIC CHECK — preparation injects and verifies provenance fail-closed
+# -------------------------------------------------------------------
+try:
+    with open("main.py", "r", encoding="utf-8") as f:
+        main_content_85 = f.read()
+    with open("workflows/meeting.py", "r", encoding="utf-8") as f:
+        meeting_content_85 = f.read()
+
+    required_main = [
+        "provenance_context={",
+        '"decision_sync_uuid": decision["sync_uuid"]',
+        "provenance_mismatches",
+        "Preparation created an action without the expected decision provenance",
+        '"/decisions/{decision_id}/lineage"',
+        "get_decision_lineage(decision_id)",
+    ]
+    missing_main = [item for item in required_main if item not in main_content_85]
+    worker_scoped = (
+        "with action_provenance_scope(" in meeting_content_85
+        and "provenance_context" in meeting_content_85
+        and "return crew.kickoff()" in meeting_content_85
+    )
+
+    if not missing_main and worker_scoped:
+        log_pass("approved preparation injects provenance in the CrewAI worker and fails closed on orphan actions")
+    else:
+        log_fail(
+            "Preparation provenance enforcement",
+            f"missing_main={missing_main}, worker_scoped={worker_scoped}",
+        )
+except Exception as e:
+    log_fail("Preparation provenance enforcement check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 86: STATIC CHECK — dashboard exposes provenance and full lineage
+# -------------------------------------------------------------------
+try:
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
+        dashboard_content_86 = f.read()
+
+    required = [
+        "source_decision_id",
+        "source_decision_topic",
+        "Linked actions:",
+        "View Lineage",
+        "Decision → Action → Outcome Lineage",
+        "Provenance: Decision #",
+        "/lineage",
+    ]
+    missing = [item for item in required if item not in dashboard_content_86]
+
+    if not missing:
+        log_pass("dashboard exposes source-decision provenance and expandable decision-to-outcome lineage")
+    else:
+        log_fail("Provenance dashboard UI", f"Missing: {missing}")
+except Exception as e:
+    log_fail("Provenance dashboard UI check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 87: DYNAMIC CHECK — provenance survives CrewAI-style cross-thread tool calls
+# -------------------------------------------------------------------
+try:
+    import threading as _threading_87
+    from config import config as _verify_config_87
+    from memory.database import (
+        init_db as _init_db_87,
+        log_decision as _log_decision_87,
+        get_decision_by_id as _get_decision_87,
+        action_provenance_scope as _scope_87,
+        propose_action as _propose_87,
+        get_action_by_id as _get_action_87,
+    )
+
+    original_db_87 = _verify_config_87.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_87.DATABASE_PATH = os.path.join(temp_dir, "cross-thread-provenance.db")
+            _init_db_87()
+            decision_id = _log_decision_87(
+                "Cross-thread provenance test", ["coo"], "Evidence", "Direction", True
+            )
+            decision = _get_decision_87(decision_id)
+            created_ids = []
+            thread_errors = []
+
+            def _tool_thread():
+                try:
+                    created_ids.append(
+                        _propose_87(
+                            "COO",
+                            "Cross-thread linked action",
+                            "echo threaded",
+                            "shell",
+                        )
+                    )
+                except Exception as exc:
+                    thread_errors.append(str(exc))
+
+            with _scope_87(decision_id, decision["sync_uuid"], "preparation"):
+                worker = _threading_87.Thread(target=_tool_thread)
+                worker.start()
+                worker.join()
+
+            action = _get_action_87(created_ids[0]) if created_ids else None
+            if (
+                not thread_errors
+                and action
+                and action["source_decision_id"] == decision_id
+                and action["source_decision_sync_uuid"] == decision["sync_uuid"]
+                and action["source_phase"] == "preparation"
+            ):
+                log_pass("provenance remains attached when a tool call runs in a different worker thread")
+            else:
+                log_fail(
+                    "Cross-thread provenance",
+                    f"errors={thread_errors}, created_ids={created_ids}, action={action}",
+                )
+    finally:
+        _verify_config_87.DATABASE_PATH = original_db_87
+except Exception as e:
+    log_fail("Cross-thread provenance check crashed", str(e))
 
 
 # -------------------------------------------------------------------

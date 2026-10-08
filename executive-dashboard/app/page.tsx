@@ -19,6 +19,7 @@ interface DecisionHistoryItem {
   preparation_status?: "not_started" | "in_progress" | "completed" | "failed";
   prepared_at?: string | null;
   preparation_outcome?: string | null;
+  linked_action_count?: number;
 }
 
 interface DailyResearchStatus {
@@ -62,6 +63,15 @@ interface PendingAction {
   measured_at?: string | null;
   next_recommendation?: string | null;
   outcome_notes?: string | null;
+  source_decision_id?: number | null;
+  source_decision_sync_uuid?: string | null;
+  source_decision_topic?: string | null;
+  source_phase?: string | null;
+}
+
+interface DecisionLineage {
+  decision: DecisionHistoryItem;
+  actions: PendingAction[];
 }
 
 interface ExecutionResult {
@@ -519,6 +529,8 @@ export default function DashboardPage() {
   const [decisionErrors, setDecisionErrors] = useState<Record<number, string>>({});
   const [preparingDecisionIds, setPreparingDecisionIds] = useState<Set<number>>(new Set());
   const [preparationResults, setPreparationResults] = useState<Record<number, string>>({});
+  const [lineageResults, setLineageResults] = useState<Record<number, DecisionLineage>>({});
+  const [loadingLineageIds, setLoadingLineageIds] = useState<Set<number>>(new Set());
 
   const fetchPendingActions = useCallback(async (currentKey: string) => {
     try {
@@ -795,6 +807,48 @@ export default function DashboardPage() {
     }
   };
 
+  const handleLoadLineage = async (id: number) => {
+    if (lineageResults[id]) {
+      setLineageResults((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+
+    setLoadingLineageIds((prev) => new Set(prev).add(id));
+    setDecisionErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`${API_BASE}/decisions/${id}/lineage`, {
+        headers: { "X-API-Key": apiKey || "" },
+      });
+      if (response.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not load decision lineage.");
+      setLineageResults((prev) => ({ ...prev, [id]: data }));
+    } catch (err: any) {
+      setDecisionErrors((prev) => ({
+        ...prev,
+        [id]: err.message || "Could not load decision lineage.",
+      }));
+    } finally {
+      setLoadingLineageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
   const toggleHistoryExpand = (id: number) => {
     setExpandedHistoryIds((prev) => {
       const next = new Set(prev);
@@ -1030,6 +1084,14 @@ export default function DashboardPage() {
                     </div>
 
                     <p className="text-sm text-gray-200">{action.action_description}</p>
+
+                    {action.source_decision_id && (
+                      <div className="text-xs text-cyan-300 border border-cyan-900 bg-cyan-950/30 rounded px-2 py-1">
+                        Source: Decision #{action.source_decision_id}
+                        {action.source_decision_topic ? ` — ${action.source_decision_topic}` : ""}
+                        {action.source_phase ? ` · ${action.source_phase}` : ""}
+                      </div>
+                    )}
 
                     <div className="bg-gray-900 border border-gray-800 rounded p-3 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
                       {renderActionDetail(action.action_type, action.action_detail)}
@@ -1286,6 +1348,9 @@ export default function DashboardPage() {
                         <span className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5">
                           Preparation: {preparation}
                         </span>
+                        <span className="bg-cyan-950/40 border border-cyan-900 text-cyan-300 rounded px-2 py-0.5">
+                          Linked actions: {item.linked_action_count || 0}
+                        </span>
                       </div>
                     </div>
                     <span className="text-xs text-gray-500">
@@ -1351,7 +1416,59 @@ export default function DashboardPage() {
                     >
                       {isPreparing ? "Preparing..." : "Start Phase 2 Preparation"}
                     </button>
+                    <button
+                      onClick={() => handleLoadLineage(item.id)}
+                      disabled={loadingLineageIds.has(item.id)}
+                      className="px-3 py-1.5 bg-cyan-800 hover:bg-cyan-700 text-white text-xs rounded disabled:opacity-40"
+                    >
+                      {loadingLineageIds.has(item.id)
+                        ? "Loading Lineage..."
+                        : lineageResults[item.id]
+                        ? "Hide Lineage"
+                        : "View Lineage"}
+                    </button>
                   </div>
+
+                  {lineageResults[item.id] && (
+                    <div className="mt-4 border border-cyan-900 rounded bg-gray-950 p-3 space-y-3">
+                      <div className="font-semibold text-cyan-300 text-sm">
+                        Decision → Action → Outcome Lineage
+                      </div>
+                      {lineageResults[item.id].actions.length === 0 ? (
+                        <p className="text-xs text-gray-500">No actions linked to this decision yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {lineageResults[item.id].actions.map((action) => (
+                            <div
+                              key={action.id}
+                              className="border border-gray-800 rounded p-3 text-xs space-y-1"
+                            >
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <span className="text-cyan-300">Action #{action.id}</span>
+                                {statusBadge(action.status)}
+                                <span className="text-gray-500">
+                                  Outcome: {action.outcome_status || "not_started"}
+                                </span>
+                              </div>
+                              <div className="text-gray-300">{action.action_description}</div>
+                              {action.expected_outcome && (
+                                <div>
+                                  <span className="text-gray-500">Expected:</span>{" "}
+                                  <span className="text-gray-300">{action.expected_outcome}</span>
+                                </div>
+                              )}
+                              {action.actual_outcome && (
+                                <div>
+                                  <span className="text-gray-500">Actual:</span>{" "}
+                                  <span className="text-gray-300">{action.actual_outcome}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {shownPreparation && (
                     <details className="mt-4 border border-purple-900 rounded bg-gray-950">
@@ -1413,6 +1530,13 @@ export default function DashboardPage() {
                     >
                       {isExpanded ? "▲ Show less" : "▼ Show more"}
                     </button>
+                  )}
+                  {item.source_decision_id && (
+                    <div className="mt-3 text-xs text-cyan-300 border border-cyan-900 bg-cyan-950/30 rounded px-3 py-2">
+                      Provenance: Decision #{item.source_decision_id}
+                      {item.source_decision_topic ? ` — ${item.source_decision_topic}` : ""}
+                      {item.source_phase ? ` · phase: ${item.source_phase}` : ""}
+                    </div>
                   )}
                   {item.result_detail && (() => {
                     try {
