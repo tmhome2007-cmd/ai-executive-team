@@ -1,0 +1,63 @@
+name: Security and Foundation Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install backend and audit tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit bandit
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q             agents config.py logging_config.py main.py memory notifications             system_checks.py tools workflows
+
+      - name: Bandit medium/high findings
+        run: bandit -r agents memory notifications tools workflows main.py config.py system_checks.py -ll
+
+      - name: Audit Python dependencies
+        run: pip-audit
+
+  frontend-security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: executive-dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: executive-dashboard/package-lock.json
+
+      - name: Install exact frontend dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit high/critical npm vulnerabilities
+        run: npm audit --audit-level=high
