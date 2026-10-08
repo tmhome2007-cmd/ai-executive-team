@@ -103,6 +103,7 @@ def _get_safe_response(url: str, headers: dict, timeout: float = 10.0, max_redir
             headers=headers,
             timeout=timeout,
             allow_redirects=False,
+            stream=True,
         )
 
         if response.is_redirect or response.is_permanent_redirect:
@@ -142,8 +143,44 @@ class PageReaderTool(BaseTool):
             if response.status_code != 200:
                 return f"Error: Received status code {response.status_code} for URL {url}"
 
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            if content_type and not (
+                content_type.startswith("text/")
+                or "html" in content_type
+                or "xml" in content_type
+            ):
+                response.close()
+                return f"Error: Unsupported content type '{content_type}' for URL {url}"
+
+            # Bound the network body BEFORE decoding/parsing. Truncating the
+            # final model text is too late if a server streams hundreds of MB.
+            max_response_bytes = 1_000_000
+            body = bytearray()
+            too_large = False
+            for chunk in response.iter_content(chunk_size=16_384):
+                if not chunk:
+                    continue
+                remaining = max_response_bytes - len(body)
+                if remaining <= 0:
+                    too_large = True
+                    break
+                body.extend(chunk[:remaining])
+                if len(chunk) > remaining:
+                    too_large = True
+                    break
+            response.close()
+
+            if too_large:
+                return (
+                    f"Error: Response exceeded the {max_response_bytes}-byte research limit "
+                    f"for URL {url}"
+                )
+
+            encoding = response.encoding or "utf-8"
+            decoded = bytes(body).decode(encoding, errors="replace")
+
             # Structureer de HTML-tekst met BeautifulSoup
-            soup = BeautifulSoup(response.text, "html.parser")
+            soup = BeautifulSoup(decoded, "html.parser")
             paragraphs = [p.get_text() for p in soup.find_all("p")]
             full_text = " ".join(paragraphs).strip()
 
