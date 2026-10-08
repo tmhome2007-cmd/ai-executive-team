@@ -433,6 +433,7 @@ def init_db() -> None:
             reviewed_at TEXT,
             action_type TEXT NOT NULL DEFAULT 'shell',
             result_detail TEXT,
+            approval_seal TEXT,
             source_decision_id INTEGER,
             source_decision_sync_uuid TEXT,
             source_phase TEXT
@@ -464,6 +465,12 @@ def init_db() -> None:
 
     try:
         cursor.execute("ALTER TABLE action_queue ADD COLUMN sync_uuid TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN approval_seal TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass
@@ -2513,6 +2520,9 @@ def propose_action(
         raise ValueError(
             f"Unsupported action_type '{action_type}'. Allowed: {sorted(VALID_ACTION_TYPES)}"
         )
+    # Tool assignment/prompt text is not authorization. Enforce the same
+    # role→capability boundary again at durable storage.
+    require_action_capability(proposed_by, action_type)
     _reject_secret_like_text(
         proposed_by,
         action_description,
