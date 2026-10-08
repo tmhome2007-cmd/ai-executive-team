@@ -2776,6 +2776,13 @@ def update_action_outcome(
     """
     if outcome_status is not None and outcome_status not in VALID_OUTCOME_STATUSES:
         raise ValueError(f"Unsupported outcome status: {outcome_status}")
+    text_fields = (
+        expected_outcome, expected_impact, actual_outcome, actual_impact,
+        next_recommendation, notes,
+    )
+    if any(value is not None and len(value) > 8000 for value in text_fields):
+        raise ValueError("Outcome text exceeds safe persistence limit")
+    _reject_secret_like_text(*text_fields)
     if expected_cost_amount is not None and expected_cost_amount < 0:
         raise ValueError("expected_cost_amount cannot be negative")
     if actual_cost_amount is not None and actual_cost_amount < 0:
@@ -2842,6 +2849,13 @@ def update_action_outcome_with_treasury(
     """
     if outcome_status is not None and outcome_status not in VALID_OUTCOME_STATUSES:
         raise ValueError(f"Unsupported outcome status: {outcome_status}")
+    text_fields = (
+        expected_outcome, expected_impact, actual_outcome, actual_impact,
+        next_recommendation, notes,
+    )
+    if any(value is not None and len(value) > 8000 for value in text_fields):
+        raise ValueError("Outcome text exceeds safe persistence limit")
+    _reject_secret_like_text(*text_fields)
     if expected_cost_amount is not None and expected_cost_amount < 0:
         raise ValueError("expected_cost_amount cannot be negative")
     if actual_cost_amount is not None and actual_cost_amount < 0:
