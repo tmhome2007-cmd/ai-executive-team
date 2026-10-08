@@ -353,6 +353,75 @@ def is_dangerous_command(command: str) -> str | None:
     return None
 
 
+def _open_workspace_file_descriptor(
+    file_path: str,
+    *,
+    operation: str,
+) -> tuple[int, str]:
+    """
+    Open a workspace file without following symlinks in ANY path component.
+
+    The directory-descriptor walk anchors the actual open operation to
+    WORKSPACE_ROOT, closing the realpath-check -> open() race window.
+    """
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+        raise RuntimeError(
+            "Secure descriptor-relative file operations require POSIX O_NOFOLLOW support"
+        )
+
+    workspace_root = _get_workspace_root()
+    expanded = os.path.expanduser(file_path)
+    lexical_target = os.path.abspath(
+        expanded if os.path.isabs(expanded) else os.path.join(workspace_root, expanded)
+    )
+    try:
+        if os.path.commonpath([workspace_root, lexical_target]) != workspace_root:
+            raise ValueError("File path escapes WORKSPACE_ROOT")
+    except ValueError as exc:
+        raise ValueError("File path escapes WORKSPACE_ROOT") from exc
+
+    relative = os.path.relpath(lexical_target, workspace_root)
+    parts = [part for part in relative.split(os.sep) if part not in {"", "."}]
+    if not parts or any(part == ".." for part in parts):
+        raise ValueError("File path must identify a file inside WORKSPACE_ROOT")
+
+    opened_dirs: list[int] = []
+    root_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    root_fd = os.open(workspace_root, root_flags)
+    opened_dirs.append(root_fd)
+    current_fd = root_fd
+
+    try:
+        for component in parts[:-1]:
+            flags = (
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+            )
+            next_fd = os.open(component, flags, dir_fd=current_fd)
+            opened_dirs.append(next_fd)
+            current_fd = next_fd
+
+        final_flags = getattr(os, "O_NOFOLLOW", 0)
+        if operation == "read":
+            final_flags |= os.O_RDONLY
+        elif operation == "write":
+            final_flags |= os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        elif operation == "append":
+            final_flags |= os.O_WRONLY | os.O_CREAT | os.O_APPEND
+        else:
+            raise ValueError(f"Unsupported file operation: {operation}")
+
+        fd = os.open(parts[-1], final_flags, 0o600, dir_fd=current_fd)
+        return fd, lexical_target
+    finally:
+        for dir_fd in reversed(opened_dirs):
+            try:
+                os.close(dir_fd)
+            except OSError:
+                pass
+
+
 def _execute_file_operation(action_id: int, action: dict) -> dict:
     """
     Voert een gestructureerde bestandsoperatie uit (read/write/append) via
@@ -431,42 +500,76 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             print(f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}")
         return {"success": True, "mode": "dry_run", "action_id": action_id, "detail": preview}
 
-    # --- LIVE MODE: echte file I/O ---
+    # --- LIVE MODE: secure descriptor-relative file I/O ---
     try:
         if operation == "read":
-            with open(resolved_path, "r", encoding="utf-8") as f:
-                file_content = f.read()
+            fd, secure_path = _open_workspace_file_descriptor(
+                file_path,
+                operation="read",
+            )
+            max_read_chars = 1_000_000
+            with os.fdopen(fd, "r", encoding="utf-8", errors="replace") as file_obj:
+                file_content = file_obj.read(max_read_chars + 1)
+            truncated = len(file_content) > max_read_chars
+            if truncated:
+                file_content = file_content[:max_read_chars]
+
             update_action_status(action_id, "executed")
-            record_execution_result(action_id, json.dumps({"stdout": file_content[:2000]}))
+            record_execution_result(
+                action_id,
+                json.dumps({
+                    "stdout": file_content[:2000],
+                    "truncated": truncated,
+                }),
+            )
             mark_action_outcome_measurement_pending(action_id)
             try:
                 send_notification(
                     f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
+                    f"<b>Path:</b> <code>{escape_html(secure_path)}</code>\n"
                     f"<b>Content:</b>\n{_telegram_sensitive_text(file_content[:500])}"
                 )
             except Exception as e:
                 print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
-            return {"success": True, "mode": "live", "action_id": action_id, "stdout": file_content}
+            return {
+                "success": True,
+                "mode": "live",
+                "action_id": action_id,
+                "stdout": file_content,
+                "truncated": truncated,
+            }
 
         elif operation in ("write", "append"):
-            mode = "w" if operation == "write" else "a"
-            with open(resolved_path, mode, encoding="utf-8") as f:
-                f.write(content)
+            if len(content) > 200_000:
+                raise ValueError("File write content exceeds 200000-character live limit")
+            fd, secure_path = _open_workspace_file_descriptor(
+                file_path,
+                operation=operation,
+            )
+            with os.fdopen(fd, "w" if operation == "write" else "a", encoding="utf-8") as file_obj:
+                file_obj.write(content)
             update_action_status(action_id, "executed")
-            record_execution_result(action_id, json.dumps({"stdout": f"Wrote {len(content)} characters to {resolved_path}"}))
+            record_execution_result(
+                action_id,
+                json.dumps({"stdout": f"Wrote {len(content)} characters to {secure_path}"}),
+            )
             mark_action_outcome_measurement_pending(action_id)
             try:
                 send_notification(
                     f"⚡ <b>FILE {operation.upper()} SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
+                    f"<b>Path:</b> <code>{escape_html(secure_path)}</code>\n"
                     f"<b>Bytes written:</b> {len(content)}"
                 )
             except Exception as e:
                 print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
-            return {"success": True, "mode": "live", "action_id": action_id, "stdout": f"Wrote {len(content)} characters to {resolved_path}"}
+            return {
+                "success": True,
+                "mode": "live",
+                "action_id": action_id,
+                "stdout": f"Wrote {len(content)} characters to {secure_path}",
+            }
 
         else:
             update_action_status(action_id, "execution_failed")
