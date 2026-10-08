@@ -3130,6 +3130,28 @@ def mark_action_outcome_execution_failed(action_id: int, reason: str) -> bool:
         return cursor.rowcount == 1
 
 
+def mark_action_outcome_execution_uncertain(action_id: int, reason: str) -> bool:
+    """Timeouts can have partial effects. Require owner review before retry."""
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE action_outcomes
+            SET outcome_status = 'inconclusive',
+                actual_outcome = ?,
+                measured_at = ?,
+                updated_at = ?,
+                next_recommendation = 'Manually inspect the real-world state before any retry.'
+            WHERE action_id = ?
+              AND outcome_status IN ('not_started', 'measurement_pending')
+            """,
+            (reason, now, now, action_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
 def recover_interrupted_actions() -> int:
     """
     Markeer acties die na een procesherstart nog op 'executing' staan als
