@@ -378,6 +378,35 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
     return True
 
 
+def _require_linked_goal_active(
+    record: dict,
+    *,
+    goal_id_key: str,
+    operation: str,
+) -> None:
+    """
+    Fail closed when a decision/action/resource belongs to a goal that is no
+    longer active. Rejection/audit endpoints intentionally do not call this.
+    """
+    goal_id = record.get(goal_id_key)
+    if goal_id is None:
+        return
+    goal = get_company_goal(goal_id)
+    if goal is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot {operation}: linked company goal no longer exists.",
+        )
+    if goal["status"] != "active":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot {operation}: linked company goal #{goal_id} is "
+                f"'{goal['status']}', not active."
+            ),
+        )
+
+
 # 7. Endpoints
 @app.get("/")
 def read_root():
@@ -644,6 +673,12 @@ def approve_decision(decision_id: int):
     decision = get_decision_by_id(decision_id)
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found.")
+
+    _require_linked_goal_active(
+        decision,
+        goal_id_key="goal_id",
+        operation="approve decision direction",
+    )
 
     if not transition_decision_approval(decision_id, "approved", ("pending",)):
         current = get_decision_by_id(decision_id)
@@ -1221,6 +1256,11 @@ def approve_resource_request(request_id: int):
     current = get_resource_request_by_id(request_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Resource request not found.")
+    _require_linked_goal_active(
+        current,
+        goal_id_key="source_goal_id",
+        operation="approve resource request",
+    )
     if not transition_resource_request_status(request_id, "approved", ("pending",)):
         refreshed = get_resource_request_by_id(request_id)
         raise HTTPException(
@@ -1257,6 +1297,11 @@ def fulfill_resource_request(request_id: int, request: ResourceFulfillmentReques
     current = get_resource_request_by_id(request_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Resource request not found.")
+    _require_linked_goal_active(
+        current,
+        goal_id_key="source_goal_id",
+        operation="fulfill resource request",
+    )
     try:
         fulfilled = transition_resource_request_status(
             request_id,
@@ -1683,6 +1728,12 @@ def approve_action(action_id: int):
     if action is None:
         raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
 
+    _require_linked_goal_active(
+        action,
+        goal_id_key="source_goal_id",
+        operation="approve action",
+    )
+
     try:
         return approve_action_with_treasury(action_id)
     except ValueError as e:
@@ -1724,6 +1775,14 @@ def reject_action(action_id: int):
 )
 def execute_approved_action(action_id: int):
     """Voert een reeds goedgekeurde actie uit via het action_id."""
+    action = get_action_by_id(action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action not found")
+    _require_linked_goal_active(
+        action,
+        goal_id_key="source_goal_id",
+        operation="execute action",
+    )
     result = execute_action(action_id)
     
     if not result.get("success", False):
