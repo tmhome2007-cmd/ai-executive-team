@@ -30,6 +30,7 @@ from memory.database import (
     mark_action_outcome_measurement_pending,
     mark_action_outcome_execution_failed,
     VALID_ACTION_TYPES,
+    get_company_goal,
 )
 from notifications.telegram_bot import send_notification, escape_html
 from config import config
@@ -634,7 +635,22 @@ def execute_action(action_id: int) -> dict:
     if not action:
         return {"success": False, "error": "Action not found"}
 
-    # 2. Reserveer de actie atomair voor precies één executor.
+    # 2. Enforce linked-goal policy INSIDE the executor so every control
+    # surface (API, Telegram, future voice/automation) gets the same gate.
+    source_goal_id = action.get("source_goal_id")
+    if source_goal_id is not None:
+        goal = get_company_goal(source_goal_id)
+        if goal is None or goal.get("status") != "active":
+            current = goal.get("status") if goal else "missing"
+            return {
+                "success": False,
+                "error": (
+                    f"Linked company goal #{source_goal_id} must be active before execution "
+                    f"(currently '{current}')."
+                ),
+            }
+
+    # 3. Reserveer de actie atomair voor precies één executor.
     status = action.get("status")
     if status != "approved":
         return {
