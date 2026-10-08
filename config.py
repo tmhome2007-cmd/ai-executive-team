@@ -73,6 +73,13 @@ class Config:
     ALLOWED_BROWSER_DOMAINS: str = field(
         default_factory=lambda: os.getenv("ALLOWED_BROWSER_DOMAINS", "").strip()
     )
+    BIND_HOST: str = field(
+        default_factory=lambda: os.getenv("BIND_HOST", "127.0.0.1").strip()
+    )
+    ALLOW_INSECURE_REMOTE_HTTP: bool = field(
+        default_factory=lambda: os.getenv("ALLOW_INSECURE_REMOTE_HTTP", "false").lower()
+        in ("true", "1", "yes")
+    )
 
 
 # 2. Centrale instantie
@@ -126,6 +133,10 @@ def set_sandbox_mode(enabled: bool) -> None:
         tmp_path = Path(tmp.name)
     try:
         os.replace(tmp_path, env_path)
+        try:
+            os.chmod(env_path, 0o600)
+        except OSError:
+            pass
         # Pas NADAT de persistente wijziging succesvol is, de live config
         # omzetten. Zo kan een filesystem-fout nooit een half-toegepaste
         # toestand opleveren waarin de API faalt maar execution mode al wijzigde.
@@ -185,6 +196,20 @@ def validate_config() -> list[str]:
             f"OLLAMA_BASE_URL ('{config.OLLAMA_BASE_URL}') ziet er niet uit als "
             "een geldige URL — verwacht iets als http://localhost:11434."
         )
+
+    loopback_hosts = {"127.0.0.1", "localhost", "::1"}
+    if config.BIND_HOST not in loopback_hosts and not config.ALLOW_INSECURE_REMOTE_HTTP:
+        errors.append(
+            "BIND_HOST is non-loopback but ALLOW_INSECURE_REMOTE_HTTP is false. "
+            "Direct remote HTTP would expose X-API-Key traffic without transport encryption. "
+            "Use a TLS/private tunnel, or explicitly opt in only if you accept that risk."
+        )
+
+    if env_path.exists():
+        try:
+            os.chmod(env_path, 0o600)
+        except OSError:
+            warnings.append("Could not enforce owner-only permissions on .env.")
 
     if errors:
         error_text = "\n".join(f"  - {e}" for e in errors)
