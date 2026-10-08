@@ -7,7 +7,7 @@
 - Frontend ESLint and production build pass on hardening commits after typing fixes.
 - Docker-worker unit tests pass on CI commit `bbb180e`.
 - New CI runs now attempt dependency audits even when lint/Bandit fails.
-- Full-system verification has been wired into CI, but its final result must be read from the latest workflow run.
+- Full-system regression verification passed **149/149 checks** on GitHub Actions before the final dependency update; rerun on the final branch head is required.
 
 ## Remediations committed
 - Centralized authority/approval bindings, imported-sync authority restrictions, fail-closed network/file controls, private artifact defaults: see `FOUNDATION_AUDIT.md`.
@@ -18,7 +18,7 @@
 - Timed-out Docker worker attempts forced removal by unique name.
 
 ## Open release blockers
-1. **CRITICAL — vulnerable Next.js dependency.** npm audit reports a critical `next/og` advisory and eight other high vulnerabilities. Patch Next.js and matching eslint-config-next and regenerate `package-lock.json` with npm; rerun npm ci, lint, build, audit. Never edit package.json alone and leave a stale lockfile.
+1. **HIGH — unresolved npm dev-tooling advisory.** The one-time updater committed Next.js and eslint-config-next 16.3.8 plus a regenerated lockfile; that updater passed lint/build and reduced npm audit from one critical/eight high to five high. Remaining findings are in the `eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces` development tooling chain. The upstream `braces` advisory has no patched release. Do not blindly downgrade eslint-config-next to v14 or report the audit clean. Recheck production-only vs development dependency exposure and document any risk acceptance.
 2. **HIGH — vulnerable ChromaDB transitive dependency.** pip-audit reports five advisories against chromadb 1.5.9 installed via CrewAI. Investigate compatible updates/constraints without bypassing CrewAI compatibility. A lockfile/constraints mechanism is recommended.
 3. **MEDIUM — dynamic SQL Bandit B608 warnings.** Current 21 findings include parameterized placeholders and code-generated column lists; validate each dynamic identifier against fixed whitelists. Suppress only individually justified false positives, never blanket-skip B608.
 4. **Workflow persistence.** No integrated per-step transactional checkpointing and exactly-once effect recovery has been demonstrated. Approved side effects must not be replayed after process crashes.
