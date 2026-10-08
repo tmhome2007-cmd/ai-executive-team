@@ -5973,12 +5973,24 @@ try:
             blocked_149 = "ALLOW_REMOTE_LLM" in str(exc)
 
         _config_149.ALLOW_REMOTE_LLM = True
+        _config_149.OLLAMA_BASE_URL = "http://models.example.com"
+        plaintext_blocked_149 = False
+        try:
+            _validate_149()
+        except _ConfigError149 as exc:
+            plaintext_blocked_149 = "must use HTTPS" in str(exc)
+
+        _config_149.OLLAMA_BASE_URL = "https://models.example.com"
         warnings_149 = _validate_149()
 
-        if blocked_149 and any("Remote LLM transport is explicitly enabled" in w for w in warnings_149):
+        if (
+            blocked_149
+            and plaintext_blocked_149
+            and any("Remote LLM transport is explicitly enabled" in w for w in warnings_149)
+        ):
             log_pass("non-local LLM endpoints fail closed unless the owner explicitly accepts prompt/memory egress")
         else:
-            log_fail("Remote LLM privacy boundary", f"blocked={blocked_149}, warnings={warnings_149}")
+            log_fail("Remote LLM privacy boundary", f"blocked={blocked_149}, plaintext={plaintext_blocked_149}, warnings={warnings_149}")
     finally:
         _config_149.OLLAMA_BASE_URL = old_url_149
         _config_149.ALLOW_REMOTE_LLM = old_remote_149
@@ -6042,6 +6054,52 @@ try:
         _config_150.TELEGRAM_INCLUDE_SENSITIVE_DETAILS = old_details_150
 except Exception as e:
     log_fail("Telegram remote-control privacy boundary check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 151: DYNAMIC/STATIC CHECK — browser evidence retention is bounded
+# -------------------------------------------------------------------
+try:
+    from config import config as _config_151
+    from workflows.action_executor import _prune_browser_screenshots as _prune_151
+
+    old_keep_151 = _config_151.SCREENSHOT_RETENTION_COUNT
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _config_151.SCREENSHOT_RETENTION_COUNT = 3
+            for i in range(6):
+                path_151 = os.path.join(temp_dir, f"action_{i}.png")
+                with open(path_151, "wb") as fh:
+                    fh.write(b"png")
+                os.utime(path_151, (1000 + i, 1000 + i))
+
+            _prune_151(temp_dir)
+            remaining_151 = sorted(
+                name for name in os.listdir(temp_dir)
+                if name.endswith(".png")
+            )
+
+            with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+                source_151 = fh.read()
+            with open(".env.example", "r", encoding="utf-8") as fh:
+                env_151 = fh.read()
+
+            static_ok_151 = (
+                "_prune_browser_screenshots(screenshots_dir)" in source_151
+                and "SCREENSHOT_RETENTION_COUNT=50" in env_151
+            )
+
+            if remaining_151 == ["action_3.png", "action_4.png", "action_5.png"] and static_ok_151:
+                log_pass("browser screenshots are owner-private and bounded by explicit retention")
+            else:
+                log_fail(
+                    "Browser screenshot retention",
+                    f"remaining={remaining_151}, static={static_ok_151}",
+                )
+    finally:
+        _config_151.SCREENSHOT_RETENTION_COUNT = old_keep_151
+except Exception as e:
+    log_fail("Browser screenshot retention check crashed", str(e))
 
 
 # -------------------------------------------------------------------
