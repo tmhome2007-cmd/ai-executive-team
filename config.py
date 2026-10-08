@@ -42,6 +42,15 @@ class Config:
         default_factory=lambda: os.getenv("DATABASE_PATH", "./memory/executive_team.db").strip()
     )
 
+    BACKUP_RETENTION_COUNT: int = field(
+        default_factory=lambda: max(1, min(365, int(os.getenv("BACKUP_RETENTION_COUNT", "7"))))
+    )
+
+    # Optional Fernet key supplied by the owner, never written to backups.
+    BACKUP_ENCRYPTION_KEY: str = field(
+        default_factory=lambda: os.getenv("BACKUP_ENCRYPTION_KEY", "").strip(), repr=False
+    )
+
     # Telegram Notificatie Instellingen
     TELEGRAM_BOT_TOKEN: str = field(
         default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", "").strip()

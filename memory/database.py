@@ -771,7 +771,7 @@ def get_company_goals(
                 END,
                 g.created_at DESC
             LIMIT ? OFFSET ?
-            """,
+            """,  # nosec B608 # WHERE uses literal clauses and bound status values.
             (*params, limit, offset),
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -817,7 +817,7 @@ def update_company_goal(
         cursor = conn.cursor()
         assignments = ", ".join(f"{key} = ?" for key in updates)
         cursor.execute(
-            f"UPDATE company_goals SET {assignments} WHERE id = ?",
+            f"UPDATE company_goals SET {assignments} WHERE id = ?",  # nosec B608 # Assignment keys come only from named goal fields.
             (*updates.values(), goal_id),
         )
         conn.commit()
@@ -1144,7 +1144,7 @@ def get_executive_memories(
             WHERE {where}
             ORDER BY confidence DESC, created_at DESC
             LIMIT ?
-            """,
+            """,  # nosec B608 # WHERE clauses are literal; filter values are bound.
             (*params, limit),
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -1439,7 +1439,7 @@ def get_followup_events(
                 END,
                 f.created_at DESC
             LIMIT ? OFFSET ?
-            """,
+            """,  # nosec B608 # WHERE clauses are literal and statuses are bound.
             (*params, limit, offset),
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -1464,7 +1464,7 @@ def transition_followup_event_status(
             SET status = ?, updated_at = ?,
                 resolved_at = CASE WHEN ? IN ('resolved','dismissed') THEN ? ELSE resolved_at END
             WHERE id = ? AND status IN ({placeholders})
-            """,
+            """,  # nosec B608 # IN contains only generated question-mark placeholders.
             (new_status, now, new_status, now, event_id, *allowed_from),
         )
         conn.commit()
@@ -1666,7 +1666,7 @@ def transition_decision_approval(
             WHERE decision_id = ?
               AND status IN ({placeholders})
               AND preparation_status NOT IN ('in_progress', 'completed')
-            """,
+            """,  # nosec B608 # IN contains only generated question-mark placeholders.
             params,
         )
         conn.commit()
@@ -1948,7 +1948,7 @@ def get_resource_requests(
                 WHERE r.status IN ({placeholders})
                 ORDER BY r.timestamp DESC
                 LIMIT ? OFFSET ?
-                """,
+                """,  # nosec B608 # IN contains only generated question-mark placeholders.
                 (*statuses, limit, offset),
             )
         else:
@@ -2011,7 +2011,7 @@ def transition_resource_request_status(
                 SET status = ?, reviewed_at = COALESCE(reviewed_at, ?),
                     fulfilled_at = ?, fulfillment_note = ?
                 WHERE id = ? AND status IN ({placeholders})
-                """,
+                """,  # nosec B608 # IN contains only generated question-mark placeholders.
                 (new_status, now, now, fulfillment_note.strip(), request_id, *allowed_from),
             )
         else:
@@ -2020,7 +2020,7 @@ def transition_resource_request_status(
                 UPDATE resource_requests
                 SET status = ?, reviewed_at = ?
                 WHERE id = ? AND status IN ({placeholders})
-                """,
+                """,  # nosec B608 # IN contains only generated question-mark placeholders.
                 (new_status, now, request_id, *allowed_from),
             )
         conn.commit()
@@ -2099,7 +2099,7 @@ def get_treasury_summary(currency: str | None = None) -> dict:
             FROM treasury_entries
             {where}
             GROUP BY currency
-            """,
+            """,  # nosec B608 # Optional WHERE is a literal currency clause; value is bound.
             params,
         )
         balances = {row["currency"]: float(row["cash_balance"] or 0) for row in cursor.fetchall()}
@@ -2115,7 +2115,7 @@ def get_treasury_summary(currency: str | None = None) -> dict:
             FROM treasury_reservations
             {reservation_where}
             GROUP BY currency
-            """,
+            """,  # nosec B608 # Optional reservation WHERE is literal; currency is bound.
             params,
         )
         reserved = {row["currency"]: float(row["reserved"] or 0) for row in cursor.fetchall()}
@@ -2712,7 +2712,7 @@ def transition_action_status(
                     ELSE approval_seal
                 END
             WHERE id = ? AND status IN ({placeholders})
-            """,
+            """,  # nosec B608 # IN contains only generated question-mark placeholders.
             (
                 new_status,
                 reviewed_at,
@@ -2883,7 +2883,7 @@ def update_action_outcome(
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",
+            f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",  # nosec B608 # Assignment keys come only from named outcome fields.
             values,
         )
         conn.commit()
@@ -3072,7 +3072,7 @@ def update_action_outcome_with_treasury(
             assignments = ", ".join(f"{key} = ?" for key in updates)
             values = list(updates.values()) + [action_id]
             cursor.execute(
-                f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",
+                f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",  # nosec B608 # Assignment keys come only from named outcome fields.
                 values,
             )
             if cursor.rowcount != 1:
@@ -3183,7 +3183,7 @@ def recover_interrupted_actions() -> int:
                 reviewed_at = ?,
                 result_detail = ?
             WHERE id IN ({placeholders})
-            """,
+            """,  # nosec B608 # IN contains only placeholders; IDs are bound.
             (reviewed_at, result_detail, *interrupted_ids),
         )
         recovered_count = cursor.rowcount
@@ -3202,7 +3202,7 @@ def recover_interrupted_actions() -> int:
                     'Manually inspect the real-world state before proposing any retry.'
                 )
             WHERE action_id IN ({placeholders})
-            """,
+            """,  # nosec B608 # IN contains only placeholders; IDs are bound.
             (
                 "Execution was interrupted; the real-world business outcome is unknown.",
                 reviewed_at,
@@ -3743,7 +3743,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                             UPDATE action_outcomes
                             SET {assignments}
                             WHERE action_sync_uuid = ?
-                            """,
+                            """,  # nosec B608 # Import fields already passed the table-column whitelist.
                             tuple(row[key] for key in importable_fields)
                             + (row.get("action_sync_uuid"),),
                         )
@@ -3772,7 +3772,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         foreign_uuid = row.get(uuid_key)
                         if foreign_uuid:
                             cursor.execute(
-                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",
+                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",  # nosec B608 # Table name comes from a fixed local foreign-key tuple.
                                 (foreign_uuid,),
                             )
                             foreign_row = cursor.fetchone()
@@ -3808,7 +3808,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         foreign_uuid = row.get(uuid_key)
                         if foreign_uuid:
                             cursor.execute(
-                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",
+                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",  # nosec B608 # Table name comes from a fixed local foreign-key tuple.
                                 (foreign_uuid,),
                             )
                             foreign_row = cursor.fetchone()
@@ -3820,7 +3820,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row is None:
                         continue
 
-                cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
+                cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))  # nosec B608 # Table name already passed _SYNC_TABLE_COLUMNS whitelist.
                 if cursor.fetchone():
                     skipped += 1
                     continue
@@ -3831,7 +3831,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 placeholders = ", ".join(["?"] * len(row))
                 try:
                     cursor.execute(
-                        f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
+                        f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",  # nosec B608 # Table and columns already passed the explicit import whitelist.
                         tuple(row.values())
                     )
                 except (sqlite3.IntegrityError, sqlite3.OperationalError):
@@ -3903,6 +3903,10 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     sync; dit is puur "een reddingslijn als de database zelf corrupt raakt of
     per ongeluk verwijderd wordt"). Retourneert het pad van de nieuwe backup.
     """
+    if config.BACKUP_ENCRYPTION_KEY:
+        from memory.encrypted_backup import backup_encrypted_database
+        return backup_encrypted_database(backup_dir, config.BACKUP_ENCRYPTION_KEY, keep_last)
+
     import datetime as _dt
 
     if not isinstance(keep_last, int) or keep_last < 1:

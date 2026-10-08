@@ -266,7 +266,7 @@ async def lifespan(app: FastAPI):
         coalesce=True,
     )
     scheduler.add_job(
-        lambda: backup_database(keep_last=7),
+        lambda: backup_database(keep_last=config.BACKUP_RETENTION_COUNT),
         trigger=IntervalTrigger(hours=24),
         id="daily_database_backup_job",
         replace_existing=True,
@@ -281,7 +281,7 @@ async def lifespan(app: FastAPI):
     # Eén backup bij het opstarten, zodat je niet 24 uur moet wachten op de
     # eerste veiligheidskopie na een verse installatie.
     try:
-        backup_path = backup_database(keep_last=7)
+        backup_path = backup_database(keep_last=config.BACKUP_RETENTION_COUNT)
         logger.info(f"Startup database backup created: {backup_path}")
     except Exception as e:
         logger.warning(f"Startup database backup failed: {e}")

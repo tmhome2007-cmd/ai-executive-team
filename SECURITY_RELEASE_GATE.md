@@ -25,11 +25,11 @@
 
 ## Open release blockers
 1. **HIGH — unresolved npm dev-tooling advisory.** Production dependency audit (`npm audit --omit=dev --audit-level=high`) passes on workflow 37812997279, but the full development-tooling audit fails. The one-time updater committed Next.js and eslint-config-next 16.3.8 plus a regenerated lockfile; that updater passed lint/build and reduced npm audit from one critical/eight high to five high. Remaining findings are in the `eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch -> braces` development tooling chain. The upstream `braces` advisory has no patched release. Do not blindly downgrade eslint-config-next to v14 or report the audit clean. Recheck production-only vs development dependency exposure and document any risk acceptance.
-2. **HIGH — vulnerable ChromaDB transitive dependency.** pip-audit reports five advisories against chromadb 1.5.9 installed via CrewAI. Investigate compatible updates/constraints without bypassing CrewAI compatibility. A lockfile/constraints mechanism is recommended.
-3. **MEDIUM — dynamic SQL Bandit B608 warnings.** Current 21 findings include parameterized placeholders and code-generated column lists; validate each dynamic identifier against fixed whitelists. Suppress only individually justified false positives, never blanket-skip B608.
-4. **Workflow persistence.** A transactional step checkpoint ledger now exists and is initialized/reconciled on startup, but existing long-running agent workflows have not been migrated to use per-step keys, stable result identifiers, and explicit recovery decisions. Exactly-once external effects cannot be guaranteed by local SQLite alone; use provider idempotency keys and manual reconciliation.
+2. **HIGH — vulnerable ChromaDB transitive dependency.** The fresh local pip-audit reports four advisory records (PYSEC-2026-311, PYSEC-2026-3813, PYSEC-2026-3814, PYSEC-2026-3815) against chromadb 1.5.9 installed via CrewAI, each with no fix version in the feed. Investigate compatible updates/constraints without bypassing CrewAI compatibility. `constraints-python312.txt` now pins the locally tested Python 3.12 resolution, including audit tooling. It is a constraints file, not a hash-verified lock; Linux CI compatibility remains to be verified. Do not run a Chroma server or enable untrusted model loading while these findings remain unresolved.
+3. **CLOSED for reviewed SQL sites — Bandit B608.** The 21 expressions are individually justified with code-adjacent B608 suppressions. Real SQLite malicious-status, signed table/column injection, and bound UPDATE-literal regressions pass. Bandit remains enabled and passes the medium/high gate; future dynamic SQL changes need renewed review.
+4. **Workflow persistence.** Approved action dispatch now claims and finalizes a durable checkpoint keyed to the action ID, with results in the existing action record. Dry-run, crash/restart, no-replay and uncertain live-failure tests pass. Analysis, preparation, research and autonomous meetings still lack complete per-agent-step migration and resumable result storage. Startup recovery assumes one application instance; multiple concurrent server instances are not supported by this recovery design. Exactly-once external effects cannot be guaranteed by local SQLite alone; use provider idempotency keys and manual reconciliation.
 5. **Docker runtime limitations.** CI now exercises a real Docker runtime and has passed the baseline network/filesystem confinement test. However, Docker daemon trust, mutable image tags, workspace writable mount, race conditions in preflight, and malicious code inside workspace remain concerns. Pin an image digest, use a dedicated worker VM and restrict Docker daemon access before live production deployment.
-6. **Privacy.** Long-lived SQLite, backups, sync history and audit data are not encrypted at rest at the application layer. Add retention configuration, full-disk encryption guidance and opt-in encrypted exports.
+6. **Privacy.** Opt-in authenticated encrypted SQLite backups and exclusive, integrity-checked restore are implemented, along with scheduled backup and log retention configuration. Encryption is not enabled on the user’s live deployment by this audit. Live SQLite, logs, screenshots, sync history and audit data still need deployment encryption and owner-defined history/age retention. Existing plaintext copies are not removed.
 7. **External transports.** Remote LLM and Telegram opt-ins transmit context to external services. Maintain disabled-by-default and verify logs contain no sensitive data.
 8. **End-to-end testing.** Exercise decision -> owner approval -> preparation -> execution -> failure -> restart -> idempotent resume, plus tampered imports, adversarial URLs, symlinks, and concurrent approval requests on a disposable machine.
 9. **GitHub Actions supply chain.** Security workflow actions are pinned to inspected upstream commit SHAs. Continue rotating these through reviewed dependency update PRs.
@@ -43,3 +43,35 @@
 - Explicit sign-off before merging `main`.
 
 This file is an **audit record, not a claim that the release gate passed**.
+
+## Local continuation evidence — 2026-10-08
+
+Checkout: `chatgpt/foundation-hardening` cloned separately from the user's main
+checkout. No production credentials or data copied; synced project sources and
+main checkout remain unchanged.
+
+- Python 3.12.14: compilation and `pip check` pass; 150/150 system checks pass
+  using temporary CrewAI storage and test credentials, with Telegram disabled.
+- 18 security tests pass, including real Docker isolation on Docker Desktop,
+  host-path/symlink attempts, no-new-privileges, concurrent approval claims,
+  durable execution crash/no-replay, signed-import SQL attacks and authenticated
+  encrypted backup restore/tamper/wrong-key/retention tests.
+- Local Ollama `llama3.1:latest` completes a short synthetic prompt with no
+  external service. This is an inference smoke test, not an agent-meeting audit.
+- ESLint passes with one existing `no-img-element` warning. Webpack production
+  build passes. Default Turbopack build is blocked locally by worker port binding
+  (`Operation not permitted`); initial sandbox run also could not fetch fonts.
+- Production npm audit: zero vulnerabilities. Full npm audit: five high
+  dependency-chain findings rooted in unpatched braces advisory
+  GHSA-vfj7-8cjw-p6xm. No risky forced downgrade or blanket advisory ignore.
+- pip-audit: four advisory records for ChromaDB 1.5.9, no published fix versions
+  in the queried feed. These remain release blockers.
+- Bandit medium/high gate passes with exactly 21 individually scoped B608
+  dispositions; lower-severity findings are not claimed eliminated.
+
+Final CI on these new changes is separate evidence and must still be checked.
+The comprehensive release gate remains **NOT CLEARED**: dependency remediation,
+universal workflow recovery, deployment encryption/history retention, full
+meeting-to-preparation end-to-end adversarial tests and deployment confinement
+remain unfinished. No merge or live business execution is authorized by this
+record.

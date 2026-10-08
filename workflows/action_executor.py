@@ -27,6 +27,7 @@ except ImportError:
 from urllib.parse import urlparse
 from memory.database import (
     get_action_by_id,
+    get_action_outcome,
     update_action_status,
     record_execution_result,
     claim_action_for_execution,
@@ -898,6 +899,46 @@ def execute_action(action_id: int) -> dict:
             "error": f"Action could not be claimed for execution; current status is '{current_status}'.",
         }
 
+    # Persist the execution boundary before any handler can perform effects.
+    # Action IDs are local immutable keys; checkpoint rows are never replayed.
+    from workflows.step_checkpoints import init_step_checkpoints, claim_step, finish_step
+    run_id, step_id = f"action:{action_id}", "execute"
+    try:
+        init_step_checkpoints()
+        if not claim_step(run_id, step_id):
+            raise RuntimeError("Execution checkpoint already exists; manual review required")
+    except Exception:
+        update_action_status(action_id, "execution_failed")
+        mark_action_outcome_execution_uncertain(action_id, "Checkpoint unavailable or already claimed; manual review required.")
+        return {"success": False, "action_id": action_id, "blocked": True,
+                "error": "Execution checkpoint unavailable or already claimed; manual review required."}
+
+    try:
+        result = _execute_claimed_action(action_id, action)
+        if result.get("mode") == "live" and not result.get("success") and not result.get("blocked"):
+            # A nonzero process exit or browser exception does not prove that
+            # no files/clicks/external effects happened before the failure.
+            mark_action_outcome_execution_uncertain(
+                action_id, "Live execution did not complete; effects require manual reconciliation."
+            )
+        outcome = get_action_outcome(action_id)
+        uncertain = outcome and outcome.get("outcome_status") == "inconclusive"
+        terminal = "inconclusive" if uncertain else ("succeeded" if result.get("success") else "failed")
+        if not finish_step(run_id, step_id, terminal):
+            raise RuntimeError("Checkpoint completion could not be confirmed")
+        return result
+    except Exception:
+        # Includes failure to persist a result after an effect. Never claim
+        # certainty or replay just because a handler raised an exception.
+        finish_step(run_id, step_id, "inconclusive")
+        update_action_status(action_id, "execution_failed")
+        mark_action_outcome_execution_uncertain(action_id, "Execution result could not be confirmed; manual review required.")
+        return {"success": False, "action_id": action_id,
+                "error": "Execution result could not be confirmed; manual review required."}
+
+
+def _execute_claimed_action(action_id: int, action: dict) -> dict:
+    """Dispatch only after both the approval and durable step are claimed."""
     action_detail = action.get("action_detail", "")
     action_type = action.get("action_type", "shell")
     if action_type not in VALID_ACTION_TYPES:

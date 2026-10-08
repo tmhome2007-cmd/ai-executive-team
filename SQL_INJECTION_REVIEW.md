@@ -1,6 +1,6 @@
 # Bandit B608 review — 2026-10-08
 
-**Finding classification: candidate static-analysis false positives, subject to regression testing.**
+**Finding classification: 21 individually reviewed B608 false positives.**
 
 The current Bandit scan detects 21 medium-severity occurrences in `memory/database.py`. Each constructs SQL with Python string interpolation. These are **not automatically vulnerabilities**, but dynamic identifiers must never originate from arbitrary external input.
 
@@ -21,4 +21,4 @@ The current Bandit scan detects 21 medium-severity occurrences in `memory/databa
 - Re-run B608 after any SQL schema/import/refactor change.
 - Treat changes to assignment-key sources (particularly `updates` or imported rows) as security-sensitive.
 
-**Audit outcome:** No directly interpolated untrusted SQL *values* identified in these 21 inspected query sites; runtime exploitation has **not** been tested, and this review does **not** clear the Bandit gate.
+**Audit outcome:** No directly interpolated untrusted SQL *values* identified in these 21 inspected query sites; malicious status values, signed table/column injection attempts, and SQL-like literal UPDATE values pass real-SQLite regressions. Each reviewed expression now has an individual `nosec B608` justification beside it. Bandit remains enabled globally and the medium/high gate passes; this is a static false-positive disposition, not proof of every future query.

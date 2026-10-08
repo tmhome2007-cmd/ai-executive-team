@@ -1,11 +1,10 @@
 """Crash-safe step claim ledger.
 
 The ledger intentionally never automatically retries an interrupted/unknown
-side-effect. This is a primitive for future workflow integration, not a claim
-that all existing workflows already use checkpoints.
+side-effect. Approved action execution uses this ledger. Analysis/preparation workflows
+still require integration; this is not universal workflow recovery.
 """
 import datetime
-import sqlite3
 from memory.database import get_connection
 
 
