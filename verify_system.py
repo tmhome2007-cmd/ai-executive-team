@@ -10,6 +10,24 @@ import sys
 import re
 import tempfile
 import json
+from contextlib import contextmanager
+
+@contextmanager
+def suppress_executor_notifications():
+    """
+    Dynamic executor smoke tests must never contact the user's real Telegram
+    bot. Patch only workflows.action_executor.send_notification in this test
+    process, then restore it immediately afterward.
+    """
+    import workflows.action_executor as executor_module
+
+    original_send_notification = executor_module.send_notification
+    executor_module.send_notification = lambda *args, **kwargs: None
+    try:
+        yield
+    finally:
+        executor_module.send_notification = original_send_notification
+
 
 # ANSI Kleurcodes voor nette terminal output
 GREEN = "\033[92m"
@@ -194,62 +212,50 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
-# CHECK 5: LIVE CHECK — Local server API endpoints
+# CHECK 5: AUTH CHECK — fail-closed behavior without poisoning live rate limits
 # -------------------------------------------------------------------
 try:
-    import requests
+    from fastapi import HTTPException
+    from starlette.requests import Request
+    from main import verify_api_key, _failed_auth_attempts
 
-    server_url = "http://localhost:8000/"
-    # Snelle check of de lokaal draaiende server bereikbaar is
-    server_online = False
+    # Do NOT send intentionally bad credentials to the running localhost API.
+    # Doing that repeatedly mutates the real process's brute-force lockout state
+    # and eventually makes later verification runs return 429 instead of 401.
+    # Static route checks above already verify Depends(verify_api_key) wiring;
+    # here we test verify_api_key itself in this isolated Python process.
+    test_client_ip = "203.0.113.250"
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/verification-auth-test",
+        "headers": [],
+        "client": (test_client_ip, 12345),
+        "server": ("testserver", 80),
+        "scheme": "http",
+        "query_string": b"",
+    }
+    request = Request(scope)
+
+    _failed_auth_attempts.pop(test_client_ip, None)
+    rejected_status = None
     try:
-        response = requests.get(server_url, timeout=2)
-        server_online = True
-    except requests.RequestException:
-        server_online = False
+        verify_api_key(request, None)
+    except HTTPException as exc:
+        rejected_status = exc.status_code
+    finally:
+        # Leave no auth-rate-limit state behind, even inside this test process.
+        _failed_auth_attempts.pop(test_client_ip, None)
 
-    if not server_online:
-        log_skip("Live API Endpoint checks", "server not running on http://localhost:8000")
+    if rejected_status == 401:
+        log_pass("verify_api_key rejects missing credentials with 401 without touching the live server's rate-limit state")
     else:
-        # Test 1: daily-research/status now requires auth — expect 401 without a key
-        res_status = requests.get("http://localhost:8000/workflows/daily-research/status", timeout=5)
-        if res_status.status_code == 401:
-            log_pass("LIVE: GET /workflows/daily-research/status rejected unauthenticated request with status 401 (Protected)")
-        else:
-            log_fail(
-                "LIVE: GET /workflows/daily-research/status", 
-                f"Expected status 401 for unauthenticated request, got {res_status.status_code}"
-            )
-
-        # Test 2: decisions/history now requires auth — expect 401 without a key
-        res_history = requests.get("http://localhost:8000/decisions/history?limit=1", timeout=5)
-        if res_history.status_code == 401:
-            log_pass("LIVE: GET /decisions/history rejected unauthenticated request with status 401 (Protected)")
-        else:
-            log_fail(
-                "LIVE: GET /decisions/history", 
-                f"Expected status 401 for unauthenticated request, got {res_history.status_code}"
-            )
-
-        # Test 3: Protected trigger endpoint without auth headers (401)
-        payload = {
-            "topic": "smoke_test",
-            "task_description": "smoke_test",
-            "agent_keys": ["ceo"]
-        }
-        res_trigger = requests.post("http://localhost:8000/decisions/trigger", json=payload, timeout=5)
-        if res_trigger.status_code == 401:
-            log_pass("LIVE: POST /decisions/trigger rejected unauthenticated request with status 401 (Protected)")
-        else:
-            log_fail(
-                "LIVE: POST /decisions/trigger", 
-                f"Expected status 401 for unauthenticated request, got {res_trigger.status_code}"
-            )
-
-except ImportError:
-    log_fail("Live API Endpoint checks", "The 'requests' package is not installed.")
+        log_fail(
+            "API authentication fail-closed behavior",
+            f"Expected isolated verify_api_key() status 401, got {rejected_status}",
+        )
 except Exception as e:
-    log_fail("Live API Endpoint checks crashed", str(e))
+    log_fail("API authentication fail-closed check crashed", str(e))
 
 
 # -------------------------------------------------------------------
@@ -1937,7 +1943,8 @@ try:
                 expected_outcome="Command completes",
             )
             _transition_73(action_id, "approved", ("pending",))
-            result = _execute_73(action_id)
+            with suppress_executor_notifications():
+                result = _execute_73(action_id)
             outcome = _get_outcome_73(action_id)
 
             if result.get("success") and outcome and outcome["outcome_status"] == "measurement_pending":
@@ -1977,7 +1984,8 @@ try:
 
             action_id = _propose_74("COO", "Dry run", "printf dry-run", "shell")
             _transition_74(action_id, "approved", ("pending",))
-            result = _execute_74(action_id)
+            with suppress_executor_notifications():
+                result = _execute_74(action_id)
             outcome = _get_outcome_74(action_id)
 
             if (
@@ -2023,7 +2031,8 @@ try:
 
             action_id = _propose_75("COO", "Expected failure", "false", "shell")
             _transition_75(action_id, "approved", ("pending",))
-            result = _execute_75(action_id)
+            with suppress_executor_notifications():
+                result = _execute_75(action_id)
             outcome = _get_outcome_75(action_id)
 
             if (
@@ -2245,6 +2254,36 @@ try:
         _verify_config_80.DATABASE_PATH = original_db_80
 except Exception as e:
     log_fail("Crash outcome recovery check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 81: STATIC CHECK — verification itself is repeatable and side-effect free
+# -------------------------------------------------------------------
+try:
+    with open("verify_system.py", "r", encoding="utf-8") as f:
+        verify_content_81 = f.read()
+
+    no_bad_live_auth = (
+        'requests.post("http://localhost:8000/decisions/trigger"' not in verify_content_81
+        and 'requests.get("http://localhost:8000/decisions/history' not in verify_content_81
+    )
+    silences_executor_notifications = (
+        "def suppress_executor_notifications" in verify_content_81
+        and verify_content_81.count("with suppress_executor_notifications():") >= 3
+    )
+    clears_test_auth_state = "_failed_auth_attempts.pop(test_client_ip, None)" in verify_content_81
+
+    if no_bad_live_auth and silences_executor_notifications and clears_test_auth_state:
+        log_pass("verification avoids live auth lockouts and suppresses Telegram side effects during executor tests")
+    else:
+        log_fail(
+            "Verification repeatability/side-effect isolation",
+            f"no_bad_live_auth={no_bad_live_auth}, "
+            f"silences_notifications={silences_executor_notifications}, "
+            f"clears_auth_state={clears_test_auth_state}",
+        )
+except Exception as e:
+    log_fail("Verification repeatability check crashed", str(e))
 
 
 # -------------------------------------------------------------------
