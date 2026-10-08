@@ -785,18 +785,48 @@ def recover_interrupted_actions() -> int:
     })
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT id FROM action_queue WHERE status = 'executing'")
+        interrupted_ids = [row[0] for row in cursor.fetchall()]
+        if not interrupted_ids:
+            return 0
+
+        placeholders = ", ".join("?" for _ in interrupted_ids)
         cursor.execute(
-            """
+            f"""
             UPDATE action_queue
             SET status = 'execution_failed',
                 reviewed_at = ?,
                 result_detail = ?
-            WHERE status = 'executing'
+            WHERE id IN ({placeholders})
             """,
-            (reviewed_at, result_detail),
+            (reviewed_at, result_detail, *interrupted_ids),
+        )
+        recovered_count = cursor.rowcount
+
+        # Een crash betekent dat het echte effect ONBEKEND is. Niet automatisch
+        # 'failed' noemen: er kan een gedeeltelijk extern effect zijn geweest.
+        cursor.execute(
+            f"""
+            UPDATE action_outcomes
+            SET outcome_status = 'inconclusive',
+                actual_outcome = ?,
+                measured_at = ?,
+                updated_at = ?,
+                next_recommendation = COALESCE(
+                    next_recommendation,
+                    'Manually inspect the real-world state before proposing any retry.'
+                )
+            WHERE action_id IN ({placeholders})
+            """,
+            (
+                "Execution was interrupted; the real-world business outcome is unknown.",
+                reviewed_at,
+                reviewed_at,
+                *interrupted_ids,
+            ),
         )
         conn.commit()
-        return cursor.rowcount
+        return recovered_count
 
 
 def get_action_by_id(action_id: int) -> dict | None:
