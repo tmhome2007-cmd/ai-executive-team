@@ -553,21 +553,35 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         page_title = None
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            # No downloads and no service workers: both create side-effect/network
+            # surfaces outside the simple navigate/click capability we actually
+            # authorize for browser_action.
+            context = browser.new_context(
+                accept_downloads=False,
+                service_workers="block",
+            )
+            page = context.new_page()
 
-            # Revalidate every navigation request, including redirects. Without
-            # this, an initially-safe public URL could redirect Chromium to a
-            # localhost/private-network target after the preflight check.
-            def _guard_navigation(route):
-                request = route.request
-                if request.is_navigation_request():
-                    reason = check_url_safety(request.url)
+            # Validate EVERY outbound HTTP(S) request, not only top-level
+            # navigations. A public page can issue fetch/XHR/image/script requests
+            # to localhost or RFC1918 services even when the page itself is safe.
+            # Non-network data/blob resources may continue; file/javascript/etc.
+            # are blocked.
+            def _guard_request(route):
+                request_url = route.request.url
+                parsed_request = urlparse(request_url)
+                scheme = (parsed_request.scheme or "").lower()
+                if scheme in {"http", "https"}:
+                    reason = check_url_safety(request_url)
                     if reason:
                         route.abort()
                         return
+                elif scheme not in {"data", "blob"}:
+                    route.abort()
+                    return
                 route.continue_()
 
-            page.route("**/*", _guard_navigation)
+            context.route("**/*", _guard_request)
             page.goto(url, timeout=15000)
             page_title = page.title()
 
@@ -576,6 +590,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 page.wait_for_timeout(1000)  # korte pauze zodat de klik-actie zichtbaar effect heeft voordat de screenshot wordt genomen
 
             page.screenshot(path=screenshot_path)
+            context.close()
             browser.close()
 
         update_action_status(action_id, "executed")
