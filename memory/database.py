@@ -176,7 +176,8 @@ _SYNC_TABLE_COLUMNS = {
         "created_at", "updated_at", "event_type", "status", "severity",
         "reason", "fingerprint", "goal_sync_uuid", "source_action_sync_uuid",
         "source_decision_sync_uuid", "generated_decision_sync_uuid",
-        "resolved_at", "sync_uuid",
+        "resolved_at", "attempt_count", "last_attempt_at", "last_error",
+        "sync_uuid",
     },
     "executive_memories": {
         "created_at", "updated_at", "executive_key", "memory_kind", "lesson",
@@ -246,10 +247,23 @@ def init_db() -> None:
             generated_decision_id INTEGER,
             generated_decision_sync_uuid TEXT,
             resolved_at TEXT,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            last_attempt_at TEXT,
+            last_error TEXT,
             sync_uuid TEXT NOT NULL UNIQUE
         )
     """)
     conn.commit()
+    for migration_sql in (
+        "ALTER TABLE followup_events ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE followup_events ADD COLUMN last_attempt_at TEXT",
+        "ALTER TABLE followup_events ADD COLUMN last_error TEXT",
+    ):
+        try:
+            cursor.execute(migration_sql)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     # Structured executive memory. Memories are historical/advisory only:
     # they never override current evidence or owner-approved state.
@@ -1370,6 +1384,57 @@ def transition_followup_event_status(
         return cursor.rowcount == 1
 
 
+def claim_followup_meeting_attempt(
+    event_id: int,
+    *,
+    min_retry_seconds: int = 900,
+) -> bool:
+    """
+    Atomically claim a reasoning attempt. Existing open events with no
+    generated decision remain retryable after backoff, so a transient model
+    failure cannot permanently deadlock an active goal.
+    """
+    now = datetime.datetime.now()
+    cutoff = (now - datetime.timedelta(seconds=min_retry_seconds)).isoformat()
+    now_iso = now.isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE followup_events
+            SET attempt_count = COALESCE(attempt_count, 0) + 1,
+                last_attempt_at = ?,
+                last_error = NULL,
+                updated_at = ?
+            WHERE id = ?
+              AND status = 'open'
+              AND generated_decision_id IS NULL
+              AND (last_attempt_at IS NULL OR last_attempt_at <= ?)
+            """,
+            (now_iso, now_iso, event_id, cutoff),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def record_followup_meeting_failure(event_id: int, error: str) -> bool:
+    clean = (error or "Unknown follow-up meeting failure").strip()[:2000]
+    _reject_secret_like_text(clean)
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE followup_events
+            SET last_error = ?, updated_at = ?
+            WHERE id = ? AND status = 'open' AND generated_decision_id IS NULL
+            """,
+            (clean, now, event_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
 def link_followup_generated_decision(event_id: int, decision_id: int) -> bool:
     decision = get_decision_by_id(decision_id)
     if decision is None:
@@ -1380,7 +1445,8 @@ def link_followup_generated_decision(event_id: int, decision_id: int) -> bool:
         cursor.execute(
             """
             UPDATE followup_events
-            SET generated_decision_id = ?, generated_decision_sync_uuid = ?, updated_at = ?
+            SET generated_decision_id = ?, generated_decision_sync_uuid = ?,
+                updated_at = ?, last_error = NULL
             WHERE id = ? AND status = 'open' AND generated_decision_id IS NULL
             """,
             (decision_id, decision["sync_uuid"], now, event_id),
@@ -3117,7 +3183,7 @@ def export_history_to_jsonl(export_path: str) -> dict:
             SELECT created_at, updated_at, event_type, status, severity, reason,
                    fingerprint, goal_sync_uuid, source_action_sync_uuid,
                    source_decision_sync_uuid, generated_decision_sync_uuid,
-                   resolved_at, sync_uuid
+                   resolved_at, attempt_count, last_attempt_at, last_error, sync_uuid
             FROM followup_events
         """)
         followup_rows = [dict(row) for row in cursor.fetchall()]
