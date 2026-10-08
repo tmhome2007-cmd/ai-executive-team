@@ -33,8 +33,13 @@ if str(project_root) not in sys.path:
 
 from config import config
 from notifications.telegram_bot import send_notification_with_keyboard, escape_html
-from memory.database import get_action_by_id, transition_action_status
-from workflows.action_executor import execute_action
+from memory.database import get_action_by_id
+from workflows.action_control import (
+    ActionControlError,
+    approve_action_control,
+    reject_action_control,
+    execute_action_control,
+)
 from logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -141,9 +146,20 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # goedkeuren, afwijzen of UITVOEREN op deze machine. Een bot-username is
     # geen geheim — dit moet ALTIJD expliciet worden gecontroleerd.
     sender_chat_id = str(update.effective_chat.id) if update.effective_chat else None
+    sender_user_id = str(update.effective_user.id) if update.effective_user else None
+    chat_type = getattr(update.effective_chat, "type", None) if update.effective_chat else None
     owner_chat_id = str(getattr(config, "TELEGRAM_CHAT_ID", "")).strip()
 
-    if not owner_chat_id or sender_chat_id != owner_chat_id:
+    # Remote approvals are intentionally supported ONLY from a private chat
+    # whose user ID matches the configured owner chat ID. In a Telegram group,
+    # every member shares the same chat ID; checking chat ID alone would let
+    # any group member approve/execute actions.
+    if (
+        not owner_chat_id
+        or sender_chat_id != owner_chat_id
+        or sender_user_id != owner_chat_id
+        or chat_type != "private"
+    ):
         # Bewust een generiek antwoord — geen details weggeven aan wie dan
         # ook die dit probeert, en niets loggen dat een aanvaller nuttig zou
         # vinden (geen actie-ID's, geen systeeminformatie).
@@ -176,12 +192,13 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         if current_status != "pending":
             await query.answer(f"Already '{current_status}' — cannot approve again.", show_alert=True)
             return
-        if not transition_action_status(action_id, "approved", ("pending",)):
-            refreshed = get_action_by_id(action_id)
-            current = refreshed["status"] if refreshed else "unknown"
-            await query.answer(f"Status changed to '{current}' before approval.", show_alert=True)
+        try:
+            approve_action_control(action_id)
+        except ActionControlError as exc:
+            await query.answer(str(exc)[:180], show_alert=True)
             return
         await query.answer("Approved ✅")
+        action = get_action_by_id(action_id) or action
         action["status"] = "approved"
         new_text = format_action_message(action, footer="✅ <b>APPROVED</b> via Telegram.")
         new_keyboard = build_action_keyboard(action_id, "approved")
@@ -191,12 +208,13 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         if current_status not in ("pending", "approved"):
             await query.answer(f"Already '{current_status}' — cannot reject now.", show_alert=True)
             return
-        if not transition_action_status(action_id, "rejected", ("pending", "approved")):
-            refreshed = get_action_by_id(action_id)
-            current = refreshed["status"] if refreshed else "unknown"
-            await query.answer(f"Status changed to '{current}' before rejection.", show_alert=True)
+        try:
+            reject_action_control(action_id)
+        except ActionControlError as exc:
+            await query.answer(str(exc)[:180], show_alert=True)
             return
         await query.answer("Rejected ❌")
+        action = get_action_by_id(action_id) or action
         action["status"] = "rejected"
         new_text = format_action_message(action, footer="❌ <b>REJECTED</b> via Telegram.")
         new_keyboard = None
@@ -210,7 +228,11 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         # execute_action() is sync and may run a real subprocess (up to the
         # existing 30s timeout) — run it in a worker thread so this callback
         # handler never blocks the bot's own event loop while it waits.
-        result = await asyncio.to_thread(execute_action, action_id)
+        try:
+            result = await asyncio.to_thread(execute_action_control, action_id)
+        except ActionControlError as exc:
+            await query.answer(str(exc)[:180], show_alert=True)
+            return
 
         refreshed = get_action_by_id(action_id) or action
         if result.get("blocked"):
