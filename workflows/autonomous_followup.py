@@ -20,6 +20,10 @@ from memory.database import (
     get_company_goals,
     get_company_goal_lineage,
     get_followup_event,
+    get_followup_events,
+    transition_followup_event_status,
+    get_company_goal,
+    get_decision_by_id,
     link_followup_generated_decision,
     log_decision,
 )
@@ -224,10 +228,12 @@ async def run_autonomous_followup() -> dict:
     create auditable follow-up records and notifications.
     """
     active_goals = get_company_goals(statuses=("active",), limit=100)
+    active_goal_ids = {goal["id"] for goal in active_goals}
     created_event_ids: list[int] = []
     generated_decision_ids: list[int] = []
     existing_event_ids: list[int] = []
     errors: list[str] = []
+    active_fingerprints: set[str] = set()
 
     for goal in active_goals:
         lineage = get_company_goal_lineage(goal["id"])
@@ -235,6 +241,7 @@ async def run_autonomous_followup() -> dict:
             continue
 
         candidates = classify_goal_followups(goal, lineage)
+        active_fingerprints.update(candidate["fingerprint"] for candidate in candidates)
         for candidate in candidates:
             try:
                 event_id, created = create_followup_event(
@@ -308,11 +315,38 @@ async def run_autonomous_followup() -> dict:
                     f"Follow-up meeting for event #{event_id} failed: {exc}"
                 )
 
+    # Reconcile old open events after scanning. Non-reasoning alerts close
+    # automatically when their deterministic condition disappears. Reasoning
+    # events remain visible until the generated decision leaves pending state.
+    resolved_event_ids: list[int] = []
+    try:
+        for event in get_followup_events(statuses=("open",), limit=500):
+            goal_id = event.get("goal_id")
+            generated_decision_id = event.get("generated_decision_id")
+
+            should_resolve = False
+            if goal_id is not None and goal_id not in active_goal_ids:
+                should_resolve = True
+            elif generated_decision_id is not None:
+                generated = get_decision_by_id(generated_decision_id)
+                if generated is not None and generated.get("approval_status") in {"approved", "rejected"}:
+                    should_resolve = True
+            elif event.get("fingerprint") not in active_fingerprints:
+                should_resolve = True
+
+            if should_resolve and transition_followup_event_status(
+                event["id"], "resolved", ("open",)
+            ):
+                resolved_event_ids.append(event["id"])
+    except Exception as exc:
+        errors.append(f"Follow-up reconciliation failed: {exc}")
+
     return {
         "success": len(errors) == 0,
         "scanned_goal_count": len(active_goals),
         "created_event_ids": created_event_ids,
         "existing_event_ids": existing_event_ids,
         "generated_decision_ids": generated_decision_ids,
+        "resolved_event_ids": resolved_event_ids,
         "errors": errors,
     }
