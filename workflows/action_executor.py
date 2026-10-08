@@ -99,6 +99,28 @@ def _get_workspace_root() -> str:
     return os.path.realpath(absolute)
 
 
+def _prune_browser_screenshots(screenshots_dir: str) -> None:
+    """Bound private browser evidence retention by newest modification time."""
+    keep = max(1, int(getattr(config, "SCREENSHOT_RETENTION_COUNT", 50)))
+    try:
+        candidates = []
+        for name in os.listdir(screenshots_dir):
+            if not (name.startswith("action_") and name.endswith(".png")):
+                continue
+            path = os.path.join(screenshots_dir, name)
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            candidates.append((os.path.getmtime(path), path))
+        candidates.sort(reverse=True)
+        for _, path in candidates[keep:]:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 def _looks_like_path(token: str) -> bool:
     """Conservatieve pad-detectie voor shellargumenten.
 
@@ -739,6 +761,11 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         workspace_root = _get_workspace_root()
         screenshots_dir = os.path.join(workspace_root, "screenshots")
         os.makedirs(screenshots_dir, exist_ok=True)
+        try:
+            os.chmod(screenshots_dir, 0o700)
+        except OSError:
+            pass
+        _prune_browser_screenshots(screenshots_dir)
         screenshot_path = os.path.join(screenshots_dir, f"action_{action_id}.png")
 
         page_title = None
@@ -779,6 +806,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 os.chmod(screenshot_path, 0o600)
             except OSError:
                 pass
+            _prune_browser_screenshots(screenshots_dir)
             browser.close()
 
         update_action_status(action_id, "executed")
