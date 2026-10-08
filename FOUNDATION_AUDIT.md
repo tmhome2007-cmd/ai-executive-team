@@ -1,6 +1,6 @@
 # Foundation Hardening Audit
 
-> **2026-10-08 update:** A constrained Docker-only opt-in command worker is now implemented and unit-tested. The original host-shell execution path was removed. This is not equivalent to a dedicated VM security boundary, and the dependency, runtime, recovery and privacy release blockers remain open. Read [SECURITY_RELEASE_GATE.md](SECURITY_RELEASE_GATE.md) before merging.
+> **2026-10-08 update:** Docker command isolation, durable agent/action checkpoints, 30-day generated artifact retention, optional encrypted backups and clean npm audits are implemented and tested. Chroma dependency and deployment confinement blockers remain. Read [SECURITY_RELEASE_GATE.md](SECURITY_RELEASE_GATE.md) before merging.
 
 Status: pre-frontend backend/security/privacy audit  
 Branch: `chatgpt/foundation-hardening`
@@ -66,39 +66,26 @@ This should happen before adding broad new execution capabilities.
 - copied backup/export files;
 - filesystem-level access outside the OS account boundary.
 
-**Current mitigation:** local-first default, owner-only permissions, signed sync integrity, no secrets intentionally stored.
+**Current mitigation:** local-first defaults, owner-only permissions and signed sync integrity. FileVault is verified On on the audited Mac; optional authenticated encrypted backups and integrity-checked restore are implemented. Backup encryption needs an owner-managed key and does not encrypt copied sync exports or replace deployment verification.
 
-**Recommended:** rely on full-disk encryption immediately; later add an optional encrypted export/backup layer with a dedicated key and authenticated encryption. Do not invent a home-grown crypto format.
+**Remaining:** verify off-device encryption/key recovery and account isolation. Application SQLite is plaintext on the encrypted system volume; other machines and older copies are outside this evidence.
 
-### 3. Durable workflow execution is not yet step-checkpointed
+### 3. Checkpoint integration is implemented; uncertain effects still require review
 
-The database records business state and guards side effects well, but a long multi-agent workflow is still closer to a single run than a durable workflow engine.
+Approved actions and synchronous agent tasks now use input-bound durable checkpoints.
+Meetings, preparation, daily research and autonomous follow-up use persistent run IDs.
+Successful outputs and proposal IDs are reused; interrupted/running steps block replay.
+A private Unix instance lock prevents startup recovery from reconciling another server.
+Exactly-once external effects still need provider idempotency and owner reconciliation.
+See SECURITY_RELEASE_GATE.md for tests and deployment limits.
 
-**Recommended next foundation phase:** explicit run/step state:
-- run UUID;
-- step UUID and deterministic idempotency key;
-- input hash;
-- started/completed/failed timestamps;
-- persisted output;
-- retry count;
-- side-effect marker;
-- resume-from-last-safe-step logic.
+### 4. Generated artifact retention is implemented
 
-Never replay a completed side effect just because the LLM/workflow process restarted.
-
-### 4. Retention is not globally policy-driven yet
-
-Logs/backups/screenshots are bounded, but durable decisions/actions/memories/outcomes are intentionally long-lived and there is no central privacy-retention policy.
-
-**Recommended:** owner-configurable retention classes:
-- operational logs;
-- screenshots/browser evidence;
-- sync exports;
-- retired memories;
-- old failed test fixtures;
-- permanent audit/treasury records.
-
-Deletion rules must preserve accounting/audit integrity.
+The owner selected 30 days. Startup/daily cleanup expires generated rotated logs,
+screenshots and registered exports in SYNC_EXPORT_DIR. Active logs rotate daily and
+by size. Existing count limits remain. Approval, execution, decision, memory and
+checkpoint evidence is preserved; unknown files and copied exports are not deleted.
+Deletion is not forensic secure erasure, and cleanup needs the server to run.
 
 ### 5. Telegram is still a third-party trust boundary
 
@@ -151,14 +138,14 @@ Relevant lesson: framework agent/tool behavior should not itself be the security
 
 ## Recommended sequence before frontend v2
 
-1. **Run and fix all 149 verification checks on this branch.**
+1. **Completed locally: all 150 verification checks.**
 2. Run CI dependency/security scans and review any Bandit/pip-audit/npm findings.
 3. Perform one real regression flow:
    - decision -> approval -> preparation -> action proposal -> approval -> sandbox execution;
    - verify approval binding and no Telegram remote control by default.
-4. **Containerized execution boundary** for future side-effecting tools.
-5. **Durable step/checkpoint model** with idempotency/resume semantics.
-6. Add global retention-policy configuration.
+4. Docker command boundary is implemented/tested; extend verified isolation to host-side browser tools and the final deployment.
+5. Durable agent/action checkpoints are implemented; interrupted effects require reconciliation.
+6. Generated artifact age retention is implemented; legal/business audit evidence remains durable.
 7. Only then continue major frontend/virtual-office work.
 
 ## Security posture after this branch

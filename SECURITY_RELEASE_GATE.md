@@ -20,9 +20,8 @@
 
 ## Local evidence
 
-Python 3.12.14: 150/150 system regression checks pass. The full test run passed
-26 tests, including real Docker; an additional daily active-log expiry test also
-passes (27 total distinct security tests). pip check and Bandit medium/high pass.
+Python 3.12.14: 150/150 system regression checks pass. The security suite includes 27 distinct tests, including real Docker and daily
+active-log expiry. pip check and Bandit medium/high pass.
 Frontend lint passes with one pre-existing no-img-element warning; clean install,
 native-glob integration tests, production Webpack build and full npm audit pass.
 A tool-free real CrewAI agent completes a synthetic task against local Ollama
@@ -45,3 +44,15 @@ Bandit, lint/build and dependency audits must pass on the final head. No unresol
 critical/high vulnerabilities or undocumented accepted risk. Verify encryption,
 restore and deployment confinement on the intended target. Explicit owner sign-off
 is required before merging main. This record does not claim that the gate passed.
+
+## CI continuation on b97c197
+
+[Run 37825733581](https://github.com/tmhome2007-cmd/ai-executive-team/actions/runs/37825733581)
+passes the complete frontend gate (clean install, native adapter, lint, production
+build and both npm audits), backend install/pip check, compilation, all 150
+regression checks and Bandit. The new log-expiry test used a macOS-specific
+temporary directory and failed on Linux; its fixture now uses the platform
+temporary directory with canonicalization. This is a test-portability correction.
+Chroma pip-audit still reports four unique advisories with no fix versions.
+The corrected final code needs a fresh CI run, including the Docker steps that
+were skipped after the fixture failure.

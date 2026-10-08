@@ -56,7 +56,8 @@ class ArtifactRetentionTests(unittest.TestCase):
         import logging
         from logging_config import PrivateRotatingFileHandler
         from memory.artifact_retention import _prune_directory
-        with tempfile.TemporaryDirectory(dir="/private/tmp") as temp:
+        with tempfile.TemporaryDirectory() as temp:
+            temp = os.path.realpath(temp)
             path = Path(temp) / "app.log"
             old = time.time() - 31 * 86400
             stamp = datetime.datetime.fromtimestamp(old).strftime("%Y-%m-%d %H:%M:%S")
