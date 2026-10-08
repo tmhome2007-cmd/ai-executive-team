@@ -110,7 +110,11 @@ def _get_workspace_root() -> str:
     raw = config.WORKSPACE_ROOT or "./workspace"
     expanded = os.path.expanduser(raw)
     absolute = os.path.abspath(expanded)
-    os.makedirs(absolute, exist_ok=True)
+    os.makedirs(absolute, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(absolute, 0o700)
+    except OSError:
+        pass
     return os.path.realpath(absolute)
 
 
@@ -671,7 +675,11 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
 
         workspace_root = _get_workspace_root()
         screenshots_dir = os.path.join(workspace_root, "screenshots")
-        os.makedirs(screenshots_dir, exist_ok=True)
+        os.makedirs(screenshots_dir, mode=0o700, exist_ok=True)
+        try:
+            os.chmod(screenshots_dir, 0o700)
+        except OSError:
+            pass
         screenshot_path = os.path.join(screenshots_dir, f"action_{action_id}.png")
 
         page_title = None
@@ -714,6 +722,10 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 page.wait_for_timeout(1000)  # korte pauze zodat de klik-actie zichtbaar effect heeft voordat de screenshot wordt genomen
 
             page.screenshot(path=screenshot_path)
+            try:
+                os.chmod(screenshot_path, 0o600)
+            except OSError:
+                pass
             context.close()
             browser.close()
 
@@ -730,8 +742,8 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"⚡ <b>BROWSER ACTION SUCCESSFUL</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Detail:</b> {escape_html(result_summary)}\n"
-                f"<b>Screenshot saved:</b> <code>{escape_html(screenshot_path)}</code>"
+                f"<b>Detail:</b> {_telegram_sensitive_text(result_summary)}\n"
+                f"<b>Screenshot:</b> {_telegram_sensitive_code(screenshot_path)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
