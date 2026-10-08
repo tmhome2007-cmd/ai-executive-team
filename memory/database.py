@@ -907,7 +907,12 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
                     SELECT COUNT(*)
                     FROM action_queue q
                     WHERE q.source_decision_id = d.id
-                ) AS linked_action_count
+                ) AS linked_action_count,
+                (
+                    SELECT COUNT(*)
+                    FROM resource_requests r
+                    WHERE r.source_decision_id = d.id
+                ) AS linked_resource_request_count
             FROM decisions d
             LEFT JOIN decision_approvals a ON a.decision_id = d.id
             LEFT JOIN company_goals g ON g.id = d.goal_id
@@ -1032,9 +1037,11 @@ def get_resource_request_by_id(request_id: int) -> dict | None:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT r.*, d.topic AS source_decision_topic
+            SELECT r.*, d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title
             FROM resource_requests r
             LEFT JOIN decisions d ON d.id = r.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             WHERE r.id = ?
             """,
             (request_id,),
@@ -1057,9 +1064,11 @@ def get_resource_requests(
             placeholders = ", ".join("?" for _ in statuses)
             cursor.execute(
                 f"""
-                SELECT r.*, d.topic AS source_decision_topic
+                SELECT r.*, d.topic AS source_decision_topic,
+                       d.goal_id AS source_goal_id, g.title AS source_goal_title
                 FROM resource_requests r
                 LEFT JOIN decisions d ON d.id = r.source_decision_id
+                LEFT JOIN company_goals g ON g.id = d.goal_id
                 WHERE r.status IN ({placeholders})
                 ORDER BY r.timestamp DESC
                 LIMIT ? OFFSET ?
@@ -1069,9 +1078,11 @@ def get_resource_requests(
         else:
             cursor.execute(
                 """
-                SELECT r.*, d.topic AS source_decision_topic
+                SELECT r.*, d.topic AS source_decision_topic,
+                       d.goal_id AS source_goal_id, g.title AS source_goal_title
                 FROM resource_requests r
                 LEFT JOIN decisions d ON d.id = r.source_decision_id
+                LEFT JOIN company_goals g ON g.id = d.goal_id
                 ORDER BY r.timestamp DESC
                 LIMIT ? OFFSET ?
                 """,
@@ -1085,9 +1096,11 @@ def get_resource_requests_for_decision(decision_id: int) -> list[dict]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT r.*, d.topic AS source_decision_topic
+            SELECT r.*, d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title
             FROM resource_requests r
             LEFT JOIN decisions d ON d.id = r.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             WHERE r.source_decision_id = ?
             ORDER BY r.timestamp ASC
             """,
@@ -1250,9 +1263,11 @@ def get_treasury_history(limit: int = 50, offset: int = 0) -> list[dict]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT e.*, d.topic AS source_decision_topic
+            SELECT e.*, d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title
             FROM treasury_entries e
             LEFT JOIN decisions d ON d.id = e.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             ORDER BY e.timestamp DESC
             LIMIT ? OFFSET ?
             """,
@@ -1706,11 +1721,13 @@ def get_actions_after_id(action_id: int) -> list[dict]:
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                    q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                    d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
             LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.id > ?
             ORDER BY q.id ASC
@@ -1731,11 +1748,13 @@ def get_pending_actions() -> list[dict]:
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                    q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                    d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
             LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.status IN ('pending', 'approved', 'executing')
             ORDER BY q.timestamp DESC
@@ -2218,11 +2237,13 @@ def get_action_by_id(action_id: int) -> dict | None:
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                    q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
                    d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount, o.currency,
                    o.outcome_status, o.actual_outcome, o.actual_impact, o.actual_cost_amount,
                    o.measured_at, o.next_recommendation, o.notes AS outcome_notes
             FROM action_queue q
             LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.id = ?
         """, (action_id,))
@@ -2242,12 +2263,14 @@ def get_actions_for_decision(decision_id: int) -> list[dict]:
                    q.result_detail, q.sync_uuid, q.source_decision_id,
                    q.source_decision_sync_uuid, q.source_phase,
                    d.topic AS source_decision_topic,
+                   d.goal_id AS source_goal_id, g.title AS source_goal_title,
                    o.expected_outcome, o.expected_impact, o.expected_cost_amount,
                    o.currency, o.outcome_status, o.actual_outcome, o.actual_impact,
                    o.actual_cost_amount, o.measured_at, o.next_recommendation,
                    o.notes AS outcome_notes
             FROM action_queue q
             LEFT JOIN decisions d ON d.id = q.source_decision_id
+            LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.source_decision_id = ?
             ORDER BY q.timestamp ASC
@@ -2296,6 +2319,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                        o.measured_at, o.next_recommendation, o.notes AS outcome_notes
                 FROM action_queue q
                 LEFT JOIN decisions d ON d.id = q.source_decision_id
+                LEFT JOIN company_goals g ON g.id = d.goal_id
                 LEFT JOIN action_outcomes o ON o.action_id = q.id
                 WHERE q.status = ?
                 ORDER BY q.timestamp DESC
@@ -2312,6 +2336,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                        o.measured_at, o.next_recommendation, o.notes AS outcome_notes
                 FROM action_queue q
                 LEFT JOIN decisions d ON d.id = q.source_decision_id
+                LEFT JOIN company_goals g ON g.id = d.goal_id
                 LEFT JOIN action_outcomes o ON o.action_id = q.id
                 ORDER BY q.timestamp DESC
                 LIMIT ? OFFSET ?
