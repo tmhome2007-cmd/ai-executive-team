@@ -1094,8 +1094,7 @@ def create_action_outcome_memories(action_id: int) -> list[int]:
             source_decision_id=source_decision_id,
             source_action_id=action_id,
             fingerprint=(
-                f"action:{action['sync_uuid']}:outcome:{outcome_status}:"
-                f"{action.get('measured_at') or action.get('updated_at') or 'measured'}:{executive_key}"
+                f"action:{action['sync_uuid']}:outcome:{outcome_status}:{executive_key}"
             ),
         )
         if created:
