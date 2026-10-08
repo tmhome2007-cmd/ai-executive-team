@@ -30,6 +30,10 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
     root = Path(workspace_root).resolve(strict=True)
     if not root.is_dir() or root.is_symlink():
         raise ContainerExecutionError("Invalid workspace directory")
+    # Docker --mount parses comma-delimited key/value options. Avoid treating
+    # path characters as mount parameters (or splitting log/CLI arguments).
+    if any(ch in str(root) for ch in (",", "\\n", "\\r")):
+        raise ContainerExecutionError("Unsupported workspace path in Docker mount")
     # A host Unix socket or device node within the bind mount could expose
     # host services (including Docker itself) to otherwise isolated code.
     # Check before launch; a dedicated workspace with no concurrent writers
