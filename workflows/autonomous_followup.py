@@ -25,6 +25,7 @@ from memory.database import (
     get_company_goal,
     get_decision_by_id,
     create_followup_generated_decision,
+    mark_followup_reasoning_attempt,
 )
 from notifications.telegram_bot import send_notification_async, escape_html
 from workflows.meeting import run_executive_meeting
@@ -267,7 +268,14 @@ async def run_autonomous_followup() -> dict:
     pending decision per deterministic fingerprint. Owner-gate events only
     create auditable follow-up records and notifications.
     """
-    active_goals = get_company_goals(statuses=("active",), limit=100)
+    active_goals: list[dict] = []
+    goal_offset = 0
+    while True:
+        batch = get_company_goals(statuses=("active",), limit=100, offset=goal_offset)
+        active_goals.extend(batch)
+        if len(batch) < 100:
+            break
+        goal_offset += len(batch)
     active_goal_ids = {goal["id"] for goal in active_goals}
     created_event_ids: list[int] = []
     generated_decision_ids: list[int] = []
@@ -312,6 +320,17 @@ async def run_autonomous_followup() -> dict:
                     or existing_event.get("generated_decision_id") is not None
                 ):
                     continue
+
+                # Avoid retry storms from repeated manual scans after a transient
+                # model/runtime failure. Normal hourly scans will retry naturally.
+                try:
+                    last_attempt = datetime.datetime.fromisoformat(existing_event["updated_at"])
+                    if (
+                        datetime.datetime.now() - last_attempt
+                    ) < datetime.timedelta(minutes=15):
+                        continue
+                except (TypeError, ValueError, KeyError):
+                    pass
             else:
                 created_event_ids.append(event_id)
                 try:
@@ -330,6 +349,7 @@ async def run_autonomous_followup() -> dict:
                 continue
 
             try:
+                mark_followup_reasoning_attempt(event_id)
                 prompt = _followup_meeting_prompt(goal, candidate, lineage)
                 followup_meeting_type = (
                     "retrospective"
