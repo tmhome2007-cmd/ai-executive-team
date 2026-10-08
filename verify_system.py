@@ -3713,6 +3713,12 @@ try:
         "Goal must be active before decisions can be linked to it",
         "Linked company goal must remain active before preparation",
         "goal completion remains an owner decision",
+        "def _require_linked_goal_active",
+        'operation="approve decision direction"',
+        'operation="approve resource request"',
+        'operation="fulfill resource request"',
+        'operation="approve action"',
+        'operation="execute action"',
     ]
     required_db = [
         "CREATE TABLE IF NOT EXISTS company_goals",
