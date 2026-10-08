@@ -43,6 +43,7 @@ jobs:
         run: python verify_system.py
 
       - name: Bandit medium/high findings
+        if: ${{ always() }}
         run: bandit -r agents memory notifications tools workflows main.py config.py system_checks.py -ll
 
       - name: Audit Python dependencies
