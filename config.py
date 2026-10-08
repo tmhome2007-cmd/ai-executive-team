@@ -9,6 +9,7 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # 1. Laad de omgevingsvariabelen uit het .env bestand
@@ -131,6 +132,10 @@ def set_sandbox_mode(enabled: bool) -> None:
         tmp_path = Path(tmp.name)
     try:
         os.replace(tmp_path, env_path)
+        try:
+            os.chmod(env_path, 0o600)
+        except OSError:
+            pass
         # Pas NADAT de persistente wijziging succesvol is, de live config
         # omzetten. Zo kan een filesystem-fout nooit een half-toegepaste
         # toestand opleveren waarin de API faalt maar execution mode al wijzigde.
@@ -190,6 +195,35 @@ def validate_config() -> list[str]:
             f"OLLAMA_BASE_URL ('{config.OLLAMA_BASE_URL}') ziet er niet uit als "
             "een geldige URL — verwacht iets als http://localhost:11434."
         )
+
+    else:
+        try:
+            ollama_host = (urlparse(config.OLLAMA_BASE_URL).hostname or "").lower()
+            if ollama_host not in {"localhost", "127.0.0.1", "::1"}:
+                warnings.append(
+                    "OLLAMA_BASE_URL points to a non-local host. Executive prompts, "
+                    "memory, and research context may leave this machine."
+                )
+        except Exception:
+            pass
+
+    telemetry_value = os.getenv("CREWAI_DISABLE_TELEMETRY", "true").strip().lower()
+    if telemetry_value not in {"true", "1", "yes", "on"}:
+        warnings.append(
+            "CrewAI telemetry is enabled. This project defaults to local-first privacy; "
+            "set CREWAI_DISABLE_TELEMETRY=true unless external telemetry is intentional."
+        )
+
+    if env_path.exists() and os.name == "posix":
+        try:
+            env_mode = env_path.stat().st_mode & 0o777
+            if env_mode & 0o077:
+                warnings.append(
+                    f".env permissions are {oct(env_mode)}; secrets should be owner-only "
+                    "(recommended chmod 600 .env)."
+                )
+        except OSError:
+            pass
 
     if errors:
         error_text = "\n".join(f"  - {e}" for e in errors)
