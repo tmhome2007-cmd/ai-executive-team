@@ -15,3 +15,5 @@ sync/*.jsonl
 .venv/
 .audit/
 *.server.lock
+
+audit-results/
