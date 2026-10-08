@@ -553,6 +553,14 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
                 if (resource_request := get_resource_request_by_id(request_id)) is not None
             ]
 
+            retry_action_mismatch = [
+                action for action in new_actions
+                if (
+                    action.get("source_decision_id") != decision_id
+                    or action.get("source_decision_sync_uuid") != decision["sync_uuid"]
+                    or action.get("source_phase") != "preparation"
+                )
+            ]
             retry_resource_mismatch = [
                 resource_request for resource_request in new_resource_requests
                 if (
@@ -562,7 +570,9 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
                 )
             ]
             if (
-                len(new_resource_requests) != len(proposed_resource_request_ids)
+                len(new_actions) != len(proposed_action_ids)
+                or retry_action_mismatch
+                or len(new_resource_requests) != len(proposed_resource_request_ids)
                 or retry_resource_mismatch
             ):
                 finish_decision_preparation(
@@ -579,6 +589,13 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
                 re.search(
                     r'(?is)(?:"name"\s*:\s*"propose_resource_request"|'
                     r'\bpropose_resource_request\s*\()',
+                    final_plan,
+                )
+            )
+            pseudo_action_call = bool(
+                re.search(
+                    r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action)"|'
+                    r'\bpropose_(?:action|file_operation|browser_action)\s*\()',
                     final_plan,
                 )
             )
