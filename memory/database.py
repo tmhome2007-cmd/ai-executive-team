@@ -924,6 +924,23 @@ def create_executive_memory(
         )
         existing = cursor.fetchone()
         if existing:
+            now = datetime.datetime.now().isoformat()
+            cursor.execute(
+                """
+                UPDATE executive_memories
+                SET lesson = ?, supporting_evidence = ?, confidence = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    lesson,
+                    supporting_evidence.strip() if supporting_evidence else None,
+                    float(confidence),
+                    now,
+                    existing["id"],
+                ),
+            )
+            conn.commit()
             return int(existing["id"]), False
 
         now = datetime.datetime.now().isoformat()
