@@ -20,6 +20,7 @@ zo kunnen de twee elkaar nooit in de weg zitten.
 import asyncio
 import threading
 import sys
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -95,18 +96,48 @@ def build_action_keyboard(action_id: int, status: str) -> Optional[InlineKeyboar
     return None
 
 
+def _telegram_safe_action_detail(action: dict) -> str:
+    """Return enough detail for remote review without exporting file contents."""
+    action_type = action.get("action_type", "shell")
+    raw = action.get("action_detail", "") or ""
+    if action_type == "file_operation":
+        try:
+            detail = json.loads(raw)
+            operation = str(detail.get("operation", "unknown"))
+            path = str(detail.get("file_path", "unknown"))
+            content = detail.get("content", "")
+            if operation in {"write", "append"}:
+                return (
+                    f"[{operation}] {path} — file body hidden from Telegram "
+                    f"({len(content) if isinstance(content, str) else 0} characters); "
+                    "review locally before approval"
+                )
+            return f"[{operation}] {path}"
+        except Exception:
+            return "[file_operation] details hidden from Telegram; review locally"
+    if action_type == "browser_action":
+        try:
+            detail = json.loads(raw)
+            url = str(detail.get("url", ""))
+            selector = detail.get("click_selector")
+            return f"[navigate] {url}" + (f" [click] {selector}" if selector else "")
+        except Exception:
+            return "[browser_action] malformed details; review locally"
+    # Shell commands need exact remote review, but cap message size.
+    return raw[:1000] + ("… [truncated; review locally]" if len(raw) > 1000 else "")
+
+
 def format_action_message(action: dict, footer: str = "") -> str:
     """
-    Bouwt de HTML-tekst van het bericht op vanuit de actuele database-rij —
-    ALTIJD opnieuw opgebouwd vanuit de database, nooit door de vorige
-    berichttekst te 'parsen'. Dat maakt het bericht na een knop-tap altijd
-    correct, ongeacht eventuele race conditions tussen meerdere taps.
+    Build Telegram control text from DB state without exporting file bodies or
+    command output. Telegram is a control surface, not a data-export channel.
     """
+    safe_detail = _telegram_safe_action_detail(action)
     text = (
         f"⏳ <b>ACTION PROPOSAL #{action['id']}</b>\n\n"
         f"<b>Proposed By:</b> {escape_html(action['proposed_by'])}\n"
         f"<b>Description:</b> {escape_html(action['action_description'])}\n"
-        f"<b>Detail:</b> <code>{escape_html(action['action_detail'])}</code>\n"
+        f"<b>Detail:</b> <code>{escape_html(safe_detail)}</code>\n"
         f"<b>Status:</b> {escape_html(action['status'])}"
     )
     if footer:
@@ -122,11 +153,12 @@ def send_proposal_notification(
     Wordt aangeroepen vanuit tools/action_proposal_tool.py in plaats van de
     oude platte send_notification() aanroep.
     """
-    action = {
+    action = get_action_by_id(action_id) or {
         "id": action_id,
         "proposed_by": proposed_by,
         "action_description": action_description,
         "action_detail": action_detail,
+        "action_type": "unknown",
         "status": "pending",
     }
     message = format_action_message(action)
@@ -240,8 +272,10 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         elif result.get("success") and result.get("mode") == "dry_run":
             footer = f"🧪 <b>EXECUTED (DRY RUN)</b>\n{escape_html(result.get('detail', ''))}"
         elif result.get("success"):
-            stdout = escape_html((result.get("stdout") or "")[:300]) or "(no output)"
-            footer = f"⚡ <b>EXECUTED SUCCESSFULLY</b>\n{stdout}"
+            footer = (
+                "⚡ <b>EXECUTED SUCCESSFULLY</b>\n"
+                "Execution output is retained locally and is not copied to Telegram."
+            )
         else:
             footer = f"❌ <b>EXECUTION FAILED</b>: {escape_html(result.get('error', 'Unknown error'))}"
 
