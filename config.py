@@ -222,16 +222,15 @@ def validate_config() -> list[str]:
             "in only if you accept the transport risk."
         )
 
-    else:
-        try:
-            ollama_host = (urlparse(config.OLLAMA_BASE_URL).hostname or "").lower()
-            if ollama_host not in {"localhost", "127.0.0.1", "::1"}:
-                warnings.append(
-                    "OLLAMA_BASE_URL points to a non-local host. Executive prompts, "
-                    "memory, and research context may leave this machine."
-                )
-        except Exception:
-            pass
+    try:
+        ollama_host = (urlparse(config.OLLAMA_BASE_URL).hostname or "").lower()
+        if ollama_host not in {"localhost", "127.0.0.1", "::1"}:
+            warnings.append(
+                "OLLAMA_BASE_URL points to a non-local host. Executive prompts, "
+                "memory, and research context may leave this machine."
+            )
+    except Exception:
+        pass
 
     telemetry_value = os.getenv("CREWAI_DISABLE_TELEMETRY", "true").strip().lower()
     if telemetry_value not in {"true", "1", "yes", "on"}:
