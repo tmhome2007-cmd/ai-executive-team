@@ -124,7 +124,10 @@ def init_db() -> None:
             status TEXT NOT NULL DEFAULT 'pending',
             reviewed_at TEXT,
             action_type TEXT NOT NULL DEFAULT 'shell',
-            result_detail TEXT
+            result_detail TEXT,
+            source_decision_id INTEGER,
+            source_decision_sync_uuid TEXT,
+            source_phase TEXT
         )
     """)
 
