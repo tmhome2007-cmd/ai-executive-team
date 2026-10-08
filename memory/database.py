@@ -855,7 +855,7 @@ def create_executive_memory(
     source_action_id: int | None = None,
     fingerprint: str,
 ) -> tuple[int, bool]:
-    executive_key = executive_key.strip()
+    executive_key = executive_key.strip().lower().replace(" ", "_")
     lesson = lesson.strip()
     fingerprint = fingerprint.strip()
     if not executive_key or not lesson or not fingerprint:
@@ -864,6 +864,10 @@ def create_executive_memory(
         raise ValueError(f"Unsupported executive memory kind: {memory_kind}")
     if not (0.0 <= float(confidence) <= 1.0):
         raise ValueError("confidence must be between 0 and 1")
+    if len(lesson) > 2000:
+        raise ValueError("Executive memory lesson is too long")
+    if supporting_evidence is not None and len(supporting_evidence) > 4000:
+        supporting_evidence = supporting_evidence[:4000]
     _reject_secret_like_text(lesson, supporting_evidence)
 
     source_goal_sync_uuid = None
@@ -1018,7 +1022,8 @@ def create_decision_memories(decision_id: int, approval_status: str) -> list[int
 
     created_ids: list[int] = []
     for executive_key in [
-        key.strip() for key in (decision.get("agents_involved") or "").split(",")
+        key.strip().lower().replace(" ", "_")
+        for key in (decision.get("agents_involved") or "").split(",")
         if key.strip()
     ]:
         memory_id, created = create_executive_memory(
@@ -1074,7 +1079,8 @@ def create_action_outcome_memories(action_id: int) -> list[int]:
 
     created_ids: list[int] = []
     roles = [
-        key.strip() for key in (decision.get("agents_involved") or "").split(",")
+        key.strip().lower().replace(" ", "_")
+        for key in (decision.get("agents_involved") or "").split(",")
         if key.strip()
     ]
     for executive_key in roles:
