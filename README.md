@@ -63,6 +63,9 @@ Edit `.env` and set:
 | `CREWAI_DISABLE_TELEMETRY` | `true` by default for local-first privacy. |
 | `SYNC_HMAC_KEY` | Recommended dedicated shared key for authenticated cross-machine JSONL sync. If empty, the API secret is used. |
 | `ALLOW_UNSAFE_RAW_SHELL` | `False` by default. Live raw shell is not treated as safely sandboxed; structured actions are preferred. |
+| `BIND_HOST` | `127.0.0.1` by default. Keep the API loopback-only unless you deliberately deploy a protected remote transport. |
+| `ALLOW_INSECURE_REMOTE_HTTP` | `False` by default. A non-loopback plaintext HTTP bind fails startup unless you explicitly accept that transport risk. |
+| `TELEGRAM_INCLUDE_SENSITIVE_DETAILS` | `False` by default. Execution paths, commands, URLs, errors, and transport details remain local; proposal details needed for informed approval are still shown. |
 
 ### Verify the setup
 
@@ -71,9 +74,10 @@ python test_config.py
 python verify_system.py
 ```
 
-`verify_system.py` runs 10+ checks covering agent roster integrity, endpoint
-auth, the danger-pattern blocklist, workspace confinement, URL safety, and
-more. Run this after *any* code change, especially AI-generated ones — it has
+`verify_system.py` runs 140+ regression/security checks covering agent roster integrity,
+endpoint auth, state-machine gates, treasury authority, signed sync, privacy,
+workspace/file safety, browser/research SSRF boundaries, autonomous retries,
+executive memory evidence separation, meeting types, and more. Run this after *any* code change, especially AI-generated ones — it has
 repeatedly caught real regressions during development that looked fine at a
 glance.
 
@@ -172,7 +176,17 @@ This is the part worth understanding before flipping to Live mode:
   hit once, now structurally prevented).
 - **Auth**: sensitive read and write API surfaces require `X-API-Key`.
   The backend binds loopback by default and CORS is restricted to the local
-  dashboard origins.
+  dashboard origins. Invalid guesses are rate-limited without allowing an
+  attacker to lock out a request that presents the correct owner key.
+- **External-channel privacy**: Telegram remains useful for owner review, but
+  execution paths/commands/URLs/errors are retained locally by default.
+  Transport-library exception details are suppressed from logs.
+- **Filesystem race resistance**: structured file I/O walks the workspace using
+  descriptor-relative `O_NOFOLLOW` operations, rejects special/multi-hard-link
+  targets, caps reads/writes, and preserves atomic owner-only writes.
+- **Runtime artifact privacy**: database/backups/sync/logs/screenshots are
+  owner-only where supported; screenshot serving refuses symlink escapes and
+  rotated logs are hardened back to mode `0600`.
 - **Telegram owner identity**: action buttons are accepted only from the
   configured owner's private Telegram chat/user. Telegram uses the same
   treasury/goal-aware action-control functions as the API.
@@ -227,3 +241,13 @@ executive-dashboard/             — Next.js dashboard (separate npm project)
   default. The intended long-term execution boundary is a disposable local
   container/VM sandbox for side-effecting activities, while the executive
   control plane remains on the host.
+
+## Automated security checks
+
+GitHub Actions runs the **Security and Foundation Checks** workflow on pull
+requests and pushes to `main`. It uses the supported Python 3.12 runtime,
+compiles the backend, runs Bandit, audits Python dependencies with
+`pip-audit`, and runs the frontend lint/build plus `npm audit`. Dependabot
+also watches Python, npm, and GitHub Actions dependencies. CrewAI remains
+deliberately protected from automatic major/minor upgrades because runtime
+stability and tool behavior must be revalidated manually.
