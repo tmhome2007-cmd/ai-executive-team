@@ -56,6 +56,13 @@ class Config:
             "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", "false"
         ).lower() in ("true", "1", "yes")
     )
+    # Telegram is a third-party transport. Remote approve/execute is disabled
+    # unless the owner explicitly opts in after accepting that trust boundary.
+    TELEGRAM_ALLOW_REMOTE_CONTROL: bool = field(
+        default_factory=lambda: os.getenv(
+            "TELEGRAM_ALLOW_REMOTE_CONTROL", "false"
+        ).lower() in ("true", "1", "yes")
+    )
 
     # API Beveiliging Key
     API_SECRET_KEY: str = field(
@@ -99,6 +106,13 @@ class Config:
     ALLOW_INSECURE_REMOTE_HTTP: bool = field(
         default_factory=lambda: os.getenv(
             "ALLOW_INSECURE_REMOTE_HTTP", "false"
+        ).lower() in ("true", "1", "yes")
+    )
+    # Executive prompts, memory and research context can be highly sensitive.
+    # A non-loopback model endpoint therefore requires explicit opt-in.
+    ALLOW_REMOTE_LLM: bool = field(
+        default_factory=lambda: os.getenv(
+            "ALLOW_REMOTE_LLM", "false"
         ).lower() in ("true", "1", "yes")
     )
 
@@ -229,9 +243,18 @@ def validate_config() -> list[str]:
 
     try:
         ollama_host = (urlparse(config.OLLAMA_BASE_URL).hostname or "").lower()
-        if ollama_host not in {"localhost", "127.0.0.1", "::1"}:
+        if (
+            ollama_host not in {"localhost", "127.0.0.1", "::1"}
+            and not config.ALLOW_REMOTE_LLM
+        ):
+            errors.append(
+                "OLLAMA_BASE_URL points to a non-local host while ALLOW_REMOTE_LLM "
+                "is false. Executive prompts, memory, and research context would "
+                "leave this machine. Keep the model local or explicitly opt in."
+            )
+        elif ollama_host not in {"localhost", "127.0.0.1", "::1"}:
             warnings.append(
-                "OLLAMA_BASE_URL points to a non-local host. Executive prompts, "
+                "Remote LLM transport is explicitly enabled. Executive prompts, "
                 "memory, and research context may leave this machine."
             )
     except Exception:
