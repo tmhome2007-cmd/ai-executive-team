@@ -497,6 +497,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         update_action_status(action_id, "execution_failed")
         error_msg = f"Malformed browser_action action_detail: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
+        mark_action_outcome_execution_failed(action_id, error_msg)
         return {
             "success": False,
             "action_id": action_id,
