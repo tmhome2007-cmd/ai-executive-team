@@ -1053,10 +1053,14 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     # worden overgeslagen.
                     local_action_id = action_match["id"]
                     cursor.execute(
-                        "SELECT 1 FROM action_outcomes WHERE action_sync_uuid = ?",
+                        "SELECT sync_uuid FROM action_outcomes WHERE action_sync_uuid = ?",
                         (row.get("action_sync_uuid"),),
                     )
-                    if cursor.fetchone():
+                    existing_outcome = cursor.fetchone()
+                    if existing_outcome:
+                        if existing_outcome["sync_uuid"] == sync_uuid_value:
+                            skipped += 1
+                            continue
                         importable_fields = [
                             key for key in row.keys()
                             if key not in {"action_id", "action_sync_uuid"}
