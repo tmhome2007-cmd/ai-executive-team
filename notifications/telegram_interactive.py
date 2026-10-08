@@ -3,10 +3,9 @@ notifications/telegram_interactive.py
 
 Maakt Telegram-notificaties over voorgestelde acties interactief: elk bericht
 krijgt echte, aantikbare Approve / Reject / Execute knoppen, die rechtstreeks
-dezelfde onderliggende functies aanroepen die de dashboard-knoppen ook
-gebruiken (update_action_status, execute_action) — geen aparte, afwijkende
-logica, gewoon een ander aanroeppunt voor exact hetzelfde gedrag, inclusief
-alle veiligheidscontroles (danger patterns, workspace confinement) uit
+dezelfde canonieke treasury-/execution-gates aanroepen als het dashboard —
+geen aparte statusovergangen of afwijkende businesslogica. Daardoor gelden
+dezelfde goal-, treasury- en execution-controles (danger patterns, workspace confinement) uit
 workflows/action_executor.py.
 
 BELANGRIJK — eigen thread, eigen event loop:
@@ -101,11 +100,16 @@ def format_action_message(action: dict, footer: str = "") -> str:
     berichttekst te 'parsen'. Dat maakt het bericht na een knop-tap altijd
     correct, ongeacht eventuele race conditions tussen meerdere taps.
     """
+    detail_line = (
+        f"<b>Detail:</b> <code>{escape_html(action['action_detail'])}</code>\n"
+        if config.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+        else "<b>Detail:</b> <i>hidden for privacy — inspect the local dashboard</i>\n"
+    )
     text = (
         f"⏳ <b>ACTION PROPOSAL #{action['id']}</b>\n\n"
         f"<b>Proposed By:</b> {escape_html(action['proposed_by'])}\n"
         f"<b>Description:</b> {escape_html(action['action_description'])}\n"
-        f"<b>Detail:</b> <code>{escape_html(action['action_detail'])}</code>\n"
+        f"{detail_line}"
         f"<b>Status:</b> {escape_html(action['status'])}"
     )
     if footer:
