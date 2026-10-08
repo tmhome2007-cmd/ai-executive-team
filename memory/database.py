@@ -891,11 +891,16 @@ def get_treasury_summary(currency: str | None = None) -> dict:
         )
         balances = {row["currency"]: float(row["cash_balance"] or 0) for row in cursor.fetchall()}
 
+        reservation_where = (
+            "WHERE currency = ? AND status = 'active'"
+            if currency
+            else "WHERE status = 'active'"
+        )
         cursor.execute(
             f"""
             SELECT currency, SUM(amount) AS reserved
             FROM treasury_reservations
-            {'WHERE currency = ? AND status = \'active\'' if currency else "WHERE status = 'active'"}
+            {reservation_where}
             GROUP BY currency
             """,
             params,
@@ -993,6 +998,159 @@ def reserve_action_budget(action_id: int) -> dict | None:
     return get_treasury_reservation_for_action(action_id)
 
 
+def approve_action_with_treasury(action_id: int) -> dict:
+    """
+    Atomically approves a pending action and, when an expected monetary cost
+    exists, reserves that amount from the matching currency treasury.
+    """
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute(
+            """
+            SELECT q.id, q.status, q.sync_uuid, q.source_decision_id,
+                   q.source_decision_sync_uuid,
+                   o.expected_cost_amount, o.currency
+            FROM action_queue q
+            LEFT JOIN action_outcomes o ON o.action_id = q.id
+            WHERE q.id = ?
+            """,
+            (action_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            conn.rollback()
+            raise ValueError("Action not found")
+        action = dict(row)
+        if action["status"] != "pending":
+            conn.rollback()
+            raise ValueError(f"Action cannot be approved from status '{action['status']}'")
+
+        amount = action.get("expected_cost_amount")
+        currency = action.get("currency")
+        reservation_id = None
+
+        if amount is not None and float(amount) > 0:
+            if not currency:
+                conn.rollback()
+                raise ValueError("Paid actions require currency before approval")
+            currency = _normalize_currency(currency)
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN entry_type IN ('funding', 'refund') THEN amount
+                        WHEN entry_type = 'spend' THEN -amount
+                        WHEN entry_type = 'adjustment' THEN amount
+                        ELSE 0
+                    END
+                ), 0) AS cash_balance
+                FROM treasury_entries
+                WHERE currency = ?
+                """,
+                (currency,),
+            )
+            cash = float(cursor.fetchone()["cash_balance"] or 0)
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(amount), 0) AS reserved
+                FROM treasury_reservations
+                WHERE currency = ? AND status = 'active'
+                """,
+                (currency,),
+            )
+            reserved = float(cursor.fetchone()["reserved"] or 0)
+            available = cash - reserved
+            if available + 1e-9 < float(amount):
+                conn.rollback()
+                raise ValueError(
+                    f"Insufficient available treasury funds: need {float(amount):.2f} {currency}, "
+                    f"available {available:.2f} {currency}"
+                )
+
+            cursor.execute(
+                """
+                INSERT INTO treasury_reservations (
+                    timestamp, amount, currency, status,
+                    source_action_id, source_action_sync_uuid,
+                    source_decision_id, source_decision_sync_uuid, sync_uuid
+                ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+                """,
+                (
+                    now, float(amount), currency,
+                    action_id, action.get("sync_uuid"),
+                    action.get("source_decision_id"),
+                    action.get("source_decision_sync_uuid"),
+                    str(uuid.uuid4()),
+                ),
+            )
+            reservation_id = cursor.lastrowid
+
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'approved', reviewed_at = ?
+            WHERE id = ? AND status = 'pending'
+            """,
+            (now, action_id),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            raise ValueError("Action approval race detected")
+
+        conn.commit()
+        return {
+            "action_id": action_id,
+            "status": "approved",
+            "reservation_id": reservation_id,
+            "reserved_amount": float(amount) if reservation_id else 0.0,
+            "currency": currency if reservation_id else None,
+        }
+
+
+def reject_action_with_treasury(action_id: int) -> dict:
+    """Atomically rejects an action and releases any active reservation."""
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute("SELECT status FROM action_queue WHERE id = ?", (action_id,))
+        row = cursor.fetchone()
+        if row is None:
+            conn.rollback()
+            raise ValueError("Action not found")
+        if row["status"] not in {"pending", "approved"}:
+            conn.rollback()
+            raise ValueError(f"Action cannot be rejected from status '{row['status']}'")
+
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'rejected', reviewed_at = ?
+            WHERE id = ? AND status IN ('pending', 'approved')
+            """,
+            (now, action_id),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            raise ValueError("Action rejection race detected")
+
+        cursor.execute(
+            """
+            UPDATE treasury_reservations
+            SET status = 'released', released_at = ?
+            WHERE source_action_id = ? AND status = 'active'
+            """,
+            (now, action_id),
+        )
+        released = cursor.rowcount == 1
+        conn.commit()
+        return {"action_id": action_id, "status": "rejected", "reservation_released": released}
+
+
 def release_action_budget(action_id: int) -> bool:
     now = datetime.datetime.now().isoformat()
     with get_connection() as conn:
@@ -1051,16 +1209,18 @@ def record_action_spend(action_id: int, amount: float, currency: str, note: str 
             f"needed, available {summary['available']:.2f} {currency}"
         )
 
-    entry_id = add_treasury_entry(
-        "spend",
-        float(amount),
-        currency,
-        note or f"Actual cost for action #{action_id}",
-        source_action_id=action_id,
-        source_action_sync_uuid=action.get("sync_uuid"),
-        source_decision_id=action.get("source_decision_id"),
-        source_decision_sync_uuid=action.get("source_decision_sync_uuid"),
-    )
+    entry_id = None
+    if float(amount) > 0:
+        entry_id = add_treasury_entry(
+            "spend",
+            float(amount),
+            currency,
+            note or f"Actual cost for action #{action_id}",
+            source_action_id=action_id,
+            source_action_sync_uuid=action.get("sync_uuid"),
+            source_decision_id=action.get("source_decision_id"),
+            source_decision_sync_uuid=action.get("source_decision_sync_uuid"),
+        )
 
     now = datetime.datetime.now().isoformat()
     if reservation and reservation["status"] == "active":
@@ -1069,10 +1229,10 @@ def record_action_spend(action_id: int, amount: float, currency: str, note: str 
             cursor.execute(
                 """
                 UPDATE treasury_reservations
-                SET status = 'consumed', consumed_at = ?
+                SET status = ?, consumed_at = ?
                 WHERE source_action_id = ? AND status = 'active'
                 """,
-                (now, action_id),
+                ("consumed" if float(amount) > 0 else "released", now, action_id),
             )
             conn.commit()
 
