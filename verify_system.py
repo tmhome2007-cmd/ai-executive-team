@@ -776,14 +776,27 @@ except Exception as e:
 try:
     with open("workflows/meeting.py", "r", encoding="utf-8") as f:
         meeting_content_29 = f.read()
+    with open("workflows/meeting_types.py", "r", encoding="utf-8") as f:
+        meeting_types_content_29 = f.read()
 
-    required_evidence_phrases = [
+    required_meeting_phrases = [
         "Unknown — evidence required",
         "Never invent or present as factual",
         "Do not inherit an unsupported claim",
-        "Evidence needed before committing money or taking real-world action",
+        "Required response structure:",
     ]
-    missing = [p for p in required_evidence_phrases if p not in meeting_content_29]
+    missing = [
+        p for p in required_meeting_phrases
+        if p not in meeting_content_29
+    ]
+    if "Evidence needed before committing money or taking real-world action" not in meeting_content_29:
+        # Phase 10 intentionally replaced the old generic section with
+        # centralized meeting-type-specific response contracts.
+        if (
+            '"response_structure"' not in meeting_types_content_29
+            or "Evidence-section rule:" not in meeting_types_content_29
+        ):
+            missing.append("centralized meeting-type evidence/output structure")
 
     if not missing:
         log_pass("executive meeting prompts enforce evidence/assumption separation and reject inherited unsupported claims")
