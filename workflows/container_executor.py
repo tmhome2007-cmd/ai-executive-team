@@ -30,8 +30,11 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
     # host services (including Docker itself) to otherwise isolated code.
     # Check before launch; a dedicated workspace with no concurrent writers
     # remains a deployment requirement to avoid TOCTOU races.
+    def _walk_failed(exc: OSError) -> None:
+        raise ContainerExecutionError("Workspace traversal denied") from exc
+
     scanned = 0
-    for directory, subdirs, files in os.walk(root, followlinks=False):
+    for directory, subdirs, files in os.walk(root, followlinks=False, onerror=_walk_failed):
         for name in subdirs + files:
             scanned += 1
             if scanned > 10000:
