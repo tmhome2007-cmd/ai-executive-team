@@ -29,6 +29,7 @@ from memory.database import (
 )
 from notifications.telegram_bot import send_notification, escape_html
 from workflows.meeting import run_executive_meeting
+from config import config
 
 
 _REASONING_EVENT_TYPES = {
@@ -214,8 +215,18 @@ def classify_goal_followups(
 
 def _followup_meeting_prompt(goal: dict, event: dict, lineage: dict) -> str:
     recent_decision = None
+    source_action = None
     if lineage.get("decisions"):
         recent_decision = lineage["decisions"][-1].get("decision")
+        wanted_action_id = event.get("source_action_id")
+        if wanted_action_id is not None:
+            for decision_lineage in lineage["decisions"]:
+                for action in decision_lineage.get("actions", []):
+                    if action.get("id") == wanted_action_id:
+                        source_action = action
+                        break
+                if source_action is not None:
+                    break
 
     return (
         "AUTONOMOUS FOLLOW-UP — TOOL-FREE REASONING ONLY\n\n"
@@ -231,6 +242,18 @@ def _followup_meeting_prompt(goal: dict, event: dict, lineage: dict) -> str:
             f"Current approval state: {recent_decision.get('approval_status')}\n"
             f"Current preparation state: {recent_decision.get('preparation_status')}\n\n"
             if recent_decision else ""
+        )
+        + (
+            f"Measured source action: #{source_action['id']} — "
+            f"{source_action.get('action_description') or 'unnamed action'}\n"
+            f"Expected outcome: {source_action.get('expected_outcome') or 'unknown'}\n"
+            f"Expected impact: {source_action.get('expected_impact') or 'unknown'}\n"
+            f"Actual outcome: {source_action.get('actual_outcome') or 'unknown'}\n"
+            f"Actual impact: {source_action.get('actual_impact') or 'unknown'}\n"
+            f"Outcome status: {source_action.get('outcome_status') or 'unknown'}\n"
+            f"Next recommendation already recorded: "
+            f"{source_action.get('next_recommendation') or 'none'}\n\n"
+            if source_action else ""
         )
         + "Produce a concise follow-up recommendation. This meeting has NO tools. "
         "Do not claim any action was executed, do not invent URLs/resources/costs, "
@@ -313,7 +336,7 @@ async def run_autonomous_followup() -> dict:
                     agents_involved=meeting.get("participants", ["cso", "coo", "ceo"]),
                     task_description=prompt,
                     decision_outcome=meeting.get("final_decision", ""),
-                    sandbox_mode=True,
+                    sandbox_mode=config.SANDBOX_MODE,
                     goal_id=goal["id"],
                 )
                 link_followup_generated_decision(event_id, decision_id)
