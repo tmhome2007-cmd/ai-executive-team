@@ -491,13 +491,15 @@ def action_provenance_scope(
     source decision. The previous context is restored even when CrewAI raises.
     """
     previous = getattr(_ACTION_PROVENANCE_CONTEXT, "value", None)
-    _ACTION_PROVENANCE_CONTEXT.value = {
+    scoped_value = {
         "decision_id": decision_id,
         "decision_sync_uuid": decision_sync_uuid,
         "phase": phase,
+        "created_action_ids": [],
     }
+    _ACTION_PROVENANCE_CONTEXT.value = scoped_value
     try:
-        yield
+        yield scoped_value
     finally:
         if previous is None:
             try:
@@ -588,6 +590,10 @@ def propose_action(
             ),
         )
         conn.commit()
+
+        if provenance is not None:
+            provenance.setdefault("created_action_ids", []).append(action_id)
+
         return action_id
 
 
