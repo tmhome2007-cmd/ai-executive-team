@@ -90,10 +90,33 @@ interface ResourceRequest {
   source_phase?: string | null;
 }
 
+interface TreasuryLineageEntry {
+  id: number;
+  timestamp: string;
+  entry_type: string;
+  amount: number;
+  currency: string;
+  note?: string | null;
+  source_action_id?: number | null;
+}
+
+interface TreasuryLineageReservation {
+  id: number;
+  timestamp: string;
+  amount: number;
+  currency: string;
+  status: string;
+  source_action_id?: number | null;
+}
+
 interface DecisionLineage {
   decision: DecisionHistoryItem;
   actions: PendingAction[];
   resource_requests: ResourceRequest[];
+  treasury?: {
+    entries: TreasuryLineageEntry[];
+    reservations: TreasuryLineageReservation[];
+  };
 }
 
 interface TreasuryCurrencySummary {
@@ -1839,6 +1862,34 @@ export default function DashboardPage() {
                           ))}
                         </div>
                       )}
+                      {((lineageResults[item.id].treasury?.entries?.length || 0) > 0 ||
+                        (lineageResults[item.id].treasury?.reservations?.length || 0) > 0) && (
+                        <div className="space-y-2 border-t border-gray-800 pt-3">
+                          <div className="text-xs font-semibold text-emerald-300">Treasury</div>
+                          {lineageResults[item.id].treasury?.reservations?.map((reservation) => (
+                            <div key={`reservation-${reservation.id}`} className="border border-emerald-900/70 rounded p-3 text-xs">
+                              <div className="text-emerald-300">
+                                Reservation #{reservation.id} · {reservation.status}
+                              </div>
+                              <div className="text-gray-300 mt-1">
+                                {reservation.amount} {reservation.currency}
+                                {reservation.source_action_id ? ` · Action #${reservation.source_action_id}` : ""}
+                              </div>
+                            </div>
+                          ))}
+                          {lineageResults[item.id].treasury?.entries?.map((entry) => (
+                            <div key={`entry-${entry.id}`} className="border border-emerald-900/70 rounded p-3 text-xs">
+                              <div className="text-emerald-300">
+                                Ledger #{entry.id} · {entry.entry_type}
+                              </div>
+                              <div className="text-gray-300 mt-1">
+                                {entry.amount} {entry.currency}
+                                {entry.source_action_id ? ` · Action #${entry.source_action_id}` : ""}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1946,7 +1997,10 @@ export default function DashboardPage() {
                     action={item}
                     apiKey={apiKey || ""}
                     onSaved={() => {
-                      if (apiKey) fetchActionHistory(apiKey);
+                      if (apiKey) {
+                        fetchActionHistory(apiKey);
+                        fetchTreasury(apiKey);
+                      }
                     }}
                   />
                   {item.reviewed_at && (
