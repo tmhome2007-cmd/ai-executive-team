@@ -62,7 +62,7 @@ Edit `.env` and set:
 | `ALLOWED_BROWSER_DOMAINS` | Optional. Comma-separated domain allowlist for browser actions (e.g. `wikipedia.org,github.com`). Empty = any public http/https domain allowed; internal/private addresses remain blocked. |
 | `CREWAI_DISABLE_TELEMETRY` | `true` by default for local-first privacy. |
 | `SYNC_HMAC_KEY` | Recommended dedicated shared key for authenticated cross-machine JSONL sync. If empty, the API secret is used. |
-| `ALLOW_UNSAFE_RAW_SHELL` | `False` by default. Live raw shell is not treated as safely sandboxed; structured actions are preferred. |
+| `ALLOW_UNSAFE_RAW_SHELL` | `False` by default. Live shell uses the isolated Docker worker if explicitly enabled; Docker must be installed with alpine:3.20 pre-pulled. |
 | `BIND_HOST` | `127.0.0.1` by default. Keep the API loopback-only unless you deliberately deploy a protected remote transport. |
 | `ALLOW_INSECURE_REMOTE_HTTP` | `False` by default. A non-loopback plaintext HTTP bind fails startup unless you explicitly accept that transport risk. |
 | `TELEGRAM_INCLUDE_SENSITIVE_DETAILS` | `False` by default. Action descriptions/details, paths, commands, URLs, errors, and transport details remain local unless explicitly enabled. |
@@ -131,7 +131,7 @@ require your explicit approval before anything happens:
 
 | Capability | Tool | Who has it | What it does |
 |---|---|---|---|
-| Shell commands | `propose_action` | COO, CTO | Proposal path retained for compatibility/testing. Live raw shell is blocked by default unless the owner explicitly opts into residual host-level risk. |
+| Shell commands | `propose_action` | COO, CTO | Proposal path retained for compatibility/testing. Live shell is disabled by default; opt-in requires a constrained, network-disabled Docker worker. |
 | File read/write/append | `propose_file_operation` | COO, CFO, CTO, General Counsel | Structured file I/O — no shell involved, safer than a raw command |
 | Browser navigate + click | `propose_browser_action` | COO | Navigates to a URL and optionally clicks one element, screenshots the result |
 
@@ -153,9 +153,9 @@ This is the part worth understanding before flipping to Live mode:
   `WORKSPACE_ROOT`; writes are atomic and owner-only. Raw shell path parsing
   remains heuristic defense-in-depth and is therefore **not** considered a
   security sandbox.
-- **Live raw shell default-off**: raw shell can access OS resources in ways
+- **Live raw shell default-off**: host shell could access OS resources in ways
   string/path inspection cannot reliably model. Live shell execution fails
-  closed unless the owner explicitly sets `ALLOW_UNSAFE_RAW_SHELL=True`.
+  closed unless the owner explicitly sets `ALLOW_UNSAFE_RAW_SHELL=True`; enabled commands run only inside the constrained Docker worker.
 - **URL/network safety**: browser actions validate every HTTP(S) request,
   including redirects and subresources, block service workers/downloads, and
   reject loopback/private/link-local targets. Research revalidates redirects,
@@ -243,7 +243,7 @@ executive-dashboard/             — Next.js dashboard (separate npm project)
 - Fine-tuning (originally planned) requires an NVIDIA GPU and hasn't been
   pursued given Apple Silicon hardware — current quality relies on
   prompt/backstory engineering and `max_iter` tuning instead.
-- Raw shell is not a full sandbox and is disabled for live execution by
+- Shell execution remains default-off; when enabled, it uses Docker rather than the host process.
   default. The intended long-term execution boundary is a disposable local
   container/VM sandbox for side-effecting activities, while the executive
   control plane remains on the host.
