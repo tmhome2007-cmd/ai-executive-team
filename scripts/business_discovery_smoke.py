@@ -22,7 +22,7 @@ def main():
         from main import app
         client = TestClient(app)
         assert client.get('/business-discovery').status_code == 401
-        with patch('workflows.business_discovery._reason', return_value='**Findings**\nSynthetic constraints only.\n**Unknowns**\nDemand unknown.\n**Recommended next step**\nDraft a private sample <script>alert(1)</script>.'), sync_playwright() as runtime:
+        with patch('workflows.business_discovery._reason', return_value='**Findings**\nSynthetic constraints only.\n**Unknowns**\nDemand unknown.\n**Recommended next step**\nDraft a private sample <script>alert(1)</script>.') as reason, sync_playwright() as runtime:
             browser = runtime.chromium.launch()
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
             page.set_default_timeout(10000)
@@ -44,6 +44,12 @@ def main():
             for checkbox in page.locator('input[type=checkbox]:visible').all():
                 checkbox.check()
             page.get_by_role('button', name='Save research brief', exact=True).click()
+            reason.side_effect = ValueError('Synthetic generation failure')
+            page.get_by_role('button', name='Compare options with local AI', exact=True).click()
+            page.get_by_text('Synthetic generation failure', exact=True).wait_for()
+            page.get_by_role('button', name='Refresh record', exact=True).click()
+            page.get_by_role('button', name='Create new attempt from this brief', exact=True).click()
+            reason.side_effect = None
             page.get_by_role('button', name='Compare options with local AI', exact=True).click()
             page.get_by_label('Chosen option', exact=True).fill('Synthetic documentation')
             page.get_by_label('Practice deliverable', exact=True).fill('Draft a synthetic guide, with no external action.')

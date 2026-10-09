@@ -8,16 +8,25 @@ from workflows.execution_lock import EXECUTION_LOCK
 from workflows.step_checkpoints import run_json_step
 
 
-def _reason(prompt):
+def _local_agent():
     from agents.executive_agents import EXECUTIVE_AGENTS_NO_TOOLS
     from urllib.parse import urlsplit
-    llm = EXECUTIVE_AGENTS_NO_TOOLS['cso'].llm
-    # Paid/remote reasoning is outside this workflow even if globally enabled.
+    agent = EXECUTIVE_AGENTS_NO_TOOLS['cso']
+    llm = agent.llm
+    # CrewAI normalizes ollama/model into provider=ollama, model=model.
+    provider = getattr(llm, 'provider', None)
+    is_ollama = provider == 'ollama' or (not provider and str(getattr(llm, 'model', '')).startswith('ollama/'))
     base = urlsplit(str(getattr(llm, 'base_url', '')))
-    if not str(getattr(llm, 'model', '')).startswith('ollama/') or base.scheme != 'http' or base.hostname not in {'localhost', '127.0.0.1', '::1'} or base.username or base.password or base.query or base.fragment:
+    if not is_ollama or base.scheme != 'http' or base.hostname not in {'localhost', '127.0.0.1', '::1'} or base.username or base.password or base.query or base.fragment:
         raise ValueError('Business discovery requires the configured local Ollama model')
+    return agent
+
+
+def _reason(prompt):
+    agent = _local_agent()
+    llm = agent.llm
     from workflows.output_quality import QUALITY_POLICY
-    result = llm.call(messages=[{'role': 'user', 'content': QUALITY_POLICY + '\nRole: ' + EXECUTIVE_AGENTS_NO_TOOLS['cso'].role + '\nPersona: ' + EXECUTIVE_AGENTS_NO_TOOLS['cso'].backstory[:4000] + '\n' + prompt}])
+    result = llm.call(messages=[{'role': 'user', 'content': QUALITY_POLICY + '\nRole: ' + agent.role + '\nPersona: ' + agent.backstory[:4000] + '\n' + prompt}])
     if not isinstance(result, str) or not result.strip():
         raise ValueError('Local model returned no text')
     return result
@@ -28,6 +37,8 @@ def run_stage(ident, expected_version, stage):
     evidence = source_context(brief['source_ids'])
     if any(item['verification'] == 'disputed' or item['freshness'] == 'stale' for item in [get_source(i) for i in brief['source_ids']]):
         raise ValueError('Resolve disputed/stale sources before generating work')
+    # Configuration failures leave the brief editable, without claiming a step.
+    _local_agent()
     brief = claim_stage(ident, expected_version, stage)
     prompt = ('AI-operated company: owner oversight, no assumed owner professional skills. €0 spend and €0 loss. '
               'No tools, external commitments, customer contact, publishing or launch permission. '

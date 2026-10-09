@@ -111,6 +111,20 @@ class DiscoveryTests(unittest.TestCase):
                 run_stage(self.brief['id'], 1, 'research')
         self.assertEqual(get_brief(self.brief['id'])['state'], 'needs_review')
 
+    def test_normalized_ollama_provider_and_preflight(self):
+        from types import SimpleNamespace
+        from workflows.business_discovery import _local_agent
+        local = SimpleNamespace(llm=SimpleNamespace(provider='ollama', model='llama3.1', base_url='http://localhost:11434'))
+        with patch.dict('agents.executive_agents.EXECUTIVE_AGENTS_NO_TOOLS', {'cso': local}):
+            self.assertIs(_local_agent(), local)
+        remote_provider = SimpleNamespace(llm=SimpleNamespace(provider='openai', model='ollama/test', base_url='http://localhost:11434'))
+        with patch.dict('agents.executive_agents.EXECUTIVE_AGENTS_NO_TOOLS', {'cso': remote_provider}), patch('workflows.business_discovery._reason') as reason:
+            with self.assertRaises(ValueError):
+                run_stage(self.brief['id'], 1, 'research')
+            reason.assert_not_called()
+        self.assertEqual(get_brief(self.brief['id'])['state'], 'draft')
+        self.assertEqual(get_brief(self.brief['id'])['version'], 1)
+
     def test_api_forbids_budget_and_launch_fields(self):
         from foundation_api import BusinessBriefRequest, BusinessReview
         from pydantic import ValidationError
