@@ -1667,7 +1667,7 @@ export default function DashboardPage() {
           </div>
         </section>
         <div hidden={view !== "office"}>
-          <VirtualOffice profiles={profiles} onRecords={() => setView("records")} decisions={history} actions={[...pendingActions, ...actionHistory.filter(a => !pendingActions.some(p => p.id === a.id))]}
+          <VirtualOffice apiKey={apiKey} onAuthFailure={handleAuthFailure} profiles={profiles} onRecords={() => setView("records")} decisions={history} actions={[...pendingActions, ...actionHistory.filter(a => !pendingActions.some(p => p.id === a.id))]}
             resources={resourceRequests} followups={followups}
             available={{ decisions: !!loadedSections.decisions && !loadError,
               actions: !!loadedSections.pendingActions && !!loadedSections.actionHistory && !sectionErrors.pendingActions && !sectionErrors.actionHistory,

@@ -228,8 +228,8 @@ def create_roadmap_board():
         for item in ROADMAP_TASKS:
             cursor.execute("""INSERT INTO agile_tasks(board_id, title, description, acceptance_criteria, assignee,
                 priority, status, blocked_reason, completion_note, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'owner', ?, ?, '', '', ?, ?)""",
+                VALUES (?, ?, ?, ?, 'owner', ?, ?, '', ?, ?, ?)""",
                 (board_id, item['title'], item['description'], item['acceptance_criteria'], item['priority'],
-                 'review' if item['title'].startswith(('BE-01', 'BE-02', 'BE-03', 'BE-04', 'BE-05', 'BE-06', 'BE-07', 'BE-08', 'BE-09', 'BE-10', 'BE-11')) else 'backlog', now, now))
+                 'done', 'Owner accepted Sprint 1 on 9 October 2026; appearance and voice refinements deferred to Sprint 2.', now, now))
         conn.commit()
         return dict(conn.execute('SELECT * FROM agile_boards WHERE id = ?', (board_id,)).fetchone())

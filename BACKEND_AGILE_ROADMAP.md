@@ -9,15 +9,15 @@ or spending authority. Existing approvals, capabilities and treasury gates remai
 
 | Ready | In progress | Review | Done |
 |---|---|---|---|
-| — | — | BE-01 Development and company task boards | Existing foundation audit and local checks |
-| — | — | BE-02 Append-only activity events | Goals, treasury, resources and outcome tracking |
-| — | — | BE-03 Experiment records and observations | Decision/action lineage, follow-ups and executive memory |
-| — | — | — | Meeting types, dashboard v2, virtual office v1 |
-| — | — | — | Published executive contributions and activity timeline v1 |
+| — | — | — | BE-01–14: owner accepted Sprint 1 on 9 October 2026 |
 
-Scope of done items is their verified current implementation, not every future extension.
-One implementation item at a time. Move to Review only after code and appropriate checks
-pass; Done requires owner review. Dates for future sprints are not committed.
+- [x] BE-12 Face, body and voice profiles — owner tested and accepted.
+- [x] BE-13 Departments and employee lifecycle — owner tested and accepted.
+- [x] BE-14 Fictional personal lives — owner tested and accepted.
+
+The owner approved merge after local review. Gender-aware character presentation and
+higher-quality voices are accepted follow-up work for Sprint 2, at low priority.
+The sprint expanded beyond its original BE-01–03 scope by explicit owner requests.
 
 ## Backlog and acceptance criteria
 
@@ -128,3 +128,28 @@ edits. Owner review is still required before marking them Done.
 See [OPERATING_FOUNDATION.md](OPERATING_FOUNDATION.md) for scope and verification.
 External observation providers, unrestricted autonomous spending and the 3D office
 are future work. These features do not enable production deployment.
+
+## Character, workforce and simulation sprint — 9 October 2026
+
+BE-12–14 are in Review on `codex/identity-organization-simulation`. New development
+board templates include these as Review; existing boards keep owner edits.
+
+- BE-12: versioned visual/body/voice preferences, Kai's requested appearance, 2D office
+  portraits/full-body previews and manual local browser voice selection.
+- BE-13: departments, floor placement, adult virtual employees, capacity/lifecycle,
+  transactional Company-task allocations and a bounded office roster.
+- BE-14: disabled-by-default fictional personal lives, chronological relationship
+  transitions, marriage/divorce history and isolation from business evidence/authority.
+
+See [CHARACTERS_ORGANIZATION_SIMULATION.md](CHARACTERS_ORGANIZATION_SIMULATION.md),
+[LOCAL_COMMANDS.md](LOCAL_COMMANDS.md) and [SPRINT_1_RETROSPECTIVE.md](SPRINT_1_RETROSPECTIVE.md).
+A 3D animation engine, imported assets, voice cloning and autonomous employee execution
+remain future implementation work. These features are not production deployment clearance.
+
+## Owner acceptance — 9 October 2026
+
+BE-12–14 accepted after owner testing; merge authorized. The owner reported that shared
+avatar rendering makes female characters appear male and browser voices have poor
+quality. Both are low-priority Sprint 2 improvements, not silently discarded findings.
+See [SPRINT_2_PLAN.md](SPRINT_2_PLAN.md) for proposed priorities and acceptance examples.
+Earlier Review entries above are historical implementation logs.

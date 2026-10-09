@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import PeopleSimulation from "./people-simulation";
 import OperatingFoundation from "./operating-foundation";
 import type { ExecutiveProfile } from "./company-records";
 const API = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
-const tabs = ["Evidence", "Plans", "Discussion rounds", "Access inventory", "Operations"] as const;
+const tabs = ["Evidence", "Plans", "Discussion rounds", "Access inventory", "Operations", "People & simulation"] as const;
 type Tab = typeof tabs[number];
 interface Source { id: number; title: string; summary: string; reference: string; observed_at: string; expires_at: string | null; freshness: string; verification: string; version: number }
 interface Work { id: number; agile_task_id: number; assignee: string; status: string; note: string; decision_id: number | null }
@@ -111,6 +112,7 @@ export default function OrganizationalWork({ apiKey, profiles, onAuthFailure }: 
       <form className="command-card grid gap-3 md:grid-cols-2" onSubmit={e => submit(e, d => request(`/actions/${Number(d.get("action"))}/capabilities`, { requirements: [{ grant_id: Number(d.get("grant")), scope: d.get("scope") }] }))}><h3 className="md:col-span-2">Require access for a pending action</h3><Field name="action" label="Pending action ID" type="number" /><Field name="grant" label="Required access ID" type="number" /><Field name="scope" label="Required action scope" /><Button disabled={busy || loading}>Bind action access requirement</Button></form>
     </>}
     {tab === "Operations" && <OperatingFoundation apiKey={apiKey} onAuthFailure={onAuthFailure} />}
-    {more && tab !== "Operations" && tab !== "Discussion rounds" && <Button disabled={busy || loading} onClick={() => setOffset(o => o + 50)}>Load older work records</Button>}
+    {tab === "People & simulation" && <PeopleSimulation apiKey={apiKey} profiles={profiles} onAuthFailure={onAuthFailure} />}
+    {more && tab !== "People & simulation" && tab !== "Operations" && tab !== "Discussion rounds" && <Button disabled={busy || loading} onClick={() => setOffset(o => o + 50)}>Load older work records</Button>}
   </section>;
 }

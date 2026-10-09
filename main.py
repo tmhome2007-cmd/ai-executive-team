@@ -2206,7 +2206,7 @@ if __name__ == "__main__":
 
 @app.get("/executives/profiles", dependencies=[Depends(verify_api_key)])
 def executive_profiles():
-    return get_executive_profiles()
+    return get_executive_profiles(include_presentation=True)
 
 
 @app.get("/decisions/{decision_id}/conversations", dependencies=[Depends(verify_api_key)])
