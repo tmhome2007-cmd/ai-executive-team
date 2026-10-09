@@ -20,6 +20,7 @@ zo kunnen de twee elkaar nooit in de weg zitten.
 import asyncio
 import threading
 import sys
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -33,8 +34,13 @@ if str(project_root) not in sys.path:
 
 from config import config
 from notifications.telegram_bot import send_notification_with_keyboard, escape_html
-from memory.database import get_action_by_id, transition_action_status
-from workflows.action_executor import execute_action
+from memory.database import get_action_by_id
+from workflows.action_control import (
+    ActionControlError,
+    approve_action_control,
+    reject_action_control,
+    execute_action_control,
+)
 from logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -77,6 +83,8 @@ def build_action_keyboard(action_id: int, status: str) -> Optional[InlineKeyboar
     - approved   -> Execute / Reject
     - alles anders (rejected/executed/blocked/...) -> geen knoppen (eindstatus)
     """
+    if not getattr(config, "TELEGRAM_ALLOW_REMOTE_CONTROL", False):
+        return None
     if status == "pending":
         return InlineKeyboardMarkup([[
             InlineKeyboardButton("✅ Approve", callback_data=f"approve:{action_id}"),
@@ -90,18 +98,64 @@ def build_action_keyboard(action_id: int, status: str) -> Optional[InlineKeyboar
     return None
 
 
+def _telegram_safe_action_detail(action: dict) -> str:
+    """Keep third-party transport details local unless explicitly opted in."""
+    action_type = action.get("action_type", "shell")
+    raw = action.get("action_detail", "") or ""
+    include_sensitive = bool(
+        getattr(config, "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", False)
+    )
+    if not include_sensitive:
+        return (
+            f"[{action_type}] sensitive action detail retained locally; "
+            "review in the local dashboard before approval"
+        )
+    if action_type == "file_operation":
+        try:
+            detail = json.loads(raw)
+            operation = str(detail.get("operation", "unknown"))
+            path = str(detail.get("file_path", "unknown"))
+            content = detail.get("content", "")
+            if operation in {"write", "append"}:
+                return (
+                    f"[{operation}] {path} — file body hidden from Telegram "
+                    f"({len(content) if isinstance(content, str) else 0} characters); "
+                    "review locally before approval"
+                )
+            return f"[{operation}] {path}"
+        except Exception:
+            return "[file_operation] details hidden from Telegram; review locally"
+    if action_type == "browser_action":
+        try:
+            detail = json.loads(raw)
+            url = str(detail.get("url", ""))
+            selector = detail.get("click_selector")
+            return f"[navigate] {url}" + (f" [click] {selector}" if selector else "")
+        except Exception:
+            return "[browser_action] malformed details; review locally"
+    # Shell commands need exact remote review, but cap message size.
+    return raw[:1000] + ("… [truncated; review locally]" if len(raw) > 1000 else "")
+
+
 def format_action_message(action: dict, footer: str = "") -> str:
     """
-    Bouwt de HTML-tekst van het bericht op vanuit de actuele database-rij —
-    ALTIJD opnieuw opgebouwd vanuit de database, nooit door de vorige
-    berichttekst te 'parsen'. Dat maakt het bericht na een knop-tap altijd
-    correct, ongeacht eventuele race conditions tussen meerdere taps.
+    Build Telegram control text from DB state without exporting file bodies or
+    command output. Telegram is a control surface, not a data-export channel.
     """
+    safe_detail = _telegram_safe_action_detail(action)
+    include_sensitive = bool(
+        getattr(config, "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", False)
+    )
+    safe_description = (
+        action["action_description"]
+        if include_sensitive
+        else "Action description retained locally; review in the local dashboard."
+    )
     text = (
         f"⏳ <b>ACTION PROPOSAL #{action['id']}</b>\n\n"
         f"<b>Proposed By:</b> {escape_html(action['proposed_by'])}\n"
-        f"<b>Description:</b> {escape_html(action['action_description'])}\n"
-        f"<b>Detail:</b> <code>{escape_html(action['action_detail'])}</code>\n"
+        f"<b>Description:</b> {escape_html(safe_description)}\n"
+        f"<b>Detail:</b> <code>{escape_html(safe_detail)}</code>\n"
         f"<b>Status:</b> {escape_html(action['status'])}"
     )
     if footer:
@@ -117,11 +171,12 @@ def send_proposal_notification(
     Wordt aangeroepen vanuit tools/action_proposal_tool.py in plaats van de
     oude platte send_notification() aanroep.
     """
-    action = {
+    action = get_action_by_id(action_id) or {
         "id": action_id,
         "proposed_by": proposed_by,
         "action_description": action_description,
         "action_detail": action_detail,
+        "action_type": "unknown",
         "status": "pending",
     }
     message = format_action_message(action)
@@ -135,15 +190,37 @@ def send_proposal_notification(
 async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
 
+    if not getattr(config, "TELEGRAM_ALLOW_REMOTE_CONTROL", False):
+        try:
+            await query.answer(
+                "Remote control is disabled. Review and act from the local dashboard.",
+                show_alert=True,
+            )
+        except Exception:
+            pass
+        logger.warning("Blocked Telegram action callback because remote control is disabled.")
+        return
+
     # KRITIEKE CONTROLE: verifieer dat dit bericht ECHT van de eigenaar komt.
     # Zonder deze check zou ELKE Telegram-gebruiker die deze bot vindt en een
     # bericht stuurt (of ooit een callback triggert) real-world acties kunnen
     # goedkeuren, afwijzen of UITVOEREN op deze machine. Een bot-username is
     # geen geheim — dit moet ALTIJD expliciet worden gecontroleerd.
     sender_chat_id = str(update.effective_chat.id) if update.effective_chat else None
+    sender_user_id = str(update.effective_user.id) if update.effective_user else None
+    chat_type = getattr(update.effective_chat, "type", None) if update.effective_chat else None
     owner_chat_id = str(getattr(config, "TELEGRAM_CHAT_ID", "")).strip()
 
-    if not owner_chat_id or sender_chat_id != owner_chat_id:
+    # Remote approvals are intentionally supported ONLY from a private chat
+    # whose user ID matches the configured owner chat ID. In a Telegram group,
+    # every member shares the same chat ID; checking chat ID alone would let
+    # any group member approve/execute actions.
+    if (
+        not owner_chat_id
+        or sender_chat_id != owner_chat_id
+        or sender_user_id != owner_chat_id
+        or chat_type != "private"
+    ):
         # Bewust een generiek antwoord — geen details weggeven aan wie dan
         # ook die dit probeert, en niets loggen dat een aanvaller nuttig zou
         # vinden (geen actie-ID's, geen systeeminformatie).
@@ -151,7 +228,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("Unauthorized.", show_alert=True)
         except Exception:
             pass
-        logger.warning(f"Blocked Telegram callback from unauthorized chat_id: {sender_chat_id}")
+        logger.warning("Blocked unauthorized Telegram callback; sender identifiers suppressed.")
         return
 
     try:
@@ -176,12 +253,13 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         if current_status != "pending":
             await query.answer(f"Already '{current_status}' — cannot approve again.", show_alert=True)
             return
-        if not transition_action_status(action_id, "approved", ("pending",)):
-            refreshed = get_action_by_id(action_id)
-            current = refreshed["status"] if refreshed else "unknown"
-            await query.answer(f"Status changed to '{current}' before approval.", show_alert=True)
+        try:
+            approve_action_control(action_id)
+        except ActionControlError as exc:
+            await query.answer(str(exc)[:180], show_alert=True)
             return
         await query.answer("Approved ✅")
+        action = get_action_by_id(action_id) or action
         action["status"] = "approved"
         new_text = format_action_message(action, footer="✅ <b>APPROVED</b> via Telegram.")
         new_keyboard = build_action_keyboard(action_id, "approved")
@@ -191,12 +269,13 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         if current_status not in ("pending", "approved"):
             await query.answer(f"Already '{current_status}' — cannot reject now.", show_alert=True)
             return
-        if not transition_action_status(action_id, "rejected", ("pending", "approved")):
-            refreshed = get_action_by_id(action_id)
-            current = refreshed["status"] if refreshed else "unknown"
-            await query.answer(f"Status changed to '{current}' before rejection.", show_alert=True)
+        try:
+            reject_action_control(action_id)
+        except ActionControlError as exc:
+            await query.answer(str(exc)[:180], show_alert=True)
             return
         await query.answer("Rejected ❌")
+        action = get_action_by_id(action_id) or action
         action["status"] = "rejected"
         new_text = format_action_message(action, footer="❌ <b>REJECTED</b> via Telegram.")
         new_keyboard = None
@@ -210,18 +289,39 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         # execute_action() is sync and may run a real subprocess (up to the
         # existing 30s timeout) — run it in a worker thread so this callback
         # handler never blocks the bot's own event loop while it waits.
-        result = await asyncio.to_thread(execute_action, action_id)
+        try:
+            result = await asyncio.to_thread(execute_action_control, action_id)
+        except ActionControlError as exc:
+            await query.answer(str(exc)[:180], show_alert=True)
+            return
 
         refreshed = get_action_by_id(action_id) or action
+        include_details = bool(
+            getattr(config, "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", False)
+        )
         if result.get("blocked"):
-            footer = f"🚫 <b>BLOCKED</b>: {escape_html(result.get('error', 'Unknown reason'))}"
+            footer = "🚫 <b>BLOCKED</b>"
+            if include_details:
+                footer += f": {escape_html(result.get('error', 'Unknown reason'))}"
+            else:
+                footer += " — details retained locally."
         elif result.get("success") and result.get("mode") == "dry_run":
-            footer = f"🧪 <b>EXECUTED (DRY RUN)</b>\n{escape_html(result.get('detail', ''))}"
+            footer = "🧪 <b>EXECUTED (DRY RUN)</b>"
+            if include_details:
+                footer += f"\n{escape_html(result.get('detail', ''))}"
+            else:
+                footer += "\nSimulation details retained locally."
         elif result.get("success"):
-            stdout = escape_html((result.get("stdout") or "")[:300]) or "(no output)"
-            footer = f"⚡ <b>EXECUTED SUCCESSFULLY</b>\n{stdout}"
+            footer = (
+                "⚡ <b>EXECUTED SUCCESSFULLY</b>\n"
+                "Execution output is retained locally and is not copied to Telegram."
+            )
         else:
-            footer = f"❌ <b>EXECUTION FAILED</b>: {escape_html(result.get('error', 'Unknown error'))}"
+            footer = "❌ <b>EXECUTION FAILED</b>"
+            if include_details:
+                footer += f": {escape_html(result.get('error', 'Unknown error'))}"
+            else:
+                footer += " — error details retained locally."
 
         new_text = format_action_message(refreshed, footer=footer)
         new_keyboard = None
@@ -275,17 +375,22 @@ def _run_listener_in_thread() -> None:
             await stop_event.wait()
             logger.info("Telegram interactive listener shutting down...")
 
-        except TelegramConflictError as e:
+        except TelegramConflictError:
             _state["last_error"] = (
-                f"Conflict: another process is already polling this bot token. "
-                f"Stop any other running instance of this app (check for zombie "
-                f"processes from a previous --reload restart) before retrying. ({e})"
+                "Conflict: another process is already polling this bot token. "
+                "Stop any other running instance of this app before retrying."
             )
-            logger.error(f"Telegram listener FAILED to start: {_state['last_error']}")
+            logger.error("Telegram listener failed to start because another poller is active.")
 
-        except Exception as e:
-            _state["last_error"] = f"Unexpected error during startup/runtime: {e}"
-            logger.error(f"Telegram listener FAILED/crashed: {e}", exc_info=True)
+        except Exception as exc:
+            _state["last_error"] = (
+                f"Unexpected Telegram listener error ({type(exc).__name__}); "
+                "transport details suppressed."
+            )
+            logger.error(
+                "Telegram listener failed/crashed (%s); transport details suppressed.",
+                type(exc).__name__,
+            )
 
         finally:
             # Ook bij een gedeeltelijke startup (initialize/start gelukt maar
@@ -310,9 +415,15 @@ def _run_listener_in_thread() -> None:
 
     try:
         loop.run_until_complete(_main())
-    except Exception as e:
-        _state["last_error"] = f"Listener thread crashed: {e}"
-        logger.error(f"Telegram listener thread crashed unexpectedly: {e}", exc_info=True)
+    except Exception as exc:
+        _state["last_error"] = (
+            f"Telegram listener thread crashed ({type(exc).__name__}); "
+            "transport details suppressed."
+        )
+        logger.error(
+            "Telegram listener thread crashed unexpectedly (%s); transport details suppressed.",
+            type(exc).__name__,
+        )
     finally:
         _state["started_successfully"] = False
         _state["application"] = None

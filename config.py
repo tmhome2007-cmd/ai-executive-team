@@ -9,6 +9,7 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # 1. Laad de omgevingsvariabelen uit het .env bestand
@@ -41,12 +42,40 @@ class Config:
         default_factory=lambda: os.getenv("DATABASE_PATH", "./memory/executive_team.db").strip()
     )
 
+    ARTIFACT_RETENTION_DAYS: int = field(
+        default_factory=lambda: int(os.getenv("ARTIFACT_RETENTION_DAYS", "30"))
+    )
+    SYNC_EXPORT_DIR: str = field(default_factory=lambda: os.getenv("SYNC_EXPORT_DIR", "sync").strip())
+
+    BACKUP_RETENTION_COUNT: int = field(
+        default_factory=lambda: max(1, min(365, int(os.getenv("BACKUP_RETENTION_COUNT", "7"))))
+    )
+
+    # Optional Fernet key supplied by the owner, never written to backups.
+    BACKUP_ENCRYPTION_KEY: str = field(
+        default_factory=lambda: os.getenv("BACKUP_ENCRYPTION_KEY", "").strip(), repr=False
+    )
+
     # Telegram Notificatie Instellingen
     TELEGRAM_BOT_TOKEN: str = field(
         default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     )
     TELEGRAM_CHAT_ID: str = field(
         default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    )
+    # Telegram is an external data channel. Keep paths/commands/error details
+    # local unless the owner explicitly opts in.
+    TELEGRAM_INCLUDE_SENSITIVE_DETAILS: bool = field(
+        default_factory=lambda: os.getenv(
+            "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", "false"
+        ).lower() in ("true", "1", "yes")
+    )
+    # Telegram is a third-party transport. Remote approve/execute is disabled
+    # unless the owner explicitly opts in after accepting that trust boundary.
+    TELEGRAM_ALLOW_REMOTE_CONTROL: bool = field(
+        default_factory=lambda: os.getenv(
+            "TELEGRAM_ALLOW_REMOTE_CONTROL", "false"
+        ).lower() in ("true", "1", "yes")
     )
 
     # API Beveiliging Key
@@ -58,6 +87,12 @@ class Config:
     WORKSPACE_ROOT: str = field(
         default_factory=lambda: os.getenv("WORKSPACE_ROOT", "./workspace").strip()
     )
+    SCREENSHOT_RETENTION_COUNT: int = field(
+        default_factory=lambda: max(
+            1,
+            int(os.getenv("SCREENSHOT_RETENTION_COUNT", "50")),
+        )
+    )
     SANDBOX_MODE: bool = field(
         default_factory=lambda: os.getenv("SANDBOX_MODE", "true").lower() in ("true", "1", "yes")
     )
@@ -65,6 +100,40 @@ class Config:
     # Leeg (standaard) = geen beperking, elk http/https-domein is toegestaan.
     ALLOWED_BROWSER_DOMAINS: str = field(
         default_factory=lambda: os.getenv("ALLOWED_BROWSER_DOMAINS", "").strip()
+    )
+    # Sync exports are integrity-authenticated. If no dedicated key is set,
+    # the API secret is used so tampered JSONL cannot silently grant authority
+    # or forge treasury history on import.
+    SYNC_HMAC_KEY: str = field(
+        default_factory=lambda: os.getenv("SYNC_HMAC_KEY", "").strip()
+    )
+    # Optional dedicated key for binding owner approvals to the exact action
+    # payload. Falls back to SYNC_HMAC_KEY, then API_SECRET_KEY.
+    ACTION_APPROVAL_HMAC_KEY: str = field(
+        default_factory=lambda: os.getenv("ACTION_APPROVAL_HMAC_KEY", "").strip()
+    )
+    # Historical flag name retained for compatibility. When enabled, shell
+    # execution now uses the isolated Docker worker, never a host shell.
+    # Requires Docker and a pre-pulled worker image; otherwise fails closed.
+    ALLOW_UNSAFE_RAW_SHELL: bool = field(
+        default_factory=lambda: os.getenv("ALLOW_UNSAFE_RAW_SHELL", "false").lower() in ("true", "1", "yes")
+    )
+    # Local-only by default. A non-loopback bind exposes the API key over the
+    # network; refuse it unless the owner explicitly acknowledges transport risk.
+    BIND_HOST: str = field(
+        default_factory=lambda: os.getenv("BIND_HOST", "127.0.0.1").strip()
+    )
+    ALLOW_INSECURE_REMOTE_HTTP: bool = field(
+        default_factory=lambda: os.getenv(
+            "ALLOW_INSECURE_REMOTE_HTTP", "false"
+        ).lower() in ("true", "1", "yes")
+    )
+    # Executive prompts, memory and research context can be highly sensitive.
+    # A non-loopback model endpoint therefore requires explicit opt-in.
+    ALLOW_REMOTE_LLM: bool = field(
+        default_factory=lambda: os.getenv(
+            "ALLOW_REMOTE_LLM", "false"
+        ).lower() in ("true", "1", "yes")
     )
 
 
@@ -119,6 +188,10 @@ def set_sandbox_mode(enabled: bool) -> None:
         tmp_path = Path(tmp.name)
     try:
         os.replace(tmp_path, env_path)
+        try:
+            os.chmod(env_path, 0o600)
+        except OSError:
+            pass
         # Pas NADAT de persistente wijziging succesvol is, de live config
         # omzetten. Zo kan een filesystem-fout nooit een half-toegepaste
         # toestand opleveren waarin de API faalt maar execution mode al wijzigde.
@@ -144,6 +217,8 @@ def validate_config() -> list[str]:
     """
     errors = []
     warnings = []
+    if not 1 <= config.ARTIFACT_RETENTION_DAYS <= 3650:
+        errors.append("ARTIFACT_RETENTION_DAYS must be 1–3650")
 
     if not config.API_SECRET_KEY:
         errors.append(
@@ -178,6 +253,58 @@ def validate_config() -> list[str]:
             f"OLLAMA_BASE_URL ('{config.OLLAMA_BASE_URL}') ziet er niet uit als "
             "een geldige URL — verwacht iets als http://localhost:11434."
         )
+
+    loopback_hosts = {"127.0.0.1", "localhost", "::1"}
+    if config.BIND_HOST not in loopback_hosts and not config.ALLOW_INSECURE_REMOTE_HTTP:
+        errors.append(
+            "BIND_HOST is non-loopback while ALLOW_INSECURE_REMOTE_HTTP is false. "
+            "That would expose X-API-Key traffic over plaintext HTTP. Keep the API "
+            "loopback-only, put it behind TLS/private tunneling, or explicitly opt "
+            "in only if you accept the transport risk."
+        )
+
+    try:
+        ollama_host = (urlparse(config.OLLAMA_BASE_URL).hostname or "").lower()
+        if (
+            ollama_host not in {"localhost", "127.0.0.1", "::1"}
+            and not config.ALLOW_REMOTE_LLM
+        ):
+            errors.append(
+                "OLLAMA_BASE_URL points to a non-local host while ALLOW_REMOTE_LLM "
+                "is false. Executive prompts, memory, and research context would "
+                "leave this machine. Keep the model local or explicitly opt in."
+            )
+        elif ollama_host not in {"localhost", "127.0.0.1", "::1"}:
+            if urlparse(config.OLLAMA_BASE_URL).scheme.lower() != "https":
+                errors.append(
+                    "Remote LLM transport must use HTTPS. Plaintext HTTP would expose "
+                    "executive prompts, memory, and research context in transit."
+                )
+            else:
+                warnings.append(
+                    "Remote LLM transport is explicitly enabled. Executive prompts, "
+                    "memory, and research context may leave this machine."
+                )
+    except Exception:
+        pass
+
+    telemetry_value = os.getenv("CREWAI_DISABLE_TELEMETRY", "true").strip().lower()
+    if telemetry_value not in {"true", "1", "yes", "on"}:
+        warnings.append(
+            "CrewAI telemetry is enabled. This project defaults to local-first privacy; "
+            "set CREWAI_DISABLE_TELEMETRY=true unless external telemetry is intentional."
+        )
+
+    if env_path.exists() and os.name == "posix":
+        try:
+            env_mode = env_path.stat().st_mode & 0o777
+            if env_mode & 0o077:
+                warnings.append(
+                    f".env permissions are {oct(env_mode)}; secrets should be owner-only "
+                    "(recommended chmod 600 .env)."
+                )
+        except OSError:
+            pass
 
     if errors:
         error_text = "\n".join(f"  - {e}" for e in errors)

@@ -11,7 +11,10 @@ import datetime
 import sys
 import uuid
 import json
+import re
 import threading
+import hashlib
+import hmac
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -22,6 +25,8 @@ if str(project_root) not in sys.path:
 
 from config import config
 from workflows.meeting_types import VALID_MEETING_TYPES
+from workflows.capability_policy import require_action_capability
+from memory.activity import activity_origin
 
 
 VALID_ACTION_STATUSES = {
@@ -86,21 +91,145 @@ _SECRET_LIKE_PATTERNS = (
     "xoxp-",
     "AIza",
     "-----BEGIN PRIVATE KEY-----",
+    "-----BEGIN RSA PRIVATE KEY-----",
+    "-----BEGIN OPENSSH PRIVATE KEY-----",
     "password=",
     "api_key=",
+    "apikey=",
     "token=",
+    "secret=",
+)
+
+_SECRET_LIKE_REGEXES = (
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\bASIA[0-9A-Z]{16}\b"),
+    re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{20,}\b"),  # Telegram bot token shape
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),  # JWT
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b"),
 )
 
 
 def _reject_secret_like_text(*values: str | None) -> None:
     combined = "\n".join(value for value in values if value)
     lowered = combined.lower()
-    for pattern in _SECRET_LIKE_PATTERNS:
-        if pattern.lower() in lowered:
-            raise ValueError(
-                "Potential secret detected. Store credentials in the configured secret/plugin "
-                "system and record only a non-secret description here."
-            )
+    detected = any(pattern.lower() in lowered for pattern in _SECRET_LIKE_PATTERNS)
+    if not detected:
+        detected = any(regex.search(combined) for regex in _SECRET_LIKE_REGEXES)
+    if detected:
+        raise ValueError(
+            "Potential secret detected. Store credentials in the configured secret/plugin "
+            "system and record only a non-secret description here."
+        )
+
+
+def _sync_signing_key() -> bytes:
+    key = (getattr(config, "SYNC_HMAC_KEY", "") or config.API_SECRET_KEY).strip()
+    if not key:
+        raise ValueError("SYNC_HMAC_KEY/API_SECRET_KEY is required for authenticated sync")
+    return key.encode("utf-8")
+
+
+def _sync_record_signature(record: dict) -> str:
+    payload = {
+        key: value
+        for key, value in record.items()
+        if key != "_signature"
+    }
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hmac.new(_sync_signing_key(), canonical, hashlib.sha256).hexdigest()
+
+
+def _sync_record_signature_valid(record: dict) -> bool:
+    supplied = record.get("_signature")
+    if not isinstance(supplied, str) or not supplied:
+        return False
+    expected = _sync_record_signature(record)
+    return hmac.compare_digest(supplied, expected)
+
+
+def _action_approval_signing_key() -> bytes:
+    key = (
+        getattr(config, "ACTION_APPROVAL_HMAC_KEY", "")
+        or getattr(config, "SYNC_HMAC_KEY", "")
+        or config.API_SECRET_KEY
+    ).strip()
+    if not key:
+        raise ValueError(
+            "ACTION_APPROVAL_HMAC_KEY/SYNC_HMAC_KEY/API_SECRET_KEY is required "
+            "to bind action approvals to their exact payload"
+        )
+    return key.encode("utf-8")
+
+
+def _action_approval_payload(action: dict) -> dict:
+    """Canonical authority-bearing fields covered by an owner approval."""
+    payload = {
+        "sync_uuid": action.get("sync_uuid"),
+        "proposed_by": action.get("proposed_by"),
+        "action_description": action.get("action_description"),
+        "action_detail": action.get("action_detail"),
+        "action_type": action.get("action_type"),
+        "expected_outcome": action.get("expected_outcome"),
+        "expected_impact": action.get("expected_impact"),
+        "expected_cost_amount": action.get("expected_cost_amount"),
+        "currency": action.get("currency"),
+        "source_decision_sync_uuid": action.get("source_decision_sync_uuid"),
+        "source_phase": action.get("source_phase"),
+    }
+    if action.get('capability_policy'):
+        payload['capability_policy'] = action['capability_policy']
+    if action.get('experiment_policy'):
+        payload['experiment_policy'] = action['experiment_policy']
+    return payload
+
+
+def _action_approval_seal(action: dict) -> str:
+    canonical = json.dumps(
+        _action_approval_payload(action),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hmac.new(
+        _action_approval_signing_key(),
+        canonical,
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _action_row_for_approval(cursor: sqlite3.Cursor, action_id: int) -> dict | None:
+    cursor.execute(
+        """
+        SELECT q.id, q.status, q.sync_uuid, q.proposed_by,
+               q.action_description, q.action_detail, q.action_type,
+               q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
+               q.approval_seal,
+               o.expected_outcome, o.expected_impact,
+               o.expected_cost_amount, o.currency
+        FROM action_queue q
+        LEFT JOIN action_outcomes o ON o.action_id = q.id
+        WHERE q.id = ?
+        """,
+        (action_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    action = dict(row)
+    from memory.experiments import experiment_policy
+    policy = experiment_policy(cursor, action_id)
+    if policy:
+        action['experiment_policy'] = policy
+    from memory.capabilities import inventory_policy
+    capability = inventory_policy(cursor, action_id)
+    if capability:
+        action['capability_policy'] = capability
+    return action
 
 
 _SYNC_TABLE_COLUMNS = {
@@ -144,7 +273,8 @@ _SYNC_TABLE_COLUMNS = {
         "created_at", "updated_at", "event_type", "status", "severity",
         "reason", "fingerprint", "goal_sync_uuid", "source_action_sync_uuid",
         "source_decision_sync_uuid", "generated_decision_sync_uuid",
-        "resolved_at", "sync_uuid",
+        "resolved_at", "attempt_count", "last_attempt_at", "last_error",
+        "sync_uuid",
     },
     "executive_memories": {
         "created_at", "updated_at", "executive_key", "memory_kind", "lesson",
@@ -169,6 +299,8 @@ def init_db() -> None:
 
     # 2. Verbind met de database en maak de tabellen aan
     conn = sqlite3.connect(db_path)
+    from memory.activity import configure_connection, init_activity
+    configure_connection(conn)
     cursor = conn.cursor()
     
     # Tabel 0: owner-defined company goals / missions.
@@ -214,10 +346,23 @@ def init_db() -> None:
             generated_decision_id INTEGER,
             generated_decision_sync_uuid TEXT,
             resolved_at TEXT,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            last_attempt_at TEXT,
+            last_error TEXT,
             sync_uuid TEXT NOT NULL UNIQUE
         )
     """)
     conn.commit()
+    for migration_sql in (
+        "ALTER TABLE followup_events ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE followup_events ADD COLUMN last_attempt_at TEXT",
+        "ALTER TABLE followup_events ADD COLUMN last_error TEXT",
+    ):
+        try:
+            cursor.execute(migration_sql)
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     # Structured executive memory. Memories are historical/advisory only:
     # they never override current evidence or owner-approved state.
@@ -290,9 +435,34 @@ def init_db() -> None:
     except sqlite3.OperationalError:
         pass
 
+    decision_columns = {row[1] for row in cursor.execute("PRAGMA table_info(decisions)")}
+    if "workflow_key" not in decision_columns:
+        cursor.execute("ALTER TABLE decisions ADD COLUMN workflow_key TEXT")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS decisions_workflow_key ON decisions(workflow_key) WHERE workflow_key IS NOT NULL")
+
     cursor.execute("SELECT id FROM decisions WHERE sync_uuid IS NULL")
     for (row_id,) in cursor.fetchall():
         cursor.execute("UPDATE decisions SET sync_uuid = ? WHERE id = ?", (str(uuid.uuid4()), row_id))
+    conn.commit()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS decision_contributions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            decision_id INTEGER NOT NULL REFERENCES decisions(id),
+            phase TEXT NOT NULL CHECK (phase IN ('decision', 'preparation')),
+            sequence INTEGER NOT NULL,
+            executive_key TEXT NOT NULL,
+            body TEXT NOT NULL,
+            profile_json TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            UNIQUE(decision_id, phase, sequence),
+            UNIQUE(decision_id, phase, executive_key)
+        )
+    """)
+    conn.commit()
+
+    from memory.agile import init_agile
+    init_agile(cursor)
     conn.commit()
 
     # Tabel 2: Action Approval Queue
@@ -307,6 +477,7 @@ def init_db() -> None:
             reviewed_at TEXT,
             action_type TEXT NOT NULL DEFAULT 'shell',
             result_detail TEXT,
+            approval_seal TEXT,
             source_decision_id INTEGER,
             source_decision_sync_uuid TEXT,
             source_phase TEXT
@@ -338,6 +509,12 @@ def init_db() -> None:
 
     try:
         cursor.execute("ALTER TABLE action_queue ADD COLUMN sync_uuid TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE action_queue ADD COLUMN approval_seal TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass
@@ -509,7 +686,23 @@ def init_db() -> None:
     conn.commit()
 
     conn.commit()
+    from memory.experiments import init_experiments
+    init_experiments(cursor)
+    from memory.evidence import init_evidence
+    init_evidence(cursor)
+    from memory.planning import init_planning
+    init_planning(cursor)
+    from memory.discussions import init_discussions
+    init_discussions(cursor)
+    from memory.capabilities import init_capabilities
+    init_capabilities(cursor)
+    conn.commit()
+    init_activity(conn)
     conn.close()
+    try:
+        os.chmod(db_path, 0o600)
+    except OSError:
+        pass
 
 
 @contextmanager
@@ -519,6 +712,8 @@ def get_connection():
     Stelt row_factory in op sqlite3.Row voor makkelijke toegang tot kolommen via sleutelnamen.
     """
     conn = sqlite3.connect(config.DATABASE_PATH)
+    from memory.activity import configure_connection
+    configure_connection(conn)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -634,7 +829,7 @@ def get_company_goals(
                 END,
                 g.created_at DESC
             LIMIT ? OFFSET ?
-            """,
+            """,  # nosec B608 # WHERE uses literal clauses and bound status values.
             (*params, limit, offset),
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -680,7 +875,7 @@ def update_company_goal(
         cursor = conn.cursor()
         assignments = ", ".join(f"{key} = ?" for key in updates)
         cursor.execute(
-            f"UPDATE company_goals SET {assignments} WHERE id = ?",
+            f"UPDATE company_goals SET {assignments} WHERE id = ?",  # nosec B608 # Assignment keys come only from named goal fields.
             (*updates.values(), goal_id),
         )
         conn.commit()
@@ -1007,7 +1202,7 @@ def get_executive_memories(
             WHERE {where}
             ORDER BY confidence DESC, created_at DESC
             LIMIT ?
-            """,
+            """,  # nosec B608 # WHERE clauses are literal; filter values are bound.
             (*params, limit),
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -1302,7 +1497,7 @@ def get_followup_events(
                 END,
                 f.created_at DESC
             LIMIT ? OFFSET ?
-            """,
+            """,  # nosec B608 # WHERE clauses are literal and statuses are bound.
             (*params, limit, offset),
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -1327,8 +1522,59 @@ def transition_followup_event_status(
             SET status = ?, updated_at = ?,
                 resolved_at = CASE WHEN ? IN ('resolved','dismissed') THEN ? ELSE resolved_at END
             WHERE id = ? AND status IN ({placeholders})
-            """,
+            """,  # nosec B608 # IN contains only generated question-mark placeholders.
             (new_status, now, new_status, now, event_id, *allowed_from),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def claim_followup_meeting_attempt(
+    event_id: int,
+    *,
+    min_retry_seconds: int = 900,
+) -> bool:
+    """
+    Atomically claim a reasoning attempt. Existing open events with no
+    generated decision remain retryable after backoff, so a transient model
+    failure cannot permanently deadlock an active goal.
+    """
+    now = datetime.datetime.now()
+    cutoff = (now - datetime.timedelta(seconds=min_retry_seconds)).isoformat()
+    now_iso = now.isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE followup_events
+            SET attempt_count = COALESCE(attempt_count, 0) + 1,
+                last_attempt_at = ?,
+                last_error = NULL,
+                updated_at = ?
+            WHERE id = ?
+              AND status = 'open'
+              AND generated_decision_id IS NULL
+              AND (last_attempt_at IS NULL OR last_attempt_at <= ?)
+            """,
+            (now_iso, now_iso, event_id, cutoff),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
+def record_followup_meeting_failure(event_id: int, error: str) -> bool:
+    clean = (error or "Unknown follow-up meeting failure").strip()[:2000]
+    _reject_secret_like_text(clean)
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE followup_events
+            SET last_error = ?, updated_at = ?
+            WHERE id = ? AND status = 'open' AND generated_decision_id IS NULL
+            """,
+            (clean, now, event_id),
         )
         conn.commit()
         return cursor.rowcount == 1
@@ -1344,7 +1590,8 @@ def link_followup_generated_decision(event_id: int, decision_id: int) -> bool:
         cursor.execute(
             """
             UPDATE followup_events
-            SET generated_decision_id = ?, generated_decision_sync_uuid = ?, updated_at = ?
+            SET generated_decision_id = ?, generated_decision_sync_uuid = ?,
+                updated_at = ?, last_error = NULL
             WHERE id = ? AND status = 'open' AND generated_decision_id IS NULL
             """,
             (decision_id, decision["sync_uuid"], now, event_id),
@@ -1365,10 +1612,18 @@ def log_decision(
     sandbox_mode: bool = True,
     goal_id: int | None = None,
     meeting_type: str = "strategy",
+    workflow_key: str | None = None,
+    individual_outputs: dict[str, str] | None = None,
+    executive_profiles: dict | None = None,
+    source_ids: list[int] | None = None,
+    discussion_messages: list[dict] | None = None,
 ) -> int:
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
     """
+    if source_ids is not None:
+        from memory.evidence import source_context
+        source_context(source_ids)
     timestamp = datetime.datetime.now().isoformat()
     agents_str = ",".join(agents_involved)
     sandbox_flag = 1 if sandbox_mode else 0
@@ -1379,6 +1634,25 @@ def log_decision(
 
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        if workflow_key is not None:
+            if not isinstance(workflow_key, str) or not 1 <= len(workflow_key) <= 128:
+                raise ValueError("Invalid decision workflow key")
+            previous = cursor.execute("SELECT * FROM decisions WHERE workflow_key = ?", (workflow_key,)).fetchone()
+            if previous:
+                expected = (topic, agents_str, task_description, decision_outcome, sandbox_flag, goal_id, meeting_type)
+                actual = tuple(previous[key] for key in ("topic", "agents_involved", "task_description", "decision_outcome", "sandbox_mode", "goal_id", "meeting_type"))
+                if actual != expected:
+                    raise ValueError("Decision workflow key reused with different inputs")
+                if source_ids:
+                    linked = {r[0] for r in cursor.execute("SELECT source_id FROM evidence_links WHERE entity_kind = 'decision' AND entity_id = ? AND relation = 'context'", (previous['id'],))}
+                    if linked != set(source_ids):
+                        raise ValueError('Decision retry differs from its original evidence sources')
+                _store_contributions(cursor, previous["id"], "decision", individual_outputs, executive_profiles)
+                from memory.discussions import store_discussion
+                store_discussion(cursor, previous['id'], discussion_messages, source_ids)
+                conn.commit()
+                return previous["id"]
         if goal_id is not None:
             cursor.execute(
                 "SELECT sync_uuid, status FROM company_goals WHERE id = ?",
@@ -1396,14 +1670,27 @@ def log_decision(
         cursor.execute("""
             INSERT INTO decisions (
                 timestamp, topic, agents_involved, task_description, decision_outcome,
-                sandbox_mode, sync_uuid, goal_id, goal_sync_uuid, meeting_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                sandbox_mode, sync_uuid, goal_id, goal_sync_uuid, meeting_type, workflow_key
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             timestamp, topic, agents_str, task_description, decision_outcome,
-            sandbox_flag, new_sync_uuid, goal_id, goal_sync_uuid, meeting_type,
+            sandbox_flag, new_sync_uuid, goal_id, goal_sync_uuid, meeting_type, workflow_key,
         ))
         
         decision_id = cursor.lastrowid
+        from memory.evidence import register_source, link_source
+        if source_ids:
+            for source_id in source_ids:
+                link_source(cursor, source_id, 'decision', decision_id)
+        else:
+            source_id = register_source(cursor, source_key='decision-context:' + new_sync_uuid,
+                title='Recorded decision input context', reference='Persisted workflow input; not independently verified',
+                summary=task_description[:12000] or 'No input evidence supplied.',
+                observed_at=datetime.datetime.now(datetime.timezone.utc).isoformat(), source_kind='owner_context')
+            link_source(cursor, source_id, 'decision', decision_id)
+        _store_contributions(cursor, decision_id, "decision", individual_outputs, executive_profiles)
+        from memory.discussions import store_discussion
+        store_discussion(cursor, decision_id, discussion_messages, source_ids)
         cursor.execute(
             """
             INSERT OR IGNORE INTO decision_approvals (
@@ -1477,7 +1764,7 @@ def transition_decision_approval(
             WHERE decision_id = ?
               AND status IN ({placeholders})
               AND preparation_status NOT IN ('in_progress', 'completed')
-            """,
+            """,  # nosec B608 # IN contains only generated question-mark placeholders.
             params,
         )
         conn.commit()
@@ -1507,6 +1794,8 @@ def finish_decision_preparation(
     decision_id: int,
     success: bool,
     outcome: str | None = None,
+    individual_outputs: dict[str, str] | None = None,
+    executive_profiles: dict | None = None,
 ) -> bool:
     """Zet preparation atomair naar completed/failed en bewaart het plan."""
     target = "completed" if success else "failed"
@@ -1521,8 +1810,11 @@ def finish_decision_preparation(
             """,
             (target, now, outcome, decision_id),
         )
+        changed = cursor.rowcount == 1
+        if changed and success:
+            _store_contributions(cursor, decision_id, "preparation", individual_outputs, executive_profiles)
         conn.commit()
-        return cursor.rowcount == 1
+        return changed
 
 
 def has_daily_research_attempt_on(date_value: datetime.date) -> bool:
@@ -1759,7 +2051,7 @@ def get_resource_requests(
                 WHERE r.status IN ({placeholders})
                 ORDER BY r.timestamp DESC
                 LIMIT ? OFFSET ?
-                """,
+                """,  # nosec B608 # IN contains only generated question-mark placeholders.
                 (*statuses, limit, offset),
             )
         else:
@@ -1822,7 +2114,7 @@ def transition_resource_request_status(
                 SET status = ?, reviewed_at = COALESCE(reviewed_at, ?),
                     fulfilled_at = ?, fulfillment_note = ?
                 WHERE id = ? AND status IN ({placeholders})
-                """,
+                """,  # nosec B608 # IN contains only generated question-mark placeholders.
                 (new_status, now, now, fulfillment_note.strip(), request_id, *allowed_from),
             )
         else:
@@ -1831,7 +2123,7 @@ def transition_resource_request_status(
                 UPDATE resource_requests
                 SET status = ?, reviewed_at = ?
                 WHERE id = ? AND status IN ({placeholders})
-                """,
+                """,  # nosec B608 # IN contains only generated question-mark placeholders.
                 (new_status, now, request_id, *allowed_from),
             )
         conn.commit()
@@ -1910,7 +2202,7 @@ def get_treasury_summary(currency: str | None = None) -> dict:
             FROM treasury_entries
             {where}
             GROUP BY currency
-            """,
+            """,  # nosec B608 # Optional WHERE is a literal currency clause; value is bound.
             params,
         )
         balances = {row["currency"]: float(row["cash_balance"] or 0) for row in cursor.fetchall()}
@@ -1926,7 +2218,7 @@ def get_treasury_summary(currency: str | None = None) -> dict:
             FROM treasury_reservations
             {reservation_where}
             GROUP BY currency
-            """,
+            """,  # nosec B608 # Optional reservation WHERE is literal; currency is bound.
             params,
         )
         reserved = {row["currency"]: float(row["reserved"] or 0) for row in cursor.fetchall()}
@@ -2033,25 +2325,18 @@ def approve_action_with_treasury(action_id: int) -> dict:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("BEGIN IMMEDIATE")
-        cursor.execute(
-            """
-            SELECT q.id, q.status, q.sync_uuid, q.source_decision_id,
-                   q.source_decision_sync_uuid,
-                   o.expected_cost_amount, o.currency
-            FROM action_queue q
-            LEFT JOIN action_outcomes o ON o.action_id = q.id
-            WHERE q.id = ?
-            """,
-            (action_id,),
-        )
-        row = cursor.fetchone()
-        if row is None:
+        action = _action_row_for_approval(cursor, action_id)
+        if action is None:
             conn.rollback()
             raise ValueError("Action not found")
-        action = dict(row)
         if action["status"] != "pending":
             conn.rollback()
             raise ValueError(f"Action cannot be approved from status '{action['status']}'")
+
+        from memory.experiments import check_experiment_budget
+        check_experiment_budget(cursor, action)
+        from memory.capabilities import check_inventory_requirements
+        check_inventory_requirements(cursor, action)
 
         amount = action.get("expected_cost_amount")
         currency = action.get("currency")
@@ -2114,13 +2399,14 @@ def approve_action_with_treasury(action_id: int) -> dict:
             )
             reservation_id = cursor.lastrowid
 
+        approval_seal = _action_approval_seal(action)
         cursor.execute(
             """
             UPDATE action_queue
-            SET status = 'approved', reviewed_at = ?
+            SET status = 'approved', reviewed_at = ?, approval_seal = ?
             WHERE id = ? AND status = 'pending'
             """,
-            (now, action_id),
+            (now, approval_seal, action_id),
         )
         if cursor.rowcount != 1:
             conn.rollback()
@@ -2154,7 +2440,7 @@ def reject_action_with_treasury(action_id: int) -> dict:
         cursor.execute(
             """
             UPDATE action_queue
-            SET status = 'rejected', reviewed_at = ?
+            SET status = 'rejected', reviewed_at = ?, approval_seal = NULL
             WHERE id = ? AND status IN ('pending', 'approved')
             """,
             (now, action_id),
@@ -2331,6 +2617,16 @@ def propose_action(
         raise ValueError(
             f"Unsupported action_type '{action_type}'. Allowed: {sorted(VALID_ACTION_TYPES)}"
         )
+    # Tool assignment/prompt text is not authorization. Enforce the same
+    # role→capability boundary again at durable storage.
+    require_action_capability(proposed_by, action_type)
+    _reject_secret_like_text(
+        proposed_by,
+        action_description,
+        action_detail,
+        expected_outcome,
+        expected_impact,
+    )
     if expected_cost_amount is not None and expected_cost_amount < 0:
         raise ValueError("expected_cost_amount cannot be negative")
     if expected_cost_amount is not None and not currency:
@@ -2480,9 +2776,11 @@ def transition_action_status(
     allowed_from: tuple[str, ...],
 ) -> bool:
     """
-    Atomische compare-and-set statusovergang. De UPDATE slaagt alleen wanneer
-    de rij op het moment van schrijven nog in één van allowed_from staat.
-    Dit sluit races tussen dashboard/Telegram-knoppen en dubbele requests.
+    Atomic compare-and-set status transition.
+
+    Direct approval remains available for internal/test paths, but it is
+    integrity-sealed and refuses paid actions so treasury reservation cannot
+    be bypassed. User-facing approvals use approve_action_with_treasury().
     """
     if new_status not in VALID_ACTION_STATUSES:
         raise ValueError(f"Unsupported action status: {new_status}")
@@ -2491,25 +2789,123 @@ def transition_action_status(
 
     reviewed_at = datetime.datetime.now().isoformat()
     placeholders = ", ".join("?" for _ in allowed_from)
-    params = (new_status, reviewed_at, action_id, *allowed_from)
 
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+
+        approval_seal = None
+        if new_status == "approved":
+            action = _action_row_for_approval(cursor, action_id)
+            if action is None or action["status"] not in allowed_from:
+                conn.rollback()
+                return False
+            from memory.experiments import check_experiment_budget
+            check_experiment_budget(cursor, action)
+            from memory.capabilities import check_inventory_requirements
+            check_inventory_requirements(cursor, action)
+            amount = action.get("expected_cost_amount")
+            if amount is not None and float(amount) > 0:
+                conn.rollback()
+                raise ValueError(
+                    "Paid actions must use treasury-aware approval; direct status "
+                    "approval is not permitted."
+                )
+            approval_seal = _action_approval_seal(action)
+
+        params = (new_status, reviewed_at, approval_seal, action_id, *allowed_from)
         cursor.execute(
             f"""
             UPDATE action_queue
-            SET status = ?, reviewed_at = ?
+            SET status = ?, reviewed_at = ?,
+                approval_seal = CASE
+                    WHEN ? IS NOT NULL THEN ?
+                    WHEN ? = 'rejected' THEN NULL
+                    ELSE approval_seal
+                END
             WHERE id = ? AND status IN ({placeholders})
-            """,
-            params,
+            """,  # nosec B608 # IN contains only generated question-mark placeholders.
+            (
+                new_status,
+                reviewed_at,
+                approval_seal,
+                approval_seal,
+                new_status,
+                action_id,
+                *allowed_from,
+            ),
         )
-        conn.commit()
-        return cursor.rowcount == 1
+        changed = cursor.rowcount == 1
+        if changed:
+            conn.commit()
+        else:
+            conn.rollback()
+        return changed
 
 
 def claim_action_for_execution(action_id: int) -> bool:
-    """Reserveert een approved actie atomair voor exact één executor."""
-    return transition_action_status(action_id, "executing", ("approved",))
+    """
+    Atomically verify the owner's approval seal and claim exactly one action.
+
+    If any authority-bearing action field changed after approval, the action is
+    returned to pending and any active treasury reservation is released in the
+    same transaction. The owner must then review and approve the new payload.
+    """
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        action = _action_row_for_approval(cursor, action_id)
+        if action is None or action["status"] != "approved":
+            conn.rollback()
+            return False
+
+        supplied_seal = action.get("approval_seal")
+        expected_seal = _action_approval_seal(action)
+        if (
+            not isinstance(supplied_seal, str)
+            or not supplied_seal
+            or not hmac.compare_digest(supplied_seal, expected_seal)
+        ):
+            cursor.execute(
+                """
+                UPDATE action_queue
+                SET status = 'pending', reviewed_at = NULL, approval_seal = NULL
+                WHERE id = ? AND status = 'approved'
+                """,
+                (action_id,),
+            )
+            cursor.execute(
+                """
+                UPDATE treasury_reservations
+                SET status = 'released', released_at = ?
+                WHERE source_action_id = ? AND status = 'active'
+                """,
+                (now, action_id),
+            )
+            conn.commit()
+            raise ValueError(
+                "Action approval integrity check failed; payload changed or "
+                "approval seal is missing. Owner re-approval is required."
+            )
+
+        from memory.experiments import check_experiment_budget
+        check_experiment_budget(cursor, action)
+        from memory.capabilities import check_inventory_requirements
+        check_inventory_requirements(cursor, action)
+        cursor.execute(
+            """
+            UPDATE action_queue
+            SET status = 'executing', reviewed_at = ?
+            WHERE id = ? AND status = 'approved' AND approval_seal = ?
+            """,
+            (now, action_id, supplied_seal),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return False
+        conn.commit()
+        return True
 
 
 def record_execution_result(action_id: int, result_detail_json: str) -> bool:
@@ -2603,7 +2999,7 @@ def update_action_outcome(
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",
+            f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",  # nosec B608 # Assignment keys come only from named outcome fields.
             values,
         )
         conn.commit()
@@ -2792,7 +3188,7 @@ def update_action_outcome_with_treasury(
             assignments = ", ".join(f"{key} = ?" for key in updates)
             values = list(updates.values()) + [action_id]
             cursor.execute(
-                f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",
+                f"UPDATE action_outcomes SET {assignments} WHERE action_id = ?",  # nosec B608 # Assignment keys come only from named outcome fields.
                 values,
             )
             if cursor.rowcount != 1:
@@ -2850,6 +3246,28 @@ def mark_action_outcome_execution_failed(action_id: int, reason: str) -> bool:
         return cursor.rowcount == 1
 
 
+def mark_action_outcome_execution_uncertain(action_id: int, reason: str) -> bool:
+    """Timeouts can have partial effects. Require owner review before retry."""
+    now = datetime.datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE action_outcomes
+            SET outcome_status = 'inconclusive',
+                actual_outcome = ?,
+                measured_at = ?,
+                updated_at = ?,
+                next_recommendation = 'Manually inspect the real-world state before any retry.'
+            WHERE action_id = ?
+              AND outcome_status IN ('not_started', 'measurement_pending')
+            """,
+            (reason, now, now, action_id),
+        )
+        conn.commit()
+        return cursor.rowcount == 1
+
+
 def recover_interrupted_actions() -> int:
     """
     Markeer acties die na een procesherstart nog op 'executing' staan als
@@ -2881,7 +3299,7 @@ def recover_interrupted_actions() -> int:
                 reviewed_at = ?,
                 result_detail = ?
             WHERE id IN ({placeholders})
-            """,
+            """,  # nosec B608 # IN contains only placeholders; IDs are bound.
             (reviewed_at, result_detail, *interrupted_ids),
         )
         recovered_count = cursor.rowcount
@@ -2900,7 +3318,7 @@ def recover_interrupted_actions() -> int:
                     'Manually inspect the real-world state before proposing any retry.'
                 )
             WHERE action_id IN ({placeholders})
-            """,
+            """,  # nosec B608 # IN contains only placeholders; IDs are bound.
             (
                 "Execution was interrupted; the real-world business outcome is unknown.",
                 reviewed_at,
@@ -3074,7 +3492,7 @@ def export_history_to_jsonl(export_path: str) -> dict:
             SELECT created_at, updated_at, event_type, status, severity, reason,
                    fingerprint, goal_sync_uuid, source_action_sync_uuid,
                    source_decision_sync_uuid, generated_decision_sync_uuid,
-                   resolved_at, sync_uuid
+                   resolved_at, attempt_count, last_attempt_at, last_error, sync_uuid
             FROM followup_events
         """)
         followup_rows = [dict(row) for row in cursor.fetchall()]
@@ -3138,34 +3556,37 @@ def export_history_to_jsonl(export_path: str) -> dict:
         """)
         treasury_reservation_rows = [dict(row) for row in cursor.fetchall()]
 
+    export_dir = os.path.dirname(os.path.abspath(export_path)) or "."
+    os.makedirs(export_dir, exist_ok=True)
+    try:
+        os.chmod(export_dir, 0o700)
+    except OSError:
+        pass
+
     with open(export_path, "w", encoding="utf-8") as f:
-        for row in goal_rows:
-            row["_table"] = "company_goals"
-            f.write(json.dumps(row) + "\n")
-        for row in decision_rows:
-            row["_table"] = "decisions"
-            f.write(json.dumps(row) + "\n")
-        for row in action_rows:
-            row["_table"] = "action_queue"
-            f.write(json.dumps(row) + "\n")
-        for row in outcome_rows:
-            row["_table"] = "action_outcomes"
-            f.write(json.dumps(row) + "\n")
-        for row in resource_rows:
-            row["_table"] = "resource_requests"
-            f.write(json.dumps(row) + "\n")
-        for row in treasury_entry_rows:
-            row["_table"] = "treasury_entries"
-            f.write(json.dumps(row) + "\n")
-        for row in treasury_reservation_rows:
-            row["_table"] = "treasury_reservations"
-            f.write(json.dumps(row) + "\n")
-        for row in followup_rows:
-            row["_table"] = "followup_events"
-            f.write(json.dumps(row) + "\n")
-        for row in memory_rows:
-            row["_table"] = "executive_memories"
-            f.write(json.dumps(row) + "\n")
+        for table_name, rows in (
+            ("company_goals", goal_rows),
+            ("decisions", decision_rows),
+            ("action_queue", action_rows),
+            ("action_outcomes", outcome_rows),
+            ("resource_requests", resource_rows),
+            ("treasury_entries", treasury_entry_rows),
+            ("treasury_reservations", treasury_reservation_rows),
+            ("followup_events", followup_rows),
+            ("executive_memories", memory_rows),
+        ):
+            for source_row in rows:
+                record = dict(source_row)
+                record["_table"] = table_name
+                record["_signature"] = _sync_record_signature(record)
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    try:
+        os.chmod(export_path, 0o600)
+    except OSError:
+        pass
+
+    from memory.artifact_retention import register_sync_export
+    register_sync_export(export_path)
 
     return {
         "goals": len(goal_rows),
@@ -3180,6 +3601,7 @@ def export_history_to_jsonl(export_path: str) -> dict:
     }
 
 
+@activity_origin("import", "signed-sync-import")
 def import_history_from_jsonl(import_path: str) -> dict:
     """
     Leest een export-bestand en voegt elke rij toe WIENS sync_uuid nog niet
@@ -3219,6 +3641,17 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 if not isinstance(row, dict):
                     skipped += 1
                     continue
+
+                # Cross-machine sync carries executable/treasury history.
+                # Never trust unsigned/tampered records.
+                try:
+                    if not _sync_record_signature_valid(row):
+                        skipped += 1
+                        continue
+                except ValueError:
+                    skipped += 1
+                    continue
+                row.pop("_signature", None)
 
                 table = row.pop("_table", None)
                 sync_uuid_value = row.get("sync_uuid")
@@ -3313,6 +3746,13 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row.get("status") not in VALID_ACTION_STATUSES:
                         skipped += 1
                         continue
+                    # Sync transports history, never executable authority.
+                    # Remote approved/executing state must be re-approved
+                    # locally before this machine may perform a real effect.
+                    if row.get("status") in {"approved", "executing"}:
+                        row["status"] = "pending"
+                        row["reviewed_at"] = None
+                        row["result_detail"] = None
                     if row.get("action_type") not in VALID_ACTION_TYPES:
                         skipped += 1
                         continue
@@ -3355,6 +3795,12 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if table == "treasury_reservations" and row.get("status") not in VALID_TREASURY_RESERVATION_STATUSES:
                         skipped += 1
                         continue
+                    if table == "treasury_reservations" and row.get("status") == "active":
+                        # A remote reservation represents remote approval.
+                        # Preserve the audit row but never import it as local
+                        # spending authority.
+                        row["status"] = "released"
+                        row["released_at"] = datetime.datetime.now().isoformat()
 
                     action_sync_uuid = row.get("source_action_sync_uuid")
                     if action_sync_uuid:
@@ -3417,7 +3863,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                             UPDATE action_outcomes
                             SET {assignments}
                             WHERE action_sync_uuid = ?
-                            """,
+                            """,  # nosec B608 # Import fields already passed the table-column whitelist.
                             tuple(row[key] for key in importable_fields)
                             + (row.get("action_sync_uuid"),),
                         )
@@ -3446,7 +3892,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         foreign_uuid = row.get(uuid_key)
                         if foreign_uuid:
                             cursor.execute(
-                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",
+                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",  # nosec B608 # Table name comes from a fixed local foreign-key tuple.
                                 (foreign_uuid,),
                             )
                             foreign_row = cursor.fetchone()
@@ -3482,7 +3928,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                         foreign_uuid = row.get(uuid_key)
                         if foreign_uuid:
                             cursor.execute(
-                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",
+                                f"SELECT id FROM {table_name} WHERE sync_uuid = ?",  # nosec B608 # Table name comes from a fixed local foreign-key tuple.
                                 (foreign_uuid,),
                             )
                             foreign_row = cursor.fetchone()
@@ -3494,7 +3940,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row is None:
                         continue
 
-                cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))
+                cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))  # nosec B608 # Table name already passed _SYNC_TABLE_COLUMNS whitelist.
                 if cursor.fetchone():
                     skipped += 1
                     continue
@@ -3505,7 +3951,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 placeholders = ", ".join(["?"] * len(row))
                 try:
                     cursor.execute(
-                        f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",
+                        f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",  # nosec B608 # Table and columns already passed the explicit import whitelist.
                         tuple(row.values())
                     )
                 except (sqlite3.IntegrityError, sqlite3.OperationalError):
@@ -3577,9 +4023,21 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     sync; dit is puur "een reddingslijn als de database zelf corrupt raakt of
     per ongeluk verwijderd wordt"). Retourneert het pad van de nieuwe backup.
     """
+    if config.BACKUP_ENCRYPTION_KEY:
+        from memory.encrypted_backup import backup_encrypted_database
+        return backup_encrypted_database(backup_dir, config.BACKUP_ENCRYPTION_KEY, keep_last)
+
     import datetime as _dt
 
+    if not isinstance(keep_last, int) or keep_last < 1:
+        raise ValueError("keep_last must be a positive integer; never delete all backups")
+    if os.path.islink(backup_dir):
+        raise ValueError("Backup directory must not be a symlink")
     os.makedirs(backup_dir, exist_ok=True)
+    try:
+        os.chmod(backup_dir, 0o700)
+    except OSError:
+        pass
     timestamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     db_path = config.DATABASE_PATH
     backup_filename = f"executive_team_backup_{timestamp}.db"
@@ -3597,6 +4055,10 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     finally:
         destination.close()
         source.close()
+    try:
+        os.chmod(backup_path, 0o600)
+    except OSError:
+        pass
 
     existing_backups = sorted(
         [f for f in os.listdir(backup_dir) if f.startswith("executive_team_backup_") and f.endswith(".db")]
@@ -3673,3 +4135,53 @@ if __name__ == "__main__":
     for action in pending:
         print(action)
     print("=" * 60)
+
+
+# Contributions contain published, evidence-guarded outputs, never hidden model
+# reasoning or raw tool traces. They commit atomically with their parent result.
+def _store_contributions(cursor, decision_id, phase, outputs, profiles):
+    if outputs is None:
+        return
+    if not isinstance(outputs, dict) or len(outputs) > 11:
+        raise ValueError("Invalid executive contribution set")
+    allowed = {'ceo', 'cfo', 'coo', 'cso', 'cmo', 'cto', 'cpo', 'chro', 'general_counsel', 'board_director', 'cco'}
+    validated = []
+    for sequence, (key, body) in enumerate(outputs.items(), 1):
+        if key not in allowed or not isinstance(body, str) or len(body) > 100000:
+            raise ValueError("Invalid executive contribution")
+        profile = (profiles or {}).get(key, {})
+        if not isinstance(profile, dict) or set(profile) - {'name', 'role', 'goal', 'backstory'}:
+            raise ValueError("Invalid executive profile snapshot")
+        if any(not isinstance(value, str) or len(value) > 20000 for value in profile.values()):
+            raise ValueError("Invalid executive profile text")
+        _reject_secret_like_text(body, *profile.values())
+        validated.append((sequence, key, body, json.dumps(profile, sort_keys=True)))
+    existing = cursor.execute(
+        "SELECT sequence, executive_key, body, profile_json FROM decision_contributions WHERE decision_id = ? AND phase = ? ORDER BY sequence",
+        (decision_id, phase)).fetchall()
+    if existing:
+        if [tuple(row) for row in existing] != validated:
+            raise ValueError("Recorded executive contributions are immutable")
+        return
+    now = datetime.datetime.now().isoformat()
+    cursor.executemany(
+        "INSERT INTO decision_contributions (decision_id, phase, sequence, executive_key, body, profile_json, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(decision_id, phase, *row, now) for row in validated])
+
+
+def get_decision_contributions(decision_id: int) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, decision_id, phase, sequence, executive_key, body, profile_json, captured_at FROM decision_contributions WHERE decision_id = ? ORDER BY CASE phase WHEN 'decision' THEN 0 ELSE 1 END, sequence",
+            (decision_id,)).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item['profile'] = json.loads(item.pop('profile_json'))
+            result.append(item)
+        return result
+
+
+def get_company_activity(limit: int = 50, offset: int = 0, before_id: int | None = None) -> list[dict]:
+    from memory.activity import list_activity
+    return list_activity(limit, offset, before_id)

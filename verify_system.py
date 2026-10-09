@@ -498,22 +498,24 @@ except Exception as e:
 
 
 # -------------------------------------------------------------------
-# CHECK 16: STATIC CHECK — subprocess execution uses a sanitized environment
+# CHECK 16: STATIC CHECK — container runtime does not inherit API process secrets
 # -------------------------------------------------------------------
 try:
-    with open("workflows/action_executor.py", "r", encoding="utf-8") as f:
-        exec_content = f.read()
-
-    subprocess_match = re.search(r"subprocess\.run\(\s*action_detail.*?\n\s*\)", exec_content, re.DOTALL)
-    if subprocess_match and "env=" in subprocess_match.group(0):
-        log_pass("subprocess.run() passes a sanitized env= — secrets are not inherited by executed commands")
+    with open("workflows/container_executor.py", "r", encoding="utf-8") as fh:
+        worker_source_16 = fh.read()
+    with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+        exec_content = fh.read()
+    if (
+        "run_in_container(action_detail, _get_workspace_root())" in exec_content
+        and "shell=False" in worker_source_16
+        and 'env={"PATH":' in worker_source_16
+        and '"--network=none"' in worker_source_16
+    ):
+        log_pass("Live shell delegates to the offline worker with explicit, sanitized process environment")
     else:
-        log_fail(
-            "Subprocess environment sanitization check",
-            "subprocess.run() does not pass env= — executed commands inherit the full process environment, including secrets from .env."
-        )
+        log_fail("Container environment sanitization", "Worker missing isolated invocation or minimal subprocess env")
 except Exception as e:
-    log_fail("Subprocess env check crashed", str(e))
+    log_fail("Container environment sanitization crashed", str(e))
 
 
 # -------------------------------------------------------------------
@@ -682,7 +684,7 @@ try:
         main_content_check23 = f.read()
 
     lifespan_match = re.search(
-        r"async def lifespan\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
+        r"async def (?:lifespan|_lifespan_unlocked)\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
         main_content_check23,
         re.DOTALL,
     )
@@ -967,7 +969,7 @@ try:
         with tempfile.TemporaryDirectory() as temp_dir:
             _verify_config.DATABASE_PATH = os.path.join(temp_dir, "state_machine.db")
             _verify_init_db()
-            test_id = _verify_propose_action("CFO", "state test", "echo ok", "shell")
+            test_id = _verify_propose_action("COO", "state test", "echo ok", "shell")
 
             first_approve = _verify_transition_action_status(test_id, "approved", ("pending",))
             second_approve = _verify_transition_action_status(test_id, "approved", ("pending",))
@@ -1405,7 +1407,7 @@ try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_58 = f.read()
     lifespan_match = re.search(
-        r"async def lifespan\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
+        r"async def (?:lifespan|_lifespan_unlocked)\(app: FastAPI\):.*?(?=\n\n# 5\. FastAPI App Instantie)",
         main_content_58,
         re.DOTALL,
     )
@@ -1748,6 +1750,7 @@ try:
         import_history_from_jsonl as _import_68,
         get_recent_decisions as _recent_68,
         transition_decision_approval as _transition_68,
+        _sync_record_signature as _sign_68,
     )
 
     original_db_68 = _verify_config_68.DATABASE_PATH
@@ -1766,6 +1769,7 @@ try:
                 "sandbox_mode": 1,
                 "sync_uuid": "verify-imported-decision-68",
             }
+            imported_row["_signature"] = _sign_68(imported_row)
             with open(export_path, "w", encoding="utf-8") as f:
                 f.write(json.dumps(imported_row) + "\n")
 
@@ -1940,11 +1944,13 @@ try:
     original_db_73 = _verify_config_73.DATABASE_PATH
     original_workspace_73 = _verify_config_73.WORKSPACE_ROOT
     original_sandbox_73 = _verify_config_73.SANDBOX_MODE
+    original_raw_shell_73 = _verify_config_73.ALLOW_UNSAFE_RAW_SHELL
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             _verify_config_73.DATABASE_PATH = os.path.join(temp_dir, "live-outcome.db")
             _verify_config_73.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
             _verify_config_73.SANDBOX_MODE = False
+            _verify_config_73.ALLOW_UNSAFE_RAW_SHELL = True
             _init_db_73()
 
             action_id = _propose_73(
@@ -1955,7 +1961,15 @@ try:
                 expected_outcome="Command completes",
             )
             _transition_73(action_id, "approved", ("pending",))
-            with suppress_executor_notifications():
+            from unittest.mock import patch as _patch_73
+            from subprocess import CompletedProcess as _CompletedProcess_73
+            # The worker image is deliberately not pulled in CI. Simulate a
+            # successful *isolated* execution to exercise the business-state
+            # transition without running any host command or network request.
+            with suppress_executor_notifications(), _patch_73(
+                "workflows.container_executor.run_in_container",
+                return_value=_CompletedProcess_73(["docker"], 0, "outcome-test", ""),
+            ):
                 result = _execute_73(action_id)
             outcome = _get_outcome_73(action_id)
 
@@ -1963,10 +1977,36 @@ try:
                 log_pass("successful live execution moves business outcome to measurement_pending, not succeeded")
             else:
                 log_fail("Live outcome transition", f"result={result}, outcome={outcome}")
+
+            from workflows.container_executor import ContainerTimeoutError as _ContainerTimeout_73
+            timeout_action_id = _propose_73(
+                "COO",
+                "Timed-out effect must require manual review",
+                "printf timeout-test",
+                "shell",
+                expected_outcome="Command completes",
+            )
+            _transition_73(timeout_action_id, "approved", ("pending",))
+            with suppress_executor_notifications(), _patch_73(
+                "workflows.container_executor.run_in_container",
+                side_effect=_ContainerTimeout_73("Container timeout"),
+            ):
+                timeout_result = _execute_73(timeout_action_id)
+            timeout_outcome = _get_outcome_73(timeout_action_id)
+            if (
+                not timeout_result.get("success")
+                and timeout_outcome
+                and timeout_outcome["outcome_status"] == "inconclusive"
+                and "Manually inspect" in (timeout_outcome.get("next_recommendation") or "")
+            ):
+                log_pass("Timed-out live worker remains inconclusive and requires manual inspection before retry")
+            else:
+                log_fail("Timed-out live outcome safety", f"result={timeout_result}, outcome={timeout_outcome}")
     finally:
         _verify_config_73.DATABASE_PATH = original_db_73
         _verify_config_73.WORKSPACE_ROOT = original_workspace_73
         _verify_config_73.SANDBOX_MODE = original_sandbox_73
+        _verify_config_73.ALLOW_UNSAFE_RAW_SHELL = original_raw_shell_73
 except Exception as e:
     log_fail("Live outcome transition check crashed", str(e))
 
@@ -2034,11 +2074,13 @@ try:
     original_db_75 = _verify_config_75.DATABASE_PATH
     original_workspace_75 = _verify_config_75.WORKSPACE_ROOT
     original_sandbox_75 = _verify_config_75.SANDBOX_MODE
+    original_raw_shell_75 = _verify_config_75.ALLOW_UNSAFE_RAW_SHELL
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             _verify_config_75.DATABASE_PATH = os.path.join(temp_dir, "failed-outcome.db")
             _verify_config_75.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
             _verify_config_75.SANDBOX_MODE = False
+            _verify_config_75.ALLOW_UNSAFE_RAW_SHELL = True
             _init_db_75()
 
             action_id = _propose_75("COO", "Expected failure", "false", "shell")
@@ -2060,6 +2102,7 @@ try:
         _verify_config_75.DATABASE_PATH = original_db_75
         _verify_config_75.WORKSPACE_ROOT = original_workspace_75
         _verify_config_75.SANDBOX_MODE = original_sandbox_75
+        _verify_config_75.ALLOW_UNSAFE_RAW_SHELL = original_raw_shell_75
 except Exception as e:
     log_fail("Execution-failure outcome check crashed", str(e))
 
@@ -2084,13 +2127,13 @@ try:
             missing_currency_rejected = False
             try:
                 _propose_76(
-                    "CFO", "Cost validation", "echo ok", "shell",
+                    "COO", "Cost validation", "echo ok", "shell",
                     expected_cost_amount=1.0,
                 )
             except ValueError:
                 missing_currency_rejected = True
 
-            action_id = _propose_76("CFO", "Outcome validation", "echo ok", "shell")
+            action_id = _propose_76("COO", "Outcome validation", "echo ok", "shell")
             invalid_status_rejected = False
             try:
                 _update_outcome_76(action_id, outcome_status="definitely_great")
@@ -2134,7 +2177,7 @@ try:
             _verify_config_77.DATABASE_PATH = source_db
             _init_db_77()
             action_id = _propose_77(
-                "CFO",
+                "COO",
                 "Sync outcome",
                 "echo sync",
                 "shell",
@@ -3082,13 +3125,13 @@ try:
             _init_db_98()
             _fund_98("funding", 100, "EUR", "Owner capital")
             first = _propose_98(
-                "CFO", "Paid test action", "echo paid", "shell",
+                "COO", "Paid test action", "echo paid", "shell",
                 expected_cost_amount=60, currency="EUR",
             )
             approval = _approve_98(first)
 
             second = _propose_98(
-                "CFO", "Too expensive test", "echo expensive", "shell",
+                "COO", "Too expensive test", "echo expensive", "shell",
                 expected_cost_amount=50, currency="EUR",
             )
             blocked = False
@@ -3140,7 +3183,7 @@ try:
             _init_db_99()
             _fund_99("funding", 100, "EUR", "Owner capital")
             action_id = _propose_99(
-                "CFO", "Reservable action", "echo reserve", "shell",
+                "COO", "Reservable action", "echo reserve", "shell",
                 expected_cost_amount=35, currency="EUR",
             )
             _approve_99(action_id)
@@ -3190,7 +3233,7 @@ try:
             _init_db_100()
             _fund_100("funding", 100, "EUR", "Owner capital")
             action_id = _propose_100(
-                "CFO", "Measured paid action", "echo measured", "shell",
+                "COO", "Measured paid action", "echo measured", "shell",
                 expected_cost_amount=60, currency="EUR",
             )
             _approve_100(action_id)
@@ -3272,7 +3315,7 @@ try:
             _fund_101("funding", 80, "EUR", "Owner capital")
             with _scope_101(source_decision_id, source_decision["sync_uuid"], "preparation"):
                 source_action_id = _propose_101(
-                    "CFO", "Synced paid action", "echo sync-money", "shell",
+                    "COO", "Synced paid action", "echo sync-money", "shell",
                     expected_cost_amount=20, currency="EUR",
                 )
             _approve_101(source_action_id)
@@ -3297,11 +3340,13 @@ try:
                 summary.get("treasury_entries_imported") == 1
                 and summary.get("treasury_reservations_imported") == 1
                 and imported_decision["id"] != source_decision_id
+                and imported_action["status"] == "pending"
+                and reservation["status"] == "released"
                 and reservation["source_action_id"] == imported_action["id"]
                 and reservation["source_decision_id"] == imported_decision["id"]
                 and reservation["source_decision_sync_uuid"] == source_decision["sync_uuid"]
             ):
-                log_pass("treasury sync resolves local decision/action IDs from stable UUID provenance")
+                log_pass("treasury sync preserves provenance but does not transfer remote approval/spending authority")
             else:
                 log_fail(
                     "Treasury sync provenance",
@@ -3468,7 +3513,7 @@ try:
                 "preparation",
             ):
                 cleanup_action_id = _propose_action_104(
-                    "CFO",
+                    "COO",
                     "Unexecuted paid goal work",
                     "printf no-run",
                     "shell",
@@ -3618,7 +3663,7 @@ try:
             _fund_106("funding", 100, "EUR", "Owner capital")
             with _scope_106(decision_id, decision["sync_uuid"], "preparation"):
                 action_id = _propose_106(
-                    "CFO",
+                    "COO",
                     "Goal-linked paid action",
                     "printf goal-lineage",
                     "shell",
@@ -3786,8 +3831,6 @@ try:
         'operation="approve decision direction"',
         'operation="approve resource request"',
         'operation="fulfill resource request"',
-        'operation="approve action"',
-        'operation="execute action"',
     ]
     required_db = [
         "CREATE TABLE IF NOT EXISTS company_goals",
@@ -3811,7 +3854,11 @@ try:
         "Abandon",
     ]
 
+    with open("workflows/action_control.py", "r", encoding="utf-8") as fh:
+        action_control_109 = fh.read()
+    required_action_control_109 = ("_require_linked_goal_active(action, \"approve action\")", "_require_linked_goal_active(action, \"execute action\")")
     missing_main = [item for item in required_main if item not in main_content_109]
+    missing_main += [item for item in required_action_control_109 if item not in action_control_109]
     missing_db = [item for item in required_db if item not in db_content_109]
     missing_dashboard = [item for item in required_dashboard if item not in dashboard_content_109]
 
@@ -5052,6 +5099,1045 @@ try:
         )
 except Exception as e:
     log_fail("Incident evidence-separation guard check crashed", str(e))
+
+
+
+# -------------------------------------------------------------------
+# CHECK 131: STATIC CHECK — every owner action surface uses one control path
+# -------------------------------------------------------------------
+try:
+    with open("workflows/action_control.py", "r", encoding="utf-8") as fh:
+        control_131 = fh.read()
+    with open("main.py", "r", encoding="utf-8") as fh:
+        main_131 = fh.read()
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as fh:
+        telegram_131 = fh.read()
+
+    required_control_131 = [
+        "approve_action_with_treasury",
+        "reject_action_with_treasury",
+        "_require_linked_goal_active",
+        "execute_action(action_id)",
+    ]
+    required_main_131 = [
+        "approve_action_control(action_id)",
+        "reject_action_control(action_id)",
+        "execute_action_control(action_id)",
+    ]
+    required_telegram_131 = [
+        "approve_action_control(action_id)",
+        "reject_action_control(action_id)",
+        "execute_action_control, action_id",
+        'chat_type != "private"',
+        "effective_user.id",
+    ]
+    if (
+        all(x in control_131 for x in required_control_131)
+        and all(x in main_131 for x in required_main_131)
+        and all(x in telegram_131 for x in required_telegram_131)
+        and "transition_action_status(action_id, \"approved\"" not in telegram_131
+    ):
+        log_pass("API and Telegram share treasury/goal-aware action control and Telegram requires the private owner user")
+    else:
+        log_fail("Shared action control", "One or more owner-control surfaces bypass the centralized gate")
+except Exception as e:
+    log_fail("Shared action control check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 132: DYNAMIC CHECK — shared action control preserves treasury and goal gates
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_132
+    from memory.database import (
+        init_db as _init_132,
+        create_company_goal as _goal_132,
+        transition_company_goal_status as _goal_status_132,
+        log_decision as _decision_132,
+        get_decision_by_id as _get_decision_132,
+        action_provenance_scope as _scope_132,
+        propose_action as _propose_132,
+        add_treasury_entry as _fund_132,
+        get_treasury_reservation_for_action as _reservation_132,
+    )
+    from workflows.action_control import (
+        approve_action_control as _approve_132,
+        reject_action_control as _reject_132,
+        ActionControlError as _control_error_132,
+    )
+
+    original_db_132 = _verify_config_132.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_132.DATABASE_PATH = os.path.join(temp_dir, "control.db")
+            _init_132()
+            goal_id = _goal_132("Control gate", "Mission", "Criteria", status="active")
+            decision_id = _decision_132(
+                "Control decision", ["cfo"], "Evidence", "Direction", True, goal_id=goal_id
+            )
+            decision = _get_decision_132(decision_id)
+            _fund_132("funding", 100, "EUR", "Owner test capital")
+            with _scope_132(decision_id, decision["sync_uuid"], "preparation"):
+                paid_id = _propose_132(
+                    "COO", "Paid controlled action", "printf controlled", "shell",
+                    expected_cost_amount=20, currency="EUR",
+                )
+                paused_id = _propose_132(
+                    "COO", "Goal-gated action", "printf paused", "shell"
+                )
+
+            approved = _approve_132(paid_id)
+            active_reservation = _reservation_132(paid_id)
+            rejected = _reject_132(paid_id)
+            released_reservation = _reservation_132(paid_id)
+
+            _goal_status_132(goal_id, "paused")
+            paused_blocked = False
+            try:
+                _approve_132(paused_id)
+            except _control_error_132:
+                paused_blocked = True
+
+            if (
+                approved["status"] == "approved"
+                and active_reservation["status"] == "active"
+                and rejected["status"] == "rejected"
+                and released_reservation["status"] == "released"
+                and paused_blocked
+            ):
+                log_pass("shared action control atomically reserves/releases treasury and blocks approval for paused goals")
+            else:
+                log_fail(
+                    "Action control semantics",
+                    f"approved={approved}, active={active_reservation}, rejected={rejected}, "
+                    f"released={released_reservation}, paused_blocked={paused_blocked}",
+                )
+    finally:
+        _verify_config_132.DATABASE_PATH = original_db_132
+except Exception as e:
+    log_fail("Action control semantics check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 133: DYNAMIC CHECK — signed sync rejects tampering and never transfers execution authority
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_133
+    from memory.database import (
+        init_db as _init_133,
+        log_decision as _decision_133,
+        get_decision_by_id as _get_decision_133,
+        action_provenance_scope as _scope_133,
+        propose_action as _propose_133,
+        add_treasury_entry as _fund_133,
+        approve_action_with_treasury as _approve_133,
+        export_history_to_jsonl as _export_133,
+        import_history_from_jsonl as _import_133,
+        get_action_history as _actions_133,
+        get_treasury_reservation_for_action as _reservation_133,
+    )
+
+    original_db_133 = _verify_config_133.DATABASE_PATH
+    original_sync_key_133 = _verify_config_133.SYNC_HMAC_KEY
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_db = os.path.join(temp_dir, "source.db")
+            valid_target_db = os.path.join(temp_dir, "valid-target.db")
+            tampered_target_db = os.path.join(temp_dir, "tampered-target.db")
+            export_path = os.path.join(temp_dir, "signed.jsonl")
+            tampered_path = os.path.join(temp_dir, "tampered.jsonl")
+            _verify_config_133.SYNC_HMAC_KEY = "verify-sync-hmac-key-133"
+
+            _verify_config_133.DATABASE_PATH = source_db
+            _init_133()
+            decision_id = _decision_133("Signed sync", ["cfo"], "Evidence", "Direction", True)
+            decision = _get_decision_133(decision_id)
+            _fund_133("funding", 50, "EUR", "Owner capital")
+            with _scope_133(decision_id, decision["sync_uuid"], "preparation"):
+                action_id = _propose_133(
+                    "COO", "Remote approved action", "printf sync", "shell",
+                    expected_cost_amount=10, currency="EUR",
+                )
+            _approve_133(action_id)
+            _export_133(export_path)
+
+            with open(export_path, "r", encoding="utf-8") as src:
+                lines_133 = src.readlines()
+            tampered_lines_133 = []
+            tampered_once_133 = False
+            for line in lines_133:
+                row = json.loads(line)
+                if row.get("_table") == "action_queue" and not tampered_once_133:
+                    row["action_description"] = "TAMPERED WITHOUT RESIGNING"
+                    tampered_once_133 = True
+                tampered_lines_133.append(json.dumps(row) + "\n")
+            with open(tampered_path, "w", encoding="utf-8") as dst:
+                dst.writelines(tampered_lines_133)
+
+            _verify_config_133.DATABASE_PATH = tampered_target_db
+            _init_133()
+            tampered_summary = _import_133(tampered_path)
+            tampered_actions = _actions_133(limit=20)
+
+            _verify_config_133.DATABASE_PATH = valid_target_db
+            _init_133()
+            valid_summary = _import_133(export_path)
+            valid_action = next(a for a in _actions_133(limit=20) if a["action_description"] == "Remote approved action")
+            valid_reservation = _reservation_133(valid_action["id"])
+
+            if (
+                tampered_once_133
+                and not any(a["action_description"] == "TAMPERED WITHOUT RESIGNING" for a in tampered_actions)
+                and tampered_summary.get("skipped_existing", 0) >= 1
+                and valid_summary.get("actions_imported") == 1
+                and valid_action["status"] == "pending"
+                and valid_reservation["status"] == "released"
+            ):
+                log_pass("sync HMAC rejects tampering and valid sync preserves history without remote execution/spending authority")
+            else:
+                log_fail(
+                    "Authenticated sync authority",
+                    f"tampered_summary={tampered_summary}, tampered_actions={tampered_actions}, "
+                    f"valid_summary={valid_summary}, action={valid_action}, reservation={valid_reservation}",
+                )
+    finally:
+        _verify_config_133.DATABASE_PATH = original_db_133
+        _verify_config_133.SYNC_HMAC_KEY = original_sync_key_133
+except Exception as e:
+    log_fail("Authenticated sync authority check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 134: DYNAMIC CHECK — live raw shell is fail-closed by default
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_134
+    from memory.database import (
+        init_db as _init_134,
+        propose_action as _propose_134,
+        transition_action_status as _transition_134,
+        get_action_by_id as _get_action_134,
+        get_action_outcome as _outcome_134,
+    )
+    from workflows.action_executor import execute_action as _execute_134
+
+    original_db_134 = _verify_config_134.DATABASE_PATH
+    original_workspace_134 = _verify_config_134.WORKSPACE_ROOT
+    original_sandbox_134 = _verify_config_134.SANDBOX_MODE
+    original_raw_134 = _verify_config_134.ALLOW_UNSAFE_RAW_SHELL
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_134.DATABASE_PATH = os.path.join(temp_dir, "shell.db")
+            _verify_config_134.WORKSPACE_ROOT = os.path.join(temp_dir, "workspace")
+            _verify_config_134.SANDBOX_MODE = False
+            _verify_config_134.ALLOW_UNSAFE_RAW_SHELL = False
+            _init_134()
+            action_id = _propose_134("COO", "Default-off shell", "printf should-not-run", "shell")
+            _transition_134(action_id, "approved", ("pending",))
+            with suppress_executor_notifications():
+                result = _execute_134(action_id)
+            action = _get_action_134(action_id)
+            outcome = _outcome_134(action_id)
+            if (
+                not result.get("success")
+                and result.get("blocked")
+                and action["status"] == "blocked_dangerous"
+                and outcome["outcome_status"] == "failed"
+                and "disabled by default" in result.get("error", "")
+            ):
+                log_pass("live raw shell is disabled by default instead of relying on heuristic path/regex sandboxing")
+            else:
+                log_fail("Raw shell fail-closed", f"result={result}, action={action}, outcome={outcome}")
+    finally:
+        _verify_config_134.DATABASE_PATH = original_db_134
+        _verify_config_134.WORKSPACE_ROOT = original_workspace_134
+        _verify_config_134.SANDBOX_MODE = original_sandbox_134
+        _verify_config_134.ALLOW_UNSAFE_RAW_SHELL = original_raw_134
+except Exception as e:
+    log_fail("Raw shell fail-closed check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 135: STATIC CHECK — browser blocks service-worker/subresource SSRF
+# -------------------------------------------------------------------
+try:
+    with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+        executor_135 = fh.read()
+    required_135 = [
+        'service_workers="block"',
+        "accept_downloads=False",
+        'context.route("**/*", _guard_network_request)',
+        "check_url_safety(request_url)",
+    ]
+    if all(x in executor_135 for x in required_135) and "request.is_navigation_request()" not in executor_135:
+        log_pass("browser isolation validates all HTTP(S) requests and blocks service-worker routing bypasses")
+    else:
+        log_fail("Browser SSRF boundary", f"missing={[x for x in required_135 if x not in executor_135]}")
+except Exception as e:
+    log_fail("Browser SSRF boundary check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 136: DYNAMIC/STATIC CHECK — research networking is bounded and credential-safe
+# -------------------------------------------------------------------
+try:
+    from tools.research_tool import _is_safe_research_url as _safe_url_136
+    with open("tools/research_tool.py", "r", encoding="utf-8") as fh:
+        research_136 = fh.read()
+
+    credential_block_136 = _safe_url_136("https://user:password@example.com/data")
+    odd_port_block_136 = _safe_url_136("https://example.com:8443/data")
+    static_ok_136 = all([
+        "stream=True" in research_136,
+        "max_bytes = 1024 * 1024" in research_136,
+        "Response body exceeded the 1 MiB research safety limit" in research_136,
+        "Unsupported content type" in research_136,
+    ])
+    if credential_block_136 and odd_port_block_136 and static_ok_136:
+        log_pass("research requests reject embedded credentials/unapproved ports and bound response size/content types")
+    else:
+        log_fail(
+            "Research network bounds",
+            f"credential={credential_block_136}, port={odd_port_block_136}, static={static_ok_136}",
+        )
+except Exception as e:
+    log_fail("Research network bounds check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 137: STATIC CHECK — local-first telemetry privacy is applied before CrewAI imports
+# -------------------------------------------------------------------
+try:
+    with open("privacy_bootstrap.py", "r", encoding="utf-8") as fh:
+        bootstrap_137 = fh.read()
+    crewai_import_files_137 = [
+        "agents/executive_agents.py",
+        "workflows/meeting.py",
+        "workflows/daily_research.py",
+        "tools/action_proposal_tool.py",
+        "tools/file_operation_tool.py",
+        "tools/browser_action_tool.py",
+        "tools/resource_request_tool.py",
+        "tools/research_tool.py",
+    ]
+    bootstrap_first_137 = True
+    for path_137 in crewai_import_files_137:
+        with open(path_137, "r", encoding="utf-8") as fh:
+            content_137 = fh.read()
+        privacy_pos_137 = content_137.find("import privacy_bootstrap")
+        crewai_pos_137 = min(
+            [p for p in (content_137.find("from crewai"), content_137.find("import crewai")) if p >= 0]
+            or [10**9]
+        )
+        if privacy_pos_137 < 0 or privacy_pos_137 > crewai_pos_137:
+            bootstrap_first_137 = False
+            break
+
+    if 'CREWAI_DISABLE_TELEMETRY", "true"' in bootstrap_137 and bootstrap_first_137:
+        log_pass("CrewAI telemetry is disabled by project default before framework imports")
+    else:
+        log_fail("CrewAI telemetry privacy", f"bootstrap_first={bootstrap_first_137}")
+except Exception as e:
+    log_fail("CrewAI telemetry privacy check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 138: DYNAMIC/STATIC CHECK — private runtime artifacts use owner-only permissions
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_138
+    from memory.database import (
+        init_db as _init_138,
+        export_history_to_jsonl as _export_138,
+        backup_database as _backup_138,
+    )
+
+    original_db_138 = _verify_config_138.DATABASE_PATH
+    original_sync_138 = _verify_config_138.SYNC_HMAC_KEY
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path_138 = os.path.join(temp_dir, "private.db")
+            export_path_138 = os.path.join(temp_dir, "sync", "private.jsonl")
+            backup_dir_138 = os.path.join(temp_dir, "backups")
+            _verify_config_138.DATABASE_PATH = db_path_138
+            _verify_config_138.SYNC_HMAC_KEY = "permission-test-key-138"
+            _init_138()
+            _export_138(export_path_138)
+            backup_path_138 = _backup_138(backup_dir=backup_dir_138, keep_last=2)
+
+            db_mode_138 = os.stat(db_path_138).st_mode & 0o777
+            export_mode_138 = os.stat(export_path_138).st_mode & 0o777
+            backup_mode_138 = os.stat(backup_path_138).st_mode & 0o777
+            export_dir_mode_138 = os.stat(os.path.dirname(export_path_138)).st_mode & 0o777
+
+            with open("logging_config.py", "r", encoding="utf-8") as fh:
+                logging_138 = fh.read()
+
+            if (
+                db_mode_138 == 0o600
+                and export_mode_138 == 0o600
+                and backup_mode_138 == 0o600
+                and export_dir_mode_138 == 0o700
+                and "os.chmod(_LOG_DIR, 0o700)" in logging_138
+                and "self._harden_permissions()" in logging_138
+                and "os.chmod(path, 0o600)" in logging_138
+            ):
+                log_pass("database, sync, backups, and logs enforce owner-only local permissions")
+            else:
+                log_fail(
+                    "Private artifact permissions",
+                    f"db={oct(db_mode_138)}, export={oct(export_mode_138)}, "
+                    f"backup={oct(backup_mode_138)}, dir={oct(export_dir_mode_138)}",
+                )
+    finally:
+        _verify_config_138.DATABASE_PATH = original_db_138
+        _verify_config_138.SYNC_HMAC_KEY = original_sync_138
+except Exception as e:
+    log_fail("Private artifact permissions check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 139: DYNAMIC CHECK — failed autonomous reasoning remains retryable after backoff
+# -------------------------------------------------------------------
+try:
+    import asyncio as _asyncio_139
+    import datetime as _datetime_139
+    import workflows.autonomous_followup as _followup_139
+    from config import config as _verify_config_139
+    from memory.database import (
+        init_db as _init_139,
+        create_company_goal as _goal_139,
+        get_followup_events as _events_139,
+        get_connection as _connection_139,
+    )
+
+    original_db_139 = _verify_config_139.DATABASE_PATH
+    original_meeting_139 = _followup_139.run_executive_meeting
+    original_notify_139 = _followup_139.send_notification_async
+    calls_139 = []
+
+    def _flaky_meeting_139(*args, **kwargs):
+        calls_139.append(kwargs)
+        if len(calls_139) == 1:
+            raise RuntimeError("synthetic transient model failure")
+        return {
+            "final_decision": "Retry succeeded; owner review still required.",
+            "participants": ["cso", "coo", "ceo"],
+            "individual_outputs": {},
+            "quality_warnings": {},
+        }
+
+    async def _silent_notify_139(*args, **kwargs):
+        return None
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_139.DATABASE_PATH = os.path.join(temp_dir, "retry.db")
+            _init_139()
+            _goal_139("Retryable follow-up", "Mission", "Criteria", status="active")
+            _followup_139.run_executive_meeting = _flaky_meeting_139
+            _followup_139.send_notification_async = _silent_notify_139
+
+            first_139 = _asyncio_139.run(_followup_139.run_autonomous_followup())
+            event_139 = next(e for e in _events_139(limit=20) if e["event_type"] == "strategy_review")
+            old_time_139 = (_datetime_139.datetime.now() - _datetime_139.timedelta(minutes=20)).isoformat()
+            with _connection_139() as conn:
+                conn.execute(
+                    "UPDATE followup_events SET last_attempt_at = ? WHERE id = ?",
+                    (old_time_139, event_139["id"]),
+                )
+                conn.commit()
+
+            second_139 = _asyncio_139.run(_followup_139.run_autonomous_followup())
+            retried_139 = next(e for e in _events_139(limit=20) if e["id"] == event_139["id"])
+
+            if (
+                not first_139["success"]
+                and second_139["success"]
+                and len(calls_139) == 2
+                and retried_139["attempt_count"] == 2
+                and retried_139["generated_decision_id"] is not None
+                and retried_139["last_error"] is None
+            ):
+                log_pass("transient autonomous meeting failures persist retry state and recover after durable backoff")
+            else:
+                log_fail(
+                    "Autonomous retry durability",
+                    f"first={first_139}, second={second_139}, calls={len(calls_139)}, event={retried_139}",
+                )
+    finally:
+        _followup_139.run_executive_meeting = original_meeting_139
+        _followup_139.send_notification_async = original_notify_139
+        _verify_config_139.DATABASE_PATH = original_db_139
+except Exception as e:
+    log_fail("Autonomous retry durability check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 140: DYNAMIC CHECK — durable history rejects common credential shapes
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_140
+    from memory.database import init_db as _init_140, propose_action as _propose_140
+
+    original_db_140 = _verify_config_140.DATABASE_PATH
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _verify_config_140.DATABASE_PATH = os.path.join(temp_dir, "secrets.db")
+            _init_140()
+            rejected_140 = 0
+            secret_samples_140 = [
+                "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi",
+                "AKIAABCDEFGHIJKLMNOP",
+                "Bearer abcdefghijklmnopqrstuvwxyz012345",
+                "eyJabcdefghij.eyJklmnopqrst.abcdefghijklmnopqrstuvwxyz",
+            ]
+            for index_140, value_140 in enumerate(secret_samples_140):
+                try:
+                    _propose_140("CTO", f"Secret test {index_140}", value_140, "shell")
+                except ValueError:
+                    rejected_140 += 1
+            normal_id_140 = _propose_140("CTO", "Normal action", "printf ordinary", "shell")
+            if rejected_140 == len(secret_samples_140) and isinstance(normal_id_140, int):
+                log_pass("action persistence rejects common Telegram/AWS/JWT/Bearer credential shapes")
+            else:
+                log_fail("Durable secret detection", f"rejected={rejected_140}, normal={normal_id_140}")
+    finally:
+        _verify_config_140.DATABASE_PATH = original_db_140
+except Exception as e:
+    log_fail("Durable secret detection check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 141: DYNAMIC CHECK — structured file I/O is atomic/private/bounded
+# -------------------------------------------------------------------
+try:
+    from config import config as _verify_config_141
+    from memory.database import (
+        init_db as _init_141,
+        propose_action as _propose_141,
+        transition_action_status as _transition_141,
+        get_action_by_id as _get_action_141,
+    )
+    from workflows.action_executor import execute_action as _execute_141
+
+    original_db_141 = _verify_config_141.DATABASE_PATH
+    original_workspace_141 = _verify_config_141.WORKSPACE_ROOT
+    original_sandbox_141 = _verify_config_141.SANDBOX_MODE
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_141 = os.path.join(temp_dir, "workspace")
+            _verify_config_141.DATABASE_PATH = os.path.join(temp_dir, "files.db")
+            _verify_config_141.WORKSPACE_ROOT = workspace_141
+            _verify_config_141.SANDBOX_MODE = False
+            _init_141()
+
+            write_detail_141 = json.dumps({
+                "operation": "write",
+                "file_path": "private.txt",
+                "content": "safe private content",
+            })
+            write_id_141 = _propose_141("COO", "Atomic write", write_detail_141, "file_operation")
+            _transition_141(write_id_141, "approved", ("pending",))
+            with suppress_executor_notifications():
+                write_result_141 = _execute_141(write_id_141)
+            target_141 = os.path.join(workspace_141, "private.txt")
+            mode_141 = os.stat(target_141).st_mode & 0o777
+            with open(target_141, "r", encoding="utf-8") as fh:
+                body_141 = fh.read()
+
+            with open(target_141, "w", encoding="utf-8") as fh:
+                fh.write("x" * (1024 * 1024 + 2))
+            read_detail_141 = json.dumps({"operation": "read", "file_path": "private.txt"})
+            read_id_141 = _propose_141("COO", "Bounded read", read_detail_141, "file_operation")
+            _transition_141(read_id_141, "approved", ("pending",))
+            with suppress_executor_notifications():
+                read_result_141 = _execute_141(read_id_141)
+            read_action_141 = _get_action_141(read_id_141)
+
+            if (
+                write_result_141.get("success")
+                and body_141 == "safe private content"
+                and mode_141 == 0o600
+                and not read_result_141.get("success")
+                and read_action_141["status"] == "execution_failed"
+                and "1 MiB" in read_result_141.get("error", "")
+            ):
+                log_pass("structured file writes are atomic/owner-only and reads fail safely above 1 MiB")
+            else:
+                log_fail(
+                    "Structured file I/O hardening",
+                    f"write={write_result_141}, mode={oct(mode_141)}, read={read_result_141}, action={read_action_141}",
+                )
+    finally:
+        _verify_config_141.DATABASE_PATH = original_db_141
+        _verify_config_141.WORKSPACE_ROOT = original_workspace_141
+        _verify_config_141.SANDBOX_MODE = original_sandbox_141
+except Exception as e:
+    log_fail("Structured file I/O hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 142: STATIC CHECK — dashboard does not persist API key and has security headers
+# -------------------------------------------------------------------
+try:
+    with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as fh:
+        dashboard_142 = fh.read()
+    with open("executive-dashboard/next.config.ts", "r", encoding="utf-8") as fh:
+        next_config_142 = fh.read()
+
+    if (
+        "dashboard_api_key" not in dashboard_142
+        and "sessionStorage" not in dashboard_142
+        and "localStorage" not in dashboard_142
+        and "Content-Security-Policy" in next_config_142
+        and "X-Frame-Options" in next_config_142
+        and "Referrer-Policy" in next_config_142
+        and "poweredByHeader: false" in next_config_142
+    ):
+        log_pass("dashboard keeps the privileged API key in memory only and emits browser hardening headers")
+    else:
+        log_fail("Dashboard credential/browser hardening", "Persistent key storage or required security headers detected/missing")
+except Exception as e:
+    log_fail("Dashboard credential/browser hardening check crashed", str(e))
+
+
+
+# -------------------------------------------------------------------
+# CHECK 143: DYNAMIC CHECK — invalid guesses cannot self-DoS the valid owner key
+# -------------------------------------------------------------------
+try:
+    import main as _main_143
+    from config import config as _config_143
+
+    class _Client143:
+        host = "127.0.0.1"
+
+    class _Request143:
+        client = _Client143()
+
+    old_key_143 = _config_143.API_SECRET_KEY
+    _main_143._failed_auth_attempts.clear()
+    try:
+        _config_143.API_SECRET_KEY = "owner-key-that-is-long-enough-for-test"
+        invalid_statuses_143 = []
+        for _ in range(_main_143._MAX_FAILED_ATTEMPTS):
+            try:
+                _main_143.verify_api_key(_Request143(), x_api_key="wrong-key")
+            except Exception as exc:
+                invalid_statuses_143.append(getattr(exc, "status_code", None))
+
+        blocked_invalid_143 = None
+        try:
+            _main_143.verify_api_key(_Request143(), x_api_key="another-wrong-key")
+        except Exception as exc:
+            blocked_invalid_143 = getattr(exc, "status_code", None)
+
+        valid_result_143 = _main_143.verify_api_key(
+            _Request143(),
+            x_api_key=_config_143.API_SECRET_KEY,
+        )
+
+        if (
+            invalid_statuses_143 == [401] * _main_143._MAX_FAILED_ATTEMPTS
+            and blocked_invalid_143 == 429
+            and valid_result_143 is True
+            and "127.0.0.1" not in _main_143._failed_auth_attempts
+        ):
+            log_pass("invalid API guesses are rate-limited without locking out a correct owner credential")
+        else:
+            log_fail(
+                "API auth availability hardening",
+                f"invalid={invalid_statuses_143}, blocked={blocked_invalid_143}, valid={valid_result_143}",
+            )
+    finally:
+        _config_143.API_SECRET_KEY = old_key_143
+        _main_143._failed_auth_attempts.clear()
+except Exception as e:
+    log_fail("API auth availability hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 144: STATIC CHECK — Telegram details/errors stay local by default
+# -------------------------------------------------------------------
+try:
+    with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+        executor_144 = fh.read()
+    with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as fh:
+        interactive_144 = fh.read()
+    with open("notifications/telegram_bot.py", "r", encoding="utf-8") as fh:
+        bot_144 = fh.read()
+    with open("config.py", "r", encoding="utf-8") as fh:
+        config_144 = fh.read()
+
+    required_144 = [
+        "TELEGRAM_INCLUDE_SENSITIVE_DETAILS",
+        "_telegram_sensitive",
+        "details retained locally",
+        "Sensitive transport details are suppressed",
+    ]
+    combined_144 = "\n".join([executor_144, interactive_144, bot_144, config_144])
+    raw_error_print_144 = (
+        'print(f"Failed to send Telegram notification: {e}")' in bot_144
+        or 'print(f"Failed to send Telegram notification with keyboard: {e}")' in bot_144
+    )
+
+    if all(item in combined_144 for item in required_144) and not raw_error_print_144:
+        log_pass("Telegram keeps execution/transport details local by default and suppresses raw transport exceptions")
+    else:
+        log_fail(
+            "Telegram privacy hardening",
+            f"missing={[x for x in required_144 if x not in combined_144]}, raw_error_print={raw_error_print_144}",
+        )
+except Exception as e:
+    log_fail("Telegram privacy hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 145: DYNAMIC CHECK — autonomous follow-up paginates all durable rows
+# -------------------------------------------------------------------
+try:
+    import workflows.autonomous_followup as _followup_145
+
+    original_goals_145 = _followup_145.get_company_goals
+    original_events_145 = _followup_145.get_followup_events
+    goal_offsets_145 = []
+    event_offsets_145 = []
+
+    def _fake_goals_145(*, statuses=None, limit=100, offset=0):
+        goal_offsets_145.append(offset)
+        total = 205
+        return [{"id": i} for i in range(offset, min(offset + limit, total))]
+
+    def _fake_events_145(*, statuses=None, limit=250, offset=0):
+        event_offsets_145.append(offset)
+        total = 511
+        return [{"id": i} for i in range(offset, min(offset + limit, total))]
+
+    try:
+        _followup_145.get_company_goals = _fake_goals_145
+        _followup_145.get_followup_events = _fake_events_145
+        goals_145 = _followup_145._get_all_active_goals(page_size=100)
+        events_145 = _followup_145._get_all_open_followups(page_size=250)
+    finally:
+        _followup_145.get_company_goals = original_goals_145
+        _followup_145.get_followup_events = original_events_145
+
+    if (
+        len(goals_145) == 205
+        and goal_offsets_145 == [0, 100, 200]
+        and len(events_145) == 511
+        and event_offsets_145 == [0, 250, 500]
+    ):
+        log_pass("autonomous follow-up scans and reconciles every page instead of silently stopping at fixed limits")
+    else:
+        log_fail(
+            "Autonomous follow-up pagination",
+            f"goals={len(goals_145)} offsets={goal_offsets_145}; events={len(events_145)} offsets={event_offsets_145}",
+        )
+except Exception as e:
+    log_fail("Autonomous follow-up pagination check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 146: DYNAMIC/STATIC CHECK — structured file I/O resists link tricks
+# -------------------------------------------------------------------
+try:
+    from config import config as _config_146
+    from memory.database import (
+        init_db as _init_146,
+        propose_action as _propose_146,
+        transition_action_status as _transition_146,
+    )
+    from workflows.action_executor import execute_action as _execute_146
+
+    old_db_146 = _config_146.DATABASE_PATH
+    old_workspace_146 = _config_146.WORKSPACE_ROOT
+    old_sandbox_146 = _config_146.SANDBOX_MODE
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_146 = os.path.join(temp_dir, "workspace")
+            os.makedirs(workspace_146, exist_ok=True)
+            outside_146 = os.path.join(temp_dir, "outside.txt")
+            with open(outside_146, "w", encoding="utf-8") as fh:
+                fh.write("outside")
+
+            hardlink_146 = os.path.join(workspace_146, "hardlink.txt")
+            os.link(outside_146, hardlink_146)
+
+            _config_146.DATABASE_PATH = os.path.join(temp_dir, "links.db")
+            _config_146.WORKSPACE_ROOT = workspace_146
+            _config_146.SANDBOX_MODE = False
+            _init_146()
+
+            detail_146 = json.dumps({
+                "operation": "append",
+                "file_path": "hardlink.txt",
+                "content": " SHOULD-NOT-WRITE",
+            })
+            action_id_146 = _propose_146(
+                "COO", "Hardlink defense", detail_146, "file_operation"
+            )
+            _transition_146(action_id_146, "approved", ("pending",))
+            with suppress_executor_notifications():
+                result_146 = _execute_146(action_id_146)
+
+            with open(outside_146, "r", encoding="utf-8") as fh:
+                outside_body_146 = fh.read()
+
+            with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+                executor_source_146 = fh.read()
+
+            static_ok_146 = all(
+                token in executor_source_146
+                for token in (
+                    "O_NOFOLLOW",
+                    "dir_fd=parent_fd",
+                    "_require_safe_regular_fd",
+                    "st_nlink",
+                    "src_dir_fd=parent_fd",
+                    "dst_dir_fd=parent_fd",
+                )
+            )
+
+            if (
+                not result_146.get("success")
+                and outside_body_146 == "outside"
+                and "multiple hard links" in result_146.get("error", "")
+                and static_ok_146
+            ):
+                log_pass("structured file I/O uses descriptor-relative no-follow operations and rejects hard-link escape tricks")
+            else:
+                log_fail(
+                    "Structured file link hardening",
+                    f"result={result_146}, outside={outside_body_146!r}, static={static_ok_146}",
+                )
+    finally:
+        _config_146.DATABASE_PATH = old_db_146
+        _config_146.WORKSPACE_ROOT = old_workspace_146
+        _config_146.SANDBOX_MODE = old_sandbox_146
+except Exception as e:
+    log_fail("Structured file link hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 147: STATIC CHECK — runtime privacy/config artifacts fail closed
+# -------------------------------------------------------------------
+try:
+    with open("config.py", "r", encoding="utf-8") as fh:
+        config_147 = fh.read()
+    with open("logging_config.py", "r", encoding="utf-8") as fh:
+        logging_147 = fh.read()
+    with open("main.py", "r", encoding="utf-8") as fh:
+        main_147 = fh.read()
+    with open(".env.example", "r", encoding="utf-8") as fh:
+        env_147 = fh.read()
+
+    stale_env_147 = os.path.exists("env.example")
+    requirements_147 = [
+        "ALLOW_INSECURE_REMOTE_HTTP" in config_147,
+        "config.BIND_HOST not in loopback_hosts" in config_147,
+        "PrivateRotatingFileHandler" in logging_147,
+        "os.chmod(path, 0o600)" in logging_147,
+        "os.path.islink(os.path.join(screenshots_root, filename))" in main_147,
+        "bind_host = config.BIND_HOST" in main_147,
+        "BIND_HOST=127.0.0.1" in env_147,
+        "TELEGRAM_INCLUDE_SENSITIVE_DETAILS=False" in env_147,
+        not stale_env_147,
+    ]
+
+    if all(requirements_147):
+        log_pass("remote binds, screenshots, logs, and the canonical environment template use privacy-safe defaults")
+    else:
+        log_fail("Runtime privacy/config hardening", f"requirements={requirements_147}, stale_env={stale_env_147}")
+except Exception as e:
+    log_fail("Runtime privacy/config hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 148: STATIC CHECK — security automation and production CSP are hardened
+# -------------------------------------------------------------------
+try:
+    with open(".github/workflows/security.yml", "r", encoding="utf-8") as fh:
+        ci_148 = fh.read()
+    with open(".github/dependabot.yml", "r", encoding="utf-8") as fh:
+        dependabot_148 = fh.read()
+    with open("executive-dashboard/next.config.ts", "r", encoding="utf-8") as fh:
+        csp_148 = fh.read()
+
+    ci_ok_148 = all(
+        token in ci_148
+        for token in (
+            'python-version: "3.12"',
+            "pip-audit",
+            "bandit",
+            "npm audit --audit-level=high",
+            "npm run build",
+        )
+    )
+    dependabot_ok_148 = 'package-ecosystem: "github-actions"' in dependabot_148
+    csp_ok_148 = (
+        'const isDevelopment = process.env.NODE_ENV !== "production"' in csp_148
+        and "script-src 'self' 'unsafe-inline' 'unsafe-eval'" in csp_148
+        and "script-src 'self' 'unsafe-inline'" in csp_148
+    )
+
+    if ci_ok_148 and dependabot_ok_148 and csp_ok_148:
+        log_pass("security CI/dependency monitoring are enabled and production CSP removes unsafe-eval")
+    else:
+        log_fail(
+            "Security automation/CSP hardening",
+            f"ci={ci_ok_148}, dependabot={dependabot_ok_148}, csp={csp_ok_148}",
+        )
+except Exception as e:
+    log_fail("Security automation/CSP hardening check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 149: DYNAMIC CHECK — non-local LLM transport is explicit opt-in
+# -------------------------------------------------------------------
+try:
+    from config import config as _config_149, validate_config as _validate_149, ConfigValidationError as _ConfigError149
+
+    old_url_149 = _config_149.OLLAMA_BASE_URL
+    old_remote_149 = _config_149.ALLOW_REMOTE_LLM
+    try:
+        _config_149.OLLAMA_BASE_URL = "https://models.example.com"
+        _config_149.ALLOW_REMOTE_LLM = False
+        blocked_149 = False
+        try:
+            _validate_149()
+        except _ConfigError149 as exc:
+            blocked_149 = "ALLOW_REMOTE_LLM" in str(exc)
+
+        _config_149.ALLOW_REMOTE_LLM = True
+        _config_149.OLLAMA_BASE_URL = "http://models.example.com"
+        plaintext_blocked_149 = False
+        try:
+            _validate_149()
+        except _ConfigError149 as exc:
+            plaintext_blocked_149 = "must use HTTPS" in str(exc)
+
+        _config_149.OLLAMA_BASE_URL = "https://models.example.com"
+        warnings_149 = _validate_149()
+
+        if (
+            blocked_149
+            and plaintext_blocked_149
+            and any("Remote LLM transport is explicitly enabled" in w for w in warnings_149)
+        ):
+            log_pass("non-local LLM endpoints fail closed unless the owner explicitly accepts prompt/memory egress")
+        else:
+            log_fail("Remote LLM privacy boundary", f"blocked={blocked_149}, plaintext={plaintext_blocked_149}, warnings={warnings_149}")
+    finally:
+        _config_149.OLLAMA_BASE_URL = old_url_149
+        _config_149.ALLOW_REMOTE_LLM = old_remote_149
+except Exception as e:
+    log_fail("Remote LLM privacy boundary check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 150: DYNAMIC/STATIC CHECK — Telegram remote control/details default off
+# -------------------------------------------------------------------
+try:
+    from config import config as _config_150
+    from notifications.telegram_interactive import (
+        build_action_keyboard as _keyboard_150,
+        _telegram_safe_action_detail as _detail_150,
+    )
+
+    old_control_150 = _config_150.TELEGRAM_ALLOW_REMOTE_CONTROL
+    old_details_150 = _config_150.TELEGRAM_INCLUDE_SENSITIVE_DETAILS
+    try:
+        _config_150.TELEGRAM_ALLOW_REMOTE_CONTROL = False
+        _config_150.TELEGRAM_INCLUDE_SENSITIVE_DETAILS = False
+
+        no_keyboard_150 = _keyboard_150(1, "pending")
+        hidden_shell_150 = _detail_150({
+            "action_type": "shell",
+            "action_detail": "printf secret-business-context",
+        })
+        hidden_browser_150 = _detail_150({
+            "action_type": "browser_action",
+            "action_detail": '{"url":"https://private.example/path","click_selector":"#submit"}',
+        })
+
+        with open("notifications/telegram_interactive.py", "r", encoding="utf-8") as fh:
+            telegram_source_150 = fh.read()
+        with open(".env.example", "r", encoding="utf-8") as fh:
+            env_source_150 = fh.read()
+
+        static_ok_150 = all([
+            "TELEGRAM_ALLOW_REMOTE_CONTROL" in telegram_source_150,
+            "Remote control is disabled" in telegram_source_150,
+            "TELEGRAM_ALLOW_REMOTE_CONTROL=False" in env_source_150,
+            "TELEGRAM_INCLUDE_SENSITIVE_DETAILS=False" in env_source_150,
+        ])
+
+        if (
+            no_keyboard_150 is None
+            and "secret-business-context" not in hidden_shell_150
+            and "private.example" not in hidden_browser_150
+            and "retained locally" in hidden_shell_150
+            and static_ok_150
+        ):
+            log_pass("Telegram defaults to notification-only mode and keeps sensitive proposal details local")
+        else:
+            log_fail(
+                "Telegram remote-control privacy boundary",
+                f"keyboard={no_keyboard_150}, shell={hidden_shell_150}, browser={hidden_browser_150}, static={static_ok_150}",
+            )
+    finally:
+        _config_150.TELEGRAM_ALLOW_REMOTE_CONTROL = old_control_150
+        _config_150.TELEGRAM_INCLUDE_SENSITIVE_DETAILS = old_details_150
+except Exception as e:
+    log_fail("Telegram remote-control privacy boundary check crashed", str(e))
+
+
+# -------------------------------------------------------------------
+# CHECK 151: DYNAMIC/STATIC CHECK — browser evidence retention is bounded
+# -------------------------------------------------------------------
+try:
+    from config import config as _config_151
+    from workflows.action_executor import _prune_browser_screenshots as _prune_151
+
+    old_keep_151 = _config_151.SCREENSHOT_RETENTION_COUNT
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _config_151.SCREENSHOT_RETENTION_COUNT = 3
+            for i in range(6):
+                path_151 = os.path.join(temp_dir, f"action_{i}.png")
+                with open(path_151, "wb") as fh:
+                    fh.write(b"png")
+                os.utime(path_151, (1000 + i, 1000 + i))
+
+            _prune_151(temp_dir)
+            remaining_151 = sorted(
+                name for name in os.listdir(temp_dir)
+                if name.endswith(".png")
+            )
+
+            with open("workflows/action_executor.py", "r", encoding="utf-8") as fh:
+                source_151 = fh.read()
+            with open(".env.example", "r", encoding="utf-8") as fh:
+                env_151 = fh.read()
+
+            static_ok_151 = (
+                "_prune_browser_screenshots(screenshots_dir)" in source_151
+                and "SCREENSHOT_RETENTION_COUNT=50" in env_151
+            )
+
+            if remaining_151 == ["action_3.png", "action_4.png", "action_5.png"] and static_ok_151:
+                log_pass("browser screenshots are owner-private and bounded by explicit retention")
+            else:
+                log_fail(
+                    "Browser screenshot retention",
+                    f"remaining={remaining_151}, static={static_ok_151}",
+                )
+    finally:
+        _config_151.SCREENSHOT_RETENTION_COUNT = old_keep_151
+except Exception as e:
+    log_fail("Browser screenshot retention check crashed", str(e))
 
 
 # -------------------------------------------------------------------

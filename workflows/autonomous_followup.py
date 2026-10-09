@@ -10,6 +10,8 @@ still require the existing human approval -> preparation -> action/resource
 approval gates before any real-world effect.
 """
 
+from agents.executive_agents import get_executive_profiles
+
 import asyncio
 import datetime
 from typing import Any
@@ -25,6 +27,8 @@ from memory.database import (
     get_company_goal,
     get_decision_by_id,
     link_followup_generated_decision,
+    claim_followup_meeting_attempt,
+    record_followup_meeting_failure,
     log_decision,
 )
 from notifications.telegram_bot import send_notification_async, escape_html
@@ -37,6 +41,38 @@ _REASONING_EVENT_TYPES = {
     "adverse_outcome_review",
     "overdue_goal_review",
 }
+
+
+def _get_all_active_goals(*, page_size: int = 100) -> list[dict]:
+    """Page through every active goal; never silently stop at the first page."""
+    goals: list[dict] = []
+    offset = 0
+    while True:
+        page = get_company_goals(
+            statuses=("active",),
+            limit=page_size,
+            offset=offset,
+        )
+        goals.extend(page)
+        if len(page) < page_size:
+            return goals
+        offset += len(page)
+
+
+def _get_all_open_followups(*, page_size: int = 250) -> list[dict]:
+    """Page through all open follow-ups so reconciliation cannot miss old rows."""
+    events: list[dict] = []
+    offset = 0
+    while True:
+        page = get_followup_events(
+            statuses=("open",),
+            limit=page_size,
+            offset=offset,
+        )
+        events.extend(page)
+        if len(page) < page_size:
+            return events
+        offset += len(page)
 
 
 def classify_goal_followups(
@@ -268,7 +304,7 @@ async def run_autonomous_followup() -> dict:
     pending decision per deterministic fingerprint. Owner-gate events only
     create auditable follow-up records and notifications.
     """
-    active_goals = get_company_goals(statuses=("active",), limit=100)
+    active_goals = _get_all_active_goals()
     active_goal_ids = {goal["id"] for goal in active_goals}
     created_event_ids: list[int] = []
     generated_decision_ids: list[int] = []
@@ -302,24 +338,46 @@ async def run_autonomous_followup() -> dict:
 
             if not created:
                 existing_event_ids.append(event_id)
-                continue
+                if not candidate.get("meeting_required"):
+                    continue
+                existing_event = get_followup_event(event_id)
+                if (
+                    existing_event is None
+                    or existing_event.get("generated_decision_id") is not None
+                    or not claim_followup_meeting_attempt(event_id, min_retry_seconds=900)
+                ):
+                    continue
+                try:
+                    await send_notification_async(
+                        "🔁 <b>FOLLOW-UP REASONING RETRY</b>\n\n"
+                        f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
+                        f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
+                        "A previous reasoning attempt failed; retrying after backoff."
+                    )
+                except Exception:
+                    pass
+            else:
+                created_event_ids.append(event_id)
 
-            created_event_ids.append(event_id)
+                try:
+                    await send_notification_async(
+                        "🔁 <b>AUTONOMOUS FOLLOW-UP</b>\n\n"
+                        f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
+                        f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
+                        f"<b>Severity:</b> {escape_html(candidate['severity'])}\n\n"
+                        f"{escape_html(candidate['reason'])}"
+                    )
+                except Exception:
+                    # Notification failure must never change persisted follow-up state.
+                    pass
 
-            try:
-                await send_notification_async(
-                    "🔁 <b>AUTONOMOUS FOLLOW-UP</b>\n\n"
-                    f"<b>Goal:</b> #{goal['id']} — {escape_html(goal['title'])}\n"
-                    f"<b>Type:</b> {escape_html(candidate['event_type'])}\n"
-                    f"<b>Severity:</b> {escape_html(candidate['severity'])}\n\n"
-                    f"{escape_html(candidate['reason'])}"
-                )
-            except Exception:
-                # Notification failure must never change persisted follow-up state.
-                pass
+                if not candidate.get("meeting_required"):
+                    continue
 
-            if not candidate.get("meeting_required"):
-                continue
+                # New reasoning events are claimed immediately. The same atomic
+                # claim function is used for future retries after backoff.
+                if not claim_followup_meeting_attempt(event_id, min_retry_seconds=0):
+                    continue
 
             try:
                 prompt = _followup_meeting_prompt(goal, candidate, lineage)
@@ -330,6 +388,7 @@ async def run_autonomous_followup() -> dict:
                 )
                 meeting = await asyncio.to_thread(
                     run_executive_meeting,
+                    workflow_run_id=f"followup:{event_id}",
                     topic=f"Autonomous follow-up for Goal #{goal['id']}",
                     task_description=prompt,
                     agent_keys=["cso", "coo", "ceo"],
@@ -338,9 +397,12 @@ async def run_autonomous_followup() -> dict:
                     meeting_type=followup_meeting_type,
                 )
                 decision_id = log_decision(
+                    workflow_key=f"followup:{event_id}",
                     topic=f"Autonomous follow-up: {goal['title']}",
                     agents_involved=meeting.get("participants", ["cso", "coo", "ceo"]),
                     task_description=prompt,
+                    individual_outputs=meeting.get("individual_outputs", {}),
+                    executive_profiles=get_executive_profiles(),
                     decision_outcome=meeting.get("final_decision", ""),
                     sandbox_mode=config.SANDBOX_MODE,
                     goal_id=goal["id"],
@@ -359,6 +421,12 @@ async def run_autonomous_followup() -> dict:
                 except Exception:
                     pass
             except Exception as exc:
+                try:
+                    record_followup_meeting_failure(event_id, str(exc))
+                except Exception as persist_exc:
+                    errors.append(
+                        f"Could not persist retryable failure for event #{event_id}: {persist_exc}"
+                    )
                 errors.append(
                     f"Follow-up meeting for event #{event_id} failed: {exc}"
                 )
@@ -368,7 +436,7 @@ async def run_autonomous_followup() -> dict:
     # events remain visible until the generated decision leaves pending state.
     resolved_event_ids: list[int] = []
     try:
-        for event in get_followup_events(statuses=("open",), limit=500):
+        for event in _get_all_open_followups():
             goal_id = event.get("goal_id")
             generated_decision_id = event.get("generated_decision_id")
 

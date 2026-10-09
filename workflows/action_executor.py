@@ -12,9 +12,12 @@ import ipaddress
 import json
 import os
 import re
+import secrets
+import stat
 import shlex
 import socket
 import subprocess
+import tempfile
 
 try:
     import resource  # Unix-only (macOS/Linux) — niet beschikbaar op Windows
@@ -24,15 +27,18 @@ except ImportError:
 from urllib.parse import urlparse
 from memory.database import (
     get_action_by_id,
+    get_action_outcome,
     update_action_status,
     record_execution_result,
     claim_action_for_execution,
     mark_action_outcome_measurement_pending,
     mark_action_outcome_execution_failed,
+    mark_action_outcome_execution_uncertain,
     VALID_ACTION_TYPES,
 )
 from notifications.telegram_bot import send_notification, escape_html
 from config import config
+from workflows.container_executor import ContainerTimeoutError
 
 # ------------------------------------------------------------------
 # WORKSPACE CONFINEMENT
@@ -89,7 +95,33 @@ def _get_workspace_root() -> str:
     expanded = os.path.expanduser(raw)
     absolute = os.path.abspath(expanded)
     os.makedirs(absolute, exist_ok=True)
+    try:
+        os.chmod(absolute, 0o700)
+    except OSError:
+        pass
     return os.path.realpath(absolute)
+
+
+def _prune_browser_screenshots(screenshots_dir: str) -> None:
+    """Bound private browser evidence retention by newest modification time."""
+    keep = max(1, int(getattr(config, "SCREENSHOT_RETENTION_COUNT", 50)))
+    try:
+        candidates = []
+        for name in os.listdir(screenshots_dir):
+            if not (name.startswith("action_") and name.endswith(".png")):
+                continue
+            path = os.path.join(screenshots_dir, name)
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            candidates.append((os.path.getmtime(path), path))
+        candidates.sort(reverse=True)
+        for _, path in candidates[keep:]:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+    except OSError:
+        pass
 
 
 def _looks_like_path(token: str) -> bool:
@@ -331,6 +363,75 @@ def is_dangerous_command(command: str) -> str | None:
     return None
 
 
+def _open_workspace_parent_fd(file_path: str) -> tuple[int, str, str]:
+    """
+    Resolve a target lexically beneath WORKSPACE_ROOT and open its parent
+    directory component-by-component with O_NOFOLLOW.
+
+    Returning an anchored parent dirfd closes the check-then-open race: later
+    file operations address the final name relative to this already-open
+    directory rather than resolving the path again through mutable symlinks.
+    """
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+        raise RuntimeError(
+            "Secure structured file operations require POSIX O_NOFOLLOW support"
+        )
+
+    workspace_root = _get_workspace_root()
+    expanded = os.path.expanduser(file_path)
+    lexical_target = os.path.abspath(
+        expanded if os.path.isabs(expanded)
+        else os.path.join(workspace_root, expanded)
+    )
+    try:
+        if os.path.commonpath([workspace_root, lexical_target]) != workspace_root:
+            raise ValueError("File path escapes WORKSPACE_ROOT")
+    except ValueError as exc:
+        raise ValueError("File path escapes WORKSPACE_ROOT") from exc
+
+    relative = os.path.relpath(lexical_target, workspace_root)
+    parts = [part for part in relative.split(os.sep) if part not in {"", "."}]
+    if not parts or any(part == ".." for part in parts):
+        raise ValueError("File path must identify a file inside WORKSPACE_ROOT")
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    current_fd = os.open(workspace_root, flags)
+    try:
+        for component in parts[:-1]:
+            next_fd = os.open(
+                component,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=current_fd,
+            )
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd, parts[-1], lexical_target
+    except Exception:
+        os.close(current_fd)
+        raise
+
+
+def _require_safe_regular_fd(fd: int) -> None:
+    """Reject devices/FIFOs/sockets and hard-linked files for structured I/O."""
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError("Structured file operation target must be a regular file")
+    if info.st_nlink != 1:
+        raise ValueError(
+            "Structured file operation target has multiple hard links; blocked for safety"
+        )
+
+
+def _telegram_sensitive(value: str, *, code: bool = False) -> str:
+    """Keep execution details local unless the owner explicitly opts in."""
+    if getattr(config, "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", False):
+        escaped = escape_html(value)
+        return f"<code>{escaped}</code>" if code else escaped
+    return "<i>hidden for privacy — inspect locally</i>"
+
+
 def _execute_file_operation(action_id: int, action: dict) -> dict:
     """
     Voert een gestructureerde bestandsoperatie uit (read/write/append) via
@@ -378,8 +479,8 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                 f"🚫 <b>FILE OPERATION BLOCKED — path outside workspace</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
                 f"<b>Operation:</b> {escape_html(operation)}\n"
-                f"<b>Path:</b> <code>{escape_html(file_path)}</code>\n"
-                f"<b>Reason:</b> {escape_html(confinement_reason)}"
+                f"<b>Path:</b> {_telegram_sensitive(file_path, code=True)}\n"
+                f"<b>Reason:</b> {_telegram_sensitive(confinement_reason)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}")
@@ -403,55 +504,171 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             send_notification(
                 f"🧪 <b>DRY RUN — FILE OPERATION</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Detail:</b> {escape_html(preview)}"
+                f"<b>Detail:</b> {_telegram_sensitive(preview)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}")
         return {"success": True, "mode": "dry_run", "action_id": action_id, "detail": preview}
 
-    # --- LIVE MODE: echte file I/O ---
+    # --- LIVE MODE: descriptor-relative file I/O ---
     try:
-        if operation == "read":
-            with open(resolved_path, "r", encoding="utf-8") as f:
-                file_content = f.read()
-            update_action_status(action_id, "executed")
-            record_execution_result(action_id, json.dumps({"stdout": file_content[:2000]}))
-            mark_action_outcome_measurement_pending(action_id)
-            try:
-                send_notification(
-                    f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
-                    f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
-                    f"<b>Content:</b>\n{escape_html(file_content[:500])}"
-                )
-            except Exception as e:
-                print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
-            return {"success": True, "mode": "live", "action_id": action_id, "stdout": file_content}
+        if len(content) > 1024 * 1024:
+            raise ValueError("Structured file write content exceeds the 1 MiB safety limit")
 
-        elif operation in ("write", "append"):
-            mode = "w" if operation == "write" else "a"
-            with open(resolved_path, mode, encoding="utf-8") as f:
-                f.write(content)
+        parent_fd, final_name, secure_path = _open_workspace_parent_fd(file_path)
+        try:
+            if operation == "read":
+                fd = os.open(
+                    final_name,
+                    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=parent_fd,
+                )
+                try:
+                    _require_safe_regular_fd(fd)
+                    max_read_chars = 1024 * 1024
+                    with os.fdopen(fd, "r", encoding="utf-8", errors="replace") as in_file:
+                        fd = -1
+                        file_content = in_file.read(max_read_chars + 1)
+                finally:
+                    if fd >= 0:
+                        os.close(fd)
+
+                if len(file_content) > max_read_chars:
+                    raise ValueError(
+                        "File exceeds the 1 MiB structured-read safety limit; "
+                        "use a narrower/local review method."
+                    )
+
+                update_action_status(action_id, "executed")
+                record_execution_result(
+                    action_id,
+                    json.dumps({"stdout": file_content[:2000]}),
+                )
+                mark_action_outcome_measurement_pending(action_id)
+                try:
+                    send_notification(
+                        f"⚡ <b>FILE READ SUCCESSFUL</b>\n\n"
+                        f"<b>Action ID:</b> #{action_id}\n"
+                        f"<b>Path:</b> {_telegram_sensitive(secure_path, code=True)}\n"
+                        "<b>Content:</b> retained locally; not copied to Telegram."
+                    )
+                except Exception as notify_err:
+                    print(
+                        f"Warning: Failed to send Telegram notification for "
+                        f"action #{action_id}: {notify_err}"
+                    )
+                return {
+                    "success": True,
+                    "mode": "live",
+                    "action_id": action_id,
+                    "stdout": file_content,
+                }
+
+            if operation == "write":
+                # Refuse an existing symlink/special target. os.replace() would
+                # replace a symlink safely, but an unexpected symlink is itself
+                # evidence that the filesystem changed after approval.
+                try:
+                    existing = os.stat(
+                        final_name,
+                        dir_fd=parent_fd,
+                        follow_symlinks=False,
+                    )
+                    if not stat.S_ISREG(existing.st_mode):
+                        raise ValueError(
+                            "Structured write target exists but is not a regular file"
+                        )
+                except FileNotFoundError:
+                    pass
+
+                temp_name = f".agent-write-{secrets.token_hex(12)}.tmp"
+                temp_fd = -1
+                try:
+                    temp_fd = os.open(
+                        temp_name,
+                        os.O_WRONLY
+                        | os.O_CREAT
+                        | os.O_EXCL
+                        | getattr(os, "O_NOFOLLOW", 0),
+                        0o600,
+                        dir_fd=parent_fd,
+                    )
+                    _require_safe_regular_fd(temp_fd)
+                    with os.fdopen(temp_fd, "w", encoding="utf-8") as out:
+                        temp_fd = -1
+                        out.write(content)
+                        out.flush()
+                        os.fsync(out.fileno())
+
+                    os.replace(
+                        temp_name,
+                        final_name,
+                        src_dir_fd=parent_fd,
+                        dst_dir_fd=parent_fd,
+                    )
+                    try:
+                        os.fsync(parent_fd)
+                    except OSError:
+                        pass
+                finally:
+                    if temp_fd >= 0:
+                        os.close(temp_fd)
+                    try:
+                        os.unlink(temp_name, dir_fd=parent_fd)
+                    except FileNotFoundError:
+                        pass
+
+            elif operation == "append":
+                fd = os.open(
+                    final_name,
+                    os.O_WRONLY
+                    | os.O_CREAT
+                    | os.O_APPEND
+                    | getattr(os, "O_NOFOLLOW", 0),
+                    0o600,
+                    dir_fd=parent_fd,
+                )
+                try:
+                    _require_safe_regular_fd(fd)
+                    with os.fdopen(fd, "a", encoding="utf-8") as out:
+                        fd = -1
+                        out.write(content)
+                        out.flush()
+                        os.fsync(out.fileno())
+                finally:
+                    if fd >= 0:
+                        os.close(fd)
+            else:
+                raise ValueError(f"Unknown operation: {operation}")
+
             update_action_status(action_id, "executed")
-            record_execution_result(action_id, json.dumps({"stdout": f"Wrote {len(content)} characters to {resolved_path}"}))
+            record_execution_result(
+                action_id,
+                json.dumps({
+                    "stdout": f"Wrote {len(content)} characters to {secure_path}"
+                }),
+            )
             mark_action_outcome_measurement_pending(action_id)
             try:
                 send_notification(
                     f"⚡ <b>FILE {operation.upper()} SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Path:</b> <code>{escape_html(resolved_path)}</code>\n"
+                    f"<b>Path:</b> {_telegram_sensitive(secure_path, code=True)}\n"
                     f"<b>Bytes written:</b> {len(content)}"
                 )
-            except Exception as e:
-                print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
-            return {"success": True, "mode": "live", "action_id": action_id, "stdout": f"Wrote {len(content)} characters to {resolved_path}"}
-
-        else:
-            update_action_status(action_id, "execution_failed")
-            error_msg = f"Unknown operation: {operation}"
-            record_execution_result(action_id, json.dumps({"error": error_msg}))
-            mark_action_outcome_execution_failed(action_id, error_msg)
-            return {"success": False, "action_id": action_id, "error": error_msg}
+            except Exception as notify_err:
+                print(
+                    f"Warning: Failed to send Telegram notification for "
+                    f"action #{action_id}: {notify_err}"
+                )
+            return {
+                "success": True,
+                "mode": "live",
+                "action_id": action_id,
+                "stdout": f"Wrote {len(content)} characters to {secure_path}",
+            }
+        finally:
+            os.close(parent_fd)
 
     except Exception as e:
         update_action_status(action_id, "execution_failed")
@@ -462,7 +679,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             send_notification(
                 f"❌ <b>FILE OPERATION FAILED</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Error:</b> {escape_html(error_msg)}"
+                f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
             print(f"Warning: Failed to send Telegram notification for action #{action_id}: {notify_err}")
@@ -513,8 +730,8 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"🚫 <b>BROWSER ACTION BLOCKED — unsafe URL</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>URL:</b> <code>{escape_html(url)}</code>\n"
-                f"<b>Reason:</b> {escape_html(url_block_reason)}"
+                f"<b>URL:</b> {_telegram_sensitive(url, code=True)}\n"
+                f"<b>Reason:</b> {_telegram_sensitive(url_block_reason)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}")
@@ -534,7 +751,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"🧪 <b>DRY RUN — BROWSER ACTION</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Detail:</b> {escape_html(preview)}"
+                f"<b>Detail:</b> {_telegram_sensitive(preview)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}")
@@ -547,26 +764,39 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         workspace_root = _get_workspace_root()
         screenshots_dir = os.path.join(workspace_root, "screenshots")
         os.makedirs(screenshots_dir, exist_ok=True)
+        try:
+            os.chmod(screenshots_dir, 0o700)
+        except OSError:
+            pass
+        _prune_browser_screenshots(screenshots_dir)
         screenshot_path = os.path.join(screenshots_dir, f"action_{action_id}.png")
 
         page_title = None
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            # Service workers can bypass Playwright routing. Block them and
+            # route at CONTEXT level so popups/new pages/subresources inherit
+            # the same SSRF boundary.
+            context = browser.new_context(
+                service_workers="block",
+                accept_downloads=False,
+            )
+            page = context.new_page()
 
-            # Revalidate every navigation request, including redirects. Without
-            # this, an initially-safe public URL could redirect Chromium to a
-            # localhost/private-network target after the preflight check.
-            def _guard_navigation(route):
-                request = route.request
-                if request.is_navigation_request():
-                    reason = check_url_safety(request.url)
+            def _guard_network_request(route):
+                request_url = route.request.url
+                scheme = (urlparse(request_url).scheme or "").lower()
+                if scheme in {"http", "https"}:
+                    reason = check_url_safety(request_url)
                     if reason:
                         route.abort()
                         return
+                elif scheme not in {"data", "blob", "about"}:
+                    route.abort()
+                    return
                 route.continue_()
 
-            page.route("**/*", _guard_navigation)
+            context.route("**/*", _guard_network_request)
             page.goto(url, timeout=15000)
             page_title = page.title()
 
@@ -575,14 +805,22 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 page.wait_for_timeout(1000)  # korte pauze zodat de klik-actie zichtbaar effect heeft voordat de screenshot wordt genomen
 
             page.screenshot(path=screenshot_path)
+            try:
+                os.chmod(screenshot_path, 0o600)
+            except OSError:
+                pass
+            _prune_browser_screenshots(screenshots_dir)
             browser.close()
 
         update_action_status(action_id, "executed")
-        result_summary = f"Navigated to '{url}' (page title: '{page_title}')" + (
+        result_summary = f"Navigated to '{url}'" + (
             f" and clicked '{click_selector}'" if click_selector else ""
         )
+        local_result_detail = result_summary + (
+            f" (page title: '{page_title}')" if page_title else ""
+        )
         record_execution_result(action_id, json.dumps({
-            "stdout": result_summary,
+            "stdout": local_result_detail,
             "screenshot_path": screenshot_path,
         }))
         mark_action_outcome_measurement_pending(action_id)
@@ -590,8 +828,8 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"⚡ <b>BROWSER ACTION SUCCESSFUL</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Detail:</b> {escape_html(result_summary)}\n"
-                f"<b>Screenshot saved:</b> <code>{escape_html(screenshot_path)}</code>"
+                f"<b>Detail:</b> {_telegram_sensitive(result_summary)}\n"
+                f"<b>Screenshot saved:</b> {_telegram_sensitive(screenshot_path, code=True)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram notification for action #{action_id}: {e}")
@@ -600,7 +838,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             "success": True,
             "mode": "live",
             "action_id": action_id,
-            "stdout": result_summary,
+            "stdout": local_result_detail,
             "screenshot_path": screenshot_path,
         }
 
@@ -613,7 +851,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
             send_notification(
                 f"❌ <b>BROWSER ACTION FAILED</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Error:</b> {escape_html(error_msg)}"
+                f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
             print(f"Warning: Failed to send Telegram notification for action #{action_id}: {notify_err}")
@@ -641,7 +879,19 @@ def execute_action(action_id: int) -> dict:
             "success": False,
             "error": f"Action status is '{status}', must be 'approved' to execute."
         }
-    if not claim_action_for_execution(action_id):
+    try:
+        claimed = claim_action_for_execution(action_id)
+    except ValueError as integrity_err:
+        current = get_action_by_id(action_id)
+        return {
+            "success": False,
+            "action_id": action_id,
+            "blocked": True,
+            "error": str(integrity_err),
+            "status": current.get("status") if current else "unknown",
+        }
+
+    if not claimed:
         current = get_action_by_id(action_id)
         current_status = current.get("status") if current else "unknown"
         return {
@@ -649,6 +899,46 @@ def execute_action(action_id: int) -> dict:
             "error": f"Action could not be claimed for execution; current status is '{current_status}'.",
         }
 
+    # Persist the execution boundary before any handler can perform effects.
+    # Action IDs are local immutable keys; checkpoint rows are never replayed.
+    from workflows.step_checkpoints import init_step_checkpoints, claim_step, finish_step
+    run_id, step_id = f"action:{action_id}", "execute"
+    try:
+        init_step_checkpoints()
+        if not claim_step(run_id, step_id):
+            raise RuntimeError("Execution checkpoint already exists; manual review required")
+    except Exception:
+        update_action_status(action_id, "execution_failed")
+        mark_action_outcome_execution_uncertain(action_id, "Checkpoint unavailable or already claimed; manual review required.")
+        return {"success": False, "action_id": action_id, "blocked": True,
+                "error": "Execution checkpoint unavailable or already claimed; manual review required."}
+
+    try:
+        result = _execute_claimed_action(action_id, action)
+        if result.get("mode") == "live" and not result.get("success") and not result.get("blocked"):
+            # A nonzero process exit or browser exception does not prove that
+            # no files/clicks/external effects happened before the failure.
+            mark_action_outcome_execution_uncertain(
+                action_id, "Live execution did not complete; effects require manual reconciliation."
+            )
+        outcome = get_action_outcome(action_id)
+        uncertain = outcome and outcome.get("outcome_status") == "inconclusive"
+        terminal = "inconclusive" if uncertain else ("succeeded" if result.get("success") else "failed")
+        if not finish_step(run_id, step_id, terminal):
+            raise RuntimeError("Checkpoint completion could not be confirmed")
+        return result
+    except Exception:
+        # Includes failure to persist a result after an effect. Never claim
+        # certainty or replay just because a handler raised an exception.
+        finish_step(run_id, step_id, "inconclusive")
+        update_action_status(action_id, "execution_failed")
+        mark_action_outcome_execution_uncertain(action_id, "Execution result could not be confirmed; manual review required.")
+        return {"success": False, "action_id": action_id,
+                "error": "Execution result could not be confirmed; manual review required."}
+
+
+def _execute_claimed_action(action_id: int, action: dict) -> dict:
+    """Dispatch only after both the approval and durable step are claimed."""
     action_detail = action.get("action_detail", "")
     action_type = action.get("action_type", "shell")
     if action_type not in VALID_ACTION_TYPES:
@@ -683,8 +973,8 @@ def execute_action(action_id: int) -> dict:
             notification_text = (
                 f"🚫 <b>EXECUTION BLOCKED — dangerous command detected</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                f"<b>Reason:</b> {escape_html(block_reason)}"
+                f"<b>Command:</b> {_telegram_sensitive(action_detail, code=True)}\n"
+                f"<b>Reason:</b> {_telegram_sensitive(block_reason)}"
             )
             send_notification(notification_text)
         except Exception as e:
@@ -699,7 +989,7 @@ def execute_action(action_id: int) -> dict:
 
     # 4. SANDBOX / DRY RUN MODUS
     if config.SANDBOX_MODE:
-        print(f"[DRY RUN] Would execute: {action_detail}")
+        print(f"[DRY RUN] Action #{action_id} simulated; details retained in local action state.")
         update_action_status(action_id, "executed_dry_run")
         record_execution_result(
             action_id,
@@ -710,7 +1000,7 @@ def execute_action(action_id: int) -> dict:
             notification_text = (
                 f"🧪 <b>DRY RUN EXECUTED</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
+                f"<b>Command:</b> {_telegram_sensitive(action_detail, code=True)}\n"
                 f"<b>Mode:</b> Sandbox (Dry-Run)"
             )
             send_notification(notification_text)
@@ -724,18 +1014,40 @@ def execute_action(action_id: int) -> dict:
             "detail": f"[DRY RUN] Command simulated: {action_detail}",
         }
 
-    # 5. LIVE EXECUTIE MODUS (Inclusief Time-out & Subprocess error handling)
-    try:
-        completed_process = subprocess.run(
-            action_detail,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30,  # 30 seconden time-out ter beveiliging
-            cwd=_get_workspace_root(),
-            env=_get_safe_subprocess_env(),  # GEEN secrets (.env) doorgeven aan het kindproces
-            preexec_fn=_limit_subprocess_resources if _RESOURCE_MODULE_AVAILABLE else None,
+    # 5. LIVE RAW SHELL
+    # Path/regex analysis is defense-in-depth, not an OS sandbox. Programs can
+    # interpret option-embedded paths, access Keychain/processes/network, or
+    # perform effects that do not look like filesystem paths. Therefore raw
+    # shell is fail-closed in live mode unless the owner explicitly opts in.
+    if not getattr(config, "ALLOW_UNSAFE_RAW_SHELL", False):
+        block_reason = (
+            "Live shell execution is disabled by default because heuristic "
+            "command/path inspection is not a true OS sandbox. Use a structured "
+            "action or explicitly set ALLOW_UNSAFE_RAW_SHELL=True to use Docker after accepting "
+            "the residual risk."
         )
+        update_action_status(action_id, "blocked_dangerous")
+        record_execution_result(action_id, json.dumps({"error": f"Blocked: {block_reason}"}))
+        mark_action_outcome_execution_failed(action_id, f"Blocked before execution: {block_reason}")
+        try:
+            send_notification(
+                f"🚫 <b>RAW SHELL LIVE EXECUTION BLOCKED</b>\n\n"
+                f"<b>Action ID:</b> #{action_id}\n"
+                "Use the local dashboard for details."
+            )
+        except Exception:
+            pass
+        return {
+            "success": False,
+            "action_id": action_id,
+            "error": f"Blocked: {block_reason}",
+            "blocked": True,
+        }
+
+    # Explicit owner opt-in runs in a constrained Docker worker, never a host shell.
+    try:
+        from workflows.container_executor import run_in_container
+        completed_process = run_in_container(action_detail, _get_workspace_root())
 
         if completed_process.returncode == 0:
             update_action_status(action_id, "executed")
@@ -749,8 +1061,8 @@ def execute_action(action_id: int) -> dict:
                 notification_text = (
                     f"⚡ <b>LIVE EXECUTION SUCCESSFUL</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                    f"<b>Output:</b>\n{escape_html(completed_process.stdout[:500]) if completed_process.stdout else '(no output)'}"
+                    f"<b>Command:</b> {_telegram_sensitive(action_detail[:500], code=True)}\n"
+                    "<b>Output:</b> retained locally; not copied to Telegram."
                 )
                 send_notification(notification_text)
             except Exception as e:
@@ -773,8 +1085,7 @@ def execute_action(action_id: int) -> dict:
                 notification_text = (
                     f"❌ <b>EXECUTION FAILED</b>\n\n"
                     f"<b>Action ID:</b> #{action_id}\n"
-                    f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                    f"<b>Error:</b>\n{escape_html(error_msg[:500])}"
+                    "<b>Error details:</b> retained locally; not copied to Telegram."
                 )
                 send_notification(notification_text)
             except Exception as e:
@@ -789,18 +1100,18 @@ def execute_action(action_id: int) -> dict:
                 "stderr": completed_process.stderr,
             }
 
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, ContainerTimeoutError):
         update_action_status(action_id, "execution_failed")
-        error_msg = "Command timed out after 30 seconds."
+        error_msg = "Command timed out; real-world side effects are uncertain. Manual review required."
         record_execution_result(action_id, json.dumps({"error": error_msg}))
-        mark_action_outcome_execution_failed(action_id, error_msg)
+        mark_action_outcome_execution_uncertain(action_id, error_msg)
 
         try:
             send_notification(
                 f"❌ <b>EXECUTION FAILED (TIMEOUT)</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                f"<b>Error:</b> {escape_html(error_msg)}"
+                f"<b>Command:</b> {_telegram_sensitive(action_detail, code=True)}\n"
+                f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as e:
             print(f"Warning: Failed to send Telegram timeout notification for action #{action_id}: {e}")
@@ -822,8 +1133,8 @@ def execute_action(action_id: int) -> dict:
             send_notification(
                 f"❌ <b>EXECUTION FAILED (UNEXPECTED ERROR)</b>\n\n"
                 f"<b>Action ID:</b> #{action_id}\n"
-                f"<b>Command:</b> <code>{escape_html(action_detail)}</code>\n"
-                f"<b>Error:</b> {escape_html(error_msg)}"
+                f"<b>Command:</b> {_telegram_sensitive(action_detail, code=True)}\n"
+                f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
             print(f"Warning: Failed to send Telegram error notification for action #{action_id}: {notify_err}")

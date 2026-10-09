@@ -5,6 +5,9 @@ CrewAI tool waarmee agenten acties voorstellen in plaats van ze direct uit te vo
 Slaat voorstellen op in de action_queue database en stuurt een Telegram-notificatie.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 from typing import Type
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
@@ -95,7 +98,7 @@ class ProposeActionTool(BaseTool):
                 action_detail=action_detail,
             )
         except Exception as e:
-            print(f"Warning: Failed to send Telegram notification for action proposal #{action_id}: {e}")
+            print(f"Warning: Telegram action-proposal notification failed ({type(e).__name__}); transport details suppressed.")
 
         # 3. Retourneer de bevestiging naar de agent
         return (

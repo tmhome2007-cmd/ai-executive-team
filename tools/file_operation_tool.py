@@ -10,6 +10,9 @@ gewone Python file I/O binnen dezelfde workspace-confinement grens als
 workflows/action_executor.py al gebruikt voor shell-commando's.
 """
 
+import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
+
+
 import json
 from typing import Type, Literal
 from pydantic import BaseModel, Field
@@ -127,7 +130,7 @@ class ProposeFileOperationTool(BaseTool):
                 action_detail=f"[{operation}] {file_path}" + (f"\n\n{content[:200]}" if content else ""),
             )
         except Exception as e:
-            print(f"Warning: Failed to send Telegram notification for file operation proposal #{action_id}: {e}")
+            print(f"Warning: Telegram file-proposal notification failed ({type(e).__name__}); transport details suppressed.")
 
         return (
             f"File operation proposal logged successfully with ID #{action_id}. "

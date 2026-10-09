@@ -1,0 +1,8 @@
+{
+  "name": "@ai-executive/native-directory-glob",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "engines": { "node": ">=22.17.0" },
+  "description": "Native directory-glob adapter for the pinned Next.js ESLint rootDir helper"
+}

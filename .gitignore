@@ -11,3 +11,9 @@ backups/
 logs/
 workspace/
 sync/*.jsonl
+
+.venv/
+.audit/
+*.server.lock
+
+audit-results/

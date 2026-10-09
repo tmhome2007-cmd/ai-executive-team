@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 
 import asyncio
 import datetime
+import hashlib
 from contextlib import asynccontextmanager
 from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException, Query, Depends, Header, Request
@@ -22,12 +23,17 @@ import os
 import re
 import json
 import ast
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
+from agents.executive_agents import get_executive_profiles
+from memory.activity import activity_origin
+
 from memory.database import (
     init_db,
+    get_decision_contributions,
+    get_company_activity,
     get_recent_decisions,
     log_decision,
     get_pending_actions,
@@ -78,6 +84,12 @@ from workflows.meeting import run_executive_meeting
 from workflows.meeting_types import MEETING_TYPES, VALID_MEETING_TYPES, resolve_meeting_agents
 from agents.executive_agents import EXECUTIVE_AGENTS, EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
+from workflows.action_control import (
+    ActionControlError,
+    approve_action_control,
+    reject_action_control,
+    execute_action_control,
+)
 from notifications.telegram_bot import send_notification, escape_html
 from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
 from config import config, set_sandbox_mode, validate_config, ConfigValidationError
@@ -188,7 +200,7 @@ async def scheduled_autonomous_followup_job():
 
 # 4. Lifespan Handler (Opstarten en Afsluiten)
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def _lifespan_unlocked(app: FastAPI):
     # Valideer de configuratie EERST — fail fast met een duidelijke foutmelding
     # in plaats van een verwarrende crash minuten later midden in een crew-run.
     try:
@@ -202,6 +214,19 @@ async def lifespan(app: FastAPI):
     # Initialiseer de database
     init_db()
 
+    # Durable step checkpoints: interrupted effects require explicit human
+    # reconciliation, never automatic replay on a server restart.
+    from workflows.step_checkpoints import init_step_checkpoints, reconcile_interrupted_steps
+    init_step_checkpoints()
+    from memory.planning import reconcile_work
+    reconcile_work()
+    uncertain_steps = reconcile_interrupted_steps()
+    if uncertain_steps:
+        logger.warning(
+            "Recovered %s interrupted workflow step(s) as inconclusive; manual review required.",
+            uncertain_steps,
+        )
+
     # Als een vorige procesrun tijdens een echte actie crashte, is het
     # real-world resultaat per definitie onzeker. Nooit automatisch retryen:
     # markeer zulke 'executing' acties als failed voor menselijke review.
@@ -211,6 +236,10 @@ async def lifespan(app: FastAPI):
             f"Recovered {recovered_actions} interrupted action(s) as execution_failed; "
             "manual review required because real-world outcome is unknown."
         )
+
+    from memory.artifact_retention import prune_generated_artifacts
+    retained = await asyncio.to_thread(prune_generated_artifacts)
+    logger.info("Generated artifact retention applied: %s", retained)
 
     # Controleer Ollama/database/Telegram bereikbaarheid — logt duidelijke
     # waarschuwingen in plaats van dat het probleem pas bij de eerste
@@ -226,6 +255,12 @@ async def lifespan(app: FastAPI):
 
     # Gebruik AsyncIOScheduler voor asynchrone achtergrondtaken
     scheduler = AsyncIOScheduler()
+    from workflows.capability_inventory import refresh_verified_capabilities
+    scheduler.add_job(refresh_verified_capabilities, trigger=IntervalTrigger(minutes=15),
+                      id='capability_health', replace_existing=True, max_instances=1, coalesce=True)
+    from workflows.executive_planning import dispatch_planned_work
+    scheduler.add_job(dispatch_planned_work, trigger=IntervalTrigger(minutes=15),
+                      id='executive_work_plans', replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(
         scheduled_research_job,
         trigger=IntervalTrigger(minutes=15),
@@ -249,10 +284,16 @@ async def lifespan(app: FastAPI):
         coalesce=True,
     )
     scheduler.add_job(
-        lambda: backup_database(keep_last=7),
+        lambda: backup_database(keep_last=config.BACKUP_RETENTION_COUNT),
         trigger=IntervalTrigger(hours=24),
         id="daily_database_backup_job",
         replace_existing=True,
+    )
+    scheduler.add_job(
+        prune_generated_artifacts,
+        trigger=IntervalTrigger(hours=24),
+        id="generated_artifact_retention_job", replace_existing=True,
+        max_instances=1, coalesce=True,
     )
     scheduler.start()
     app.state.scheduler = scheduler
@@ -264,7 +305,7 @@ async def lifespan(app: FastAPI):
     # Eén backup bij het opstarten, zodat je niet 24 uur moet wachten op de
     # eerste veiligheidskopie na een verse installatie.
     try:
-        backup_path = backup_database(keep_last=7)
+        backup_path = backup_database(keep_last=config.BACKUP_RETENTION_COUNT)
         logger.info(f"Startup database backup created: {backup_path}")
     except Exception as e:
         logger.warning(f"Startup database backup failed: {e}")
@@ -282,6 +323,14 @@ async def lifespan(app: FastAPI):
     # Stop de Telegram-listener netjes (wacht tot de achtergrond-thread eindigt)
     stop_telegram_listener()
     logger.info("Telegram listener stopped. Shutdown complete.")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from workflows.instance_lock import database_instance_lock
+    with database_instance_lock(config.DATABASE_PATH):
+        async with _lifespan_unlocked(app):
+            yield
 
 
 # 5. FastAPI App Instantie
@@ -308,7 +357,14 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    response = await call_next(request)
+    # Attribution is the initiating owner API, not a claim about model/tool identity.
+    supplied = request.headers.get('X-API-Key')
+    actor = 'owner' if config.API_SECRET_KEY and supplied and hmac.compare_digest(supplied, config.API_SECRET_KEY) else 'system'
+    source = f'http:{request.method} {request.url.path}'
+    if not re.fullmatch(r'[A-Za-z0-9_/:. -]{1,180}', source):
+        source = 'http'
+    with activity_origin(actor, source):
+        response = await call_next(request)
     duration_ms = round((time.time() - start_time) * 1000, 1)
     logger.info(f'{request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)')
     return response
@@ -324,6 +380,8 @@ class DailyResearchResponse(BaseModel):
 
 
 class DecisionRequest(BaseModel):
+    source_ids: list[int] = Field(default_factory=list, max_length=20)
+    workflow_run_id: Optional[str] = Field(default=None, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9:_-]+$")
     topic: str = Field(min_length=1, max_length=200)
     task_description: str = Field(min_length=1, max_length=12000)
     meeting_type: Literal[
@@ -335,6 +393,7 @@ class DecisionRequest(BaseModel):
 
 
 class DecisionResponse(BaseModel):
+    workflow_run_id: Optional[str] = None
     database_id: int
     topic: str
     meeting_type: str
@@ -432,7 +491,24 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
 
-    attempts = [t for t in _failed_auth_attempts.get(client_ip, []) if now - t < _LOCKOUT_WINDOW_SECONDS]
+    attempts = [
+        t for t in _failed_auth_attempts.get(client_ip, [])
+        if now - t < _LOCKOUT_WINDOW_SECONDS
+    ]
+
+    server_key = config.API_SECRET_KEY
+    is_valid = (
+        bool(server_key)
+        and x_api_key is not None
+        and hmac.compare_digest(x_api_key, server_key)
+    )
+
+    # A valid owner credential must never be denied because an attacker (or a
+    # broken local client) intentionally filled this IP's invalid-attempt
+    # bucket. Rate limiting applies only to invalid guesses.
+    if is_valid:
+        _failed_auth_attempts.pop(client_ip, None)
+        return True
 
     if len(attempts) >= _MAX_FAILED_ATTEMPTS:
         raise HTTPException(
@@ -440,20 +516,12 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
             detail="Too many failed authentication attempts. Try again later.",
         )
 
-    server_key = config.API_SECRET_KEY
-    is_valid = bool(server_key) and x_api_key is not None and hmac.compare_digest(x_api_key, server_key)
-
-    if not is_valid:
-        attempts.append(now)
-        _failed_auth_attempts[client_ip] = attempts
-        raise HTTPException(
-            status_code=401,
-            detail="Missing or invalid API key",
-        )
-
-    # Succesvolle poging: reset de teller voor dit IP.
-    _failed_auth_attempts.pop(client_ip, None)
-    return True
+    attempts.append(now)
+    _failed_auth_attempts[client_ip] = attempts
+    raise HTTPException(
+        status_code=401,
+        detail="Missing or invalid API key",
+    )
 
 
 def _require_linked_goal_active(
@@ -789,8 +857,15 @@ def list_meeting_types():
 )
 def trigger_ad_hoc_decision(request: DecisionRequest):
     """Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op."""
+    import uuid
+    workflow_run_id = request.workflow_run_id or f"decision:{uuid.uuid4()}"
     goal = None
     meeting_task = request.task_description
+    from memory.evidence import source_context
+    try:
+        registered_context = source_context(request.source_ids)
+    except (ValueError, LookupError) as error:
+        raise HTTPException(400, str(error)) from None
     try:
         resolved_agent_keys = resolve_meeting_agents(
             request.meeting_type,
@@ -818,9 +893,12 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             "Do not claim the goal is complete; goal completion remains an owner decision."
         )
 
+    if registered_context:
+        meeting_task += '\nREGISTERED SOURCES (preserve freshness/review labels):\n' + registered_context
     try:
         meeting_result = run_executive_meeting(
             topic=request.topic,
+            workflow_run_id=workflow_run_id,
             task_description=meeting_task,
             agent_keys=resolved_agent_keys,
             # Decision meetings are reasoning-only. Tool-capable agents belong
@@ -855,6 +933,10 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         sandbox_mode=config.SANDBOX_MODE,
         goal_id=request.goal_id,
         meeting_type=request.meeting_type,
+        workflow_key=workflow_run_id,
+        individual_outputs=meeting_result.get("individual_outputs", {}),
+        executive_profiles=get_executive_profiles(),
+        source_ids=request.source_ids,
     )
 
     try:
@@ -865,6 +947,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         print(f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}")
 
     return DecisionResponse(
+        workflow_run_id=workflow_run_id,
         database_id=db_id,
         topic=request.topic,
         meeting_type=request.meeting_type,
@@ -1068,6 +1151,7 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
     def _run_preparation_meeting(task_text: str):
         return run_executive_meeting(
+            workflow_run_id="prepare:" + decision["sync_uuid"] + ":" + hashlib.sha256(task_text.encode()).hexdigest()[:24],
             topic=f"Preparation for Decision #{decision_id}",
             task_description=task_text,
             agent_keys=request.agent_keys,
@@ -1444,7 +1528,9 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 ),
             )
 
-        finish_decision_preparation(decision_id, True, final_plan)
+        finish_decision_preparation(decision_id, True, final_plan,
+            individual_outputs=meeting_result.get("individual_outputs", {}),
+            executive_profiles=get_executive_profiles())
     except HTTPException:
         raise
     except ValueError as e:
@@ -1844,9 +1930,23 @@ def get_screenshot(filename: str):
         raise HTTPException(status_code=400, detail="Invalid screenshot filename format.")
 
     workspace_root = os.path.realpath(os.path.expanduser(config.WORKSPACE_ROOT or "./workspace"))
-    screenshot_path = os.path.join(workspace_root, "screenshots", filename)
+    screenshots_root = os.path.realpath(os.path.join(workspace_root, "screenshots"))
+    screenshot_path = os.path.realpath(os.path.join(screenshots_root, filename))
 
-    if not os.path.isfile(screenshot_path):
+    try:
+        if os.path.commonpath([screenshots_root, screenshot_path]) != screenshots_root:
+            raise HTTPException(status_code=404, detail="Screenshot not found.")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Screenshot not found.")
+
+    # Refuse symlinked screenshot files/directories. FileResponse would follow
+    # symlinks, which could otherwise turn this endpoint into a local file read.
+    if (
+        not os.path.isdir(screenshots_root)
+        or os.path.islink(os.path.join(workspace_root, "screenshots"))
+        or os.path.islink(os.path.join(screenshots_root, filename))
+        or not os.path.isfile(screenshot_path)
+    ):
         raise HTTPException(status_code=404, detail="Screenshot not found.")
 
     return FileResponse(screenshot_path, media_type="image/png")
@@ -2018,23 +2118,18 @@ def approve_action(action_id: int):
     if action is None:
         raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
 
-    _require_linked_goal_active(
-        action,
-        goal_id_key="source_goal_id",
-        operation="approve action",
-    )
-
     try:
-        return approve_action_with_treasury(action_id)
-    except ValueError as e:
+        return approve_action_control(action_id)
+    except ActionControlError as e:
         current = get_action_by_id(action_id)
         if current is None:
             raise HTTPException(status_code=404, detail=str(e))
         detail = str(e)
         status_code = 409 if (
-            "cannot be approved" in detail
-            or "Insufficient available treasury funds" in detail
+            "cannot be approved" in detail.lower()
+            or "insufficient available treasury funds" in detail.lower()
             or "race" in detail.lower()
+            or "linked company goal" in detail.lower()
         ) else 400
         raise HTTPException(status_code=status_code, detail=detail)
 
@@ -2052,8 +2147,8 @@ def reject_action(action_id: int):
         raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
 
     try:
-        return reject_action_with_treasury(action_id)
-    except ValueError as e:
+        return reject_action_control(action_id)
+    except ActionControlError as e:
         current = get_action_by_id(action_id)
         if current is None:
             raise HTTPException(status_code=404, detail=str(e))
@@ -2068,12 +2163,12 @@ def execute_approved_action(action_id: int):
     action = get_action_by_id(action_id)
     if action is None:
         raise HTTPException(status_code=404, detail="Action not found")
-    _require_linked_goal_active(
-        action,
-        goal_id_key="source_goal_id",
-        operation="execute action",
-    )
-    result = execute_action(action_id)
+    try:
+        result = execute_action_control(action_id)
+    except ActionControlError as e:
+        detail = str(e)
+        status_code = 409 if "linked company goal" in detail.lower() else 400
+        raise HTTPException(status_code=status_code, detail=detail)
     
     if not result.get("success", False):
         error_msg = result.get("error", "Execution failed")
@@ -2094,8 +2189,192 @@ if __name__ == "__main__":
     # te brute-forcen vanaf een ander toestel. Alleen bewust overschrijven
     # via BIND_HOST in .env als je écht vanaf een ander apparaat op hetzelfde
     # netwerk bij het dashboard moet kunnen (en dan met extra voorzichtigheid).
-    bind_host = os.getenv("BIND_HOST", "127.0.0.1")
+    bind_host = config.BIND_HOST
     # Stable single-process default. For active development, run
     # "uvicorn main:app --reload" explicitly instead. Auto-reload can briefly
     # overlap workers, which is unsafe for the single Telegram poller.
     uvicorn.run("main:app", host=bind_host, port=8000, reload=False)
+
+@app.get("/executives/profiles", dependencies=[Depends(verify_api_key)])
+def executive_profiles():
+    return get_executive_profiles()
+
+
+@app.get("/decisions/{decision_id}/conversations", dependencies=[Depends(verify_api_key)])
+def decision_conversations(decision_id: int):
+    if get_decision_by_id(decision_id) is None:
+        raise HTTPException(status_code=404, detail="Decision not found.")
+    return {"decision_id": decision_id, "contributions": get_decision_contributions(decision_id),
+            "scope": "Published executive task outputs in task order; not a verbatim conversation or hidden reasoning."}
+
+
+@app.get("/company/activity", dependencies=[Depends(verify_api_key)])
+def company_activity(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0), before_id: Optional[int] = Query(default=None, ge=1)):
+    items = get_company_activity(limit, offset, before_id)
+    return {"items": items, "limit": limit, "offset": offset,
+            "next_before_id": items[-1]['id'] if len(items) == limit else None,
+            "scope": "Retained database changes since ledger installation. Legacy snapshots have unknown earlier history; actor identifies the initiating context."}
+
+
+# Owner-controlled planning boards. A task transition never executes an action.
+from memory.agile import create_board, list_boards, list_tasks, create_task, update_task, create_roadmap_board
+
+
+class BoardCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    kind: Literal['development', 'company']
+
+
+class AgileTaskCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default='', max_length=10000)
+    acceptance_criteria: str = Field(default='', max_length=10000)
+    assignee: str = Field(default='owner', max_length=40)
+    priority: Literal['critical', 'high', 'medium', 'low'] = 'medium'
+    goal_id: Optional[int] = Field(default=None, ge=1)
+    decision_id: Optional[int] = Field(default=None, ge=1)
+    action_id: Optional[int] = Field(default=None, ge=1)
+
+
+class AgileTaskUpdateRequest(AgileTaskCreateRequest):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    expected_version: int = Field(ge=1)
+    status: Literal['backlog', 'ready', 'in_progress', 'review', 'done', 'blocked'] = 'backlog'
+    blocked_reason: str = Field(default='', max_length=2000)
+    completion_note: str = Field(default='', max_length=10000)
+
+
+def _agile_call(callback, *args, **kwargs):
+    try:
+        return callback(*args, **kwargs)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.get('/boards', dependencies=[Depends(verify_api_key)])
+def get_agile_boards(limit: int = Query(default=100, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return list_boards(limit, offset)
+
+
+@app.post('/boards', dependencies=[Depends(verify_api_key)])
+def post_agile_board(request: BoardCreateRequest):
+    return {'id': _agile_call(create_board, request.name, request.kind)}
+
+
+@app.get('/boards/{board_id}/tasks', dependencies=[Depends(verify_api_key)])
+def get_agile_tasks(board_id: int, limit: int = Query(default=100, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return _agile_call(list_tasks, board_id, limit, offset)
+
+
+@app.post('/boards/{board_id}/tasks', dependencies=[Depends(verify_api_key)])
+def post_agile_task(board_id: int, request: AgileTaskCreateRequest):
+    return _agile_call(create_task, board_id, **request.model_dump())
+
+
+@app.patch('/tasks/{task_id}', dependencies=[Depends(verify_api_key)])
+def patch_agile_task(task_id: int, request: AgileTaskUpdateRequest):
+    fields = request.model_dump(exclude_unset=True)
+    version = fields.pop('expected_version')
+    return _agile_call(update_task, task_id, version, **fields)
+
+
+@app.post('/boards/roadmap', dependencies=[Depends(verify_api_key)])
+def post_development_roadmap():
+    return _agile_call(create_roadmap_board)
+
+
+from memory.experiments import create_experiment, update_experiment, get_experiment, list_experiments, record_observation, list_observations
+
+
+class ExperimentPlanRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    title: str = Field(min_length=1, max_length=200)
+    hypothesis: str = Field(min_length=1, max_length=4000)
+    baseline_note: str = Field(min_length=1, max_length=4000)
+    baseline_value: Optional[float] = Field(default=None, strict=True)
+    metric_name: str = Field(min_length=1, max_length=120)
+    unit: str = Field(min_length=1, max_length=40)
+    target_value: Optional[float] = Field(default=None, strict=True)
+    direction: Literal['increase', 'decrease'] = 'increase'
+    expected_result: str = Field(min_length=1, max_length=4000)
+    budget_amount: float = Field(ge=0, le=1e15, strict=True)
+    risk_limit: float = Field(ge=0, le=1e15, strict=True)
+    currency: str = Field(pattern=r'^[A-Z]{3}$')
+    observation_due_at: str = Field(max_length=40)
+
+
+class ExperimentCreateRequest(ExperimentPlanRequest):
+    action_id: int = Field(ge=1, strict=True)
+
+
+class ExperimentUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    expected_version: int = Field(ge=1)
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    hypothesis: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    baseline_note: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    baseline_value: Optional[float] = Field(default=None, strict=True)
+    metric_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    unit: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    target_value: Optional[float] = Field(default=None, strict=True)
+    direction: Optional[Literal['increase', 'decrease']] = None
+    expected_result: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    budget_amount: Optional[float] = Field(default=None, ge=0, le=1e15, strict=True)
+    risk_limit: Optional[float] = Field(default=None, ge=0, le=1e15, strict=True)
+    currency: Optional[str] = Field(default=None, pattern=r'^[A-Z]{3}$')
+    observation_due_at: Optional[str] = Field(default=None, max_length=40)
+
+
+class ObservationRequest(BaseModel):
+    source_ids: list[int] | None = Field(default=None, max_length=20)
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    idempotency_key: str = Field(min_length=1, max_length=80, pattern=r'^[A-Za-z0-9:_-]+$')
+    observed_at: str = Field(max_length=40)
+    value: Optional[float] = Field(default=None, strict=True)
+    evidence: str = Field(min_length=1, max_length=12000)
+    notes: str = Field(default='', max_length=4000)
+
+
+@app.get('/experiments', dependencies=[Depends(verify_api_key)])
+def experiments_list(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return list_experiments(limit, offset)
+
+
+@app.post('/experiments', dependencies=[Depends(verify_api_key)])
+def experiment_create(request: ExperimentCreateRequest):
+    fields = request.model_dump()
+    action_id = fields.pop('action_id')
+    return _agile_call(create_experiment, action_id, **fields)
+
+
+@app.get('/experiments/{experiment_id}', dependencies=[Depends(verify_api_key)])
+def experiment_get(experiment_id: int):
+    plan = get_experiment(experiment_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail='Experiment not found')
+    return plan
+
+
+@app.patch('/experiments/{experiment_id}', dependencies=[Depends(verify_api_key)])
+def experiment_patch(experiment_id: int, request: ExperimentUpdateRequest):
+    fields = request.model_dump(exclude_unset=True)
+    version = fields.pop('expected_version')
+    return _agile_call(update_experiment, experiment_id, version, **fields)
+
+
+@app.get('/experiments/{experiment_id}/observations', dependencies=[Depends(verify_api_key)])
+def observations_list(experiment_id: int, limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return _agile_call(list_observations, experiment_id, limit, offset)
+
+
+@app.post('/experiments/{experiment_id}/observations', dependencies=[Depends(verify_api_key)])
+def observation_create(experiment_id: int, request: ObservationRequest):
+    return _agile_call(record_observation, experiment_id, **request.model_dump())
+
+
+from foundation_api import router as foundation_router
+app.include_router(foundation_router, dependencies=[Depends(verify_api_key)])
