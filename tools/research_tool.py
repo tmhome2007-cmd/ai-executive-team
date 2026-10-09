@@ -20,6 +20,7 @@ een op het oog extern domein toch naar 127.0.0.1 wijst.
 import privacy_bootstrap  # apply local-first telemetry defaults before CrewAI imports
 
 
+from email.message import Message
 import ipaddress
 import socket
 from urllib.parse import urlparse
@@ -183,13 +184,14 @@ class PageReaderTool(BaseTool):
             if too_large:
                 return "Error: Response body exceeded the 1 MiB research safety limit."
 
-            encoding = response.encoding or "utf-8"
-            text_body = bytes(body).decode(encoding, errors="replace")
-
-            # Structureer de HTML-tekst met BeautifulSoup
-            soup = BeautifulSoup(text_body, "html.parser")
+            # requests defaults unlabelled text to Latin-1, which corrupts
+            # UTF-8 punctuation. Honour an explicit HTTP charset; otherwise
+            # let the HTML parser inspect meta tags and the bounded bytes.
+            content_header = Message()
+            content_header['Content-Type'] = response.headers.get('Content-Type', '')
+            soup = BeautifulSoup(bytes(body), "html.parser", from_encoding=content_header.get_content_charset())
             paragraphs = [p.get_text() for p in soup.find_all("p")]
-            full_text = " ".join(paragraphs).strip()
+            full_text = (soup.get_text() if 'text/plain' in content_type else " ".join(paragraphs)).strip()
 
             if not full_text:
                 return "Error: No textual paragraph content found on page."
