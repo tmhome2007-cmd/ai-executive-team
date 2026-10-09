@@ -89,3 +89,32 @@ practice: a complete numbered task guide and three FAQ answers were saved, while
 the original sample/review stayed intact and the revision awaited a new assessment.
 No claim of passing owner checks was recorded. A false credential-prefix match on
 ordinary `task-name` text was also fixed; genuine `sk-` token prefixes remain rejected.
+
+### Sample and checklist follow-up — 10 October 2026
+
+The current summary excludes exact instruction-only checks such as `one per line:`.
+New practice plans reject those entries with a correction message. Existing checks,
+owner results and journal records are retained; the dashboard explains the exclusion
+and derives its current assessment from the actual criteria. This grants no action,
+spending or launch approval. Refresh an existing reviewed card after restarting;
+there is no need to create another sample just to repair that summary.
+
+Initial generation and revisions now share the completeness and unsupported-control
+checks, including the contradiction of setting a reminder whose behavior is unknown.
+A failed first sample gets one local text repair and is withheld if still invalid.
+Report scaffolding and stale `write the guide` next actions are removed from the
+current deliverable view; essential unknowns are retained once. Historical full text
+remains available in the sample history. These checks cover observed defects and do
+not establish universal factual accuracy or independent agent competence.
+
+Validation: 22 discovery tests and all 155 disposable regression tests passed,
+including real Docker isolation. The copied dashboard built successfully and passed
+the authenticated browser review/correction/revision flow. Lint and Bandit passed;
+the pre-existing image lint warning remains informational. No dependency policy was
+changed by this follow-up.
+
+A real local first-generation test still produced unsupported UI details after its
+single repair. Both drafts were withheld; no invalid sample or review was stored.
+This validates the failure path, not consistent model success. Requested report
+sections are retained when explicitly part of the exercise, and negative advice
+such as `Do not set a reminder` is not treated as an instruction to enable one.

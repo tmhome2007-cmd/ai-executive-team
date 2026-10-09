@@ -5,6 +5,15 @@ from memory.database import get_connection
 from memory.experiments import _text, _date
 from memory.business_practice_history import init_history, history
 
+def instruction_check(value):
+    return value.strip().lower().rstrip(':').strip() in {'one per line', 'one check per line', 'checks one per line'}
+
+
+def effective_assessment(checks, results):
+    meaningful = [passed for check, passed in zip(checks, results) if not instruction_check(check)]
+    return 'practice_passed' if len(meaningful) >= 2 and all(meaningful) else 'practice_failed'
+
+
 SCOPE = 'Research and local text practice only; €0 spend/loss; no launch authority or verified demand/profit.'
 
 
@@ -36,6 +45,12 @@ def get_brief(ident, include_history=True):
     result['attempts'] = attempts
     for field in ('source_ids', 'checks', 'review'):
         result[field] = json.loads(result.pop(field + '_json') or 'null')
+    from workflows.business_revision_contract import clean_deliverable
+    result['sample_display'] = clean_deliverable(result['sample'], exercise=result['exercise'] or '') if result['sample'] else None
+    if result['sample_display']:
+        result['sample_display'] += '\n\nCurrent exercise scope: ' + (result['exercise'] or '') + '\nOwner assessment is recorded separately; this sample grants no launch authority.'
+    result['ignored_check_indices'] = [i for i, check in enumerate(result['checks'] or []) if instruction_check(check)]
+    result['review_assessment'] = effective_assessment(result['checks'], result['review']['results']) if result['review'] else None
     result.update(scope=SCOPE, budget_amount=0, risk_limit=0, skill_assessment='not_demonstrated' if not result['review'] else 'owner_reviewed_practice_only')
     return result
 
@@ -70,6 +85,8 @@ def select_practice(ident, expected_version, selected_option, exercise, checks, 
     if not isinstance(checks, list) or not 2 <= len(checks) <= 10:
         raise ValueError('Define two to ten observable practice checks')
     checks = [_text(c, 'practice check', 500) for c in checks]
+    if any(instruction_check(check) for check in checks):
+        raise ValueError('Remove the instruction “one per line:” from the checks; enter actual criteria only')
     if len(set(checks)) != len(checks):
         raise ValueError('Practice checks must be distinct')
     observation_due_at = _date(observation_due_at, 'observation date')
@@ -144,7 +161,7 @@ def review_practice(ident, expected_version, results, evidence, observed_at, cor
     observed = datetime.datetime.fromisoformat(observed_at.replace('Z', '+00:00'))
     if observed > datetime.datetime.now(datetime.timezone.utc) or observed < datetime.datetime.fromisoformat(brief['sample_created_at'] or brief['created_at']):
         raise ValueError('Review time must be after brief creation and not in the future')
-    review = dict(results=results, evidence=evidence, observed_at=observed_at, assessment='practice_passed' if all(results) else 'practice_failed',
+    review = dict(results=results, evidence=evidence, observed_at=observed_at, assessment=effective_assessment(brief['checks'], results), ignored_check_indices=brief['ignored_check_indices'],
                   scope='Owner assessment of this sample only; not independent skill verification, demand evidence or launch approval')
     with get_connection() as conn:
         conn.execute('BEGIN IMMEDIATE')

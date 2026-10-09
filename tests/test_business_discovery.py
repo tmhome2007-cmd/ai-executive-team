@@ -46,7 +46,7 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_full_loop_never_approves_actions_or_credits_money(self):
         brief = self.plan()
-        with patch('workflows.business_discovery._reason', return_value='Synthetic practice sample; unknown evidence remains unknown.'):
+        with patch('workflows.business_discovery._reason', return_value='Synthetic practice guide: review the supplied evidence, label any unsupported statements unknown, and request owner assessment.'):
             brief = run_stage(brief['id'], brief['version'], 'practice')
         brief = review_practice(brief['id'], brief['version'], [True, False], 'Checked sample: prerequisite omitted.', datetime.datetime.now(datetime.timezone.utc).isoformat())
         self.assertEqual(brief['review']['assessment'], 'practice_failed')
@@ -83,7 +83,7 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_review_requires_real_boolean_checks(self):
         brief = self.plan()
-        with patch('workflows.business_discovery._reason', return_value='Synthetic sample'):
+        with patch('workflows.business_discovery._reason', return_value='Synthetic practice guide: review the supplied evidence, label unsupported statements unknown, and request owner assessment.'):
             brief = run_stage(brief['id'], brief['version'], 'practice')
         with self.assertRaises(ValueError):
             review_practice(brief['id'], brief['version'], [1, 1], 'Test evidence', datetime.datetime.now(datetime.timezone.utc).isoformat())
@@ -167,8 +167,8 @@ class DiscoveryTests(unittest.TestCase):
 
     def reviewed_sample(self):
         brief = self.plan()
-        with patch('workflows.business_discovery._reason', return_value='Original synthetic sample with an unsupported pencil icon.'):
-            brief = run_stage(brief['id'], brief['version'], 'practice')
+        claim_stage(brief['id'], brief['version'], 'practice')
+        brief = finish_stage(brief['id'], 'practice', 'Original synthetic sample with an unsupported pencil icon.')
         return review_practice(brief['id'], brief['version'], [False, False], 'Correct the invented pencil icon; use generic steps.', datetime.datetime.now(datetime.timezone.utc).isoformat())
 
     def revision_json(self):
@@ -314,3 +314,55 @@ class DiscoveryTests(unittest.TestCase):
         for value in ['sk-dummy-test-secret', 'Key: sk-dummy-test-secret', '"sk-dummy-test-secret"']:
             with self.assertRaises(ValueError):
                 _reject_secret_like_text(value)
+
+    def test_instruction_check_is_excluded_without_rewriting_history(self):
+        brief = self.reviewed_sample()
+        with get_connection() as conn:
+            conn.execute('UPDATE business_discovery SET checks_json=?, review_json=? WHERE id=?', (json.dumps(['one per line:', 'Actual criterion A', 'Actual criterion B']), json.dumps(dict(brief['review'], results=[False, True, True])), brief['id']))
+            conn.commit()
+        current = get_brief(brief['id'])
+        self.assertEqual(current['review_assessment'], 'practice_passed')
+        self.assertEqual(current['ignored_check_indices'], [0])
+        self.assertEqual(current['review']['assessment'], 'practice_failed')
+        self.assertEqual(current['attempts'], brief['attempts'])
+        candidate = create_brief('Another test', 'Zero spending', self.ids)
+        with patch('workflows.business_discovery._reason', return_value=self.research_json()):
+            candidate = run_stage(candidate['id'], candidate['version'], 'research')
+        with self.assertRaises(ValueError):
+            select_practice(candidate['id'], candidate['version'], 'Documentation', 'Synthetic guide', ['one per line:', 'A', 'B'], '2030-01-01T00:00:00Z')
+
+    def test_initial_sample_rejects_invented_features_and_repeated_scaffolding(self):
+        from workflows.business_revision_contract import validate_sample
+        exercise = 'Write a task guide: create, edit and complete tasks. Reminder functionality is unknown. Include three FAQ answers.'
+        sample = 'Findings\n- The exercise is a guide.\nNext Action\n- Write the guide.\n**Guide**\n1. Create a task using its create function.\n2. Edit a task using its edit function.\n3. Complete a task using its complete function.\nQ: Create?\nA: Use create.\nQ: Edit?\nA: Use edit.\nQ: Complete?\nA: Use complete.\n**Changes**\n- Removed controls.'
+        clean = validate_sample(sample, exercise)
+        self.assertNotIn('Write the guide', clean)
+        self.assertNotIn('Changes', clean)
+        self.assertIn('Do not set', validate_sample(clean + '\nDo not set a reminder; its behavior is unknown.', exercise))
+        report = validate_sample('**Findings**\nThe supplied fictional record establishes one observed result.\n**Unknowns**\n- Cause unknown.', 'Write a findings report with unknowns.', preserve_unknowns=True)
+        self.assertIn('one observed result', report)
+        for bad in ['Click the "+" button.', 'Click "Save".', 'Open the Tasks tab.', 'Set a reminder (reminders unknown).']:
+            with self.assertRaises(ValueError):
+                validate_sample(clean + '\n' + bad, exercise)
+
+    def test_initial_generation_withholds_bad_sample_and_repairs_once(self):
+        brief = self.plan()
+        bad = 'Private guide: click the "+" button to start. Unspecified functions and unknown details still need owner review.'
+        good = 'Private guide: inspect supplied evidence, distinguish facts from assumptions, and request owner assessment. Missing details remain unknown.'
+        with patch('workflows.business_discovery._reason', side_effect=[bad, good]) as reason:
+            result = run_stage(brief['id'], brief['version'], 'practice')
+        self.assertEqual(reason.call_count, 2)
+        self.assertEqual(result['state'], 'sample_ready')
+        self.assertNotIn('"+"', result['sample'])
+        self.assertEqual(len(result['attempts']), 1)
+
+    def test_initial_generation_failure_preserves_no_invalid_sample(self):
+        brief = self.plan()
+        with patch('workflows.business_discovery._reason', return_value='Click the "+" button. This is a synthetic guide with unknown details and pending owner review.') as reason:
+            with self.assertRaises(ValueError):
+                run_stage(brief['id'], brief['version'], 'practice')
+        result = get_brief(brief['id'])
+        self.assertEqual(reason.call_count, 2)
+        self.assertEqual(result['state'], 'needs_review')
+        self.assertIsNone(result['sample'])
+        self.assertEqual(result['attempts'], [])

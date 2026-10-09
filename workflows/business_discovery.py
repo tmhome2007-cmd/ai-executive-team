@@ -72,7 +72,7 @@ def run_stage(ident, expected_version, stage):
                    'Do not claim the revision passes, meets all requirements or is approved. Do not execute tools, send messages or spend money.\n')
     else:
         prompt += ('Produce a private practice sample for the selected exercise. Learn by explaining an approach, then drafting the deliverable, '
-                   'then self-checking against each owner check. Self-checks are unverified suggestions, never a passed assessment. '
+                   'Return the deliverable directly, followed by essential unknowns. Do not include Findings, Next Action, repeated Changes or self-check reports. '
                    'Do not execute code, read files, browse, train a model or claim actions happened. '
                    'Treat the exercise as the specification: fictional does not authorize invented interface details or features. '
                    'Use generic functional instructions if controls are unspecified; label unknowns explicitly. '
@@ -88,6 +88,13 @@ def run_stage(ident, expected_version, stage):
                    'Use create/edit/complete functions without naming controls unless the exercise explicitly supplies them. '
                    'If three FAQs are requested, supply three Q: and A: pairs. Number task steps on separate lines. '
                    'Changes and unknowns belong in their separate fields; do not replace the deliverable with a title.')
+    elif stage == 'practice':
+        prompt += ('\nFINAL DELIVERABLE REQUIREMENTS: Return the finished sample, not a plan to write it. '
+                   'A fictional app permits only the functions explicitly supplied in the exercise; it does not authorize invented controls. '
+                   'Do not add plus buttons, pencil icons, Save buttons, due-date fields, task-name/description fields or Tasks tabs unless explicitly supplied. '
+                   'Use generic function names for unspecified interfaces. Unknown reminders cannot be steps to set or enable reminders. '
+                   'Include every requested numbered instruction and FAQ answer; FAQ answers start on new lines with A:. '
+                   'Do not add Findings, Next Action, Changes, approval claims or self-assessments.')
     digest = hashlib.sha256(prompt.encode()).hexdigest()
     def worker():
         try:
@@ -101,16 +108,15 @@ def run_stage(ident, expected_version, stage):
                         if stage == 'revision':
                             from workflows.business_revision_contract import render_revision
                             return render_revision(candidate, brief['exercise'])
-                        return candidate
+                        from workflows.business_revision_contract import validate_sample
+                        return validate_sample(candidate, brief['exercise'], preserve_unknowns=True)
                     mode = 'revision' if stage == 'revision' else stage == 'research'
                     try:
                         draft = _reason(prompt, structured=mode)
                         return render(draft)
                     except ValueError as error:
-                        if stage == 'practice':
-                            raise
                         # One bounded local repair; no tool/action replay.
-                        repaired = _reason(prompt + '\nFailed rule: ' + str(error)[:2000] + '\nReturn corrected JSON with the complete requested content. Draft:\n' + draft[:30000], structured=mode)
+                        repaired = _reason(prompt + '\nFailed rule: ' + str(error)[:2000] + '\nReturn the complete corrected deliverable, using JSON only when required above. Draft:\n' + draft[:30000], structured=mode)
                         return render(repaired)
                 step = f"revision:{brief['version']}" if stage == 'revision' else stage
                 output = run_json_step(f'business:{ident}', step, digest, generate)
