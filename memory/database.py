@@ -185,6 +185,8 @@ def _action_approval_payload(action: dict) -> dict:
         payload['capability_policy'] = action['capability_policy']
     if action.get('experiment_policy'):
         payload['experiment_policy'] = action['experiment_policy']
+    if action.get('operating_policy_version', 1) > 1:
+        payload['operating_policy_version'] = action['operating_policy_version']
     return payload
 
 
@@ -229,6 +231,8 @@ def _action_row_for_approval(cursor: sqlite3.Cursor, action_id: int) -> dict | N
     capability = inventory_policy(cursor, action_id)
     if capability:
         action['capability_policy'] = capability
+    from memory.operating_policies import current_policy
+    action['operating_policy_version'] = current_policy(cursor)['version']
     return action
 
 
@@ -696,6 +700,14 @@ def init_db() -> None:
     init_discussions(cursor)
     from memory.capabilities import init_capabilities
     init_capabilities(cursor)
+    from memory.operating_policies import init_policies
+    from memory.memory_reconciliation import init_memory_reconciliation
+    from memory.observation_jobs import init_observation_jobs
+    init_policies(cursor)
+    init_memory_reconciliation(cursor)
+    init_observation_jobs(cursor)
+    from memory.agent_runtime import init_agent_runtime
+    init_agent_runtime(cursor)
     conn.commit()
     init_activity(conn)
     conn.close()
@@ -1128,6 +1140,8 @@ def create_executive_memory(
         )
         existing = cursor.fetchone()
         if existing:
+            if cursor.execute("SELECT 1 FROM memory_lifecycle WHERE memory_id=?", (existing["id"],)).fetchone():
+                return int(existing["id"]), False
             now = datetime.datetime.now().isoformat()
             cursor.execute(
                 """
@@ -1188,6 +1202,9 @@ def get_executive_memories(
     params: list = [executive_key]
     if active_only:
         clauses.append("is_active = 1")
+        clauses.append("NOT EXISTS (SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id AND (l.state!='active' OR (l.expires_at IS NOT NULL AND julianday(l.expires_at)<=julianday('now'))))")
+        clauses.append("NOT EXISTS (SELECT 1 FROM memory_lifecycle l JOIN evidence_sources e ON e.id IN (SELECT value FROM json_each(l.source_ids)) WHERE l.memory_id=executive_memories.id AND (e.verification='disputed' OR (e.expires_at IS NOT NULL AND julianday(e.expires_at)<=julianday('now'))))")
+        clauses.append("NOT EXISTS (SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id AND l.claim_key!='' AND l.claim_key IN (SELECT x.claim_key FROM memory_lifecycle x JOIN executive_memories m ON m.id=x.memory_id WHERE x.state='active' AND m.is_active=1 GROUP BY x.claim_key HAVING COUNT(DISTINCT m.lesson)>1))")
     if goal_id is not None:
         clauses.append("(source_goal_id = ? OR source_goal_id IS NULL)")
         params.append(goal_id)
@@ -2335,6 +2352,8 @@ def approve_action_with_treasury(action_id: int) -> dict:
 
         from memory.experiments import check_experiment_budget
         check_experiment_budget(cursor, action)
+        from memory.operating_policies import check_policy
+        check_policy(cursor, action)
         from memory.capabilities import check_inventory_requirements
         check_inventory_requirements(cursor, action)
 
@@ -2802,6 +2821,8 @@ def transition_action_status(
                 return False
             from memory.experiments import check_experiment_budget
             check_experiment_budget(cursor, action)
+            from memory.operating_policies import check_policy
+            check_policy(cursor, action)
             from memory.capabilities import check_inventory_requirements
             check_inventory_requirements(cursor, action)
             amount = action.get("expected_cost_amount")
@@ -2891,6 +2912,8 @@ def claim_action_for_execution(action_id: int) -> bool:
 
         from memory.experiments import check_experiment_budget
         check_experiment_budget(cursor, action)
+        from memory.operating_policies import check_policy
+        check_policy(cursor, action)
         from memory.capabilities import check_inventory_requirements
         check_inventory_requirements(cursor, action)
         cursor.execute(

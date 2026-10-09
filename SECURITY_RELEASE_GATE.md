@@ -212,3 +212,30 @@ baseline. That request is separate from production deployment approval. Existing
 credentials, runtime records and local servers were preserved. Production
 dependency, confinement, encrypted off-device recovery and external-effect
 limits remain documented; no real business action was enabled by this work.
+
+## BE-08–BE-11 operating foundation audit — 9 October 2026
+
+The new operating-policy, memory-reconciliation, observation-scheduling and
+executive-activity implementation passed the comprehensive local audit in
+`audit-results/20261009-191333`: 108 backend tests passed with real Docker enabled,
+150/150 foundation checks, Bandit medium/high, Python compatibility, frontend
+clean install/lint/build, npm audit (zero vulnerabilities), Chromium runtime and
+local Ollama inference. A separate Chromium test exercised the new Operations
+forms against a disposable SQLite database, including policy persistence, retained
+memory correction, source-backed observation results, executive state, mobile
+layout, text safety and API key privacy.
+
+Audit fixes include timezone-aware due/expiry comparisons; atomic daily spending
+limits; policy-version approval invalidation; immutable curated memory/history;
+immutable observation inputs bound to exact read actions; bounded source retry
+and no interrupted tool replay; actual executive role/task state; bounded activity
+replay and SSE connections; and accessible Operations form labels.
+
+Four known upstream Chroma advisories remain visible; Python dependency scanning
+is not clean. Existing encrypted off-device recovery/deployment constraints and
+external-effect guarantees remain outside this sprint. Existing screenshot blob
+rendering retains its informational Next.js optimization warning; it requires
+owner-authenticated fetching and does not expose an unauthenticated optimizer URL.
+These passing development checks do not certify arbitrary AI answers or production
+release. BE-08–BE-11 remain in Review until owner acceptance. See
+`OPERATING_FOUNDATION.md` for provider, retention, sync and state limits.

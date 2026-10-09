@@ -109,3 +109,22 @@ Final local verification: **68 tests passed, one unchanged opt-in Docker test sk
 build; and all three SQLite/API Chromium feature smokes (boards, experiments,
 organizational work). Lint retains the existing image warning. Provider tests were
 synthetic, and live model-quality/provider-permission trials remain owner checks.
+
+## Operating foundation sprint — 9 October 2026
+
+BE-08 through BE-11 are implemented on `codex/operating-foundation-sprint`
+and moved to Review in the development template. Existing boards retain owner
+edits. Owner review is still required before marking them Done.
+
+- BE-08: immutable policy versions; cost/risk/type limits checked inside approval
+  and execution transactions; policy changes invalidate earlier approval seals.
+- BE-09: source-backed correction, supersession, conflict review and expiry;
+  original lessons and revisions remain; unsuitable lessons are withheld from agents.
+- BE-10: durable, atomic observation claims, bounded source retries and interruption
+  recovery; owner-confirmed structured sources or independently approved file reads.
+- BE-11: actual task start/completion metadata, authenticated cursor replay/SSE,
+  bounded sessions and explicit unknown states; Operations dashboard controls.
+
+See [OPERATING_FOUNDATION.md](OPERATING_FOUNDATION.md) for scope and verification.
+External observation providers, unrestricted autonomous spending and the 3D office
+are future work. These features do not enable production deployment.

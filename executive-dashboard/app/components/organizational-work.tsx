@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import OperatingFoundation from "./operating-foundation";
 import type { ExecutiveProfile } from "./company-records";
 const API = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "");
-const tabs = ["Evidence", "Plans", "Discussion rounds", "Access inventory"] as const;
+const tabs = ["Evidence", "Plans", "Discussion rounds", "Access inventory", "Operations"] as const;
 type Tab = typeof tabs[number];
 interface Source { id: number; title: string; summary: string; reference: string; observed_at: string; expires_at: string | null; freshness: string; verification: string; version: number }
 interface Work { id: number; agile_task_id: number; assignee: string; status: string; note: string; decision_id: number | null }
@@ -109,6 +110,7 @@ export default function OrganizationalWork({ apiKey, profiles, onAuthFailure }: 
       {grants.map(g => <article key={g.id} className="command-card space-y-2"><h3>Access #{g.id} · {g.provider} · {g.target}</h3><p>Resource #{g.resource_request_id} · {g.status} · {g.health} · {g.fresh ? "Current health check" : "Not currently verified"}</p><p className="text-sm">Scopes: {g.scopes.join(", ")} · Roles: {g.roles.map(executiveName).join(", ")}</p>{g.secret_ref && <p className="text-xs text-gray-400">Secret reference: {g.secret_ref}</p>}{g.verified_until && <p className="text-xs">Verification expires {new Date(g.verified_until).toLocaleString()}</p>}{g.status !== "revoked" && <div className="flex gap-2"><Button disabled={busy || loading} onClick={() => void mutate(() => request(`/capabilities/${g.id}/verify`, {}))}>Verify access #{g.id}</Button><Button disabled={busy || loading} onClick={() => void mutate(() => request(`/capabilities/${g.id}/revoke`, { expected_version: g.version }))}>Revoke access #{g.id}</Button></div>}</article>)}
       <form className="command-card grid gap-3 md:grid-cols-2" onSubmit={e => submit(e, d => request(`/actions/${Number(d.get("action"))}/capabilities`, { requirements: [{ grant_id: Number(d.get("grant")), scope: d.get("scope") }] }))}><h3 className="md:col-span-2">Require access for a pending action</h3><Field name="action" label="Pending action ID" type="number" /><Field name="grant" label="Required access ID" type="number" /><Field name="scope" label="Required action scope" /><Button disabled={busy || loading}>Bind action access requirement</Button></form>
     </>}
-    {more && tab !== "Discussion rounds" && <Button disabled={busy || loading} onClick={() => setOffset(o => o + 50)}>Load older work records</Button>}
+    {tab === "Operations" && <OperatingFoundation apiKey={apiKey} onAuthFailure={onAuthFailure} />}
+    {more && tab !== "Operations" && tab !== "Discussion rounds" && <Button disabled={busy || loading} onClick={() => setOffset(o => o + 50)}>Load older work records</Button>}
   </section>;
 }

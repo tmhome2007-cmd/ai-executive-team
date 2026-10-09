@@ -230,6 +230,12 @@ async def _lifespan_unlocked(app: FastAPI):
     # Als een vorige procesrun tijdens een echte actie crashte, is het
     # real-world resultaat per definitie onzeker. Nooit automatisch retryen:
     # markeer zulke 'executing' acties als failed voor menselijke review.
+    from memory.observation_jobs import recover_observations
+    from memory.memory_reconciliation import expire_memories
+    recover_observations()
+    from memory.agent_runtime import recover_agent_runtime
+    recover_agent_runtime()
+    expire_memories()
     recovered_actions = recover_interrupted_actions()
     if recovered_actions:
         logger.warning(
@@ -255,6 +261,9 @@ async def _lifespan_unlocked(app: FastAPI):
 
     # Gebruik AsyncIOScheduler voor asynchrone achtergrondtaken
     scheduler = AsyncIOScheduler()
+    from memory.observation_jobs import run_observation_jobs
+    scheduler.add_job(run_observation_jobs, trigger=IntervalTrigger(minutes=1), id='observation_collectors', replace_existing=True, max_instances=1, coalesce=True)
+    scheduler.add_job(expire_memories, trigger=IntervalTrigger(minutes=15), id='memory_expiry', replace_existing=True, max_instances=1, coalesce=True)
     from workflows.capability_inventory import refresh_verified_capabilities
     scheduler.add_job(refresh_verified_capabilities, trigger=IntervalTrigger(minutes=15),
                       id='capability_health', replace_existing=True, max_instances=1, coalesce=True)
