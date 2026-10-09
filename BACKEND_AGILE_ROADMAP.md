@@ -176,3 +176,7 @@ research brief, local tool-free comparisons, owner-selected text practice and
 observed pass/fail review. Records grant no action or launch authority. See
 [BE17_LOCAL_REVIEW.md](BE17_LOCAL_REVIEW.md) for verification and explicit limits.
 Owner acceptance is pending; this item is not Done.
+
+## BE-17 acceptance — 10 October 2026
+
+Owner accepted the bounded research/private-practice workflow and authorized PR #31 merge. BE-17 is Done; earlier Backlog/Review entries are historical. BE-18/19 remain Backlog. This is not commercial launch acceptance. See [CONCEPTUAL_SYSTEM_AUDIT.md](CONCEPTUAL_SYSTEM_AUDIT.md) for current boundaries and proposed follow-ups.
