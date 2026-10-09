@@ -196,6 +196,25 @@ class OperatingFoundationTests(unittest.TestCase):
                 self.assertEqual(error.exception.status_code,429)
         asyncio.run(exercise())
 
+    def test_legacy_sync_never_activates_curated_memory_without_provenance(self):
+        from config import config
+        from pathlib import Path
+        from memory.database import export_history_to_jsonl, import_history_from_jsonl, init_db
+        ident,_=create_executive_memory(executive_key='ceo',memory_kind='general_lesson',lesson='Curated source-backed lesson',fingerprint='sync-curated')
+        source=self.source()
+        reconcile_memory(ident,expected_version=1,operation='annotate',source_ids=[source['id']],note='Retain source constraints')
+        export=Path(self.temp.name)/'sync/history.jsonl'
+        with patch.object(config,'SYNC_HMAC_KEY','synthetic-memory-sync-key'), patch('memory.artifact_retention.register_sync_export'):
+            export_history_to_jsonl(str(export))
+            records=[json.loads(line) for line in export.read_text().splitlines()]
+            memories=[r for r in records if r['_table']=='executive_memories']
+            self.assertEqual(memories[0]['is_active'],0)
+            self.assertEqual(get_executive_memories('ceo')[0]['id'],ident)
+            with patch.object(config,'DATABASE_PATH',str(Path(self.temp.name)/'other-device.db')):
+                init_db(); import_history_from_jsonl(str(export))
+                self.assertEqual(get_executive_memories('ceo'),[])
+                self.assertEqual(len(curated_memories()),1)
+
     def test_owner_api_auth_validation_and_version_conflicts(self):
         from fastapi.testclient import TestClient
         from main import app

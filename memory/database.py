@@ -3522,7 +3522,8 @@ def export_history_to_jsonl(export_path: str) -> dict:
 
         cursor.execute("""
             SELECT created_at, updated_at, executive_key, memory_kind, lesson,
-                   supporting_evidence, confidence, is_active,
+                   supporting_evidence, confidence,
+                   CASE WHEN EXISTS(SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id) THEN 0 ELSE is_active END AS is_active,
                    source_goal_sync_uuid, source_decision_sync_uuid,
                    source_action_sync_uuid, fingerprint, sync_uuid
             FROM executive_memories

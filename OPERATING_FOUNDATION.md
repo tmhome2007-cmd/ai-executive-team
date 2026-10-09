@@ -111,4 +111,6 @@ lint/build, Chromium runtime and local Ollama inference. Upstream Chroma advisor
 remain visible separately. This does not certify production deployment or every
 AI answer. External service collectors, semantic contradiction adjudication,
 heartbeat supervision and new multi-device sync for these tables are future work;
-existing whole-database backup covers the new records.
+existing whole-database backup covers the new records. Legacy JSONL exports carry
+curated memories as inactive historical records, so missing lifecycle metadata on
+another device cannot silently activate them. Their local eligibility is unchanged.
