@@ -65,7 +65,7 @@ def main():
         run('security-tests', [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v'])
         run('foundation-150', [sys.executable, 'verify_system.py'])
         run('bandit', [sys.executable, '-m', 'bandit', '-r', 'agents', 'memory', 'notifications',
-                       'tools', 'workflows', 'main.py', 'config.py', 'system_checks.py', 'logging_config.py', '-ll'])
+                       'tools', 'workflows', 'main.py', 'config.py', 'system_checks.py', 'logging_config.py', 'foundation_api.py', '-ll'])
         audit_json = report / 'python-dependencies.json'
         audit_ok = run('python-dependencies', [sys.executable, '-m', 'pip_audit', '-f', 'json', '-o', str(audit_json)], defer_failure=True)
         if not audit_ok and audit_json.exists():

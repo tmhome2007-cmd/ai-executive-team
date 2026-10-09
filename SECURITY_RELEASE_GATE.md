@@ -75,3 +75,32 @@ on implementation commit `08ee7eef481f5d35ca00ba3a8bd1c4a35927803c` confirms:
 The follow-up commit recording this evidence changes documentation only.
 The release gate remains NOT CLEARED for the explicitly listed dependency and
 deployment requirements; no main merge or live business action was performed.
+
+## Organizational work sprint evidence — 9 October 2026
+
+BE-04–07 add source provenance, reviewed executive planning, published discussion
+rounds and scoped capability inventory. All APIs use the existing owner-auth dependency.
+New activity events omit source/discussion contents and credential fingerprints.
+Approval seals bind new capability authority; fresh checks, role/host/scope constraints,
+rotation and revocation are checked before claiming execution. Scoped browser
+preparation resources cannot be bypassed by omitting a manual action binding.
+
+The Organizational work production-build Chromium smoke exercises source review,
+owner plan/task review, discussion publication and manual access verification/revocation
+against disposable SQLite via real APIs, with synthetic model responses. It verifies
+pending direction, safe model text, mobile width, memory-only API keys and no business
+execution or treasury movement. Real CrewAI tests separately verify plan generation,
+seven role/round checkpoints, canonical personality snapshots and inference-free replay.
+Provider permission/rotation/revocation tests use synthetic credentials and mocked
+GitHub/Chromium probes; real user credentials were not read or used.
+
+Whole-database backups retain these new tables. Existing sync payloads do not export
+them. This implementation does not add arbitrary provider execution tools or certify
+local model answers. Production/dependency release criteria above remain separate.
+
+Final sprint head local checks: 69 tests run, 68 passed and one opt-in Docker test
+skipped; 150/150 foundation checks; compilation/pip check; Bandit with zero medium/high
+findings; frontend lint (existing image warning)/Webpack build; all three real API/
+SQLite Chromium feature smokes passed. Docker/Ollama/dependency audits were not
+re-run for this sprint; earlier evidence and unresolved upstream findings remain
+separate. New final-head CI results must be evaluated after pushing.

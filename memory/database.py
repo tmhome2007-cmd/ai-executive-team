@@ -181,6 +181,8 @@ def _action_approval_payload(action: dict) -> dict:
         "source_decision_sync_uuid": action.get("source_decision_sync_uuid"),
         "source_phase": action.get("source_phase"),
     }
+    if action.get('capability_policy'):
+        payload['capability_policy'] = action['capability_policy']
     if action.get('experiment_policy'):
         payload['experiment_policy'] = action['experiment_policy']
     return payload
@@ -223,6 +225,10 @@ def _action_row_for_approval(cursor: sqlite3.Cursor, action_id: int) -> dict | N
     policy = experiment_policy(cursor, action_id)
     if policy:
         action['experiment_policy'] = policy
+    from memory.capabilities import inventory_policy
+    capability = inventory_policy(cursor, action_id)
+    if capability:
+        action['capability_policy'] = capability
     return action
 
 
@@ -682,6 +688,14 @@ def init_db() -> None:
     conn.commit()
     from memory.experiments import init_experiments
     init_experiments(cursor)
+    from memory.evidence import init_evidence
+    init_evidence(cursor)
+    from memory.planning import init_planning
+    init_planning(cursor)
+    from memory.discussions import init_discussions
+    init_discussions(cursor)
+    from memory.capabilities import init_capabilities
+    init_capabilities(cursor)
     conn.commit()
     init_activity(conn)
     conn.close()
@@ -1601,10 +1615,15 @@ def log_decision(
     workflow_key: str | None = None,
     individual_outputs: dict[str, str] | None = None,
     executive_profiles: dict | None = None,
+    source_ids: list[int] | None = None,
+    discussion_messages: list[dict] | None = None,
 ) -> int:
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
     """
+    if source_ids is not None:
+        from memory.evidence import source_context
+        source_context(source_ids)
     timestamp = datetime.datetime.now().isoformat()
     agents_str = ",".join(agents_involved)
     sandbox_flag = 1 if sandbox_mode else 0
@@ -1625,7 +1644,13 @@ def log_decision(
                 actual = tuple(previous[key] for key in ("topic", "agents_involved", "task_description", "decision_outcome", "sandbox_mode", "goal_id", "meeting_type"))
                 if actual != expected:
                     raise ValueError("Decision workflow key reused with different inputs")
+                if source_ids:
+                    linked = {r[0] for r in cursor.execute("SELECT source_id FROM evidence_links WHERE entity_kind = 'decision' AND entity_id = ? AND relation = 'context'", (previous['id'],))}
+                    if linked != set(source_ids):
+                        raise ValueError('Decision retry differs from its original evidence sources')
                 _store_contributions(cursor, previous["id"], "decision", individual_outputs, executive_profiles)
+                from memory.discussions import store_discussion
+                store_discussion(cursor, previous['id'], discussion_messages, source_ids)
                 conn.commit()
                 return previous["id"]
         if goal_id is not None:
@@ -1653,7 +1678,19 @@ def log_decision(
         ))
         
         decision_id = cursor.lastrowid
+        from memory.evidence import register_source, link_source
+        if source_ids:
+            for source_id in source_ids:
+                link_source(cursor, source_id, 'decision', decision_id)
+        else:
+            source_id = register_source(cursor, source_key='decision-context:' + new_sync_uuid,
+                title='Recorded decision input context', reference='Persisted workflow input; not independently verified',
+                summary=task_description[:12000] or 'No input evidence supplied.',
+                observed_at=datetime.datetime.now(datetime.timezone.utc).isoformat(), source_kind='owner_context')
+            link_source(cursor, source_id, 'decision', decision_id)
         _store_contributions(cursor, decision_id, "decision", individual_outputs, executive_profiles)
+        from memory.discussions import store_discussion
+        store_discussion(cursor, decision_id, discussion_messages, source_ids)
         cursor.execute(
             """
             INSERT OR IGNORE INTO decision_approvals (
@@ -2298,6 +2335,8 @@ def approve_action_with_treasury(action_id: int) -> dict:
 
         from memory.experiments import check_experiment_budget
         check_experiment_budget(cursor, action)
+        from memory.capabilities import check_inventory_requirements
+        check_inventory_requirements(cursor, action)
 
         amount = action.get("expected_cost_amount")
         currency = action.get("currency")
@@ -2763,6 +2802,8 @@ def transition_action_status(
                 return False
             from memory.experiments import check_experiment_budget
             check_experiment_budget(cursor, action)
+            from memory.capabilities import check_inventory_requirements
+            check_inventory_requirements(cursor, action)
             amount = action.get("expected_cost_amount")
             if amount is not None and float(amount) > 0:
                 conn.rollback()
@@ -2850,6 +2891,8 @@ def claim_action_for_execution(action_id: int) -> bool:
 
         from memory.experiments import check_experiment_budget
         check_experiment_budget(cursor, action)
+        from memory.capabilities import check_inventory_requirements
+        check_inventory_requirements(cursor, action)
         cursor.execute(
             """
             UPDATE action_queue

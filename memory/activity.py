@@ -33,6 +33,13 @@ def configure_connection(conn):
 # decision/action/resource/goal link expressions, company visibility condition.
 # No free-text contents are copied into the ledger. Edits record changed field names.
 SPECS = (
+    ('capability_inventory', 'id', 'capability', ('status', 'health', 'version'), (), ('NULL', 'NULL', 'NEW.resource_request_id', 'NULL'), '1'),
+    ('action_capability_requirements', 'id', 'capability', ('grant_id', 'required_scope'), (), ('NULL', 'NEW.action_id', 'NULL', 'NULL'), '1'),
+    ('discussion_messages', 'id', 'discussion', ('round_number', 'phase', 'executive_key'), (), ('NEW.decision_id', 'NULL', 'NULL', 'NULL'), '1'),
+    ('executive_plans', 'id', 'planning', ('status', 'version', 'proposer'), (), ('NULL', 'NULL', 'NULL', 'NEW.goal_id'), '1'),
+    ('planned_work', 'id', 'planning', ('status', 'claimed_once', 'decision_id'), (), ('NEW.decision_id', 'NULL', 'NULL', '(SELECT goal_id FROM executive_plans WHERE id = NEW.plan_id)'), '1'),
+    ('evidence_sources', 'id', 'evidence', ('verification', 'version'), (), ('NULL', 'NULL', 'NULL', 'NULL'), '1'),
+    ('evidence_links', 'id', 'evidence', ('source_id', 'entity_kind', 'entity_id', 'relation'), (), ("CASE WHEN NEW.entity_kind = 'decision' THEN NEW.entity_id ELSE NULL END", 'NULL', 'NULL', 'NULL'), '1'),
     ('experiments', 'id', 'experiment', ('budget_amount', 'risk_limit', 'currency', 'version'), ('hypothesis', 'baseline_value', 'target_value', 'observation_due_at'), ('(SELECT source_decision_id FROM action_queue WHERE id = NEW.action_id)', 'NEW.action_id', 'NULL', 'NULL'), '1'),
     ('experiment_observations', 'id', 'experiment', ('value', 'observed_at', 'measurement_mode'), (), ('(SELECT q.source_decision_id FROM experiments e JOIN action_queue q ON q.id = e.action_id WHERE e.id = NEW.experiment_id)', '(SELECT action_id FROM experiments WHERE id = NEW.experiment_id)', 'NULL', 'NULL'), '1'),
     ('decisions', 'id', 'meeting', ('meeting_type',), (), ('NEW.id', 'NULL', 'NULL', 'NEW.goal_id'), '1'),

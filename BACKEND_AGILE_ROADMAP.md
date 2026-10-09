@@ -81,3 +81,31 @@ The checked-in roadmap and new-board template reflect this work. Existing runtim
 boards are deliberately not overwritten by reseeding. The current default local DB
 has not loaded the board migration; restart the isolated backend with its original
 test environment/database before reviewing/updating existing cards.
+
+## BE-04–07 implementation — 9 October 2026
+
+Owner explicitly requested BE-04 through BE-07 together. All four are implemented
+and enter **Review**, with an Organizational work dashboard surface:
+
+- BE-04: immutable dated source provenance, freshness/review labels, source links,
+  explicit missing/context-only/conflicting evidence and observation integration.
+- BE-05: validated executive-proposed task graphs, owner plan review, company cards,
+  budget/goal/dependency-aware single claims, scheduled tool-free recommendations,
+  workload counts and separate result review.
+- BE-06: durable proposal/critique/revision/CEO-synthesis rounds with canonical persona
+  snapshots, source links and guarded owner-consent claims.
+- BE-07: requested/provided/verified access, fixed GitHub/local-browser health adapters,
+  manual inventory, metadata-only secret references, expiry/refresh/revocation and
+  exact approval-bound action scope checks.
+
+Details, owner test steps and integration limits are in ORGANIZATIONAL_WORK.md.
+New records are retained in database backups; cross-machine sync does not yet include
+these organizational tables. No real provider credentials, business execution or
+spending was used during verification. Existing runtime boards remain untouched by
+reseeding, and owner review is required before moving these cards to Done.
+
+Final local verification: **68 tests passed, one unchanged opt-in Docker test skipped**;
+150/150 foundation checks; pip check; Bandit medium/high; frontend lint and Webpack
+build; and all three SQLite/API Chromium feature smokes (boards, experiments,
+organizational work). Lint retains the existing image warning. Provider tests were
+synthetic, and live model-quality/provider-permission trials remain owner checks.

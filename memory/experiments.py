@@ -151,7 +151,10 @@ def update_experiment(ident, expected_version, **fields):
     return get_experiment(ident)
 
 
-def record_observation(ident, *, idempotency_key, observed_at, value=None, evidence, notes=''):
+def record_observation(ident, *, idempotency_key, observed_at, value=None, evidence, notes='', source_ids=None):
+    from memory.evidence import register_source, link_source, source_context
+    if source_ids is not None:
+        source_context(source_ids)
     if not isinstance(idempotency_key, str) or not re.fullmatch(r'[A-Za-z0-9:_-]{1,80}', idempotency_key):
         raise ValueError('Invalid observation idempotency key')
     _reject_secret_like_text(idempotency_key)
@@ -171,6 +174,10 @@ def record_observation(ident, *, idempotency_key, observed_at, value=None, evide
         if existing:
             if any(existing[f] != v for f, v in [('observed_at', observed_at), ('value', value), ('evidence', evidence), ('notes', notes)]):
                 raise RuntimeError('Observation retry differs from its original record')
+            if source_ids:
+                linked = {r[0] for r in cursor.execute("SELECT source_id FROM evidence_links WHERE entity_kind = 'observation' AND entity_id = ? AND relation = 'supports'", (existing['id'],))}
+                if linked != set(source_ids):
+                    raise RuntimeError('Observation retry differs from its original evidence sources')
             return dict(existing)
         action = cursor.execute('SELECT status, reviewed_at FROM action_queue WHERE id = ?', (plan['action_id'],)).fetchone()
         if action['status'] not in {'executed', 'executed_dry_run', 'execution_failed', 'blocked_dangerous'}:
@@ -185,6 +192,11 @@ def record_observation(ident, *, idempotency_key, observed_at, value=None, evide
             observed_at, value, evidence, notes, recorded_at, measurement_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
             (ident, idempotency_key, observed_at, value, evidence, notes, now, mode))
         row = dict(cursor.execute('SELECT * FROM experiment_observations WHERE id = ?', (cursor.lastrowid,)).fetchone())
+        sources = source_ids or [register_source(cursor, source_key=f"observation:{row['id']}",
+            title='Owner-recorded observation source', reference='Owner-supplied measurement evidence',
+            summary=evidence, observed_at=observed_at, source_kind='observation')]
+        for source_id in sources:
+            link_source(cursor, source_id, 'observation', row['id'], 'supports')
         conn.commit()
         return row
 

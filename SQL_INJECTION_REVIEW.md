@@ -31,3 +31,14 @@ are program literals; no API or sync value can supply SQL structure. Each site h
 individual justification. The gate now reviews 23 construction sites and reports zero
 medium/high findings. Real SQLite tests cover migration replay, atomic rollback and
 concurrent transitions in addition to the existing adversarial input regressions.
+
+## BE-04–07 schema additions — 9 October 2026
+
+Two further construction expressions install immutable evidence-link and discussion
+triggers. Each iterates only the literal tuple (`UPDATE`, `DELETE`) with a fixed table,
+trigger prefix and error string; no user identifiers/values enter those expressions.
+Both have individual B608 dispositions. Other new source/plan/discussion/capability
+queries bind all runtime values. The evidence-target query selector chooses among
+three fixed statements, and provider checks use fixed hosts rather than SQL-derived
+URLs. Real SQLite tests exercise immutable records and normal/stale/concurrent owner
+transitions. Bandit remains enabled globally and includes foundation_api.py.

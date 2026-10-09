@@ -218,6 +218,8 @@ async def _lifespan_unlocked(app: FastAPI):
     # reconciliation, never automatic replay on a server restart.
     from workflows.step_checkpoints import init_step_checkpoints, reconcile_interrupted_steps
     init_step_checkpoints()
+    from memory.planning import reconcile_work
+    reconcile_work()
     uncertain_steps = reconcile_interrupted_steps()
     if uncertain_steps:
         logger.warning(
@@ -253,6 +255,12 @@ async def _lifespan_unlocked(app: FastAPI):
 
     # Gebruik AsyncIOScheduler voor asynchrone achtergrondtaken
     scheduler = AsyncIOScheduler()
+    from workflows.capability_inventory import refresh_verified_capabilities
+    scheduler.add_job(refresh_verified_capabilities, trigger=IntervalTrigger(minutes=15),
+                      id='capability_health', replace_existing=True, max_instances=1, coalesce=True)
+    from workflows.executive_planning import dispatch_planned_work
+    scheduler.add_job(dispatch_planned_work, trigger=IntervalTrigger(minutes=15),
+                      id='executive_work_plans', replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(
         scheduled_research_job,
         trigger=IntervalTrigger(minutes=15),
@@ -372,6 +380,7 @@ class DailyResearchResponse(BaseModel):
 
 
 class DecisionRequest(BaseModel):
+    source_ids: list[int] = Field(default_factory=list, max_length=20)
     workflow_run_id: Optional[str] = Field(default=None, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9:_-]+$")
     topic: str = Field(min_length=1, max_length=200)
     task_description: str = Field(min_length=1, max_length=12000)
@@ -852,6 +861,11 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     workflow_run_id = request.workflow_run_id or f"decision:{uuid.uuid4()}"
     goal = None
     meeting_task = request.task_description
+    from memory.evidence import source_context
+    try:
+        registered_context = source_context(request.source_ids)
+    except (ValueError, LookupError) as error:
+        raise HTTPException(400, str(error)) from None
     try:
         resolved_agent_keys = resolve_meeting_agents(
             request.meeting_type,
@@ -879,6 +893,8 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             "Do not claim the goal is complete; goal completion remains an owner decision."
         )
 
+    if registered_context:
+        meeting_task += '\nREGISTERED SOURCES (preserve freshness/review labels):\n' + registered_context
     try:
         meeting_result = run_executive_meeting(
             topic=request.topic,
@@ -920,6 +936,7 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         workflow_key=workflow_run_id,
         individual_outputs=meeting_result.get("individual_outputs", {}),
         executive_profiles=get_executive_profiles(),
+        source_ids=request.source_ids,
     )
 
     try:
@@ -2313,6 +2330,7 @@ class ExperimentUpdateRequest(BaseModel):
 
 
 class ObservationRequest(BaseModel):
+    source_ids: list[int] | None = Field(default=None, max_length=20)
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
     idempotency_key: str = Field(min_length=1, max_length=80, pattern=r'^[A-Za-z0-9:_-]+$')
     observed_at: str = Field(max_length=40)
@@ -2356,3 +2374,7 @@ def observations_list(experiment_id: int, limit: int = Query(default=50, ge=1, l
 @app.post('/experiments/{experiment_id}/observations', dependencies=[Depends(verify_api_key)])
 def observation_create(experiment_id: int, request: ObservationRequest):
     return _agile_call(record_observation, experiment_id, **request.model_dump())
+
+
+from foundation_api import router as foundation_router
+app.include_router(foundation_router, dependencies=[Depends(verify_api_key)])
