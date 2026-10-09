@@ -33,6 +33,10 @@ def configure_connection(conn):
 # decision/action/resource/goal link expressions, company visibility condition.
 # No free-text contents are copied into the ledger. Edits record changed field names.
 SPECS = (
+    ('agent_runtime','id','executive',('executive_key','state'),('updated_at',),('NULL','NULL','NULL','NULL'),'1'),
+    ('operating_policies','version','policy',('version','currency','require_known_cost'),('note','max_action_cost','max_daily_cost','max_experiment_risk','prohibited_types'),('NULL','NULL','NULL','NULL'),'NEW.version > 1'),
+    ('memory_lifecycle','memory_id','memory',('version','state','superseded_by'),('claim_key','source_ids','expires_at'),('NULL','NULL','NULL','NULL'),'1'),
+    ('observation_jobs','id','observation',('status','attempts','version','observation_id'),('note',),('NULL','NEW.collection_action_id','NULL','NULL'),'1'),
     ('capability_inventory', 'id', 'capability', ('status', 'health', 'version'), (), ('NULL', 'NULL', 'NEW.resource_request_id', 'NULL'), '1'),
     ('action_capability_requirements', 'id', 'capability', ('grant_id', 'required_scope'), (), ('NULL', 'NEW.action_id', 'NULL', 'NULL'), '1'),
     ('discussion_messages', 'id', 'discussion', ('round_number', 'phase', 'executive_key'), (), ('NEW.decision_id', 'NULL', 'NULL', 'NULL'), '1'),

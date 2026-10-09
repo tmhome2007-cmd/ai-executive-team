@@ -93,6 +93,8 @@ class OrganizationalPipelineTests(unittest.TestCase):
                 self.assertEqual(generate_plan(run_key='pipeline-plan', goal_id=self.goal, board_id=self.board, title='Synthetic research', proposer='coo')['id'], first['id'])
             with self.assertRaises(RuntimeError):
                 generate_plan(run_key='pipeline-plan', goal_id=self.goal, board_id=self.board, title='Changed scope', proposer='coo')
+        from memory.agent_activity_stream import executive_states
+        self.assertEqual(executive_states()['coo'], 'idle')
         self.assertEqual(first['status'], 'proposed')
         self.assertEqual(agents['coo'].backstory, EXECUTIVE_AGENTS_NO_TOOLS['coo'].backstory)
     def test_actual_round_pipeline_persists_speakers_and_replays_without_inference(self):

@@ -16,8 +16,11 @@ class DurableTask(Task):
 
     def execute_sync(self, agent=None, context=None, tools=None):
         chosen_agent = agent or self.agent
+        from memory.operating_policies import policy_context
+        operating_context = policy_context()
         # Bind result reuse to actual prompt, predecessor outputs and role.
         digest = hashlib.sha256(json.dumps({
+            'operating_context': operating_context,
             'quality_policy': 1 if self.quality_enabled else None,
             'quality_evidence': self.quality_evidence,
             'quality_phase': self.quality_phase, 'quality_proposals': self.quality_proposals,
@@ -32,7 +35,7 @@ class DurableTask(Task):
         from memory.database import _current_action_provenance
         provenance = _current_action_provenance()
 
-        def execute():
+        def execute_task():
             before_actions = set(provenance['created_action_ids']) if provenance else set()
             before_resources = set(provenance['created_resource_request_ids']) if provenance else set()
             output = super(DurableTask, self).execute_sync(agent, context, tools)
@@ -65,6 +68,27 @@ class DurableTask(Task):
                 'action_ids': [item for item in provenance['created_action_ids'] if item not in before_actions] if provenance else [],
                 'resource_ids': [item for item in provenance['created_resource_request_ids'] if item not in before_resources] if provenance else [],
             }
+
+        def execute():
+            from workflows.capability_policy import normalize_executive_role
+            from memory.agent_runtime import record_state
+            role = normalize_executive_role(chosen_agent.role.split(" (", 1)[0])
+            if role:
+                record_state(self.checkpoint_run_id, self.checkpoint_step_id, role, 'running')
+            try:
+                original_description = self.description
+                self.description = original_description + "\n" + operating_context
+                try:
+                    result = execute_task()
+                finally:
+                    self.description = original_description
+            except BaseException:
+                if role:
+                    record_state(self.checkpoint_run_id, self.checkpoint_step_id, role, 'unknown')
+                raise
+            if role:
+                record_state(self.checkpoint_run_id, self.checkpoint_step_id, role, 'idle')
+            return result
 
         saved = run_json_step(self.checkpoint_run_id, self.checkpoint_step_id, digest, execute)
         if provenance:

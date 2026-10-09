@@ -229,3 +229,130 @@ def capability_bind(action_id: int, request: CapabilityBinding):
     result = invoke(bind_capabilities, action_id, request.model_dump()['requirements'])
     # Authority seal fields are internal; never expose credential fingerprints.
     return {'action_id': result['action_id'], 'requirements': [{k: v for k, v in row.items() if k != 'credential_fingerprint'} for row in result['requirements']]}
+
+# BE-08–11 share the main router's existing owner-auth dependency.
+from memory.operating_policies import get_policy, save_policy
+from memory.memory_reconciliation import curated_memories, reconcile_memory
+from memory.observation_jobs import schedule_observation, list_jobs, review_job
+from memory.agent_activity_stream import stream_page, executive_states
+
+
+class OperatingPolicyRequest(StrictRequest):
+    expected_version: int = Field(ge=1)
+    currency: str = Field(pattern=r'^[A-Z]{3}$')
+    max_action_cost: float | None = Field(default=None,ge=0,le=1e15)
+    max_daily_cost: float | None = Field(default=None,ge=0,le=1e15)
+    max_experiment_risk: float | None = Field(default=None,ge=0,le=1e15)
+    require_known_cost: bool = False
+    prohibited_types: list[Literal['shell','file_operation','browser_action']] = Field(default_factory=list,max_length=3)
+    note: str = Field(min_length=1,max_length=2000)
+
+
+@router.get('/operating-policy')
+def read_operating_policy():
+    return get_policy()
+
+
+@router.put('/operating-policy')
+def write_operating_policy(request: OperatingPolicyRequest):
+    return invoke(save_policy,**request.model_dump())
+
+
+class MemoryReconcileRequest(StrictRequest):
+    expected_version: int = Field(ge=1)
+    operation: Literal['annotate','correct','expire','conflict']
+    source_ids: list[int] = Field(min_length=1,max_length=20)
+    note: str = Field(min_length=1,max_length=2000)
+    lesson: str | None = Field(default=None,max_length=2000)
+    claim_key: str = Field(default='',max_length=120)
+    expires_at: str | None = Field(default=None,max_length=40)
+
+
+@router.get('/memory-review')
+def read_memory_review(limit: int=Query(50,ge=1,le=100),offset: int=Query(0,ge=0)):
+    return curated_memories(limit,offset)
+
+
+@router.post('/memory-review/{ident}')
+def write_memory_review(ident: int,request: MemoryReconcileRequest):
+    return invoke(reconcile_memory,ident,**request.model_dump())
+
+
+@router.get('/memory-review/{ident}/history')
+def memory_review_history(ident: int, limit: int=Query(50,ge=1,le=100), offset: int=Query(0,ge=0)):
+    from memory.database import get_connection
+    with get_connection() as conn:
+        return [dict(row) for row in conn.execute('SELECT * FROM memory_revisions WHERE memory_id=? ORDER BY version DESC LIMIT ? OFFSET ?',(ident,limit,offset))]
+
+
+class ObservationJobRequest(StrictRequest):
+    job_key: str = Field(min_length=1,max_length=80)
+    experiment_id: int = Field(ge=1)
+    collector: Literal['owner_source','approved_file_read']
+    due_at: str = Field(max_length=40)
+    source_id: int | None = Field(default=None,ge=1)
+    collection_action_id: int | None = Field(default=None,ge=1)
+
+
+class ObservationJobReview(StrictRequest):
+    expected_version: int = Field(ge=1)
+    operation: Literal['retry','cancel']
+
+
+@router.get('/observation-jobs')
+def read_observation_jobs(limit: int=Query(50,ge=1,le=100),offset: int=Query(0,ge=0)):
+    return list_jobs(limit,offset)
+
+
+@router.post('/observation-jobs')
+def write_observation_job(request: ObservationJobRequest):
+    return invoke(schedule_observation,**request.model_dump())
+
+
+@router.post('/observation-jobs/{ident}/review')
+def write_observation_job_review(ident: int,request: ObservationJobReview):
+    return invoke(review_job,ident,request.expected_version,request.operation)
+
+
+@router.get('/activity-stream/page')
+def read_stream_page(after_id: int=Query(0,ge=0),limit: int=Query(100,ge=1,le=100)):
+    return {**stream_page(after_id,limit),'executives':executive_states(),'state_scope':'Running is a recent observed task start; idle is observed completion; interrupted/stale/unobserved roles are unknown'}
+
+
+_active_streams = 0
+_MAX_STREAMS = 16
+
+
+@router.get('/activity-stream')
+async def stream_activity(after_id: int=Query(0,ge=0)):
+    import asyncio
+    import json
+    from starlette.responses import StreamingResponse
+    if _active_streams >= _MAX_STREAMS:
+        raise HTTPException(429, "Too many activity streams; retry later")
+    async def events():
+        global _active_streams
+        if _active_streams >= _MAX_STREAMS:
+            yield 'event: unavailable\ndata: {"retry": true}\n\n'
+            return
+        _active_streams += 1
+        try:
+            async for item in replay_events():
+                yield item
+        finally:
+            _active_streams -= 1
+    async def replay_events():
+        cursor=after_id
+        # Finite session duration and bounded batches; reconnect with the last ID.
+        for _ in range(60):
+            page=await asyncio.to_thread(stream_page,cursor)
+            if page['reset_required']:
+                cursor=page['after_id']
+                yield 'event: reset\ndata: '+json.dumps({'after_id':cursor,'retention_days':30})+'\n\n'
+            for item in page['items']:
+                cursor=item['id']
+                yield 'id: '+str(cursor)+'\nevent: activity\ndata: '+json.dumps(item)+'\n\n'
+            states=await asyncio.to_thread(executive_states)
+            yield 'event: states\ndata: '+json.dumps(states)+'\n\n'
+            await asyncio.sleep(5)
+    return StreamingResponse(events(),media_type='text/event-stream',headers={'Cache-Control':'no-store','X-Accel-Buffering':'no'})
