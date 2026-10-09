@@ -65,6 +65,24 @@ class DiscussionTests(unittest.TestCase):
         self.assertNotIn('Create a task with a variable due time', result['final_decision'])
         self.assertEqual(result['approval_status'], 'pending')
 
+    def test_complete_evidence_and_valid_quoted_critique_publish_cleanly(self):
+        from workflows.discussion_contracts import CONTRACTS
+        details = '\nPrerequisites: Supplied in fixture record.\nSetup: Same fixture build and clock.\nSteps: Compare enabled reminders while holding the clock fixed.\nObserve: Record both events in the fixture log by 12:03 UTC.\nPass: Both enabled tasks emit a reminder event.\nFail: At least one expected event is absent.\nCausal limit: A pass alone does not establish cause.'
+        def meeting(**kwargs):
+            phase = kwargs['discussion_round'][0]
+            body = '\n'.join('**' + h + '**' for h in CONTRACTS[phase].split('; '))
+            if phase == 'critique':
+                body += '\nClaim quote: ceo | Pass: Both enabled tasks emit a reminder event.\nThis is an observation criterion; it cannot establish cause.'
+            else:
+                body += details
+            return {'participants': ['ceo'], 'individual_outputs': {'ceo': body}, 'final_decision': body}
+        with patch('workflows.discussion_rounds.run_executive_meeting', side_effect=meeting):
+            result = run_discussion(run_key='valid-complete-critique', topic='Complete synthetic fixture', task_description='Build: fixture-v2\nReminder due time: 12:02 UTC\nObservation channel: fixture event log\nOriginal reproduction steps: enable reminder and advance clock to 12:03 UTC.', agent_keys=['ceo'])
+        critique = result['messages'][1]
+        self.assertIn('Claim quote: ceo', critique['body'])
+        self.assertEqual(critique['quality_checks']['warnings'], [])
+        self.assertEqual(result['approval_status'], 'pending')
+
     def test_failed_round_publishes_no_partial_decision(self):
         with patch('workflows.discussion_rounds.run_executive_meeting', side_effect=[self.meeting(agent_keys=['ceo']), ValueError('Synthetic failure')]):
             with self.assertRaises(ValueError):

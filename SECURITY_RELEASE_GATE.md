@@ -1,6 +1,6 @@
 # Security release gate — 2026-10-08
 
-**Status: NOT CLEARED. Work remains on dependency remediation and deployment confinement. Do not merge into main or enable production execution based on this audit.**
+**Production status: NOT CLEARED. Dependency remediation and deployment confinement remain. On 9 October the owner requested merging the verified work into main as the development baseline; that authorization does not enable production execution or certify AI answers. Historical audit evidence below remains scoped to its dated commits.**
 
 ## Implemented and locally verified
 
@@ -186,3 +186,29 @@ or truth of a critique. These conservative safeguards do not certify arbitrary
 model reasoning. No saved discussions are rewritten or model calls replayed.
 Verified: 83 tests passed, one opt-in Docker test skipped (84 run); 150/150
 foundation checks passed and changed Python files passed Bandit.
+
+
+## Shared quality verification — 9 October 2026
+
+Final isolated regression: 94 tests passed, one opt-in Docker test skipped
+(95 run), and 150/150 foundation checks passed. The comprehensive local audit
+in audit-results/20261009-182705 passed all project checks, including its
+90-test suite with real Docker enabled, clean frontend install/lint/build/audit,
+browser runtime and local inference. pip check and Bandit medium/high passed.
+The Python dependency scan remains unclean with four known Chroma advisories.
+
+A fresh complete-evidence local Ollama discussion completed with pending approval
+and zero actions. One text-only repair per failing tool-free task was exercised.
+The model still failed to produce a valid quoted critique and still falsely
+called supplied fields missing; those outcomes were withheld or flagged instead
+of being certified. A follow-up regression fixes warning text satisfying a
+missing-heading check. Positive synthetic coverage verifies a valid quotation
+can pass and publish; separate tests verify tool authority is never replayed,
+corrected outputs are cached, distinct-source coverage and full research publication.
+This is improved quality control, not certification of arbitrary AI reasoning.
+
+The owner requested merging the verified work into main as a development
+baseline. That request is separate from production deployment approval. Existing
+credentials, runtime records and local servers were preserved. Production
+dependency, confinement, encrypted off-device recovery and external-effect
+limits remain documented; no real business action was enabled by this work.

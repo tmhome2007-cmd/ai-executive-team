@@ -43,6 +43,43 @@ class OrganizationalPipelineTests(unittest.TestCase):
     def agents(self, llm):
         result = {key: Agent(role=EXECUTIVE_AGENTS_NO_TOOLS[key].role, goal=EXECUTIVE_AGENTS_NO_TOOLS[key].goal, backstory=EXECUTIVE_AGENTS_NO_TOOLS[key].backstory, llm=llm, tools=[], allow_delegation=False, verbose=False, max_iter=2) for key in ('ceo', 'coo', 'cfo')}
         return result
+    def test_text_quality_repair_is_bounded_and_cached(self):
+        from workflows.durable_task import DurableTask
+        from crewai.tasks.task_output import TaskOutput
+        from crewai import Task
+        llm = PlanLLM(model='synthetic-only')
+        agent = self.agents(llm)['ceo']
+        task = DurableTask(agent=agent, description='Review synthetic evidence.', expected_output='Recommendation with pending owner review.', checkpoint_run_id='quality-repair', checkpoint_step_id='ceo', quality_enabled=True)
+        raw = TaskOutput(description='Synthetic', raw='The owner approved execution.', agent='CEO')
+        with patch.object(Task, 'execute_sync', return_value=raw) as execute:
+            output = task.execute_sync()
+            self.assertEqual(execute.call_count, 1)
+            self.assertEqual(llm.calls, 1)
+            self.assertNotIn('owner approved', output.raw)
+        with patch.object(Task, 'execute_sync', side_effect=AssertionError('Replay')):
+            self.assertEqual(task.execute_sync().raw, output.raw)
+            self.assertEqual(llm.calls, 1)
+
+    def test_quality_failure_does_not_replay_tool_authority(self):
+        from workflows.durable_task import DurableTask
+        from crewai.tasks.task_output import TaskOutput
+        from crewai import Task
+        from crewai.tools import BaseTool
+        class InertTool(BaseTool):
+            name: str = 'synthetic_tool'
+            description: str = 'Never executes in this test.'
+            def _run(self):
+                raise AssertionError('Tool execution')
+        llm = PlanLLM(model='synthetic-only')
+        agent = self.agents(llm)['ceo']
+        task = DurableTask(agent=agent, tools=[InertTool()], description='Synthetic tool-authority boundary.', expected_output='Draft.', checkpoint_run_id='quality-tools', checkpoint_step_id='ceo', quality_enabled=True)
+        raw = TaskOutput(description='Synthetic', raw='The owner approved execution.', agent='CEO')
+        with patch.object(Task, 'execute_sync', return_value=raw) as execute:
+            output = task.execute_sync()
+            self.assertEqual(execute.call_count, 1)
+            self.assertEqual(llm.calls, 0)
+            self.assertIn('AI QUALITY REVIEW REQUIRED', output.raw)
+
     def test_actual_plan_pipeline_preserves_persona_and_reuses_saved_plan(self):
         llm = PlanLLM(model='synthetic-only')
         agents = self.agents(llm)

@@ -30,10 +30,15 @@ from crewai.tools import BaseTool
 
 # Wereldwijde teller voor het bijhouden van geslaagde toolaanroepen
 _CALL_COUNT = 0
+_FETCHED_SOURCES = {}
 
 def reset_call_count():
     global _CALL_COUNT
     _CALL_COUNT = 0
+    _FETCHED_SOURCES.clear()
+
+def get_fetched_sources():
+    return dict(_FETCHED_SOURCES)
 
 def get_call_count():
     return _CALL_COUNT
@@ -193,6 +198,8 @@ class PageReaderTool(BaseTool):
             # verificatie. Netwerkfouten/HTTP-fouten/lege pagina's mogen nooit
             # de 3/3 gate laten slagen.
             _CALL_COUNT += 1
+            if len(_FETCHED_SOURCES) < 16 or url in _FETCHED_SOURCES:
+                _FETCHED_SOURCES[url] = full_text[:2000]
 
             # Beperk de tekstlengte om de contextruimte van het model te besparen
             return full_text[:2000]

@@ -36,7 +36,7 @@ def assess_round(body, phase, evidence):
     """Narrow deterministic review cues, not semantic truth/causality certification."""
     import re
     warnings = []
-    normalized = re.sub(r'[*#_:]', '', body).lower()
+    normalized = {re.sub(r'[*#_:]', '', line).strip().lower() for line in body.splitlines()}
     for heading in CONTRACTS[phase].split('; '):
         if heading.lower() not in normalized:
             warnings.append('Missing round section: ' + heading)

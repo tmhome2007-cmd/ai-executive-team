@@ -29,7 +29,9 @@ from workflows.meeting_types import get_meeting_type_profile, meeting_type_promp
 from memory.database import action_provenance_scope, get_executive_memories
 
 
-EVIDENCE_DISCIPLINE = """
+from workflows.output_quality import QUALITY_POLICY, assess_output, review_notice
+
+EVIDENCE_DISCIPLINE = QUALITY_POLICY + "\n" + """
 Evidence discipline (mandatory):
 - Treat only the information explicitly present in the task/context as established evidence.
 - Never invent or present as factual any revenue, cost, ROI, payback period, market share, customer count, budget, headcount, probability, growth rate, or timeline that is not supported by the supplied evidence.
@@ -290,6 +292,7 @@ def run_executive_meeting(
     meeting_type: str = "strategy",
     workflow_run_id: str | None = None,
     discussion_round: tuple[str, bool] | None = None,
+    discussion_proposals: dict[str, str] | None = None,
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -512,6 +515,10 @@ def run_executive_meeting(
             expected_output=current_task.expected_output,
             agent=agent_obj,
             context=list(tasks) if tasks else None,
+            quality_enabled=True,
+            quality_phase=discussion_round[0] if discussion_round else '',
+            quality_proposals=discussion_proposals or {},
+            quality_evidence=evidence_text if evidence_text is not None else task_description,
             checkpoint_run_id=workflow_run_id,
             checkpoint_step_id=f"agent:{index}:{key}",
         )
@@ -676,6 +683,10 @@ def run_executive_meeting(
         guarded_final_decision = _INSUFFICIENT_RETROSPECTIVE
         guarded_individual_outputs = {key: _INSUFFICIENT_RETROSPECTIVE for key in individual_outputs}
 
+    shared_quality = {key: assess_output(body, guard_source) for key, body in guarded_individual_outputs.items()}
+    shared_quality['final_decision'] = assess_output(guarded_final_decision, guard_source)
+    guarded_individual_outputs = {key: review_notice(body, shared_quality[key]) for key, body in guarded_individual_outputs.items()}
+    guarded_final_decision = review_notice(guarded_final_decision, shared_quality['final_decision'])
     return {
         "workflow_run_id": workflow_run_id,
         "final_decision": guarded_final_decision,
@@ -683,6 +694,7 @@ def run_executive_meeting(
         "meeting_type": meeting_type,
         "individual_outputs": guarded_individual_outputs,
         "quality_warnings": {
+            "shared_output_checks": shared_quality,
             "insufficient_retrospective_evidence": insufficient_retrospective_evidence,
             "owner_acknowledgement_corrected": owner_acknowledgement_corrected,
             "unsupported_quantitative_claims": quality_warnings,

@@ -15,8 +15,8 @@ KNOWN_CHROMA = {'PYSEC-2026-311', 'PYSEC-2026-3813', 'PYSEC-2026-3814', 'PYSEC-2
 
 def main():
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=ROOT, text=True).strip()
-    if branch != 'chatgpt/foundation-hardening':
-        raise SystemExit('Stop: run this on chatgpt/foundation-hardening, not main.')
+    if branch not in {'chatgpt/foundation-hardening', 'main'}:
+        raise SystemExit('Stop: use the foundation-hardening or main development baseline for this disposable audit.')
     stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     report = ROOT / 'audit-results' / stamp
     report.mkdir(mode=0o700, parents=True, exist_ok=False)

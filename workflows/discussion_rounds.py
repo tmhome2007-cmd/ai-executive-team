@@ -5,6 +5,7 @@ from memory.evidence import source_context
 from memory.discussions import consent_guard, get_discussion
 from memory.experiments import _text
 from workflows.meeting import run_executive_meeting
+from workflows.output_quality import assess_output
 from workflows.discussion_contracts import assess_round, guard_missing_prerequisites, guard_critique_references, guard_revision_changes
 
 
@@ -48,7 +49,7 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
         result = run_executive_meeting(topic=topic, task_description=evidence + '\nROUND: ' + phase + '\n' + instruction + '\nPUBLISHED PRIOR ROUND (unverified recommendations):\n' + previous + original_context,
             agent_keys=participants, agents_source=EXECUTIVE_AGENTS_NO_TOOLS, evidence_text=evidence,
             meeting_type='strategy', workflow_run_id=f'discussion:{run_key}:{phase}',
-            discussion_round=(phase, len(agent_keys) == 1),
+            discussion_round=(phase, len(agent_keys) == 1), discussion_proposals=proposals,
             memory_context={'enabled': True, 'goal_id': goal_id, 'limit': 5})
         outputs = result.get('individual_outputs', {})
         if set(outputs) != set(participants) or set(result['participants']) != set(participants) or len(result['participants']) != len(participants):
@@ -63,9 +64,13 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
                 body = guard_revision_changes(body, proposals.get(role, ''))
             published[role] = body
             quality = assess_round(body, phase, evidence)
+            quality['warnings'].extend(assess_output(body, evidence))
+            if quality['warnings']:
+                quality['status'] = 'review_required'
             if body != raw_body:
                 quality['warnings'].append('Backend corrected unverified discussion instructions or attribution; review the published output')
                 quality['status'] = 'review_required'
+            quality['warnings'] = list(dict.fromkeys(quality['warnings']))[:30]
             messages.append({'round_number': number, 'phase': phase, 'executive_key': role, 'body': body, 'profile': profiles[role], 'quality_checks': quality})
         if phase == 'proposal':
             proposals = published.copy()
@@ -78,7 +83,7 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
         if len(previous) > 300000:
             raise ValueError('Published discussion context exceeds the bounded round size')
     final = guard_missing_prerequisites(consent_guard(result['final_decision']), 'synthesis')
-    unresolved = messages[-1]['quality_checks']['warnings']
+    unresolved = list(dict.fromkeys(warning for message in messages for warning in message['quality_checks']['warnings']))[:30]
     if unresolved:
         final += '\n\nDiscussion quality review required:\n' + '\n'.join('- ' + warning for warning in unresolved) + '\nThese checks do not approve the recommendation. Owner review remains pending.'
     revised['ceo'] = final

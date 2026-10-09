@@ -9,6 +9,7 @@ from memory.planning import create_plan, claim_work, finish_work, get_plan
 from memory.experiments import _text
 from workflows.durable_task import DurableTask
 from workflows.execution_lock import EXECUTION_LOCK
+from workflows.output_quality import QUALITY_POLICY, assess_output
 from workflows.meeting import run_executive_meeting
 
 
@@ -36,7 +37,7 @@ def generate_plan(*, run_key, goal_id, board_id, title, proposer='coo'):
                   llm=canonical.llm, tools=[], allow_delegation=False, verbose=False,
                   max_iter=canonical.max_iter)
     task = DurableTask(agent=agent, checkpoint_run_id='plan:' + run_key, checkpoint_step_id='proposal',
-        description=(f'Propose a reviewed work plan: {title}. Preserve your role/personality. No tools, owner approval claims or real-world commitments. '
+        description=(QUALITY_POLICY + f'Propose a reviewed work plan: {title}. Preserve your role/personality. No tools, owner approval claims or real-world commitments. '
             'Return only JSON {"tasks":[{"key":"research","title":"...","acceptance_criteria":"...",'
             '"assignee":"cso","depends_on":[],"expected_cost":0,"currency":"EUR"}]}. '
             'Use known executive keys, at most 20 tasks, an acyclic graph, and distinguish estimated costs from measured facts. '
@@ -59,6 +60,8 @@ def generate_plan(*, run_key, goal_id, board_id, title, proposer='coo'):
             raise ValueError()
     except (ValueError, AttributeError):
         raise ValueError('Executive did not return a valid structured plan; nothing was approved') from None
+    if any(assess_output(item.get('title', '') + '\n' + item.get('acceptance_criteria', '')) for item in proposal['tasks'] if isinstance(item, dict)):
+        raise ValueError('AI plan failed output quality checks; nothing was approved')
     return create_plan(run_key=run_key, goal_id=goal_id, board_id=board_id, title=title, proposer=proposer, tasks=proposal['tasks'])
 
 
