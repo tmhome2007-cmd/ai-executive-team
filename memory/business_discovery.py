@@ -11,12 +11,14 @@ def init_business_discovery(cursor):
     cursor.execute('''CREATE TABLE IF NOT EXISTS business_discovery (
         id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, constraints TEXT NOT NULL,
         source_ids_json TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'draft',
-        research TEXT, selected_option TEXT, exercise TEXT, checks_json TEXT,
+        research TEXT, research_contract_version INTEGER NOT NULL DEFAULT 0, selected_option TEXT, exercise TEXT, checks_json TEXT,
         observation_due_at TEXT, sample TEXT, sample_created_at TEXT, review_json TEXT,
         created_at TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1
     )''')
 
     columns = {row[1] for row in cursor.execute('PRAGMA table_info(business_discovery)')}
+    if 'research_contract_version' not in columns:
+        cursor.execute('ALTER TABLE business_discovery ADD COLUMN research_contract_version INTEGER NOT NULL DEFAULT 0')
     if 'sample_created_at' not in columns:
         cursor.execute('ALTER TABLE business_discovery ADD COLUMN sample_created_at TEXT')
 
@@ -72,10 +74,10 @@ def select_practice(ident, expected_version, selected_option, exercise, checks, 
         conn.execute('BEGIN IMMEDIATE')
         cursor = conn.execute('''UPDATE business_discovery SET selected_option=?,exercise=?,checks_json=?,
             observation_due_at=?,state='practice_ready',version=version+1
-            WHERE id=? AND version=? AND state='research_ready' ''',
+            WHERE id=? AND version=? AND state='research_ready' AND research_contract_version=2 ''',
             (selected_option, exercise, json.dumps(checks), observation_due_at, ident, expected_version))
         if cursor.rowcount != 1:
-            raise RuntimeError('Refresh; practice requires completed research and current version')
+            raise RuntimeError('Refresh; practice requires current validated research. Create a new attempt for older reports.')
         conn.commit()
     return get_brief(ident)
 
@@ -102,7 +104,7 @@ def finish_stage(ident, stage, output=None):
     if output is not None:
         output = _text(output, 'AI output', 30000)
     # Fixed queries only; no model-controlled SQL identifiers.
-    query = {'research': "UPDATE business_discovery SET research=?,state=?,version=version+1 WHERE id=? AND state='research_running'",
+    query = {'research': "UPDATE business_discovery SET research=?,state=?,research_contract_version=2,version=version+1 WHERE id=? AND state='research_running'",
              'practice': "UPDATE business_discovery SET sample=?,state=?,sample_created_at=?,version=version+1 WHERE id=? AND state='practice_running'"}[stage]
     state = ('research_ready' if stage == 'research' else 'sample_ready') if output else 'needs_review'
     with get_connection() as conn:

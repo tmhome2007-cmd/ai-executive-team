@@ -1,4 +1,5 @@
 """Disposable owner-controlled discovery; no inference/network or real execution."""
+import json
 import datetime
 import tempfile
 import unittest
@@ -25,8 +26,12 @@ class DiscoveryTests(unittest.TestCase):
         self.database.stop()
         self.temp.cleanup()
 
+    def research_json(self):
+        from workflows.business_research_contract import SERVICES
+        return json.dumps({'options': [{'key': key, 'skills': ['Clear writing'], 'exercise': 'Draft a private synthetic guide', 'checks': ['Names prerequisites', 'Labels missing facts']} for key in SERVICES], 'practice_choice': 'documentation'})
+
     def generate(self):
-        with patch('workflows.business_discovery._reason', return_value='Findings: platform constraints only. Unknowns: demand unknown. Recommended next step: private sample.') as reason:
+        with patch('workflows.business_discovery._reason', return_value=self.research_json()) as reason:
             result = run_stage(self.brief['id'], 1, 'research')
             self.assertEqual(reason.call_count, 1)
             with self.assertRaises(RuntimeError):
@@ -124,6 +129,41 @@ class DiscoveryTests(unittest.TestCase):
             reason.assert_not_called()
         self.assertEqual(get_brief(self.brief['id'])['state'], 'draft')
         self.assertEqual(get_brief(self.brief['id'])['version'], 1)
+
+    def test_service_and_quote_contract_withholds_bad_comparisons(self):
+        from workflows.business_research_contract import render_research
+        from memory.evidence import get_source
+        sources = [get_source(i) for i in self.ids]
+        good = json.loads(self.research_json())
+        rendered = render_research(json.dumps(good), sources)
+        self.assertIn('No best business can be selected', rendered)
+        for bad in ['Cloudflare Pages', 'GitHub Pages', 'Fiverr']:
+            broken = json.loads(self.research_json())
+            broken['options'][0]['key'] = bad
+            with self.assertRaises(ValueError):
+                render_research(json.dumps(broken), sources)
+        broken = json.loads(self.research_json())
+        broken['source_quotes'] = [{'source_id': self.ids[0], 'quote': 'Invented commercial restrictions across all services'}]
+        with self.assertRaises(ValueError):
+            render_research(json.dumps(broken), sources)
+        broken = json.loads(self.research_json())
+        broken['options'][0]['exercise'] = 'The services are not intended for commercial use'
+        with self.assertRaises(ValueError):
+            render_research(json.dumps(broken), sources)
+        with patch('workflows.business_discovery._reason', return_value='Cloudflare Pages is the business') as reason:
+            with self.assertRaises(ValueError):
+                run_stage(self.brief['id'], 1, 'research')
+            self.assertEqual(reason.call_count, 2)
+        self.assertEqual(get_brief(self.brief['id'])['state'], 'needs_review')
+
+    def test_legacy_recommendation_cannot_advance_to_practice(self):
+        brief = self.generate()
+        with get_connection() as conn:
+            conn.execute('UPDATE business_discovery SET research_contract_version=0 WHERE id=?', (brief['id'],))
+            conn.commit()
+        with self.assertRaisesRegex(RuntimeError, 'validated research'):
+            select_practice(brief['id'], brief['version'], 'Documentation', 'Private text sample', ['A', 'B'], '2030-01-01T00:00:00Z')
+        self.assertEqual(get_brief(brief['id'])['state'], 'research_ready')
 
     def test_api_forbids_budget_and_launch_fields(self):
         from foundation_api import BusinessBriefRequest, BusinessReview

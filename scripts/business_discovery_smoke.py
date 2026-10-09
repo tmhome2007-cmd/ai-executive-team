@@ -1,4 +1,5 @@
 """Full owner research/practice UI on disposable records and a supplied dashboard URL."""
+import json
 import datetime
 import os
 import sys
@@ -22,7 +23,9 @@ def main():
         from main import app
         client = TestClient(app)
         assert client.get('/business-discovery').status_code == 401
-        with patch('workflows.business_discovery._reason', return_value='**Findings**\nSynthetic constraints only.\n**Unknowns**\nDemand unknown.\n**Recommended next step**\nDraft a private sample <script>alert(1)</script>.') as reason, sync_playwright() as runtime:
+        from workflows.business_research_contract import SERVICES
+        research = json.dumps({'options': [{'key': key, 'skills': ['Clear writing'], 'exercise': 'Private sample <script>alert(1)</script>', 'checks': ['Clearly labels unknown demand', 'Does not claim launch approval']} for key in SERVICES], 'practice_choice': 'documentation'})
+        with patch('workflows.business_discovery._reason', return_value=research) as reason, sync_playwright() as runtime:
             browser = runtime.chromium.launch()
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
             page.set_default_timeout(10000)
