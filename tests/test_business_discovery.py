@@ -165,6 +165,103 @@ class DiscoveryTests(unittest.TestCase):
             select_practice(brief['id'], brief['version'], 'Documentation', 'Private text sample', ['A', 'B'], '2030-01-01T00:00:00Z')
         self.assertEqual(get_brief(brief['id'])['state'], 'research_ready')
 
+    def reviewed_sample(self):
+        brief = self.plan()
+        with patch('workflows.business_discovery._reason', return_value='Original synthetic sample with an unsupported pencil icon.'):
+            brief = run_stage(brief['id'], brief['version'], 'practice')
+        return review_practice(brief['id'], brief['version'], [False, False], 'Correct the invented pencil icon; use generic steps.', datetime.datetime.now(datetime.timezone.utc).isoformat())
+
+    def revision_json(self):
+        return json.dumps({'revised_sample': '1. Create a task using the app’s create-task function. 2. Edit its supplied details. 3. Complete the task. Interface controls remain unknown; no new features are established.', 'changes': ['Removed invented controls'], 'remaining_unknowns': ['Specific interface controls are unspecified']})
+
+    def test_feedback_revision_and_corrections_preserve_history(self):
+        brief = self.reviewed_sample()
+        original = brief['sample']
+        original_review = brief['attempts'][0]['reviews'][0]
+        brief = review_practice(brief['id'], brief['version'], [True, False], 'Correction: first check passed; invented interface detail still fails.', datetime.datetime.now(datetime.timezone.utc).isoformat(), correction=True)
+        self.assertEqual(len(brief['attempts'][0]['reviews']), 2)
+        self.assertEqual(brief['attempts'][0]['reviews'][1]['supersedes_review_id'], original_review['id'])
+        self.assertEqual(brief['attempts'][0]['reviews'][0]['review']['results'], [False, False])
+        correction_id = brief['attempts'][0]['reviews'][1]['id']
+        with patch('workflows.business_discovery._reason', return_value=self.revision_json()) as reason:
+            brief = run_stage(brief['id'], brief['version'], 'revision')
+            self.assertIn('Correction: first check passed', reason.call_args.args[0])
+            self.assertIn(original, reason.call_args.args[0])
+        self.assertEqual(brief['state'], 'sample_ready')
+        self.assertIsNone(brief['review'])
+        self.assertEqual(len(brief['attempts']), 2)
+        self.assertEqual(brief['attempts'][0]['sample'], original)
+        self.assertEqual(brief['attempts'][1]['feedback_review_id'], correction_id)
+        brief = review_practice(brief['id'], brief['version'], [True, True], 'Observed both checks in the revised sample.', datetime.datetime.now(datetime.timezone.utc).isoformat())
+        with get_connection() as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM action_queue').fetchone()[0], 0)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM treasury_entries').fetchone()[0], 0)
+        self.assertEqual(brief['review']['assessment'], 'practice_passed')
+
+    def test_legacy_history_import_is_idempotent(self):
+        brief = self.plan()
+        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        review = json.dumps({'results': [True, False], 'evidence': 'Legacy owner feedback', 'assessment': 'practice_failed', 'observed_at': timestamp})
+        with get_connection() as conn:
+            conn.execute("UPDATE business_discovery SET sample='Legacy exact sample',sample_created_at=?,review_json=?,state='reviewed' WHERE id=?", (timestamp, review, brief['id']))
+            conn.commit()
+        init_db()
+        init_db()
+        result = get_brief(brief['id'])
+        self.assertEqual(len(result['attempts']), 1)
+        self.assertEqual(result['attempts'][0]['sample'], 'Legacy exact sample')
+        self.assertEqual(len(result['attempts'][0]['reviews']), 1)
+        self.assertEqual(result['attempts'][0]['reviews'][0]['review']['evidence'], 'Legacy owner feedback')
+
+    def test_history_rejects_rewriting_or_deleting(self):
+        import sqlite3
+        brief = self.reviewed_sample()
+        with get_connection() as conn:
+            for sql in ["UPDATE business_practice_samples SET sample='replacement'", 'DELETE FROM business_practice_samples', "UPDATE business_practice_reviews SET review_json='{}'", 'DELETE FROM business_practice_reviews']:
+                with self.assertRaises(sqlite3.IntegrityError):
+                    conn.execute(sql)
+        self.assertEqual(get_brief(brief['id'])['sample'], brief['sample'])
+
+    def test_revision_claim_recovery_and_correction_race(self):
+        brief = self.reviewed_sample()
+        claim_stage(brief['id'], brief['version'], 'revision')
+        with self.assertRaises(RuntimeError):
+            claim_stage(brief['id'], brief['version'], 'revision')
+        with self.assertRaises(RuntimeError):
+            review_practice(brief['id'], brief['version']+1, [True, False], 'Attempted correction during generation', datetime.datetime.now(datetime.timezone.utc).isoformat(), correction=True)
+        reconcile_discovery()
+        result = get_brief(brief['id'])
+        self.assertEqual(result['state'], 'needs_review')
+        self.assertEqual(result['sample'], brief['sample'])
+        self.assertEqual(len(result['attempts']), 1)
+        new_claim = claim_stage(result['id'], result['version'], 'revision')
+        finish_stage(result['id'], 'revision', 'Stale generation must not replace the sample.', claimed_version=brief['version']+1)
+        self.assertEqual(get_brief(result['id'])['version'], new_claim['version'])
+        self.assertEqual(get_brief(result['id'])['sample'], brief['sample'])
+        reconcile_discovery()
+        result = get_brief(result['id'])
+        with patch('workflows.business_discovery._reason', return_value=self.revision_json()):
+            result = run_stage(result['id'], result['version'], 'revision')
+        self.assertEqual(result['state'], 'sample_ready')
+        self.assertEqual(len(result['attempts']), 2)
+
+    def test_revision_rejects_invented_controls_and_false_pass(self):
+        from workflows.business_revision_contract import render_revision
+        for bad in ['Tap the pencil icon.', 'All checks passed.', 'Set the due date.']:
+            payload = json.loads(self.revision_json())
+            payload['revised_sample'] = bad
+            with self.assertRaises(ValueError):
+                render_revision(json.dumps(payload), 'Create, edit and complete tasks. Reminders unknown.')
+        brief = self.reviewed_sample()
+        with patch('workflows.business_discovery._reason', return_value='Malformed draft') as reason:
+            with self.assertRaises(ValueError):
+                run_stage(brief['id'], brief['version'], 'revision')
+            self.assertEqual(reason.call_count, 2)
+        result = get_brief(brief['id'])
+        self.assertEqual(result['state'], 'needs_review')
+        self.assertEqual(result['sample'], brief['sample'])
+        self.assertEqual(result['review'], brief['review'])
+
     def test_api_forbids_budget_and_launch_fields(self):
         from foundation_api import BusinessBriefRequest, BusinessReview
         from pydantic import ValidationError
@@ -172,3 +269,20 @@ class DiscoveryTests(unittest.TestCase):
             BusinessBriefRequest(title='Synthetic', constraints='Synthetic', source_ids=self.ids, budget_amount=5)
         with self.assertRaises(ValidationError):
             BusinessReview(expected_version=1, results=['true', True], evidence='Synthetic', observed_at='2026-01-01T00:00:00Z')
+
+    def test_revision_requires_complete_task_guide_and_faq_answers(self):
+        from workflows.business_revision_contract import render_revision
+        exercise = 'Draft a task guide explaining create, edit and complete tasks with three FAQ answers.'
+        payload = json.loads(self.revision_json())
+        with self.assertRaises(ValueError):
+            render_revision(json.dumps(payload), exercise)
+        payload['revised_sample'] = ('1. Create a task using the provided task function.\n'
+            '2. Edit the task using the provided editing function.\n'
+            '3. Complete the task using its completion function.\n'
+            'Q: Which controls should I use?\nA: Interface controls are unspecified.\n'
+            'Q: Are reminders available?\nA: Reminder behavior is unknown.\n'
+            'Q: Has this guide been tested?\nA: No execution evidence was provided.')
+        self.assertIn('awaiting owner assessment', render_revision(json.dumps(payload), exercise))
+        payload['revised_sample'] += '\nClick the pencil icon to edit the task.'
+        with self.assertRaises(ValueError):
+            render_revision(json.dumps(payload), exercise)

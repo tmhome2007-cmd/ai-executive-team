@@ -598,3 +598,13 @@ def business_practice(ident: int, request: BusinessVersion):
 @router.post('/business-discovery/{ident}/review')
 def business_review(ident: int, request: BusinessReview):
     return invoke(review_practice, ident, **request.model_dump())
+
+
+@router.post('/business-discovery/{ident}/revise')
+def business_revise(ident: int, request: BusinessVersion):
+    return invoke(run_stage, ident, request.expected_version, 'revision')
+
+
+@router.post('/business-discovery/{ident}/review-correction')
+def business_review_correction(ident: int, request: BusinessReview):
+    return invoke(review_practice, ident, **request.model_dump(), correction=True)

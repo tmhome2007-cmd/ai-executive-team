@@ -61,11 +61,32 @@ def main():
             page.get_by_role('button', name='Approve this practice plan only', exact=True).click()
             page.get_by_role('button', name='Generate private practice sample', exact=True).click()
             page.get_by_text('Practice sample — AI self-checks are unverified', exact=True).wait_for()
-            page.get_by_label('Clearly labels unknown demand', exact=True).check()
-            page.get_by_label('Does not claim launch approval', exact=True).check()
+            assert page.get_by_role('button', name='Record practice review', exact=True).is_disabled()
+            page.get_by_label('Clearly labels unknown demand', exact=True).select_option('fail')
+            page.get_by_label('Does not claim launch approval', exact=True).select_option('fail')
             page.get_by_label('What you checked and observed', exact=True).fill('Synthetic review of the displayed sample; both checks observed.')
             page.get_by_role('button', name='Record practice review', exact=True).click()
-            page.get_by_text('practice passed', exact=False).wait_for()
+            page.get_by_role('button', name='Correct review results', exact=True).click()
+            page.get_by_label('Clearly labels unknown demand', exact=True).select_option('pass')
+            page.get_by_role('button', name='Record review correction', exact=True).wait_for()
+            page.get_by_label('What you checked and observed', exact=True).fill('Correction: the first check passed; the second needs revision.')
+            page.get_by_role('button', name='Record review correction', exact=True).click()
+            reason.return_value = json.dumps({'revised_sample': 'Demand remains unknown. This private sample has no launch approval and does not establish any completed real action. <script>alert(1)</script>', 'changes': ['Made uncertainty and approval boundary explicit'], 'remaining_unknowns': ['Real demand unknown']})
+            page.get_by_role('button', name='Revise sample using this review', exact=True).click()
+            page.get_by_label('Clearly labels unknown demand', exact=True).select_option('pass')
+            page.get_by_label('Does not claim launch approval', exact=True).select_option('pass')
+            page.get_by_label('What you checked and observed', exact=True).fill('Reviewed revised sample: both checks observed passing.')
+            page.get_by_role('button', name='Record practice review', exact=True).click()
+            page.get_by_text('practice passed', exact=False).first.wait_for()
+            from memory.business_discovery import get_brief
+            record = get_brief(list_briefs()[0]['id'])
+            assert len(record['attempts']) == 2
+            assert len(record['attempts'][0]['reviews']) == 2
+            assert record['attempts'][0]['reviews'][0]['review']['results'] == [False, False]
+            assert record['attempts'][0]['reviews'][1]['review']['results'] == [True, False]
+            assert record['attempts'][1]['reviews'][0]['review']['results'] == [True, True]
+            page.get_by_text('Sample & review history (2 samples)', exact=True).click()
+            page.get_by_text('Sample 1', exact=False).first.wait_for()
             assert list_briefs()[0]['state'] == 'reviewed'
             with get_connection() as conn:
                 assert conn.execute('SELECT COUNT(*) FROM action_queue').fetchone()[0] == 0
@@ -78,7 +99,7 @@ def main():
             assert all(config.API_SECRET_KEY not in url for url in urls)
             assert page.evaluate('localStorage.length') == 0
             browser.close()
-        print('PASS business UI: authenticated research -> owner practice plan -> sample -> review, no actions/money, literal text and mobile/key safety')
+        print('PASS business UI: authenticated research -> practice -> explicit review -> correction -> revision -> fresh review, append-only history, no actions/money, literal text and mobile/key safety')
 
 
 if __name__ == '__main__':
