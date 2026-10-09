@@ -1,4 +1,5 @@
 "use client";
+import AiReport from "./ai-report";
 
 import { useState } from "react";
 import OfficeWorkforce from "./office-workforce";
@@ -97,7 +98,7 @@ export default function VirtualOffice({ decisions, actions, resources, followups
         <h4 className="office-subheading">Resource requests</h4>
         {!available.resources ? <p className="text-sm text-gray-400">Resources unavailable.</p> : executiveResources.length === 0 ? <p className="text-sm text-gray-400">No outstanding resource requests in the loaded records.</p> : executiveResources.map(r => <button className="office-record" key={r.id} onClick={() => onNavigate("resources")}>{r.resource_name}<span className="text-xs text-gray-500 block">{r.status}</span></button>)}
         <h4 className="office-subheading">Recorded meeting contribution</h4>
-        {!available.decisions ? <p className="text-sm text-gray-400">Meetings unavailable.</p> : executiveDecisions.length === 0 ? <p className="text-sm text-gray-400">No participation recorded in the recent meetings.</p> : <><p className="text-sm text-teal-300">#{executiveDecisions[0].id} · {executiveDecisions[0].topic}</p><details className="mt-3"><summary className="text-sm cursor-pointer">Read the meeting’s final report</summary><p className="text-sm text-gray-400 whitespace-pre-wrap mt-3 break-words">{executiveDecisions[0].decision_outcome}</p></details><p className="text-xs text-gray-500 mt-2">Collective meeting result; not an individual message or live chat.</p></>}
+        {!available.decisions ? <p className="text-sm text-gray-400">Meetings unavailable.</p> : executiveDecisions.length === 0 ? <p className="text-sm text-gray-400">No participation recorded in the recent meetings.</p> : <><p className="text-sm text-teal-300">#{executiveDecisions[0].id} · {executiveDecisions[0].topic}</p><details className="mt-3"><summary className="text-sm cursor-pointer">Read the meeting’s final report</summary><AiReport text={executiveDecisions[0].decision_outcome} /></details><p className="text-xs text-gray-500 mt-2">Collective meeting result; not an individual message or live chat.</p></>}
       </aside>
     </div>
     <OfficeWorkforce key={floor} apiKey={apiKey} floor={floor} onAuthFailure={onAuthFailure} />

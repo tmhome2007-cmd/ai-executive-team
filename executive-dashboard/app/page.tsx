@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import AiReport from "./components/ai-report";
 import VirtualOffice from "./components/virtual-office";
 import AgileBoard from "./components/agile-board";
 import Experiments from "./components/experiments";
@@ -21,19 +22,6 @@ interface SystemHealth {
   status: string;
   uptime_seconds: number;
   components: Record<string, { ok: boolean; message: string }>;
-}
-
-// Model text stays React text: headings and lists never execute HTML or links.
-function Report({ text }: { text: string }) {
-  const inline = (line: string) => line.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**")
-      ? <strong key={i}>{part.slice(2, -2)}</strong> : part);
-  return <div className="report">{text.split(/\r?\n/).map((line, i) => {
-    if (!line.trim()) return null;
-    if (/^\s*#{1,6}\s/.test(line)) return <h4 key={i}>{inline(line.replace(/^\s*#{1,6}\s+/, ""))}</h4>;
-    if (/^\s*[-*+]\s+/.test(line)) return <ul key={i}><li>{inline(line.replace(/^\s*[-*+]\s+/, ""))}</li></ul>;
-    return <p key={i}>{inline(line)}</p>;
-  })}</div>;
 }
 
 // --- Types ---
@@ -455,7 +443,7 @@ function OutcomeEditor({
           {action.actual_cost_amount !== null && action.actual_cost_amount !== undefined && (
             <div><span className="text-gray-500">Actual cost:</span> <span className="text-gray-300">{action.actual_cost_amount} {action.currency || ""}</span></div>
           )}
-          {action.next_recommendation && <div><span className="text-gray-500">Next recommendation:</span> <span className="text-gray-300">{action.next_recommendation}</span></div>}
+          {action.next_recommendation && <div><span className="text-gray-500">Next recommendation:</span> <AiReport text={action.next_recommendation} /></div>}
         </div>
       )}
 
@@ -737,7 +725,6 @@ export default function DashboardPage() {
   const [executionResults, setExecutionResults] = useState<Record<number, ExecutionResult>>({});
   const [executingIds, setExecutingIds] = useState<Set<number>>(new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<number>>(new Set());
   const [expandedActionHistoryIds, setExpandedActionHistoryIds] = useState<Set<number>>(new Set());
   const [decisionErrors, setDecisionErrors] = useState<Record<number, string>>({});
   const [preparingDecisionIds, setPreparingDecisionIds] = useState<Set<number>>(new Set());
@@ -1473,15 +1460,6 @@ export default function DashboardPage() {
         return next;
       });
     }
-  };
-
-  const toggleHistoryExpand = (id: number) => {
-    setExpandedHistoryIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   };
 
   const toggleActionHistoryExpand = (id: number) => {
@@ -2432,7 +2410,7 @@ export default function DashboardPage() {
               <div>
                 <h4 className="font-semibold text-gray-200 mb-1">Final Decision:</h4>
                 <div className="bg-gray-950 rounded-md p-4 text-sm text-gray-200 whitespace-pre-wrap border border-gray-800">
-                  <Report text={result.final_decision} />
+                  <AiReport text={result.final_decision} />
                 </div>
               </div>
 
@@ -2594,12 +2572,6 @@ export default function DashboardPage() {
               <p className="text-gray-500 text-sm">No decisions found yet.</p>
             )}
             {history.map((item) => {
-              const isExpanded = expandedHistoryIds.has(item.id);
-              const preview =
-                item.decision_outcome.length > 150
-                  ? item.decision_outcome.slice(0, 150) + "..."
-                  : item.decision_outcome;
-
               const approval = item.approval_status || "pending";
               const preparation = item.preparation_status || "not_started";
               const isPreparing = preparingDecisionIds.has(item.id);
@@ -2609,12 +2581,12 @@ export default function DashboardPage() {
               return (
                 <div
                   key={item.id}
-                  className="bg-gray-900 border border-gray-800 rounded-lg p-5"
+                  className="bg-gray-900 border border-gray-800 rounded-lg p-5 min-w-0 break-words"
                 >
-                  <div className="flex justify-between items-start gap-3">
+                  <div className="flex flex-wrap justify-between items-start gap-3">
                     <div>
                       <h3 className="text-blue-400 font-bold text-lg">{item.topic}</h3>{item.meeting_type && <span className="text-xs text-purple-300 uppercase">{item.meeting_type.replaceAll("_", " ")}</span>}
-                      <div className="flex gap-2 mt-2 text-xs">
+                      <div className="flex flex-wrap gap-2 mt-2 text-xs">
                         <span className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5">
                           Decision: {approval}
                         </span>
@@ -2650,15 +2622,8 @@ export default function DashboardPage() {
                       </span>
                     ))}
                   </p>
-                  <div className="text-sm text-gray-300 mt-3"><Report text={isExpanded ? item.decision_outcome : preview} /></div>
-                  {item.decision_outcome.length > 150 && (
-                    <button
-                      onClick={() => toggleHistoryExpand(item.id)}
-                      className="text-blue-400 text-sm mt-2 hover:underline"
-                    >
-                      {isExpanded ? "▲ Show less" : "▼ Show more"}
-                    </button>
-                  )}
+                  <div className="text-sm text-gray-300 mt-3"><AiReport text={item.decision_outcome} /></div>
+
 
                   {decisionErrors[item.id] && (
                     <div className="mt-3 p-2 bg-red-950 border border-red-800 text-red-300 text-xs rounded">
@@ -2797,9 +2762,9 @@ export default function DashboardPage() {
                       <summary className="cursor-pointer p-3 text-sm font-semibold text-purple-300">
                         Preparation Plan
                       </summary>
-                      <pre className="p-3 border-t border-purple-900 whitespace-pre-wrap text-xs text-gray-300 font-sans">
-                        {shownPreparation}
-                      </pre>
+                      <div className="p-3 border-t border-purple-900 text-xs text-gray-300 font-sans">
+                        <AiReport text={shownPreparation} />
+                      </div>
                     </details>
                   )}
                 </div>
@@ -2828,7 +2793,7 @@ export default function DashboardPage() {
               return (
                 <div
                   key={item.id}
-                  className="bg-gray-900 border border-gray-800 rounded-lg p-5"
+                  className="bg-gray-900 border border-gray-800 rounded-lg p-5 min-w-0 break-words"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">

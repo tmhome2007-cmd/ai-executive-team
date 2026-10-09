@@ -1,59 +1,45 @@
 # Local commands explained
 
-Use this checkout for the new features. Your older `Ai village/AI Executive Team` directory is a separate copy.
-
-## Terminal 1: select the code and start the backend
-
-Stop an older backend with Ctrl+C in its terminal first. Then:
+Use this checkout rather than the older `Ai village/AI Executive Team` copy. From any terminal:
 
 ```sh
 cd "/Users/alpha/.codex/.chatgpt-projects/g-p-6ac6034a5d7881918e21bf72595bb34b/foundation-hardening"
-git switch codex/identity-organization-simulation
-git pull --ff-only origin codex/identity-organization-simulation
+./company doctor
+./company start
 ```
 
-`cd` selects the folder. `git switch` selects the version of the code. `git pull --ff-only` downloads newer commits without creating a merge. Switching branches does not switch or reset your database, virtual environment or `.env` file. If Git reports local changes, keep them and ask for help rather than resetting.
+`cd` selects the checkout. `doctor` checks the current Git branch, this checkout's Python 3.12 environment, configured key, Node/npm, Docker, local Ollama and both application ports. It does not change files, fetch commits, switch branches or stop apps. Open Docker Desktop and Ollama if it reports they are unavailable.
+
+`start` builds the current branch's dashboard, starts the backend on 8001 and dashboard on 3000, then copies your **existing** API key to the macOS clipboard. Open `http://127.0.0.1:3000` and paste the key. Keep this single terminal open. Ctrl+C stops only the apps this launcher started.
+
+If older apps already occupy those ports, stop them with Ctrl+C in their own terminals first. The launcher refuses to kill or silently reuse them. It always rebuilds the current dashboard; it installs exact npm dependencies only if `node_modules` is missing. The first install requires internet access; the build no longer downloads Google fonts.
+
+## Other commands
+
+| Command | Purpose |
+|---|---|
+| `./company doctor` | Diagnose local setup without starting apps |
+| `./company start` | Build and run both apps in one terminal |
+| `./company key` | Copy the configured key again, without displaying or replacing it |
+| `./company audit` | Run automated checks using disposable data and a separate frontend copy |
+| `./company help` | Show command choices |
+
+The launcher enforces local sandbox settings, disables raw shell, remote LLMs, Telegram and framework telemetry for its children. It preserves your `.env`, database, goals, existing key and unrelated processes. Existing approved local schedules still run under sandbox settings. It does not make a fresh test company or reset the current one. The audit's disposable internal key never replaces your dashboard key.
+
+A missing/short `API_SECRET_KEY` must be set privately in this checkout's `.env`; the launcher will not generate one silently. Environment variables override `.env`, so use the same launcher/terminal configuration for start and key copy. Never paste keys into chat or commit `.env`.
+
+## Git, separately
+
+Git selects code; it does not select/reset your database or `.env`. To test this feature branch after it is pushed:
 
 ```sh
-open -a Docker
-open -a Ollama
-export SANDBOX_MODE=true
-export ALLOW_UNSAFE_RAW_SHELL=false
-export CREWAI_DISABLE_TELEMETRY=true
-export CREWAI_TRACING_ENABLED=false
-export TELEGRAM_BOT_TOKEN=""
-export TELEGRAM_CHAT_ID=""
-.venv/bin/python -c 'from config import config; print(config.API_SECRET_KEY, end="")' | pbcopy
-.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8001
+git switch codex/sprint-2-local-review
+git pull --ff-only origin codex/sprint-2-local-review
+./company start
 ```
 
-`open` starts the local services. `export` sets safety options for this terminal and the backend it starts. `.venv/bin/python` uses this checkout's Python environment directly, so you do not need `source .../activate`. `uvicorn` starts the backend; leave this terminal open.
+`switch` chooses a branch. `pull --ff-only` downloads commits without creating a merge. If Git reports uncommitted changes, preserve them; do not reset. Stop/restart the apps after changing branches. After an approved merge, select `main` instead.
 
-The `pbcopy` command copies the configured key to your clipboard without displaying it. Paste it into the dashboard's API Key field. It **does not create a new key**. An empty/missing `API_SECRET_KEY` must be fixed privately in this checkout's `.env` before startup. Never paste the key into a chat or commit `.env`. Environment variables can override `.env`, so copy the key from the same terminal configuration used to start the backend.
+For initial environment installation or a broken dependency environment, follow the repository installation instructions. The launcher diagnoses setup; it does not upgrade Python, replace `.venv`, reinstall Docker or rewrite credentials. `curl` calls individual HTTP endpoints but is no longer necessary merely to start and review the dashboard.
 
-## Terminal 2: start the dashboard
-
-Stop an older dashboard with Ctrl+C in its terminal first. Open a new terminal:
-
-```sh
-cd "/Users/alpha/.codex/.chatgpt-projects/g-p-6ac6034a5d7881918e21bf72595bb34b/foundation-hardening/executive-dashboard"
-export NEXT_PUBLIC_API_BASE=http://127.0.0.1:8001
-npm ci
-npm run build -- --webpack
-npm run start -- --hostname 127.0.0.1
-```
-
-`npm ci` installs the exact frontend dependencies. `build` prepares the current branch's dashboard. `start` serves that build at `http://127.0.0.1:3000`. Rebuild after frontend code changes; restarting an old build still shows the old interface.
-
-Open the dashboard, unlock it with the copied key, and select **Organizational work → People & simulation**. Use fictional data. Changing task status or personal-life records does not authorize business execution.
-
-## Terminal 3: run the automated audit
-
-```sh
-cd "/Users/alpha/.codex/.chatgpt-projects/g-p-6ac6034a5d7881918e21bf72595bb34b/foundation-hardening"
-.venv/bin/python scripts/local_audit.py
-```
-
-This runs automated checks using a disposable database and separate frontend copy. Its synthetic audit key is internal to the test; it does not replace your dashboard key. Results are saved under `audit-results/`. `PROJECT CHECKS: PASS` means those checks passed. A separate upstream dependency warning remains visible and is not a clean production security sign-off.
-
-`curl` is a terminal HTTP client for calling individual backend endpoints. You do not need to repeat a long curl script to review the new dashboard features. Keep the three purposes separate: backend, dashboard, automated audit.
+Audit results live under `audit-results/`. `PROJECT CHECKS: PASS` applies to the automated checks; separate upstream advisories remain visible. It does not certify every AI answer or production deployment.
