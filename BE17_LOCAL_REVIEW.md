@@ -63,7 +63,7 @@ The final comparison also supplies concrete minimum review controls (preserved f
 
 ### Feedback revision verification
 
-Seventeen targeted tests pass, covering legacy import, preserved original assessments,
+Eighteen targeted tests pass, covering legacy import, preserved original assessments,
 corrections, duplicate/stale generation claims, crash recovery, completeness and
 unsupported interface details. The copied-dashboard browser test passes the full
 review → correction → revision → fresh review sequence, with no actions or money.
@@ -77,7 +77,15 @@ Both are rejected by the revision contract rather than published as successful
 revisions. These safeguards do not guarantee a useful output from every local model
 attempt. BE-17 remains in owner review; no competence or business launch is approved.
 
-The final disposable regression run passed all 149 tests, including real Docker
-isolation. Revision now requests plain JSON from the existing local model and checks
-it on the server, avoiding a second SDK structured-conversion/retry loop. Research
-retains its per-call structured response model. The worker permits one repair only.
+The final disposable regression run passed all 151 tests, including real Docker
+isolation. Revision uses a separate local client with native JSON-schema formatting,
+a 120-second request timeout and bounded output, then checks content on the server.
+It avoids a second SDK structured-conversion/retry loop and preserves the shared
+executive settings. Research retains its per-call structured response model. The
+worker permits one repair only.
+
+The final actual Ollama revision test passed on a disposable copy of the reviewed
+practice: a complete numbered task guide and three FAQ answers were saved, while
+the original sample/review stayed intact and the revision awaited a new assessment.
+No claim of passing owner checks was recorded. A false credential-prefix match on
+ordinary `task-name` text was also fixed; genuine `sk-` token prefixes remain rejected.

@@ -84,7 +84,6 @@ VALID_OUTCOME_STATUSES = {
 }
 
 _SECRET_LIKE_PATTERNS = (
-    "sk-",
     "ghp_",
     "github_pat_",
     "xoxb-",
@@ -101,6 +100,7 @@ _SECRET_LIKE_PATTERNS = (
 )
 
 _SECRET_LIKE_REGEXES = (
+    re.compile(r"(?i)(?<![a-z0-9])sk-"),  # Token prefix, not the suffix of words such as task-name.
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"\bASIA[0-9A-Z]{16}\b"),
     re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{20,}\b"),  # Telegram bot token shape

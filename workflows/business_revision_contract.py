@@ -15,11 +15,17 @@ class PracticeRevision(BaseModel):
 
 
 def render_revision(raw, exercise):
+    if isinstance(raw, str):
+        wrapper = re.fullmatch(r'\s*```(?:json)?\s*\n(.*)\n```\s*', raw, re.S | re.I)
+        if wrapper:
+            raw = wrapper.group(1)
     try:
         result = PracticeRevision.model_validate_json(raw)
     except (ValueError, TypeError):
-        raise ValueError('Revision must include a sample, changes and remaining unknowns') from None
+        raise ValueError('Return a JSON object with revised_sample as one text string (not a nested object), changes as a list of strings, and remaining_unknowns as a list of strings') from None
     sample = _text(result.revised_sample, 'revised sample', 20000)
+    if 'guide' in exercise.lower() and '\n' not in sample and '\\n' in sample:
+        sample = sample.replace('\\n', '\n')
     if len(sample) < 80:
         raise ValueError('Revision must contain the deliverable, not just a title or change list')
     if 'guide' in exercise.lower() and 'task' in exercise.lower():
@@ -32,11 +38,12 @@ def render_revision(raw, exercise):
             raise ValueError('Provide three complete FAQ answers, each on a line starting A:')
     # Regression for the observed UI fabrication: no positive instructions for
     # unprovided controls/fields. This is not a universal truth verifier.
-    details = ['pencil icon', 'checkbox', 'due date', 'due time', 'completed section', 'save button', 'plus icon', '"+"']
+    details = ['pencil icon', 'checkbox', 'due date', 'due time', 'completed section', 'save button', 'plus icon', '"+"',
+               'task name and description', 'task completion date', 'removed from the task list']
     for detail in details:
         if detail not in exercise.lower():
             for line in sample.splitlines():
-                if detail in line.lower() and not re.search(r'\b(?:unknown|unspecified|not provided|not specified|cannot|do not|no evidence)\b', line, re.I):
+                if detail in line.lower() and not re.search(r'\b(?:unknown|unspecified|not provided|not specified|cannot|do not|no evidence)\b', line, re.I) and not re.search(r'^\s*(?:[-*]\s*)?(?:removed|deleted|omitted)\b', line, re.I):
                     raise ValueError('Revision still invents an interface detail absent from the exercise: ' + detail)
     if re.search(r'\b(?:meets all|passes all|all checks (?:pass|passed)|owner (?:approved|accepted))\b', sample, re.I):
         raise ValueError('AI revision cannot establish passing checks or owner approval')

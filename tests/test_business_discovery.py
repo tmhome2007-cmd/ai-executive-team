@@ -284,6 +284,11 @@ class DiscoveryTests(unittest.TestCase):
             'Q: Are reminders available?\nA: Reminder behavior is unknown.\n'
             'Q: Has this guide been tested?\nA: No execution evidence was provided.')
         self.assertIn('awaiting owner assessment', render_revision(json.dumps(payload), exercise))
+        self.assertIn('awaiting owner assessment', render_revision('```json\n' + json.dumps(payload) + '\n```', exercise))
+        payload['revised_sample'] += '\n- Removed pencil icons from the previous draft.'
+        self.assertIn('awaiting owner assessment', render_revision(json.dumps(payload), exercise))
+        escaped = dict(payload, revised_sample=payload['revised_sample'].replace('\n', '\\n'))
+        self.assertIn('awaiting owner assessment', render_revision(json.dumps(escaped), exercise))
         payload['revised_sample'] += '\nClick the pencil icon to edit the task.'
         with self.assertRaises(ValueError):
             render_revision(json.dumps(payload), exercise)
@@ -292,7 +297,20 @@ class DiscoveryTests(unittest.TestCase):
         from unittest.mock import Mock
         from workflows.business_discovery import _reason
         agent = Mock(role='Synthetic executive', backstory='Synthetic personality')
+        agent.llm.model = 'llama3.1'
+        agent.llm.base_url = 'http://localhost:11434'
         agent.llm.call.return_value = self.revision_json()
-        with patch('workflows.business_discovery._local_agent', return_value=agent):
+        with patch('workflows.business_discovery._local_agent', return_value=agent), patch('crewai.LLM', return_value=agent.llm) as constructor:
             self.assertEqual(_reason('Synthetic prompt', structured='revision'), self.revision_json())
+            response_format = constructor.call_args.kwargs['response_format']
+            from workflows.business_revision_contract import PracticeRevision
+            self.assertIs(response_format, PracticeRevision)
+            self.assertEqual(constructor.call_args.kwargs['timeout'], 120)
         self.assertNotIn('response_model', agent.llm.call.call_args.kwargs)
+
+    def test_task_name_is_not_a_secret_but_key_prefix_is_rejected(self):
+        from memory.database import _reject_secret_like_text
+        _reject_secret_like_text('Task-name fields and desk-based work are unspecified.')
+        for value in ['sk-dummy-test-secret', 'Key: sk-dummy-test-secret', '"sk-dummy-test-secret"']:
+            with self.assertRaises(ValueError):
+                _reject_secret_like_text(value)

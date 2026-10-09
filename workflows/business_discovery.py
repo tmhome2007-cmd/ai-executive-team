@@ -25,6 +25,13 @@ def _local_agent():
 def _reason(prompt, structured=False):
     agent = _local_agent()
     llm = agent.llm
+    if structured == 'revision':
+        from crewai import LLM
+        from workflows.business_revision_contract import PracticeRevision
+        model = str(llm.model)
+        llm = LLM(model=model if model.startswith('ollama/') else 'ollama/' + model,
+                  base_url=llm.base_url, temperature=0.0, timeout=120,
+                  max_tokens=2000, response_format=PracticeRevision)
     from workflows.business_research_contract import ResearchComparison
     from workflows.business_revision_contract import PracticeRevision
     from workflows.output_quality import QUALITY_POLICY
@@ -75,7 +82,9 @@ def run_stage(ident, expected_version, stage):
     prompt += json.dumps({'brief': context, 'evidence': evidence}, ensure_ascii=False)
     if stage == 'revision':
         prompt += ('\nFINAL OUTPUT REQUIREMENTS: Write the actual complete sample in revised_sample. '
-                   'Old draft instructions are not product facts. Remove unsupported pencil icons, checkboxes, due-date fields, save buttons and completed sections. '
+                   'The revised_sample value must be ONE TEXT STRING with paragraphs and line breaks, never a nested JSON object. '
+                   'The changes and remaining_unknowns values must each be lists of text strings. '
+                   'Old draft instructions are not product facts. Remove unsupported pencil icons, checkboxes, due-date fields, save buttons, task-name/description fields and completed sections. '
                    'Use create/edit/complete functions without naming controls unless the exercise explicitly supplies them. '
                    'If three FAQs are requested, supply three Q: and A: pairs. Number task steps on separate lines. '
                    'Changes and unknowns belong in their separate fields; do not replace the deliverable with a title.')
