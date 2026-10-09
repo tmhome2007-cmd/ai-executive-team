@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-export interface ExecutiveProfile { name: string; role: string; goal: string; backstory: string }
+import type { CharacterPresentation } from "./character-avatar";
+
+export interface ExecutiveProfile { name: string; role: string; goal: string; backstory: string; presentation?: CharacterPresentation | null }
 interface Contribution {
   id: number; executive_key: string; body: string; phase: string; sequence: number;
   captured_at: string; profile: Partial<ExecutiveProfile>;

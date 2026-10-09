@@ -33,6 +33,11 @@ def configure_connection(conn):
 # decision/action/resource/goal link expressions, company visibility condition.
 # No free-text contents are copied into the ledger. Edits record changed field names.
 SPECS = (
+    ('character_profiles','id','character',('character_key','version'),(),('NULL','NULL','NULL','NULL'),'NEW.version > 1'),
+    ('company_departments','id','organization',('status','version','executive_key','floor'),('name',),('NULL','NULL','NULL','NULL'),"NEW.version > 1 OR NEW.department_key NOT IN ('leadership','finance','operations','growth','technology')"),
+    ('virtual_employees','id','organization',('status','version','department_id'),('name','job_title','capacity_hours'),('NULL','NULL','NULL','NULL'),'1'),
+    ('employee_assignments','id','organization',('status','version','employee_id','task_id'),('hours','note'),('NULL','NULL','NULL','NULL'),'1'),
+
     ('agent_runtime','id','executive',('executive_key','state'),('updated_at',),('NULL','NULL','NULL','NULL'),'1'),
     ('operating_policies','version','policy',('version','currency','require_known_cost'),('note','max_action_cost','max_daily_cost','max_experiment_risk','prohibited_types'),('NULL','NULL','NULL','NULL'),'NEW.version > 1'),
     ('memory_lifecycle','memory_id','memory',('version','state','superseded_by'),('claim_key','source_ids','expires_at'),('NULL','NULL','NULL','NULL'),'1'),

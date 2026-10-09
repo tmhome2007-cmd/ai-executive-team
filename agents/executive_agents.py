@@ -288,15 +288,16 @@ if __name__ == "__main__":
     print("=" * 60)
 # Human-readable identities for the existing agents; reasoning still uses their
 # original goal and backstory. Never replace the persona with UI-generated traits.
-EXECUTIVE_NAMES = {
-    'ceo': 'Kai Akira', 'cfo': 'Maya Chen', 'cso': 'Alex Sterling',
-    'chro': 'Jordan Blake', 'general_counsel': 'Sarah Okonkwo',
-    'coo': 'Marcus Rivera', 'cmo': 'Zoe Nakamura', 'cpo': 'Dev Patel',
-    'board_director': 'Elena Volkov', 'cco': 'Brandon Fire', 'cto': 'Priya Raman',
-}
+from agents.identities import EXECUTIVE_NAMES
 
 
-def get_executive_profiles() -> dict:
-    return {key: {'name': EXECUTIVE_NAMES[key], 'role': agent.role,
-                  'goal': agent.goal, 'backstory': agent.backstory}
-            for key, agent in EXECUTIVE_AGENTS.items()}
+def get_executive_profiles(*, include_presentation=False) -> dict:
+    profiles = {key: {'name': EXECUTIVE_NAMES[key], 'role': agent.role,
+                     'goal': agent.goal, 'backstory': agent.backstory}
+                for key, agent in EXECUTIVE_AGENTS.items()}
+    if include_presentation:
+        from memory.character_profiles import executive_presentations
+        presentations = executive_presentations()
+        for key, profile in profiles.items():
+            profile['presentation'] = presentations.get(key)
+    return profiles

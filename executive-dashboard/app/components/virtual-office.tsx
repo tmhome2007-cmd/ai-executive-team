@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import OfficeWorkforce from "./office-workforce";
+import CharacterAvatar from "./character-avatar";
 import type { ExecutiveProfile } from "./company-records";
 
 type Destination = "decisions" | "actions" | "resources" | "activity";
@@ -35,16 +37,9 @@ const FLOORS = [
 ];
 const belongsTo = (participants: string, key: string) => participants.split(",").map(p => p.trim().toLowerCase()).includes(key);
 
-function Avatar({ initials, color }: { initials: string; color: string }) {
-  return <svg className="office-avatar" viewBox="0 0 64 64" aria-hidden="true">
-    <rect width="64" height="64" rx="18" fill={color} fillOpacity=".12" />
-    <path d="M14 58c0-13 8-21 18-21s18 8 18 21" fill={color} fillOpacity=".6" />
-    <circle cx="32" cy="24" r="12" fill={color} />
-    <text x="32" y="29" textAnchor="middle" fontSize="10" fontWeight="700" fill="#0f172a">{initials}</text>
-  </svg>;
-}
 
-export default function VirtualOffice({ decisions, actions, resources, followups, available, errors, onNavigate, onMemory, profiles, onRecords }: {
+export default function VirtualOffice({ decisions, actions, resources, followups, available, errors, onNavigate, onMemory, profiles, onRecords, apiKey, onAuthFailure }: {
+  apiKey: string | null; onAuthFailure: () => void;
   profiles: Record<string, ExecutiveProfile>; onRecords: () => void;
   decisions: Decision[]; actions: Action[]; resources: Resource[]; followups: Followup[];
   available: { decisions: boolean; actions: boolean; resources: boolean; followups: boolean };
@@ -81,7 +76,7 @@ export default function VirtualOffice({ decisions, actions, resources, followups
               const active = actions.some(a => a.proposed_by.toLowerCase() === e.key && a.status === "executing");
               const proposals = actions.filter(a => a.proposed_by.toLowerCase() === e.key && a.status === "pending").length;
               return <button key={e.key} aria-label={`Inspect ${e.title}`} aria-pressed={selected === e.key} onClick={() => setSelected(e.key)} className={`office-desk ${selected === e.key ? "office-desk-selected" : ""}`}>
-                <Avatar initials={e.initials} color={e.color} /><strong className="block text-sm mt-2">{profiles[e.key]?.name || e.title}</strong><span className="block text-xs text-gray-400">{e.title}</span>
+                <CharacterAvatar compact presentation={profiles[e.key]?.presentation} name={profiles[e.key]?.name || e.title} /><strong className="block text-sm mt-2">{profiles[e.key]?.name || e.title}</strong><span className="block text-xs text-gray-400">{e.title}</span>
                 <span className="block text-xs text-gray-400 mt-1">{!available.actions ? "State unavailable" : active ? "Executing" : proposals ? `${proposals} pending proposals` : "No active execution"}</span>
               </button>;
             })}</div>
@@ -92,7 +87,7 @@ export default function VirtualOffice({ decisions, actions, resources, followups
         </article>
       </div>
       <aside className="command-card office-inspector" aria-label="Executive inspector">
-        <div className="flex items-center gap-4"><Avatar initials={executive.initials} color={executive.color} /><div><p className="text-teal-300 text-xs">{executive.department}</p><h3 className="text-xl font-semibold">{executive.title}</h3></div></div>
+        <div className="flex items-center gap-4"><CharacterAvatar compact presentation={profiles[selected]?.presentation} name={profiles[selected]?.name || executive.title} /><div><p className="text-teal-300 text-xs">{executive.department}</p><h3 className="text-xl font-semibold">{executive.title}</h3></div></div>
         <p className="font-medium mt-4">{profiles[selected]?.name || "Name unavailable until profiles load"}</p><p className="text-sm text-gray-400 mt-1">{profiles[selected]?.goal || executive.remit}</p>
         <button className="command-link" onClick={() => onMemory(selected)}>Review {executive.title} memory →</button>
         {profiles[selected] && <details className="mt-4"><summary className="text-sm text-teal-300 cursor-pointer">Background & role personality</summary><p className="text-sm text-gray-400 whitespace-pre-wrap mt-3">{profiles[selected].backstory}</p></details>}
@@ -105,6 +100,7 @@ export default function VirtualOffice({ decisions, actions, resources, followups
         {!available.decisions ? <p className="text-sm text-gray-400">Meetings unavailable.</p> : executiveDecisions.length === 0 ? <p className="text-sm text-gray-400">No participation recorded in the recent meetings.</p> : <><p className="text-sm text-teal-300">#{executiveDecisions[0].id} · {executiveDecisions[0].topic}</p><details className="mt-3"><summary className="text-sm cursor-pointer">Read the meeting’s final report</summary><p className="text-sm text-gray-400 whitespace-pre-wrap mt-3 break-words">{executiveDecisions[0].decision_outcome}</p></details><p className="text-xs text-gray-500 mt-2">Collective meeting result; not an individual message or live chat.</p></>}
       </aside>
     </div>
+    <OfficeWorkforce key={floor} apiKey={apiKey} floor={floor} onAuthFailure={onAuthFailure} />
     <article className="command-card"><h3 className="font-semibold">Observation desk · open follow-ups</h3>
       {!available.followups ? <p className="text-gray-400 mt-3">Follow-ups unavailable.</p> : followups.length === 0 ? <p className="text-gray-400 mt-3">No open observations in the loaded records.</p> : followups.slice(0, 5).map(f => <button className="office-record" key={f.id} onClick={() => onNavigate("activity")}><span className="text-xs uppercase text-amber-300">{f.severity}</span><span className="block text-sm mt-1">{f.reason}</span></button>)}
       <button className="command-link" onClick={() => onNavigate("activity")}>Review follow-ups →</button>

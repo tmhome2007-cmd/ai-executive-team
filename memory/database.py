@@ -708,6 +708,12 @@ def init_db() -> None:
     init_observation_jobs(cursor)
     from memory.agent_runtime import init_agent_runtime
     init_agent_runtime(cursor)
+    from memory.character_profiles import init_characters
+    from memory.organization import init_organization
+    from memory.personal_simulation import init_simulation
+    init_characters(cursor)
+    init_organization(cursor)
+    init_simulation(cursor)
     conn.commit()
     init_activity(conn)
     conn.close()
