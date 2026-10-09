@@ -82,6 +82,7 @@ async def _run_research_crew_once(workflow_run_id: str, attempt: int) -> tuple[s
         agents=[cso_agent],
         tasks=[task],
         process=Process.sequential,
+        tracing=False,
         verbose=False,
     )
 

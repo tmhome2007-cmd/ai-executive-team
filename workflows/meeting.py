@@ -508,6 +508,7 @@ def run_executive_meeting(
         agents=agent_instances,
         tasks=tasks,
         process=Process.sequential,
+        tracing=False,
         verbose=False
     )
 

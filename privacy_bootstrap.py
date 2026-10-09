@@ -9,3 +9,7 @@ explicitly overrides the environment before process start.
 import os
 
 os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
+
+# CrewAI tracing is separate from telemetry and can inherit saved account consent.
+# This local application never enables trace sharing through those global settings.
+os.environ["CREWAI_TRACING_ENABLED"] = "false"

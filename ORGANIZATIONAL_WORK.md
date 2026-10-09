@@ -174,3 +174,24 @@ responses, verifies all four owner workflows, checks safe rendering/mobile layou
 asserts that directions stay pending, actions do not execute, and no money moves.
 Unresolved upstream advisories remain in their separate register; this sprint does
 not clear the production/security release gate or merge main.
+
+## Manual local trial follow-up — 9 October 2026
+
+The owner log showed three rounds of local model answers continuing over roughly
+12 minutes before a forced server stop. With three executives this flow needs ten
+model responses; a single request can take many minutes. The dashboard now states
+this while busy. The final HTTP 500/CancelledError in that log followed the forced
+shutdown and does not establish that model generation had frozen. No completed final
+synthesis was confirmed by the supplied log. Interrupted checkpoints remain subject
+to normal reconciliation; this fix does not replay or rewrite the owner's run.
+
+The same log exposed a privacy regression: disabling CrewAI telemetry alone did not
+disable its independent tracing/trace-sharing mechanism. A trace export was confirmed
+in the supplied log. Uploaded contents have not been inspected or removed by this fix.
+Tracing is now explicitly disabled before framework initialization and on all three
+production Crew constructors (meetings, daily research and planning). Saved global
+CrewAI consent cannot turn it on for this application. Regression checks use a real
+synthetic Crew with prior-consent settings and fail on sharing or terminal prompts.
+Final checks: 70 tests passed, one opt-in Docker test skipped; 150 foundation checks;
+frontend lint/build passed with the existing image warning. This does not make local
+model responses faster or certify the interrupted manual discussion as completed.

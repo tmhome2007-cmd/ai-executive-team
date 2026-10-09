@@ -45,7 +45,7 @@ def generate_plan(*, run_key, goal_id, board_id, title, proposer='coo'):
     def worker():
         # The worker owns the lock even if the HTTP caller times out.
         with EXECUTION_LOCK:
-            return Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False).kickoff()
+            return Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False, tracing=False).kickoff()
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         executor.submit(worker).result(timeout=600)

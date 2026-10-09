@@ -104,3 +104,15 @@ findings; frontend lint (existing image warning)/Webpack build; all three real A
 SQLite Chromium feature smokes passed. Docker/Ollama/dependency audits were not
 re-run for this sprint; earlier evidence and unresolved upstream findings remain
 separate. New final-head CI results must be evaluated after pushing.
+
+## Tracing regression correction — 9 October 2026
+
+A supplied manual-runtime log confirmed one CrewAI trace export and interactive
+sharing prompts despite the telemetry opt-out. Prior claims that telemetry defaults
+alone ensured no trace sharing were insufficient. The application now forces tracing
+off before framework import and passes tracing=False to all production Crew instances.
+Real synthetic-Crew regression tests cover saved consent and reject sharing/prompt
+attempts. The prior uploaded trace's contents/deletion have not been verified.
+70 tests passed with one opt-in Docker test skipped, 150/150 foundation checks and
+frontend lint/build passed. Discussion waiting text now explains the multi-call local
+model workload; the interrupted manual run was not automatically replayed or modified.
