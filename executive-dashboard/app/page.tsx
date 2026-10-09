@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import AiReport from "./components/ai-report";
 import VirtualOffice from "./components/virtual-office";
 import AgileBoard from "./components/agile-board";
+import BusinessDiscovery from "./components/business-discovery";
 import Experiments from "./components/experiments";
 import OrganizationalWork from "./components/organizational-work";
 import CompanyRecords, { type ExecutiveProfile } from "./components/company-records";
@@ -14,7 +15,7 @@ const errorMessage = (error: unknown): string => error instanceof Error ? error.
 
 const VIEWS = [
   ["overview", "Overview"], ["boards", "Agile boards"], ["office", "Virtual office"], ["records", "Conversations & activity"], ["goals", "Goals"], ["treasury", "Treasury"],
-  ["decisions", "Decisions"], ["resources", "Resources"], ["actions", "Actions & results"], ["experiments", "Experiments"], ["work", "Organizational work"],
+  ["decisions", "Decisions"], ["resources", "Resources"], ["actions", "Actions & results"], ["experiments", "Experiments"], ["business", "Business research"], ["work", "Organizational work"],
   ["activity", "Executive activity"], ["system", "System health"],
 ] as const;
 type DashboardView = typeof VIEWS[number][0];
@@ -1656,6 +1657,7 @@ export default function DashboardPage() {
         </div>
         {view === "boards" && apiKey && <AgileBoard apiKey={apiKey} profiles={profiles} onAuthFailure={handleAuthFailure} onNavigate={setView} />}
         {view === "work" && apiKey && <OrganizationalWork apiKey={apiKey} profiles={profiles} onAuthFailure={handleAuthFailure} />}
+        {view === "business" && apiKey && <BusinessDiscovery apiKey={apiKey} onAuthFailure={handleAuthFailure} />}
         {view === "experiments" && apiKey && <Experiments apiKey={apiKey} onAuthFailure={handleAuthFailure} onActions={() => setView("actions")} />}
         {view === "records" && apiKey && <CompanyRecords apiKey={apiKey} decisions={history} profiles={profiles} onAuthFailure={handleAuthFailure} onNavigate={setView} />}
         <section hidden={view !== "system"} className="command-card" aria-label="System health">
