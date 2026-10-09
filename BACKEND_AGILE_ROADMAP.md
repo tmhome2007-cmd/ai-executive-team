@@ -9,14 +9,14 @@ or spending authority. Existing approvals, capabilities and treasury gates remai
 
 | Ready | In progress | Review | Done |
 |---|---|---|---|
-| — | — | BE-12 Face, body and voice profiles | BE-01–07: boards, activity, experiments, evidence, planning, discussion and access |
-| — | — | BE-13 Departments and employee lifecycle | BE-08–11: policies, memory reconciliation, observations and agent stream |
-| — | — | BE-14 Fictional personal lives | Earlier foundation, dashboard and company-work structures |
+| — | — | — | BE-01–14: owner accepted Sprint 1 on 9 October 2026 |
 
-The owner accepted BE-01–11 and their changes were merged before this work.
-BE-12–14 are implemented and being verified for owner review on
-`codex/identity-organization-simulation`. Done requires owner acceptance; implementation
-completion alone does not record it. Existing runtime boards are not overwritten.
+- [x] BE-12 Face, body and voice profiles — owner tested and accepted.
+- [x] BE-13 Departments and employee lifecycle — owner tested and accepted.
+- [x] BE-14 Fictional personal lives — owner tested and accepted.
+
+The owner approved merge after local review. Gender-aware character presentation and
+higher-quality voices are accepted follow-up work for Sprint 2, at low priority.
 The sprint expanded beyond its original BE-01–03 scope by explicit owner requests.
 
 ## Backlog and acceptance criteria
@@ -145,3 +145,11 @@ See [CHARACTERS_ORGANIZATION_SIMULATION.md](CHARACTERS_ORGANIZATION_SIMULATION.m
 [LOCAL_COMMANDS.md](LOCAL_COMMANDS.md) and [SPRINT_1_RETROSPECTIVE.md](SPRINT_1_RETROSPECTIVE.md).
 A 3D animation engine, imported assets, voice cloning and autonomous employee execution
 remain future implementation work. These features are not production deployment clearance.
+
+## Owner acceptance — 9 October 2026
+
+BE-12–14 accepted after owner testing; merge authorized. The owner reported that shared
+avatar rendering makes female characters appear male and browser voices have poor
+quality. Both are low-priority Sprint 2 improvements, not silently discarded findings.
+See [SPRINT_2_PLAN.md](SPRINT_2_PLAN.md) for proposed priorities and acceptance examples.
+Earlier Review entries above are historical implementation logs.

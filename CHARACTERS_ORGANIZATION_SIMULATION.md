@@ -1,6 +1,6 @@
 # Characters, workforce and fictional personal lives
 
-BE-12–14 are implemented for owner review. Open **Organizational work → People & simulation** after restarting both applications from `codex/identity-organization-simulation`.
+BE-12–14 were tested and accepted by the owner on 9 October 2026. Open **Organizational work → People & simulation** after restarting both applications from `codex/identity-organization-simulation`.
 
 ## What is implemented
 
@@ -53,4 +53,4 @@ The security/regression suite covers profiles, original persona preservation, au
 
 The comprehensive disposable audit is `.venv/bin/python scripts/local_audit.py`. Browser workflow verification uses a separately built dashboard pointed at `http://127.0.0.1:8001`; the smoke intercepts that API and never writes to a running company database. The generic audit's Chromium check verifies browser availability; it is not a substitute for the feature smoke.
 
-Local startup and command meanings are in [LOCAL_COMMANDS.md](LOCAL_COMMANDS.md). Owner review is still required before BE-12–14 are marked Done or merged.
+Local startup and command meanings are in [LOCAL_COMMANDS.md](LOCAL_COMMANDS.md). Owner acceptance and merge authorization were recorded on 9 October 2026. Female character presentation and higher-quality voices remain low-priority Sprint 2 improvements.

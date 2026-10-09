@@ -1,6 +1,6 @@
 # Sprint 1 retrospective — 9 October 2026
 
-Sprint 1 grew from its original board/activity/experiment scope to BE-01–14 through explicit owner requests. BE-01–11 were accepted and merged before this final increment. BE-12–14 are implemented, tested and ready for owner review; their acceptance and merge are still pending.
+Sprint 1 grew from its original board/activity/experiment scope to BE-01–14 through explicit owner requests. BE-01–11 were accepted and merged before this final increment. BE-12–14 were tested locally and accepted by the owner on 9 October 2026; merge was authorized.
 
 A **sprint review** checks the delivered product against its acceptance criteria. A **retrospective** examines how we worked and chooses improvements for the next sprint. This document covers the latter, with delivery/test evidence as context. It is a development retrospective, not an AI-generated company meeting or an assertion of owner approval.
 
@@ -57,3 +57,11 @@ These are proposed next-sprint improvements, not silently scheduled work. The ow
 At a retrospective, everyone contributes observations, the team chooses a small number of improvements, assigns responsibility, and checks them next sprint. Keep it blameless and concrete: “the setup instructions mixed three purposes” is more useful than “the tester did it wrong.”
 
 When reviewing BE-12–14, first check the acceptance examples in the feature guide. Once accepted, mark those items Done and merge the review PR. Then choose the next sprint goal and bring the three improvement experiments into planning. The owner has supplied retrospective feedback; acceptance of these final features remains a separate decision.
+
+## Final owner review
+
+The owner accepted BE-12–14 after local testing and requested merge. They reported that
+female executives appear male in the shared avatar design and that browser voices sound
+low quality. Both are carried into Sprint 2 at low priority. This feedback confirms why
+visual and audible owner review must supplement automated checks: schema/behavior tests
+do not establish that a character looks or sounds right.
