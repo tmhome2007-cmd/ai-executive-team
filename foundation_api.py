@@ -365,6 +365,7 @@ from memory.personal_simulation import settings,set_enabled,relationship,record_
 
 
 class AppearanceRequest(StrictRequest):
+    portrait_style: Literal['masculine','feminine','androgynous'] = 'androgynous'
     description: str = Field(min_length=1,max_length=1000)
     skin_tone: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
     hair_color: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')

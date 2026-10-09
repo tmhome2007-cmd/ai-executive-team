@@ -23,3 +23,9 @@ BE-17 discovery is now in progress at the owner's request. Its clarified scope i
 ## Conceptual review — 10 October 2026
 
 See [CONCEPTUAL_SYSTEM_AUDIT.md](CONCEPTUAL_SYSTEM_AUDIT.md) for the implemented system map and proposed next stories. BE-18 and BE-19 remain the existing appearance/voice backlog; the audit proposals need separate scope selection. Earlier scope suggestions above are historical.
+
+## Remaining Sprint 2 implementation — 10 October 2026
+
+Owner requested completion of Sprint 2, approved the explicit character identities, and requested both local voice improvements and other-provider comparison. BE-18/19 are now in Review. See [SPRINT_2_CHARACTER_VOICE_REVIEW.md](SPRINT_2_CHARACTER_VOICE_REVIEW.md) for implementation, candidate research and owner review. Neither subjective audio/visual acceptance nor a new provider choice is recorded yet. Earlier Backlog entries are historical.
+
+Draft retrospective: [SPRINT_2_RETROSPECTIVE.md](SPRINT_2_RETROSPECTIVE.md). Final closure follows owner visual/audio acceptance; no Done checkbox is recorded for an unreviewed voice.

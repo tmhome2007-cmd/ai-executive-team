@@ -25,8 +25,8 @@ def main():
             errors=[];requests=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.add_init_script("""window.__spoken=[];window.__cancelled=0;
                 Object.defineProperty(window,'speechSynthesis',{value:{
-                  getVoices:()=>[{name:'Synthetic local',lang:'en-US',localService:true,voiceURI:'local'},{name:'Forbidden remote',lang:'en-US',localService:false,voiceURI:'remote'}],
-                  addEventListener:()=>{},removeEventListener:()=>{},cancel:()=>window.__cancelled++,speak:u=>window.__spoken.push({name:u.voice.name,text:u.text})}});
+                  getVoices:()=>[{name:'Synthetic local',lang:'en-US',localService:true,voiceURI:'local'},{name:'Synthetic second',lang:'en-GB',localService:true,voiceURI:'second'},{name:'Forbidden remote',lang:'en-US',localService:false,voiceURI:'remote'}],
+                  addEventListener:()=>{},removeEventListener:()=>{},cancel:()=>window.__cancelled++,speak:u=>window.__spoken.push({name:u.voice.name,text:u.text,pitch:u.pitch,rate:u.rate})}});
                 window.SpeechSynthesisUtterance=function(text){this.text=text;};""")
             def respond(route):
                 request=route.request;requests.append(request.url);path=request.url.removeprefix('http://127.0.0.1:8001')
@@ -40,11 +40,40 @@ def main():
             page.get_by_role('button',name='People & simulation',exact=True).click()
             page.get_by_label('Voice pace',exact=True).fill('1.05');page.get_by_role('button',name='Save character version',exact=True).click()
             page.get_by_text('190 cm · well built · version 2',exact=True).wait_for();assert get_character('executive:ceo')['appearance']['beard'] is False
-            page.get_by_role('button',name='Preview local voice',exact=True).click();assert page.evaluate('window.__spoken[0].name')=='Synthetic local'
-            page.get_by_label('Installed voice name (optional)',exact=True).fill('Forbidden remote');page.get_by_role('button',name='Save character version',exact=True).click();page.get_by_text('190 cm · well built · version 3',exact=True).wait_for()
-            page.get_by_role('button',name='Preview local voice',exact=True).click();page.get_by_text('The selected local voice is unavailable.',exact=False).wait_for();assert page.evaluate('window.__spoken.length')==1
+            assert page.get_by_label('Compare installed local voice',exact=True).locator('option').filter(has_text='Forbidden remote').count()==0
+            page.get_by_label('Compare installed local voice',exact=True).select_option('local')
+            page.get_by_role('button',name='Preview natural voice',exact=True).click()
+            assert page.evaluate('window.__spoken[0].name')=='Synthetic local'
+            assert page.evaluate('window.__spoken[0].pitch')==1
+            assert page.evaluate('window.__spoken[0].rate')==1
+            page.get_by_role('button',name='Compare saved pitch / pace',exact=True).click()
+            assert page.evaluate('window.__spoken[1].rate')==1.05
+            page.get_by_label('Compare installed local voice',exact=True).select_option('second')
+            page.get_by_role('button',name='Preview natural voice',exact=True).click()
+            assert page.evaluate('window.__spoken[2].name')=='Synthetic second'
+            page.get_by_role('button',name='Stop voice',exact=True).click()
+            page.get_by_role('button',name='Save selected voice at natural pitch',exact=True).click()
+            page.get_by_text('190 cm · well built · version 3',exact=True).wait_for()
+            assert get_character('executive:ceo')['voice']['voice_name']=='Synthetic second'
+            assert get_character('executive:ceo')['voice']['language']=='en-GB'
+            assert get_character('executive:ceo')['voice']['rate']==1
+            page.get_by_label('Installed voice name (optional)',exact=True).fill('Forbidden remote')
+            page.get_by_role('button',name='Save character version',exact=True).click()
+            page.get_by_text('190 cm · well built · version 4',exact=True).wait_for()
+            assert page.get_by_role('button',name='Preview natural voice',exact=True).is_disabled()
+            page.get_by_text('Your saved voice is unavailable on this device.',exact=False).wait_for()
+            assert page.evaluate('window.__spoken.length')==3
             page.get_by_role('button',name='Show character history',exact=True).click();page.get_by_text('Version 1:',exact=False).wait_for()
             page.set_viewport_size({'width':390,'height':844});assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1');page.set_viewport_size({'width':1440,'height':1000})
+            for key in ('ceo','cfo','general_counsel','cmo','board_director','cto','chro'):
+                page.get_by_label('Character',exact=True).select_option('executive:'+key)
+                page.get_by_label('Portrait presentation',exact=True).wait_for()
+                expected=get_character('executive:'+key)['appearance']['portrait_style']
+                page.wait_for_function("(expected) => document.querySelector('[name=portrait_style]')?.value === expected",arg=expected)
+                assert page.get_by_role('img',name='character:',exact=False).count()>=2
+            page.get_by_label('Character',exact=True).select_option('executive:cfo')
+            page.get_by_role('heading',name='Maya Chen',exact=True).wait_for()
+            page.screenshot(path='/private/tmp/sprint2-character-review.png',full_page=True)
             page.get_by_role('button',name='Workforce',exact=True).click()
             def fill(values):
                 for label,value in values.items():page.get_by_label(label,exact=True).fill(str(value))
