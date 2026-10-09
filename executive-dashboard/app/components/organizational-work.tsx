@@ -1,4 +1,5 @@
 "use client";
+import AiReport from "./ai-report";
 
 import { useCallback, useEffect, useState } from "react";
 import PeopleSimulation from "./people-simulation";
@@ -100,7 +101,7 @@ export default function OrganizationalWork({ apiKey, profiles, onAuthFailure }: 
       </form>
       <form className="command-card flex gap-3 flex-wrap" onSubmit={e => submit(e, async d => readDiscussion(Number(d.get("decision"))))}><Field name="decision" label="Discussion decision ID" type="number" /><Button disabled={busy || loading}>Open discussion rounds</Button></form>
       {discussionId && <h3>Published rounds for decision #{discussionId}</h3>}{discussionId && messages.length === 0 && <p>No structured rounds recorded for this decision.</p>}
-      {messages.map(m => <article key={m.id} className="command-card space-y-2"><h3>Round {m.round_number} · {m.phase} · {m.profile.name || executiveName(m.executive_key)}</h3><p className="text-xs text-gray-400">{m.profile.role} · Message #{m.id}</p><p className="whitespace-pre-wrap break-words">{m.body}</p>{m.quality_checks && <div className="rounded border border-amber-800 p-3 text-sm break-words"><p>{m.quality_checks.status === "review_required" ? "Discussion review required" : m.quality_checks.status === "not_assessed" ? "Quality not assessed" : "Basic format checks passed"}</p>{m.quality_checks.warnings.length > 0 && <ul className="list-disc pl-5">{m.quality_checks.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}<p className="text-xs text-gray-400">{m.quality_checks.scope}. Owner approval remains separate.</p></div>}</article>)}
+      {messages.map(m => <article key={m.id} className="command-card space-y-2"><h3>Round {m.round_number} · {m.phase} · {m.profile.name || executiveName(m.executive_key)}</h3><p className="text-xs text-gray-400">{m.profile.role} · Message #{m.id}</p><AiReport text={m.body} />{m.quality_checks && <div className="rounded border border-amber-800 p-3 text-sm break-words"><p>{m.quality_checks.status === "review_required" ? "Discussion review required" : m.quality_checks.status === "not_assessed" ? "Quality not assessed" : "Basic format checks passed"}</p>{m.quality_checks.warnings.length > 0 && <ul className="list-disc pl-5">{m.quality_checks.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}<p className="text-xs text-gray-400">{m.quality_checks.scope}. Owner approval remains separate.</p></div>}</article>)}
     </>}
     {tab === "Access inventory" && <>
       <p className="text-sm text-gray-400">Provide a scope against an approved resource request, then verify it. Store credential values in the backend environment; enter only the GITHUB_TOKEN reference here. Manual connectors stay unverified. Browser checks establish local runtime readiness for an allowed host.</p>

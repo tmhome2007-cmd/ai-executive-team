@@ -1,0 +1,7 @@
+#!/bin/sh
+# Always use this checkout, regardless of the caller's current directory.
+company_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 1
+if [ -x "$company_root/.venv/bin/python" ]; then
+  exec "$company_root/.venv/bin/python" "$company_root/scripts/company_cli.py" "$@"
+fi
+exec python3 "$company_root/scripts/company_cli.py" "$@"

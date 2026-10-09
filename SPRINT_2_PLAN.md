@@ -1,6 +1,8 @@
 # Sprint 2 planning proposal — 9 October 2026
 
-Proposed goal: make the company easier to run locally and its recommendations easier to review. The owner chooses the final sprint scope; these items begin in Backlog, not as a commitment to deliver all five.
+Owner-selected scope: BE-15 and BE-16. Both are implemented for Review on `codex/sprint-2-local-review`; owner acceptance and merge remain pending. BE-17–19 remain Backlog.
+
+Sprint goal: make the company easier to run locally and its recommendations easier to review. The owner chooses the final sprint scope; these items begin in Backlog, not as a commitment to deliver all five.
 
 | ID | Priority | Story | Acceptance examples |
 |---|---|---|---|
@@ -13,3 +15,5 @@ Proposed goal: make the company easier to run locally and its recommendations ea
 Suggested first commitment: BE-15 and BE-16. Groom BE-17 alongside that work if capacity permits. BE-18/19 remain low priority as requested. 3D animation, autonomous employee tools and personal-life AI generation are separate future stories.
 
 Work one coherent story at a time. Review acceptance examples before coding, verify with disposable data, and prefer a separate PR per feature. At the next retrospective record setup assistance needed, owner readability feedback and scope changes. Do not invent velocity or estimated completion dates from the previous sprint.
+
+Implementation and acceptance steps: [SPRINT_2_LOCAL_REVIEW.md](SPRINT_2_LOCAL_REVIEW.md).

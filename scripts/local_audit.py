@@ -15,7 +15,7 @@ KNOWN_CHROMA = {'PYSEC-2026-311', 'PYSEC-2026-3813', 'PYSEC-2026-3814', 'PYSEC-2
 
 def main():
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=ROOT, text=True).strip()
-    if branch not in {'chatgpt/foundation-hardening', 'main', 'codex/operating-foundation-sprint', 'codex/identity-organization-simulation'}:
+    if branch not in {'chatgpt/foundation-hardening', 'main', 'codex/operating-foundation-sprint', 'codex/identity-organization-simulation', 'codex/sprint-2-local-review'}:
         raise SystemExit('Stop: use the foundation-hardening or main development baseline for this disposable audit.')
     stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     report = ROOT / 'audit-results' / stamp
@@ -86,6 +86,7 @@ def main():
                         ignore=shutil.ignore_patterns('node_modules', '.next', '.git', '.env*'))
         installed = run('frontend-clean-install', ['npm', 'ci'], cwd=dashboard)
         if installed:
+            run('frontend-review-summary', ['npm', 'run', 'test:review-summary'], cwd=dashboard)
             run('frontend-glob', ['npm', 'run', 'test:lint-glob'], cwd=dashboard)
             run('frontend-lint', ['npm', 'run', 'lint'], cwd=dashboard)
             built = run('frontend-build', ['npm', 'run', 'build', '--', '--webpack'], cwd=dashboard)

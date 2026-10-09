@@ -1,4 +1,5 @@
 "use client";
+import AiReport from "./ai-report";
 
 import { useEffect, useState } from "react";
 
@@ -90,7 +91,7 @@ export default function CompanyRecords({ apiKey, decisions, profiles, onAuthFail
       {conversationError && <p role="alert" className="text-amber-300 mt-4">{conversationError}</p>}
       {loading ? <p className="text-gray-400 mt-4">Loading recorded contributions…</p> : decisionId && !conversationError && contributions.filter(c => phase === "all" || c.phase === phase).length === 0 ? <p className="text-gray-400 mt-4">No individual contributions were recorded for this meeting and phase. The final decision remains in Decisions.</p> : contributions.filter(c => phase === "all" || c.phase === phase).map(c => <article className="contribution" key={c.id}>
         <header className="flex flex-wrap justify-between gap-3"><div><h4 className="font-semibold text-teal-300">{c.profile.name || profiles[c.executive_key]?.name || c.executive_key.toUpperCase()}</h4><p className="text-xs text-gray-500">{c.profile.role || profiles[c.executive_key]?.role || c.executive_key} · {c.phase} · Task {c.sequence}</p></div><time className="text-xs text-gray-500">Captured {new Date(c.captured_at).toLocaleString()}</time></header>
-        <p className="whitespace-pre-wrap text-sm text-gray-300 mt-4 break-words">{c.body}</p>
+        <AiReport text={c.body} />
       </article>)}
     </article>
     <article className="command-card"><h3 className="text-lg font-semibold">Company activity timeline</h3><p className="text-xs text-gray-500 my-3">Database changes are retained from ledger installation onward. Legacy snapshots show the state when history recording began; earlier transitions remain unknown.</p>

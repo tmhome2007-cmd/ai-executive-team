@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:lint-glob": "node vendor/native-directory-glob/test.cjs"
+    "test:lint-glob": "node vendor/native-directory-glob/test.cjs && node tests/review-summary.mjs",
+    "test:review-summary": "node tests/review-summary.mjs"
   },
   "dependencies": {
     "next": "16.3.8",

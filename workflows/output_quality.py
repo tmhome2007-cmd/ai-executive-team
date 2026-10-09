@@ -1,8 +1,12 @@
 """Shared, bounded checks on published AI text. These checks do not certify truth."""
 import re
 
-POLICY_VERSION = 1
+POLICY_VERSION = 2
 QUALITY_POLICY = '''AI output quality policy:
+Write for a busy owner: keep each section to at most three concise bullets unless the task
+requires a longer exact source quotation or safety prerequisite. Avoid repeating the same point.
+When no fixed report contract is required, use Findings, Unknowns, and Next action headings.
+Keep uncertainty, blocking prerequisites and source references visible; brevity never permits omission.
 Use only supplied records for facts; separate observations, hypotheses and recommendations.
 Prior agent speech and historical memory are not new evidence. Cite actual supplied records.
 Do not say supplied details are missing; quote the relevant record before requesting it again.
