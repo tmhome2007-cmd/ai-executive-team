@@ -114,3 +114,41 @@ heartbeat supervision and new multi-device sync for these tables are future work
 existing whole-database backup covers the new records. Legacy JSONL exports carry
 curated memories as inactive historical records, so missing lifecycle metadata on
 another device cannot silently activate them. Their local eligibility is unchanged.
+
+## Restart for owner review
+
+Stop the existing backend and dashboard with **Ctrl+C** in their respective
+terminals. Use the current workspace, whose `.env` and API key are separate from
+an older checkout. These commands keep external Telegram control disabled during
+review; they do not alter the `.env` file.
+
+Backend terminal:
+
+```sh
+cd "/Users/alpha/.codex/.chatgpt-projects/g-p-6ac6034a5d7881918e21bf72595bb34b/foundation-hardening"
+git switch codex/operating-foundation-sprint
+source .venv/bin/activate
+unset API_SECRET_KEY
+export SANDBOX_MODE=true ALLOW_UNSAFE_RAW_SHELL=false
+export CREWAI_DISABLE_TELEMETRY=true CREWAI_TRACING_ENABLED=false
+export TELEGRAM_BOT_TOKEN="" TELEGRAM_CHAT_ID=""
+python -c 'from config import config; import sys; sys.stdout.write(config.API_SECRET_KEY)' | pbcopy
+python -m uvicorn main:app --host 127.0.0.1 --port 8001
+```
+
+The key is copied directly to the clipboard without printing it. Paste it into
+the dashboard's API Key field. Do not paste it into a chat or commit it.
+
+Dashboard terminal:
+
+```sh
+cd "/Users/alpha/.codex/.chatgpt-projects/g-p-6ac6034a5d7881918e21bf72595bb34b/foundation-hardening/executive-dashboard"
+export NEXT_PUBLIC_API_BASE=http://127.0.0.1:8001
+npm run build -- --webpack
+npm run start -- --hostname 127.0.0.1
+```
+
+Open `http://127.0.0.1:3000`, unlock, then choose **Organizational work → Operations**.
+Sandbox review supports source collectors and simulated execution; real approved
+file-read collectors were tested separately using disposable local files. Do not
+change sandbox settings merely to make a synthetic observation appear successful.

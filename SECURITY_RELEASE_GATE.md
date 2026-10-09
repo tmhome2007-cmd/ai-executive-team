@@ -239,3 +239,13 @@ owner-authenticated fetching and does not expose an unauthenticated optimizer UR
 These passing development checks do not certify arbitrary AI answers or production
 release. BE-08–BE-11 remain in Review until owner acceptance. See
 `OPERATING_FOUNDATION.md` for provider, retention, sync and state limits.
+
+Final follow-up: source commit `c8c382e7e8f0c2c68ed693ec033d693edd4a5b52`
+passed the complete local audit in `audit-results/20261009-191836`, with all
+109 backend tests passing including real Docker and the cross-device memory
+regression. Curated memories now export as inactive historical records when
+legacy sync cannot carry their lifecycle/source constraints; local eligibility
+is unchanged. The 150 foundation checks and all other project checks passed.
+The first PR #28 CI run passed compile, backend tests, live Docker, foundation,
+Bandit and frontend checks; its sole failed step found the same four unpatched
+Chroma advisories. The dependency gate remains visibly unclean.
