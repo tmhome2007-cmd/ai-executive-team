@@ -18,8 +18,8 @@ executives do not automatically pick up cards or execute tasks yet.
 
 Create development roadmap imports fourteen proposed features from the planning template
 represented in BACKEND_AGILE_ROADMAP.md. Creation is atomic and repeat requests reuse the
-existing named roadmap without overwriting owner edits. BE-01/BE-02 are in Review; BE-03
-is Ready, and later features start in Backlog. The first sprint is a proposal; priorities
+existing named roadmap without overwriting owner edits. BE-01/BE-02/BE-03 are in Review after implementation; later features
+remain Backlog, and later features start in Backlog. The first sprint is a proposal; priorities
 and ordering can be changed by the owner. No dates, story-point estimates or automatic
 implementation are promised.
 

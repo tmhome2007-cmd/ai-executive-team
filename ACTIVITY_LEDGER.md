@@ -2,7 +2,8 @@
 
 SQLite triggers append events in the same transaction as changes to decisions,
 contributions, direction/preparation approvals, action execution/results, outcomes,
-resources, treasury entries/reservations, goals, follow-ups, memories and board tasks.
+resources, treasury entries/reservations, goals, follow-ups, memories, board tasks,
+experiment plans and observations.
 An event stores UTC capture time, initiating actor/source, source entity/links, selected
 previous/new state values and changed field names. It does not copy prompts, evidence
 bodies, credentials, contribution text or tool output. Those remain in their original

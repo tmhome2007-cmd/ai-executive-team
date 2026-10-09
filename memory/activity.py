@@ -33,6 +33,8 @@ def configure_connection(conn):
 # decision/action/resource/goal link expressions, company visibility condition.
 # No free-text contents are copied into the ledger. Edits record changed field names.
 SPECS = (
+    ('experiments', 'id', 'experiment', ('budget_amount', 'risk_limit', 'currency', 'version'), ('hypothesis', 'baseline_value', 'target_value', 'observation_due_at'), ('(SELECT source_decision_id FROM action_queue WHERE id = NEW.action_id)', 'NEW.action_id', 'NULL', 'NULL'), '1'),
+    ('experiment_observations', 'id', 'experiment', ('value', 'observed_at', 'measurement_mode'), (), ('(SELECT q.source_decision_id FROM experiments e JOIN action_queue q ON q.id = e.action_id WHERE e.id = NEW.experiment_id)', '(SELECT action_id FROM experiments WHERE id = NEW.experiment_id)', 'NULL', 'NULL'), '1'),
     ('decisions', 'id', 'meeting', ('meeting_type',), (), ('NEW.id', 'NULL', 'NULL', 'NEW.goal_id'), '1'),
     ('decision_contributions', 'id', 'conversation', ('phase', 'sequence', 'executive_key'), (), ('NEW.decision_id', 'NULL', 'NULL', 'NULL'), '1'),
     ('decision_approvals', 'decision_id', 'approval', ('status', 'preparation_status'), ('preparation_outcome',), ('NEW.decision_id', 'NULL', 'NULL', 'NULL'), '1'),

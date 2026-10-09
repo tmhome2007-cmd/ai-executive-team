@@ -23,7 +23,7 @@ import os
 import re
 import json
 import ast
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -2268,3 +2268,91 @@ def patch_agile_task(task_id: int, request: AgileTaskUpdateRequest):
 @app.post('/boards/roadmap', dependencies=[Depends(verify_api_key)])
 def post_development_roadmap():
     return _agile_call(create_roadmap_board)
+
+
+from memory.experiments import create_experiment, update_experiment, get_experiment, list_experiments, record_observation, list_observations
+
+
+class ExperimentPlanRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    title: str = Field(min_length=1, max_length=200)
+    hypothesis: str = Field(min_length=1, max_length=4000)
+    baseline_note: str = Field(min_length=1, max_length=4000)
+    baseline_value: Optional[float] = Field(default=None, strict=True)
+    metric_name: str = Field(min_length=1, max_length=120)
+    unit: str = Field(min_length=1, max_length=40)
+    target_value: Optional[float] = Field(default=None, strict=True)
+    direction: Literal['increase', 'decrease'] = 'increase'
+    expected_result: str = Field(min_length=1, max_length=4000)
+    budget_amount: float = Field(ge=0, le=1e15, strict=True)
+    risk_limit: float = Field(ge=0, le=1e15, strict=True)
+    currency: str = Field(pattern=r'^[A-Z]{3}$')
+    observation_due_at: str = Field(max_length=40)
+
+
+class ExperimentCreateRequest(ExperimentPlanRequest):
+    action_id: int = Field(ge=1, strict=True)
+
+
+class ExperimentUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    expected_version: int = Field(ge=1)
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    hypothesis: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    baseline_note: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    baseline_value: Optional[float] = Field(default=None, strict=True)
+    metric_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    unit: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    target_value: Optional[float] = Field(default=None, strict=True)
+    direction: Optional[Literal['increase', 'decrease']] = None
+    expected_result: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    budget_amount: Optional[float] = Field(default=None, ge=0, le=1e15, strict=True)
+    risk_limit: Optional[float] = Field(default=None, ge=0, le=1e15, strict=True)
+    currency: Optional[str] = Field(default=None, pattern=r'^[A-Z]{3}$')
+    observation_due_at: Optional[str] = Field(default=None, max_length=40)
+
+
+class ObservationRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    idempotency_key: str = Field(min_length=1, max_length=80, pattern=r'^[A-Za-z0-9:_-]+$')
+    observed_at: str = Field(max_length=40)
+    value: Optional[float] = Field(default=None, strict=True)
+    evidence: str = Field(min_length=1, max_length=12000)
+    notes: str = Field(default='', max_length=4000)
+
+
+@app.get('/experiments', dependencies=[Depends(verify_api_key)])
+def experiments_list(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return list_experiments(limit, offset)
+
+
+@app.post('/experiments', dependencies=[Depends(verify_api_key)])
+def experiment_create(request: ExperimentCreateRequest):
+    fields = request.model_dump()
+    action_id = fields.pop('action_id')
+    return _agile_call(create_experiment, action_id, **fields)
+
+
+@app.get('/experiments/{experiment_id}', dependencies=[Depends(verify_api_key)])
+def experiment_get(experiment_id: int):
+    plan = get_experiment(experiment_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail='Experiment not found')
+    return plan
+
+
+@app.patch('/experiments/{experiment_id}', dependencies=[Depends(verify_api_key)])
+def experiment_patch(experiment_id: int, request: ExperimentUpdateRequest):
+    fields = request.model_dump(exclude_unset=True)
+    version = fields.pop('expected_version')
+    return _agile_call(update_experiment, experiment_id, version, **fields)
+
+
+@app.get('/experiments/{experiment_id}/observations', dependencies=[Depends(verify_api_key)])
+def observations_list(experiment_id: int, limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+    return _agile_call(list_observations, experiment_id, limit, offset)
+
+
+@app.post('/experiments/{experiment_id}/observations', dependencies=[Depends(verify_api_key)])
+def observation_create(experiment_id: int, request: ObservationRequest):
+    return _agile_call(record_observation, experiment_id, **request.model_dump())

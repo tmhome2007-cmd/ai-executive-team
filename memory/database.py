@@ -168,7 +168,7 @@ def _action_approval_signing_key() -> bytes:
 
 def _action_approval_payload(action: dict) -> dict:
     """Canonical authority-bearing fields covered by an owner approval."""
-    return {
+    payload = {
         "sync_uuid": action.get("sync_uuid"),
         "proposed_by": action.get("proposed_by"),
         "action_description": action.get("action_description"),
@@ -181,6 +181,9 @@ def _action_approval_payload(action: dict) -> dict:
         "source_decision_sync_uuid": action.get("source_decision_sync_uuid"),
         "source_phase": action.get("source_phase"),
     }
+    if action.get('experiment_policy'):
+        payload['experiment_policy'] = action['experiment_policy']
+    return payload
 
 
 def _action_approval_seal(action: dict) -> str:
@@ -213,7 +216,14 @@ def _action_row_for_approval(cursor: sqlite3.Cursor, action_id: int) -> dict | N
         (action_id,),
     )
     row = cursor.fetchone()
-    return dict(row) if row else None
+    if row is None:
+        return None
+    action = dict(row)
+    from memory.experiments import experiment_policy
+    policy = experiment_policy(cursor, action_id)
+    if policy:
+        action['experiment_policy'] = policy
+    return action
 
 
 _SYNC_TABLE_COLUMNS = {
@@ -669,6 +679,9 @@ def init_db() -> None:
     """)
     conn.commit()
 
+    conn.commit()
+    from memory.experiments import init_experiments
+    init_experiments(cursor)
     conn.commit()
     init_activity(conn)
     conn.close()
@@ -2283,6 +2296,9 @@ def approve_action_with_treasury(action_id: int) -> dict:
             conn.rollback()
             raise ValueError(f"Action cannot be approved from status '{action['status']}'")
 
+        from memory.experiments import check_experiment_budget
+        check_experiment_budget(cursor, action)
+
         amount = action.get("expected_cost_amount")
         currency = action.get("currency")
         reservation_id = None
@@ -2745,6 +2761,8 @@ def transition_action_status(
             if action is None or action["status"] not in allowed_from:
                 conn.rollback()
                 return False
+            from memory.experiments import check_experiment_budget
+            check_experiment_budget(cursor, action)
             amount = action.get("expected_cost_amount")
             if amount is not None and float(amount) > 0:
                 conn.rollback()
@@ -2830,6 +2848,8 @@ def claim_action_for_execution(action_id: int) -> bool:
                 "approval seal is missing. Owner re-approval is required."
             )
 
+        from memory.experiments import check_experiment_budget
+        check_experiment_budget(cursor, action)
         cursor.execute(
             """
             UPDATE action_queue

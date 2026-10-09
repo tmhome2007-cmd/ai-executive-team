@@ -9,9 +9,9 @@ or spending authority. Existing approvals, capabilities and treasury gates remai
 
 | Ready | In progress | Review | Done |
 |---|---|---|---|
-| BE-03 Experiment records and observations | — | BE-01 Development and company task boards | Existing foundation audit and local checks |
+| — | — | BE-01 Development and company task boards | Existing foundation audit and local checks |
 | — | — | BE-02 Append-only activity events | Goals, treasury, resources and outcome tracking |
-| — | — | — | Decision/action lineage, follow-ups and executive memory |
+| — | — | BE-03 Experiment records and observations | Decision/action lineage, follow-ups and executive memory |
 | — | — | — | Meeting types, dashboard v2, virtual office v1 |
 | — | — | — | Published executive contributions and activity timeline v1 |
 
@@ -68,3 +68,16 @@ Chromium board smoke verified retained task transitions. Owner review remains.
 Product direction: build towards evidence-backed revenue and profit. Experiments must
 separate planned results from observed results, track costs and require supporting
 evidence. Funding is capital, not automatically revenue; forecasts are not earnings.
+
+BE-03 is in Review: owner-defined hypotheses, unknown-aware baselines/targets, linked
+pending actions, planned observation dates, budget/risk gates, frozen approval-bound
+plans, immutable idempotent evidence observations and the Experiments dashboard view.
+The combined suite passed 49 tests with one unchanged opt-in Docker test skipped;
+150/150 foundation checks, Bandit medium/high, lint/build and both real SQLite/API
+Chromium feature smokes passed. BE-02 commit: a707b5f. Owner review remains for both.
+The next candidate is BE-04, currently Backlog rather than Ready.
+
+The checked-in roadmap and new-board template reflect this work. Existing runtime
+boards are deliberately not overwritten by reseeding. The current default local DB
+has not loaded the board migration; restart the isolated backend with its original
+test environment/database before reviewing/updating existing cards.
