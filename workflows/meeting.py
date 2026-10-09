@@ -289,6 +289,7 @@ def run_executive_meeting(
     memory_context: Dict[str, Any] | None = None,
     meeting_type: str = "strategy",
     workflow_run_id: str | None = None,
+    discussion_round: tuple[str, bool] | None = None,
 ) -> Dict[str, Any]:
     """
     Voert een sequentieel overleg uit tussen de gespecificeerde agents.
@@ -492,6 +493,19 @@ def run_executive_meeting(
                 agent=agent_obj,
                 context=list(tasks)  # Geef alle voorgaande taken mee als context
             )
+
+        if discussion_round is not None:
+            from workflows.discussion_contracts import round_contract
+            contract = round_contract(*discussion_round)
+            # Discussion phases must not inherit the strategy template or automatic
+            # CEO synthesis instructions intended for a different meeting workflow.
+            current_task.description = (
+                task_description + "\n\n" + EVIDENCE_DISCIPLINE + "\n\n"
+                + (role_memory + "\n\n" if role_memory else "")
+                + "PUBLISHED DISCUSSION ROUND CONTRACT:\n" + contract
+                + "\nContribute from your canonical role and personality."
+            )
+            current_task.expected_output = contract
 
         current_task = DurableTask(
             description=current_task.description,

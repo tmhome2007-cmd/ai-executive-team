@@ -195,3 +195,26 @@ synthetic Crew with prior-consent settings and fail on sharing or terminal promp
 Final checks: 70 tests passed, one opt-in Docker test skipped; 150 foundation checks;
 frontend lint/build passed with the existing image warning. This does not make local
 model responses faster or certify the interrupted manual discussion as completed.
+
+## Discussion contract correction — 9 October 2026
+
+The owner's completed CEO-only decision #7 showed four saved rounds and pending
+approval, but repeated generic strategy sections, unsupported release/revenue/market
+claims and an "unresolved disagreement" used for missing evidence. These are reasoning
+quality failures, not proof of a successful semantic trial.
+
+Discussion tasks now replace the generic strategy-meeting response structure with
+fixed phase-specific contracts: proposal/test, challenged claims, explicit revisions,
+and supported synthesis. CEO synthesis instructions no longer override the earlier
+proposal/critique/revision phases. Solo runs specify self-review and unresolved
+questions; multiple-executive disagreement must identify actual conflicting positions.
+Prompts bound responses to 250 words, request one reproducible next test, preserve
+persona through judgment/tone, and prohibit irrelevant business assumptions without
+current source support. This is prompt guidance, not deterministic proof of truth or
+model compliance. Existing published rounds are immutable and were not rewritten.
+
+Real CrewAI synthetic-model tests verify the exact phase contract enters each task
+without the general strategy template. 72 tests passed with one opt-in Docker test
+skipped; 150/150 foundation checks passed. A fresh CEO-only local Ollama discussion
+using the same fictional evidence remains the semantic acceptance check. No owner
+database/model run was launched or altered during implementation verification.

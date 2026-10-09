@@ -45,6 +45,7 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
         result = run_executive_meeting(topic=topic, task_description=evidence + '\nROUND: ' + phase + '\n' + instruction + '\nPUBLISHED PRIOR ROUND (unverified recommendations):\n' + previous,
             agent_keys=participants, agents_source=EXECUTIVE_AGENTS_NO_TOOLS, evidence_text=evidence,
             meeting_type='strategy', workflow_run_id=f'discussion:{run_key}:{phase}',
+            discussion_round=(phase, len(agent_keys) == 1),
             memory_context={'enabled': True, 'goal_id': goal_id, 'limit': 5})
         outputs = result.get('individual_outputs', {})
         if set(outputs) != set(participants) or set(result['participants']) != set(participants) or len(result['participants']) != len(participants):
