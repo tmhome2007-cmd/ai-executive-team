@@ -17,3 +17,5 @@ Suggested first commitment: BE-15 and BE-16. Groom BE-17 alongside that work if 
 Work one coherent story at a time. Review acceptance examples before coding, verify with disposable data, and prefer a separate PR per feature. At the next retrospective record setup assistance needed, owner readability feedback and scope changes. Do not invent velocity or estimated completion dates from the previous sprint.
 
 Implementation and acceptance steps: [SPRINT_2_LOCAL_REVIEW.md](SPRINT_2_LOCAL_REVIEW.md).
+
+BE-17 discovery is now in progress at the owner's request. Its clarified scope is AI-operated research with €0 spending and €0 permitted loss; the owner's personal professional skills are not a prerequisite. See [BE17_DISCOVERY.md](BE17_DISCOVERY.md) for the existing capability map and proposed acceptance example. Implementation acceptance and option selection remain pending.
