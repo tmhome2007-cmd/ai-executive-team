@@ -1,6 +1,6 @@
 # BE-15 and BE-16 — local workflow and short AI review
 
-These two owner-selected Sprint 2 stories are implemented for review on `codex/sprint-2-local-review`. They are not marked Done or merged until owner acceptance.
+These two owner-selected Sprint 2 stories are Done. The owner tested startup and the report view, accepted the result and authorized merge on 9 October 2026.
 
 ## BE-15
 
@@ -8,7 +8,7 @@ These two owner-selected Sprint 2 stories are implemented for review on `codex/s
 
 Loopback Ollama probes reject remote endpoints, credentials, query strings and unexpected paths; redirects and proxies are disabled for probes. Child audit Python is explicitly selected, avoiding confusion from another terminal's active virtual environment. Dashboard builds use system fonts rather than downloading fonts from Google.
 
-The existing local app was left running during verification. Its occupied ports were correctly reported. Cold-start process ownership/readiness/interrupt behavior is tested with synthetic child processes, not by restarting the owner's company. Owner cold-start review remains necessary.
+The existing local app was left running during verification. Its occupied ports were correctly reported. Cold-start process ownership/readiness/interrupt behavior is tested with synthetic child processes, not by restarting the owner's company. Owner cold-start review subsequently passed: after stopping the older dashboard on port 3000, the owner confirmed startup worked and the report view looked good.
 
 ## BE-16
 

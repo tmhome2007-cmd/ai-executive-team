@@ -160,3 +160,10 @@ Owner selected simpler local startup/testing and shorter evidence-first AI revie
 Both are implemented on `codex/sprint-2-local-review`; owner acceptance remains.
 BE-17 discovery and BE-18/19 appearance/voice refinements remain Backlog, with the
 latter two at Low priority. See SPRINT_2_LOCAL_REVIEW.md for scope and test examples.
+
+## Sprint 2 owner acceptance — 9 October 2026
+
+- [x] BE-15: local startup tested successfully after stopping the old dashboard.
+- [x] BE-16: owner reviewed and accepted the new report view.
+
+Owner authorized PR #30 merge. BE-17–19 remain Backlog. Earlier Review entries are historical.

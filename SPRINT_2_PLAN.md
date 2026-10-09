@@ -1,6 +1,6 @@
 # Sprint 2 planning proposal — 9 October 2026
 
-Owner-selected scope: BE-15 and BE-16. Both are implemented for Review on `codex/sprint-2-local-review`; owner acceptance and merge remain pending. BE-17–19 remain Backlog.
+Owner-selected scope: BE-15 and BE-16. Both are Done: the owner tested startup and the report view, accepted the result and authorized merge on 9 October 2026. BE-17–19 remain Backlog.
 
 Sprint goal: make the company easier to run locally and its recommendations easier to review. The owner chooses the final sprint scope; these items begin in Backlog, not as a commitment to deliver all five.
 
