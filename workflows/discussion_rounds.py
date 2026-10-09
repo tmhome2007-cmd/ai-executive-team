@@ -5,6 +5,7 @@ from memory.evidence import source_context
 from memory.discussions import consent_guard, get_discussion
 from memory.experiments import _text
 from workflows.meeting import run_executive_meeting
+from workflows.discussion_contracts import assess_round
 
 
 def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=None, goal_id=None):
@@ -54,13 +55,19 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
         for role in result['participants']:
             body = consent_guard(outputs[role])
             published[role] = body
-            messages.append({'round_number': number, 'phase': phase, 'executive_key': role, 'body': body, 'profile': profiles[role]})
+            messages.append({'round_number': number, 'phase': phase, 'executive_key': role, 'body': body, 'profile': profiles[role], 'quality_checks': assess_round(body, phase, evidence)})
         if phase == 'revision':
             revised = published
         previous = '\n'.join(f'{role}: {body}' for role, body in published.items())
+        reviews = [f"{m['executive_key']}: {warning}" for m in messages if m['round_number'] == number for warning in m['quality_checks']['warnings']]
+        if reviews:
+            previous += '\nAUTOMATIC REVIEW CUES (not source evidence; address these in the next round):\n' + '\n'.join(reviews)
         if len(previous) > 300000:
             raise ValueError('Published discussion context exceeds the bounded round size')
     final = consent_guard(result['final_decision'])
+    unresolved = messages[-1]['quality_checks']['warnings']
+    if unresolved:
+        final += '\n\nDiscussion quality review required:\n' + '\n'.join('- ' + warning for warning in unresolved) + '\nThese checks do not approve the recommendation. Owner review remains pending.'
     revised['ceo'] = final
     ident = log_decision(topic, agent_keys, task_description, final, goal_id=goal_id,
         workflow_key='discussion:' + run_key, individual_outputs=revised, executive_profiles=profiles,

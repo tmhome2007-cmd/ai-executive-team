@@ -116,3 +116,27 @@ attempts. The prior uploaded trace's contents/deletion have not been verified.
 70 tests passed with one opt-in Docker test skipped, 150/150 foundation checks and
 frontend lint/build passed. Discussion waiting text now explains the multi-call local
 model workload; the interrupted manual run was not automatically replayed or modified.
+
+
+## Discussion evidence and test detail correction — 9 October 2026
+
+Proposal, revision and synthesis now request prerequisites, setup, ordered steps,
+observations, pass/fail criteria and a causal limit. Missing original reproduction
+details must be requested before a test is executable. A reminder appearing alone
+does not identify the cause of an earlier failure. Unsupported account settings
+or external services must not be assumed from the fictional check example.
+
+Each newly published round stores an immutable, versioned quality assessment.
+Missing headings/test labels, selected unestablished dependencies and selected
+causal assertions produce review warnings. Subsequent rounds receive these cues
+separately from source evidence; unresolved synthesis warnings also appear on the
+parent decision. The dashboard displays the stored assessment and its limits.
+These are narrow heuristics, not factual validation, proof of causality or an
+approval gate. Human review and action authorization remain separate. Historical
+discussions are preserved and labelled not assessed; no saved conversations are
+rewritten or re-executed. Fresh local Ollama output still needs owner review.
+
+Verification: 77 tests passed, one opt-in Docker test skipped (78 run);
+150/150 foundation checks passed. Changed Python files passed Bandit. Frontend
+lint passed with the existing image warning; the production webpack build passed
+in disposable storage. No real-model discussion was automatically re-run.

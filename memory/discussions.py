@@ -18,6 +18,9 @@ def init_discussions(cursor):
         body TEXT NOT NULL, profile_json TEXT NOT NULL, captured_at TEXT NOT NULL,
         UNIQUE(decision_id, round_number, executive_key)
     )''')
+    columns = {r[1] for r in cursor.execute('PRAGMA table_info(discussion_messages)')}
+    if 'quality_json' not in columns:
+        cursor.execute('ALTER TABLE discussion_messages ADD COLUMN quality_json TEXT')
     for operation in ('UPDATE', 'DELETE'):
         cursor.execute(f"CREATE TRIGGER IF NOT EXISTS discussion_no_{operation.lower()} BEFORE {operation} ON discussion_messages BEGIN SELECT RAISE(ABORT, 'Published rounds are immutable'); END")  # nosec B608 # Two literal SQL operations only.
 
@@ -40,7 +43,7 @@ def store_discussion(cursor, decision_id, messages, source_ids=None):
         raise RuntimeError('Discussion replay differs from its published speaker set')
     seen = set()
     for message in messages:
-        if not isinstance(message, dict) or set(message) != {'round_number', 'phase', 'executive_key', 'body', 'profile'}:
+        if not isinstance(message, dict) or set(message) - {'round_number', 'phase', 'executive_key', 'body', 'profile', 'quality_checks'} or not {'round_number', 'phase', 'executive_key', 'body', 'profile'} <= set(message):
             raise ValueError('Invalid discussion message fields')
         number, phase, role = message['round_number'], message['phase'], message['executive_key']
         if type(number) is not int or not 1 <= number <= 4 or phase != PHASES[number-1] or role not in OWNERS - {'owner'} or (number == 4 and role != 'ceo'):
@@ -55,13 +58,23 @@ def store_discussion(cursor, decision_id, messages, source_ids=None):
         for value in profile.values():
             _text(value, 'profile value', 20000)
         serialized = json.dumps(profile, sort_keys=True)
+        quality = message.get('quality_checks')
+        if quality is not None and (not isinstance(quality, dict) or set(quality) != {'version', 'status', 'warnings', 'scope'} or type(quality['version']) is not int or quality['version'] != 1 or quality['status'] not in {'review_required', 'checks_passed'} or not isinstance(quality['warnings'], list) or len(quality['warnings']) > 30):
+            raise ValueError('Invalid discussion quality checks')
+        if quality is not None:
+            if (quality['status'] == 'review_required') != bool(quality['warnings']):
+                raise ValueError('Inconsistent discussion quality status')
+            _text(quality['scope'], 'quality scope', 300)
+            for warning in quality['warnings']:
+                _text(warning, 'quality warning', 300)
+        quality_json = json.dumps(quality, sort_keys=True) if quality is not None else None
         existing = cursor.execute('SELECT * FROM discussion_messages WHERE decision_id = ? AND round_number = ? AND executive_key = ?', (decision_id, number, role)).fetchone()
         if existing:
-            if existing['body'] != body or existing['profile_json'] != serialized or existing['phase'] != phase:
+            if existing['body'] != body or existing['profile_json'] != serialized or existing['phase'] != phase or existing['quality_json'] != quality_json:
                 raise RuntimeError('Discussion replay differs from its published record')
             continue
-        cursor.execute('''INSERT INTO discussion_messages(decision_id,round_number,phase,executive_key,body,profile_json,captured_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)''', (decision_id, number, phase, role, body, serialized, datetime.datetime.now(datetime.timezone.utc).isoformat()))
+        cursor.execute('''INSERT INTO discussion_messages(decision_id,round_number,phase,executive_key,body,profile_json,captured_at,quality_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', (decision_id, number, phase, role, body, serialized, datetime.datetime.now(datetime.timezone.utc).isoformat(), quality_json))
         message_id = cursor.lastrowid
         sources = source_ids or [r[0] for r in cursor.execute("SELECT source_id FROM evidence_links WHERE entity_kind = 'decision' AND entity_id = ?", (decision_id,))]
         for source_id in sources:
@@ -73,4 +86,4 @@ def get_discussion(decision_id):
         if not conn.execute('SELECT id FROM decisions WHERE id = ?', (decision_id,)).fetchone():
             raise LookupError('Decision not found')
         rows = conn.execute('SELECT * FROM discussion_messages WHERE decision_id = ? ORDER BY round_number, id LIMIT 34', (decision_id,)).fetchall()
-    return [{**dict(row), 'profile': json.loads(row['profile_json'])} for row in rows]
+    return [{**dict(row), 'profile': json.loads(row['profile_json']), 'quality_checks': json.loads(row['quality_json']) if row['quality_json'] else {'status': 'not_assessed', 'warnings': [], 'scope': 'Legacy published output; no stored quality assessment'}} for row in rows]
