@@ -22,3 +22,12 @@ The current Bandit scan detects 21 medium-severity occurrences in `memory/databa
 - Treat changes to assignment-key sources (particularly `updates` or imported rows) as security-sensitive.
 
 **Audit outcome:** No directly interpolated untrusted SQL *values* identified in these 21 inspected query sites; malicious status values, signed table/column injection attempts, and SQL-like literal UPDATE values pass real-SQLite regressions. Each reviewed expression now has an individual `nosec B608` justification beside it. Bandit remains enabled globally and the medium/high gate passes; this is a static false-positive disposition, not proof of every future query.
+
+## Activity ledger review — 9 October 2026
+
+Two additional B608 expressions in memory/activity.py generate migration snapshots and
+triggers from the fixed SPECS tuple. Table names, keys, columns, links and conditions
+are program literals; no API or sync value can supply SQL structure. Each site has an
+individual justification. The gate now reviews 23 construction sites and reports zero
+medium/high findings. Real SQLite tests cover migration replay, atomic rollback and
+concurrent transitions in addition to the existing adversarial input regressions.

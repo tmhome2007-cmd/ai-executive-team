@@ -18,8 +18,8 @@ executives do not automatically pick up cards or execute tasks yet.
 
 Create development roadmap imports fourteen proposed features from the planning template
 represented in BACKEND_AGILE_ROADMAP.md. Creation is atomic and repeat requests reuse the
-existing named roadmap without overwriting owner edits. BE-01 is in Review, BE-02/BE-03
-are Ready, and later features start in Backlog. The first sprint is a proposal; priorities
+existing named roadmap without overwriting owner edits. BE-01/BE-02 are in Review; BE-03
+is Ready, and later features start in Backlog. The first sprint is a proposal; priorities
 and ordering can be changed by the owner. No dates, story-point estimates or automatic
 implementation are promised.
 
@@ -34,9 +34,9 @@ the current card before saving. Credential-shaped text is rejected, input sizes 
 are validated, SQL values are parameterized, and every API requires the existing owner
 key. No new runtime dependencies or external services are introduced.
 
-Latest company task states appear in the company activity timeline. Development tasks are
-excluded from business activity. This remains a latest-state view; BE-02 proposes an
-append-only event ledger to retain every future transition.
+Company task changes now appear as retained events in the activity timeline. Development
+task events are retained in the ledger but excluded from the company timeline. See
+ACTIVITY_LEDGER.md for migration, attribution and retention limits.
 
 ## API
 

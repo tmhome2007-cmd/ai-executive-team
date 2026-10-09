@@ -26,6 +26,7 @@ if str(project_root) not in sys.path:
 from config import config
 from workflows.meeting_types import VALID_MEETING_TYPES
 from workflows.capability_policy import require_action_capability
+from memory.activity import activity_origin
 
 
 VALID_ACTION_STATUSES = {
@@ -282,6 +283,8 @@ def init_db() -> None:
 
     # 2. Verbind met de database en maak de tabellen aan
     conn = sqlite3.connect(db_path)
+    from memory.activity import configure_connection, init_activity
+    configure_connection(conn)
     cursor = conn.cursor()
     
     # Tabel 0: owner-defined company goals / missions.
@@ -667,6 +670,7 @@ def init_db() -> None:
     conn.commit()
 
     conn.commit()
+    init_activity(conn)
     conn.close()
     try:
         os.chmod(db_path, 0o600)
@@ -681,6 +685,8 @@ def get_connection():
     Stelt row_factory in op sqlite3.Row voor makkelijke toegang tot kolommen via sleutelnamen.
     """
     conn = sqlite3.connect(config.DATABASE_PATH)
+    from memory.activity import configure_connection
+    configure_connection(conn)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -3532,6 +3538,7 @@ def export_history_to_jsonl(export_path: str) -> dict:
     }
 
 
+@activity_origin("import", "signed-sync-import")
 def import_history_from_jsonl(import_path: str) -> dict:
     """
     Leest een export-bestand en voegt elke rij toe WIENS sync_uuid nog niet
@@ -4112,57 +4119,6 @@ def get_decision_contributions(decision_id: int) -> list[dict]:
         return result
 
 
-def get_company_activity(limit: int = 50, offset: int = 0) -> list[dict]:
-    if not 1 <= limit <= 100 or offset < 0:
-        raise ValueError("Invalid activity pagination")
-    # Existing status tables retain the latest transition, not every historical
-    # status. Each timeline item explicitly identifies that scope.
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT * FROM (
-                SELECT 'decision:' || id AS event_key, timestamp AS timestamp, 'meeting' AS category,
-                    'Meeting recorded' AS title, topic AS detail, id AS decision_id,
-                    NULL AS action_id, NULL AS resource_id, NULL AS goal_id FROM decisions
-                UNION ALL
-                SELECT 'contribution:' || id, captured_at, 'conversation',
-                    'Executive contribution recorded', executive_key || ' · ' || phase,
-                    decision_id, NULL, NULL, NULL FROM decision_contributions
-                UNION ALL
-                SELECT 'direction:' || a.decision_id, a.reviewed_at, 'approval',
-                    'Latest direction review: ' || a.status, d.topic,
-                    d.id, NULL, NULL, d.goal_id
-                    FROM decision_approvals a JOIN decisions d ON d.id = a.decision_id WHERE a.reviewed_at IS NOT NULL
-                UNION ALL
-                SELECT 'preparation:' || a.decision_id, a.prepared_at, 'preparation',
-                    'Latest preparation state: ' || a.preparation_status, d.topic,
-                    d.id, NULL, NULL, d.goal_id
-                    FROM decision_approvals a JOIN decisions d ON d.id = a.decision_id WHERE a.prepared_at IS NOT NULL
-                UNION ALL
-                SELECT 'proposal:' || id, timestamp, 'action', 'Action proposed', action_description,
-                    source_decision_id, id, NULL, NULL FROM action_queue
-                UNION ALL
-                SELECT 'action-state:' || id, reviewed_at, 'action', 'Latest action state: ' || status,
-                    action_description, source_decision_id, id, NULL, NULL FROM action_queue WHERE reviewed_at IS NOT NULL
-                UNION ALL
-                SELECT 'outcome:' || o.action_id, o.measured_at, 'result', 'Outcome measured: ' || o.outcome_status,
-                    o.actual_outcome, q.source_decision_id, q.id, NULL, NULL
-                    FROM action_outcomes o JOIN action_queue q ON q.id = o.action_id WHERE o.measured_at IS NOT NULL
-                UNION ALL
-                SELECT 'resource:' || id, COALESCE(fulfilled_at, reviewed_at, timestamp), 'resource',
-                    'Latest resource state: ' || status, resource_name, source_decision_id, NULL, id, NULL FROM resource_requests
-                UNION ALL
-                SELECT 'capital:' || id, timestamp, 'treasury', 'Capital ledger: ' || entry_type,
-                    CAST(amount AS TEXT) || ' ' || currency, source_decision_id, source_action_id, NULL, NULL FROM treasury_entries
-                UNION ALL
-                SELECT 'task:' || t.id, t.updated_at, 'task', 'Latest company task state: ' || t.status,
-                    t.title, t.decision_id, t.action_id, NULL, t.goal_id
-                    FROM agile_tasks t JOIN agile_boards b ON b.id = t.board_id WHERE b.kind = 'company'
-                UNION ALL
-                SELECT 'goal:' || id, updated_at, 'goal', 'Latest goal state: ' || status,
-                    title, NULL, NULL, NULL, id FROM company_goals
-                UNION ALL
-                SELECT 'followup:' || id, updated_at, 'followup', 'Latest follow-up state: ' || status,
-                    reason, source_decision_id, source_action_id, NULL, goal_id FROM followup_events
-            ) ORDER BY timestamp DESC, event_key DESC LIMIT ? OFFSET ?
-        """, (limit, offset)).fetchall()
-        return [dict(row) for row in rows]
+def get_company_activity(limit: int = 50, offset: int = 0, before_id: int | None = None) -> list[dict]:
+    from memory.activity import list_activity
+    return list_activity(limit, offset, before_id)

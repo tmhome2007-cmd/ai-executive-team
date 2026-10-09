@@ -99,10 +99,20 @@ def main():
             assert page.evaluate('Object.keys(localStorage).length + Object.keys(sessionStorage).length') == 0
             with get_connection() as conn:
                 assert conn.execute('SELECT status FROM action_queue WHERE id = ?', (action,)).fetchone()[0] == 'pending'
+            page.get_by_role('navigation', name='Company views').get_by_role('button', name='Conversations & activity', exact=True).click()
+            timeline = page.locator('.company-timeline')
+            timeline.get_by_text('Initiator: owner', exact=False).first.wait_for()
+            assert timeline.get_by_text('Recorded state change', exact=True).count() >= 4
+            assert 'BE-02' not in timeline.inner_text(), 'Development work leaked into company history'
+            for toggle in timeline.get_by_text('Recorded state change', exact=True).all():
+                toggle.click()
+            assert '"done"' in timeline.inner_text()
+            assert '"blocked"' in timeline.inner_text()
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             assert not errors, errors
             assert writes
             browser.close()
-            print('PASS: development roadmap, company task CRUD, lineage, blocking/completion rules, concurrent-edit conflict, mobile layout, privacy and no business execution.')
+            print('PASS: boards, retained task transitions/owner attribution, lineage, blocking/completion, stale-edit conflict, mobile layout, privacy and no business execution.')
 
 
 if __name__ == '__main__':

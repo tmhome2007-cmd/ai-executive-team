@@ -39,15 +39,11 @@ does not remove durable company history.
 
 ## Activity timeline
 
-`GET /company/activity?limit=50&offset=0` returns ordered, bounded activity with links to
-source decisions, actions, resources and goals. It includes meetings, contributions,
-proposals, measured outcomes, capital ledger entries and latest retained direction,
-preparation, execution, resource, goal and follow-up states.
-
-Existing status tables overwrite earlier transitions. The timeline explicitly labels
-latest-state records and does not claim to be a complete historical transition audit log.
-The frontend supports refresh and older-record pagination. Both APIs and executive
-profiles require the existing owner API key; no execution authority is added.
+`GET /company/activity?limit=50` now reads the append-only activity ledger. New state
+changes persist alongside their business transaction, with initiating actor/source and
+previous/new states. Legacy snapshots identify unknown earlier history. Cursor pagination
+using `before_id` avoids skips when newer events arrive. See ACTIVITY_LEDGER.md.
+The existing owner API key is required; no execution authority is added.
 
 ## Local use
 

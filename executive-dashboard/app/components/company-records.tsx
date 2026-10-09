@@ -9,6 +9,7 @@ interface Contribution {
 }
 interface Activity {
   event_key: string; timestamp: string; category: string; title: string; detail: string;
+  actor?: string; source?: string; previous_state?: Record<string, unknown> | null; new_state?: Record<string, unknown>; legacy_snapshot?: number;
   decision_id: number | null; action_id: number | null; resource_id: number | null; goal_id: number | null;
 }
 interface Decision { id: number; topic: string }
@@ -28,7 +29,8 @@ export default function CompanyRecords({ apiKey, decisions, profiles, onAuthFail
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [offset, setOffset] = useState(0);
+  const [beforeId, setBeforeId] = useState<number | null>(null);
+  const [nextBeforeId, setNextBeforeId] = useState<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -36,20 +38,21 @@ export default function CompanyRecords({ apiKey, decisions, profiles, onAuthFail
     const load = async () => {
       setTimelineLoading(true);
       try {
-        const response = await fetch(`${API_BASE}/company/activity?limit=50&offset=${offset}`, { headers: { "X-API-Key": apiKey }, signal: controller.signal });
+        const response = await fetch(`${API_BASE}/company/activity?limit=50${beforeId ? `&before_id=${beforeId}` : ""}`, { headers: { "X-API-Key": apiKey }, signal: controller.signal });
         if (response.status === 401) { onAuthFailure(); return; }
         if (!response.ok) throw new Error("Activity timeline unavailable. The backend may need a restart after updating.");
         const data = await response.json();
         if (!active) return;
-        setItems(previous => offset ? [...previous, ...data.items.filter((item: Activity) => !previous.some(p => p.event_key === item.event_key))] : data.items);
-        setHasMore(data.items.length === 50);
+        setItems(previous => beforeId ? [...previous, ...data.items.filter((item: Activity) => !previous.some(p => p.event_key === item.event_key))] : data.items);
+        setHasMore(Boolean(data.next_before_id));
+        setNextBeforeId(data.next_before_id || null);
         setTimelineError(null);
       } catch (error) { if (active) setTimelineError(error instanceof Error ? error.message : "Activity unavailable."); }
       finally { if (active) setTimelineLoading(false); }
     };
     load();
     return () => { active = false; controller.abort(); };
-  }, [apiKey, offset, revision, onAuthFailure]);
+  }, [apiKey, beforeId, revision, onAuthFailure]);
 
   useEffect(() => {
     if (!decisionId) return;
@@ -72,7 +75,7 @@ export default function CompanyRecords({ apiKey, decisions, profiles, onAuthFail
     return () => { active = false; controller.abort(); };
   }, [apiKey, decisionId, revision, onAuthFailure]);
 
-  const refresh = () => { setOffset(0); setRevision(r => r + 1); };
+  const refresh = () => { setBeforeId(null); setRevision(r => r + 1); };
   return <section aria-label="Conversations and timeline" className="space-y-6">
     <header className="flex flex-wrap justify-between gap-4"><div><h2 className="text-2xl font-semibold">Conversations & activity</h2><p className="text-sm text-gray-400 mt-2">Published executive contributions and a timeline of recorded company work.</p></div><button className="office-filter" onClick={refresh} disabled={timelineLoading || loading}>Refresh records</button></header>
     <article className="command-card">
@@ -88,14 +91,16 @@ export default function CompanyRecords({ apiKey, decisions, profiles, onAuthFail
         <p className="whitespace-pre-wrap text-sm text-gray-300 mt-4 break-words">{c.body}</p>
       </article>)}
     </article>
-    <article className="command-card"><h3 className="text-lg font-semibold">Company activity timeline</h3><p className="text-xs text-gray-500 my-3">Meetings, contributions, proposals, results and the latest retained status transitions. Earlier transitions overwritten by existing status tables are not reconstructed.</p>
+    <article className="command-card"><h3 className="text-lg font-semibold">Company activity timeline</h3><p className="text-xs text-gray-500 my-3">Database changes are retained from ledger installation onward. Legacy snapshots show the state when history recording began; earlier transitions remain unknown.</p>
       {timelineError && <p role="alert" className="text-amber-300">{timelineError} Existing items may be stale.</p>}
       {!timelineLoading && !timelineError && items.length === 0 && <p className="text-gray-400">No company activity recorded yet.</p>}
       <ol className="company-timeline">{items.map(item => <li key={item.event_key}>
         <p className="text-xs text-gray-500 uppercase tracking-wide">{item.category} · <time>{new Date(item.timestamp).toLocaleString()}</time></p><h4 className="font-medium mt-1">{item.title}</h4><p className="text-sm text-gray-400 mt-1 break-words">{item.detail}</p>
+        {item.actor && <p className="text-xs text-gray-500 mt-2">Initiator: {item.actor} · Source: {item.source}</p>}
+        {item.new_state && <details className="text-xs text-gray-400 mt-2"><summary>Recorded state change</summary><p className="break-words mt-2">Previous: {item.previous_state ? JSON.stringify(item.previous_state) : item.legacy_snapshot ? "Unknown earlier history" : "No previous record"}</p><p className="break-words mt-1">New: {JSON.stringify(item.new_state)}</p></details>}
         <div className="flex flex-wrap gap-x-4">{item.decision_id && <button className="command-link" onClick={() => { setDecisionId(String(item.decision_id)); setPhase("all"); }}>Contributions for decision #{item.decision_id} ↑</button>}{item.decision_id && <button className="command-link" onClick={() => onNavigate("decisions")}>Decision #{item.decision_id} →</button>}{item.action_id && <button className="command-link" onClick={() => onNavigate("actions")}>Action #{item.action_id} →</button>}{item.resource_id && <button className="command-link" onClick={() => onNavigate("resources")}>Resource #{item.resource_id} →</button>}{item.category === "task" && <button className="command-link" onClick={() => onNavigate("boards")}>Company board →</button>}{item.category === "treasury" && <button className="command-link" onClick={() => onNavigate("treasury")}>Treasury →</button>}{item.goal_id && <button className="command-link" onClick={() => onNavigate("goals")}>Goal #{item.goal_id} →</button>}</div>
       </li>)}</ol>
-      {timelineLoading && <p className="text-gray-400">Loading activity…</p>}{hasMore && !timelineError && <button disabled={timelineLoading} className="office-filter" onClick={() => setOffset(o => o + 50)}>Load older activity</button>}
+      {timelineLoading && <p className="text-gray-400">Loading activity…</p>}{hasMore && !timelineError && <button disabled={timelineLoading} className="office-filter" onClick={() => setBeforeId(nextBeforeId)}>Load older activity</button>}
     </article>
   </section>;
 }

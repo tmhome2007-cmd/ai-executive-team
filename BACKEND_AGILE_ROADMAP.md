@@ -9,8 +9,8 @@ or spending authority. Existing approvals, capabilities and treasury gates remai
 
 | Ready | In progress | Review | Done |
 |---|---|---|---|
-| BE-02 Append-only activity events | — | BE-01 Development and company task boards | Existing foundation audit and local checks |
-| BE-03 Experiment records and observations | — | — | Goals, treasury, resources and outcome tracking |
+| BE-03 Experiment records and observations | — | BE-01 Development and company task boards | Existing foundation audit and local checks |
+| — | — | BE-02 Append-only activity events | Goals, treasury, resources and outcome tracking |
 | — | — | — | Decision/action lineage, follow-ups and executive memory |
 | — | — | — | Meeting types, dashboard v2, virtual office v1 |
 | — | — | — | Published executive contributions and activity timeline v1 |
@@ -56,3 +56,15 @@ Build BE-01 first. Then prefer BE-02 before expanding autonomous behavior: a rea
 event ledger supports trustworthy history and the future 3D activity stream. BE-03 then
 turns actions into experiments with measurable learning. Frontend 3D rendering is a
 separate implementation track once these event and identity contracts are stable.
+
+## Work log — 9 October 2026
+
+BE-02 is in Review: transactional append-only events, initiating actor/source, state
+changes, legacy snapshots and stable cursor pagination are implemented and verified.
+43 tests passed (one opt-in Docker test skipped), 150/150 foundation checks passed,
+Bandit has no medium/high findings, frontend lint/build passed, and the real SQLite/API
+Chromium board smoke verified retained task transitions. Owner review remains.
+
+Product direction: build towards evidence-backed revenue and profit. Experiments must
+separate planned results from observed results, track costs and require supporting
+evidence. Funding is capital, not automatically revenue; forecasts are not earnings.

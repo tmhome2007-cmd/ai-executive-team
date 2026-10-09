@@ -28,6 +28,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from agents.executive_agents import get_executive_profiles
+from memory.activity import activity_origin
 
 from memory.database import (
     init_db,
@@ -348,7 +349,14 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    response = await call_next(request)
+    # Attribution is the initiating owner API, not a claim about model/tool identity.
+    supplied = request.headers.get('X-API-Key')
+    actor = 'owner' if config.API_SECRET_KEY and supplied and hmac.compare_digest(supplied, config.API_SECRET_KEY) else 'system'
+    source = f'http:{request.method} {request.url.path}'
+    if not re.fullmatch(r'[A-Za-z0-9_/:. -]{1,180}', source):
+        source = 'http'
+    with activity_origin(actor, source):
+        response = await call_next(request)
     duration_ms = round((time.time() - start_time) * 1000, 1)
     logger.info(f'{request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)')
     return response
@@ -2184,9 +2192,11 @@ def decision_conversations(decision_id: int):
 
 
 @app.get("/company/activity", dependencies=[Depends(verify_api_key)])
-def company_activity(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
-    return {"items": get_company_activity(limit, offset), "limit": limit, "offset": offset,
-            "scope": "Recorded meetings and contributions plus latest retained state transitions; not a complete transition audit log."}
+def company_activity(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0), before_id: Optional[int] = Query(default=None, ge=1)):
+    items = get_company_activity(limit, offset, before_id)
+    return {"items": items, "limit": limit, "offset": offset,
+            "next_before_id": items[-1]['id'] if len(items) == limit else None,
+            "scope": "Retained database changes since ledger installation. Legacy snapshots have unknown earlier history; actor identifies the initiating context."}
 
 
 # Owner-controlled planning boards. A task transition never executes an action.
