@@ -67,3 +67,14 @@ class MissingPrerequisiteGuardTests(unittest.TestCase):
         self.assertEqual(guard_missing_prerequisites(body, 'synthesis'), body)
         critique = 'Reminder due time is unknown. Challenge the variable due time fallback.'
         self.assertEqual(guard_missing_prerequisites(critique, 'critique'), critique)
+
+
+class MissingReportDetailsTests(unittest.TestCase):
+    def test_report_does_not_provide_or_specify_blocks_proposal(self):
+        for detail in ('Original reproduction steps: The report does not provide information on how the test was set up.',
+                       'Reminder due time: The report does not specify when the reminder was supposed to appear.'):
+            body = '**Evidence and gaps**\n' + detail + '\n**Proposed next test**\nSteps: Trigger the reminder.\n**Expected observation**\nThe reminder will appear.\n**Owner review requested**\nPending owner review.'
+            guarded = guard_missing_prerequisites(body, 'proposal')
+            self.assertIn('Setup: Blocked', guarded)
+            self.assertNotIn('Steps: Trigger the reminder.', guarded)
+            self.assertNotIn('The reminder will appear.', guarded)

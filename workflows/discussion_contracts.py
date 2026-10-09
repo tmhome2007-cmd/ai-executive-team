@@ -76,7 +76,7 @@ def guard_missing_prerequisites(body, phase):
         return body
     sentences = re.split(r'[.!?\n]', body)
     missing = any(re.search(r'original reproduction|reminder due time|observation channel|\bbuild\b', sentence, re.I)
-                  and re.search(r'unknown|not provided|not supplied|missing|does not include|still needed', sentence, re.I)
+                  and re.search(r'unknown|not provided|not supplied|missing|does not (?:include|provide|specify)|still needed', sentence, re.I)
                   for sentence in sentences)
     if not missing:
         return body

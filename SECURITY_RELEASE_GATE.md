@@ -159,3 +159,10 @@ Verification: 80 tests passed, one opt-in Docker test skipped (81 run),
 150/150 foundation checks passed and changed Python files passed Bandit.
 Regression cases cover the reported fallback, idempotence, known inputs,
 critique preservation, published instructions, parent output and pending approval.
+
+Decision #10 manual review confirmed a blocked final recommendation, but its
+proposal used “does not provide/specify” instead of “unknown”. The safeguard
+now recognizes these missing-detail statements too. Regression coverage checks
+that both executable steps and predicted observations are removed. Verified:
+81 tests passed, one opt-in Docker test skipped (82 run), 150/150 foundation
+checks passed, and the changed guard passed Bandit. Existing records remain intact.
