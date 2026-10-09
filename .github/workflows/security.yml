@@ -28,7 +28,7 @@ jobs:
 
       - name: Compile Python sources
         run: |
-          python -m compileall -q agents config.py logging_config.py main.py memory notifications system_checks.py tools workflows privacy_bootstrap.py
+          python -m compileall -q agents config.py logging_config.py main.py foundation_api.py memory notifications system_checks.py tools workflows privacy_bootstrap.py
 
       - name: Container boundary unit tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
@@ -53,7 +53,7 @@ jobs:
 
       - name: Bandit medium/high findings
         if: ${{ always() }}
-        run: bandit -r agents memory notifications tools workflows main.py config.py system_checks.py -ll
+        run: bandit -r agents memory notifications tools workflows main.py foundation_api.py config.py system_checks.py -ll
 
       - name: Audit Python dependencies
         if: ${{ always() }}
