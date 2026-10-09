@@ -5,7 +5,7 @@ from memory.evidence import source_context
 from memory.discussions import consent_guard, get_discussion
 from memory.experiments import _text
 from workflows.meeting import run_executive_meeting
-from workflows.discussion_contracts import assess_round
+from workflows.discussion_contracts import assess_round, guard_missing_prerequisites
 
 
 def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=None, goal_id=None):
@@ -53,9 +53,14 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
             raise ValueError('Discussion round lacks a published output for each participant')
         published = {}
         for role in result['participants']:
-            body = consent_guard(outputs[role])
+            raw_body = consent_guard(outputs[role])
+            body = guard_missing_prerequisites(raw_body, phase)
             published[role] = body
-            messages.append({'round_number': number, 'phase': phase, 'executive_key': role, 'body': body, 'profile': profiles[role], 'quality_checks': assess_round(body, phase, evidence)})
+            quality = assess_round(body, phase, evidence)
+            if body != raw_body:
+                quality['warnings'].append('Backend blocked test instructions because the response reports missing reproduction prerequisites')
+                quality['status'] = 'review_required'
+            messages.append({'round_number': number, 'phase': phase, 'executive_key': role, 'body': body, 'profile': profiles[role], 'quality_checks': quality})
         if phase == 'revision':
             revised = published
         previous = '\n'.join(f'{role}: {body}' for role, body in published.items())
@@ -64,7 +69,7 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
             previous += '\nAUTOMATIC REVIEW CUES (not source evidence; address these in the next round):\n' + '\n'.join(reviews)
         if len(previous) > 300000:
             raise ValueError('Published discussion context exceeds the bounded round size')
-    final = consent_guard(result['final_decision'])
+    final = guard_missing_prerequisites(consent_guard(result['final_decision']), 'synthesis')
     unresolved = messages[-1]['quality_checks']['warnings']
     if unresolved:
         final += '\n\nDiscussion quality review required:\n' + '\n'.join('- ' + warning for warning in unresolved) + '\nThese checks do not approve the recommendation. Owner review remains pending.'

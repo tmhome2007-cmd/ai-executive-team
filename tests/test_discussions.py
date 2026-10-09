@@ -45,6 +45,23 @@ class DiscussionTests(unittest.TestCase):
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM action_queue').fetchone()[0], 0)
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM evidence_links WHERE entity_kind = 'discussion'").fetchone()[0], 7)
 
+    def test_missing_prerequisites_block_published_and_parent_instructions(self):
+        from workflows.discussion_contracts import CONTRACTS
+        def meeting(**kwargs):
+            phase = kwargs['discussion_round'][0]
+            body = '\n'.join('**' + h + '**\n' + ('Reminder due time and build are unknown. Create a task with a variable due time.' if 'test' in h.lower() else 'Original reproduction steps are unknown.') for h in CONTRACTS[phase].split('; '))
+            return {'participants': ['ceo'], 'individual_outputs': {'ceo': body}, 'final_decision': body}
+        with patch('workflows.discussion_rounds.run_executive_meeting', side_effect=meeting):
+            result = run_discussion(run_key='missing-prerequisites', topic='Fictional reminder', task_description='Reminder failed; cause unknown.', agent_keys=['ceo'])
+        for message in result['messages']:
+            if message['phase'] != 'critique':
+                self.assertIn('Setup: Blocked', message['body'])
+                self.assertNotIn('Create a task with a variable due time', message['body'])
+                self.assertTrue(any('Backend blocked' in w for w in message['quality_checks']['warnings']))
+        self.assertIn('Setup: Blocked', result['final_decision'])
+        self.assertNotIn('Create a task with a variable due time', result['final_decision'])
+        self.assertEqual(result['approval_status'], 'pending')
+
     def test_failed_round_publishes_no_partial_decision(self):
         with patch('workflows.discussion_rounds.run_executive_meeting', side_effect=[self.meeting(agent_keys=['ceo']), ValueError('Synthetic failure')]):
             with self.assertRaises(ValueError):

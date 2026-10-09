@@ -1,5 +1,5 @@
 import unittest
-from workflows.discussion_contracts import CONTRACTS, TEST_FIELDS, assess_round
+from workflows.discussion_contracts import CONTRACTS, TEST_FIELDS, assess_round, guard_missing_prerequisites
 
 
 class DiscussionQualityTests(unittest.TestCase):
@@ -50,3 +50,20 @@ class DiscussionQualityStorageTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             store_discussion(cursor, 1, [message])
         conn.close()
+
+
+class MissingPrerequisiteGuardTests(unittest.TestCase):
+    def test_reported_fallback_is_replaced_and_guard_is_idempotent(self):
+        body = '**Supported findings:**\nThe original reproduction steps, reminder due time, build and observation channel are still unknown.\n**Unresolved questions:**\nUnknown.\n**Recommended next test and observable result:**\nSteps: Create a task with the original due time (if known) or a variable due time.\n**Owner approval pending:**\nPending owner review.'
+        guarded = guard_missing_prerequisites(body, 'synthesis')
+        self.assertNotIn('or a variable due time', guarded)
+        self.assertIn('Setup: Blocked', guarded)
+        self.assertIn('Steps: Do not create a task', guarded)
+        self.assertIn('Pending owner review.', guarded)
+        self.assertEqual(guard_missing_prerequisites(guarded, 'synthesis'), guarded)
+
+    def test_known_prerequisites_and_critique_remain_unchanged(self):
+        body = 'Build: test-v1. Reminder due time: 12:00. Steps: Create the task. Cause unknown.'
+        self.assertEqual(guard_missing_prerequisites(body, 'synthesis'), body)
+        critique = 'Reminder due time is unknown. Challenge the variable due time fallback.'
+        self.assertEqual(guard_missing_prerequisites(critique, 'critique'), critique)

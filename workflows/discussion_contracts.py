@@ -21,6 +21,7 @@ def round_contract(phase, solo):
             'Propose one reproducible next test with setup, observation and success/failure criteria rather than generic further testing. '
             'For proposal, revision and synthesis, include these labelled lines: Prerequisites:, Setup:, Steps:, Observe:, Pass:, Fail:, Causal limit:. '
             'Prerequisites must name missing original reproduction steps, reminder due time, build and observation channel; if these are unknown, block the test until supplied instead of inventing values. '
+            'When any prerequisite is missing, write Setup: Blocked; Steps: Do not run; Observe: Not scheduled; Pass: Not assessable; Fail: Not assessable. Never use an if-known fallback, variable due time or invented delay. Request the missing details only. '
             'Steps must describe ordered operations, what stays fixed and what variable changes. Observe must identify the recorded artifact or event and its time window. '
             'Pass/Fail refer only to the stated observation under the chosen conditions; state expected results as hypotheses, not promised outcomes. '
             'Causal limit must explicitly say a passing or failing reminder test does not alone identify the cause; a controlled comparison is needed to isolate a factor. '
@@ -66,3 +67,43 @@ def assess_round(body, phase, evidence):
         warnings.append('Causal claim needs a controlled comparison; an observed pass alone does not prove cause')
     return {'version': 1, 'status': 'review_required' if warnings else 'checks_passed', 'warnings': warnings,
             'scope': 'Heuristic section/dependency checks only; no independent truth or causal verification'}
+
+
+def guard_missing_prerequisites(body, phase):
+    """Replace an executable-looking test when its own text admits missing inputs."""
+    import re
+    if phase not in {'proposal', 'revision', 'synthesis'}:
+        return body
+    sentences = re.split(r'[.!?\n]', body)
+    missing = any(re.search(r'original reproduction|reminder due time|observation channel|\bbuild\b', sentence, re.I)
+                  and re.search(r'unknown|not provided|not supplied|missing|does not include|still needed', sentence, re.I)
+                  for sentence in sentences)
+    if not missing:
+        return body
+    test_heading = {'proposal': 'Proposed next test', 'revision': 'Revised next test',
+                    'synthesis': 'Recommended next test and observable result'}[phase]
+    headings = CONTRACTS[phase].split('; ')
+    lines = body.splitlines()
+    normalized = [re.sub(r'[*#_:]', '', line).strip().lower() for line in lines]
+    start = next((i for i, line in enumerate(normalized) if line == test_heading.lower()), None)
+    blocked = ('Prerequisites: Obtain the original reproduction steps, reminder due time, build and observation channel.\n'
+               'Setup: Blocked until these missing details are supplied.\n'
+               'Steps: Do not create a task, choose a substitute due time or run the test. Request the missing details.\n'
+               'Observe: Not scheduled until the reproduction conditions and observation window are defined.\n'
+               'Pass: Not assessable before prerequisites are supplied and the test is defined.\n'
+               'Fail: Not assessable before prerequisites are supplied and the test is defined.\n'
+               'Causal limit: A future passing or failing observation alone does not establish cause.')
+    if start is None:
+        # Malformed output cannot safely retain an executable-looking proposal.
+        return '\n\n'.join('**' + heading + '**\n' + (blocked if heading == test_heading else
+                              'Test blocked: missing reproduction details. No execution or owner approval is recorded.')
+                              for heading in headings)
+    stop = next((i for i in range(start + 1, len(lines)) if normalized[i] in [h.lower() for h in headings]), len(lines))
+    lines[start + 1:stop] = ['', blocked, '']
+    if phase == 'proposal':
+        normalized = [re.sub(r'[*#_:]', '', line).strip().lower() for line in lines]
+        observation = next((i for i, line in enumerate(normalized) if line == 'expected observation'), None)
+        if observation is not None:
+            end = next((i for i in range(observation + 1, len(lines)) if normalized[i] in [h.lower() for h in headings]), len(lines))
+            lines[observation + 1:end] = ['', 'No observation is scheduled while the prerequisites are missing.', '']
+    return '\n'.join(lines)

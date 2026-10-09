@@ -242,3 +242,22 @@ Verification: 77 tests passed, one opt-in Docker test skipped (78 run);
 150/150 foundation checks passed. Changed Python files passed Bandit. Frontend
 lint passed with the existing image warning; the production webpack build passed
 in disposable storage. No real-model discussion was automatically re-run.
+
+
+### Missing-prerequisite stop condition
+
+The manual decision #9 trial exposed a contradictory variable-due-time fallback.
+New proposal/revision/synthesis instructions forbid substituting unknown test
+conditions. A deterministic safeguard detects explicit missing reproduction
+prerequisites in the response and replaces its proposed test section with a
+blocked request for the original reproduction steps, due time, build and
+observation channel. Expected observations are suppressed while blocked.
+The published round records a backend-intervention warning; the parent decision
+also receives the guard and review warnings. Critiques remain available for
+review. Historical records are unchanged. This conservative text check does not
+certify all model output or infer missing conditions from arbitrary evidence.
+
+Verification: 80 tests passed, one opt-in Docker test skipped (81 run),
+150/150 foundation checks passed and changed Python files passed Bandit.
+Regression cases cover the reported fallback, idempotence, known inputs,
+critique preservation, published instructions, parent output and pending approval.
