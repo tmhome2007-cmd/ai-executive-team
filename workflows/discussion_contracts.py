@@ -17,7 +17,7 @@ def round_contract(phase, solo):
             'Ground findings in the supplied evidence/source IDs. Prior speeches and remembered company facts are not new evidence. '
             'Do not introduce product launches, revenue loss, market share, customer behavior, competitive positioning or assumed budgets unless current source records establish their relevance. '
             'A fictional test remains fictional. Persona influences judgment and tone, not invented facts; do not add a Preserving Personality section. '
-            'For critique, challenge unsupported statements rather than agreeing and recopying them. For revision, identify the specific change, or explicitly state no change is justified. '
+            'For critique, cite every challenged claim on a separate line in the exact form Claim quote: executive_key | verbatim published text. Quote only the published proposal, never raw drafts or review cues. If it already blocks the test, acknowledge that; do not claim it permits running or guessing. No change needed is valid. For revision, identify the specific change, or explicitly state no change is justified. '
             'Propose one reproducible next test with setup, observation and success/failure criteria rather than generic further testing. '
             'For proposal, revision and synthesis, include these labelled lines: Prerequisites:, Setup:, Steps:, Observe:, Pass:, Fail:, Causal limit:. '
             'Prerequisites must name missing original reproduction steps, reminder due time, build and observation channel; if these are unknown, block the test until supplied instead of inventing values. '
@@ -106,4 +106,43 @@ def guard_missing_prerequisites(body, phase):
         if observation is not None:
             end = next((i for i in range(observation + 1, len(lines)) if normalized[i] in [h.lower() for h in headings]), len(lines))
             lines[observation + 1:end] = ['', 'No observation is scheduled while the prerequisites are missing.', '']
+    return '\n'.join(lines)
+
+
+def guard_critique_references(body, proposals):
+    """Verify quotation attribution; discard uncited or fabricated critiques."""
+    import re
+    clean = body.replace('**', '')
+    citations = re.findall(r'(?im)^\s*Claim quote:\s*([a-z_]+)\s*\|\s*(.+?)\s*$', clean)
+    def normalized(text):
+        return ' '.join(text.replace('**', '').split())
+    valid = bool(citations) and all(len(quote.strip()) >= 12 and role in proposals
+                                  and normalized(quote) in normalized(proposals[role])
+                                  for role, quote in citations)
+    if valid:
+        return body
+    blocked = any('Setup: Blocked' in proposal.replace('**', '') for proposal in proposals.values())
+    acknowledgement = ('The published proposal already blocks the test and requests missing details. '
+                       'No new blocking change is needed.' if blocked else
+                       'No challenge with a verified quotation was supplied. Review the published proposals directly.')
+    return ('**Claims challenged**\nNo verified challenge is recorded. The generated critique lacked valid published-claim quotations.\n\n'
+            '**Why the supplied evidence does not support them**\nUnverified attributions were withheld; prior speeches are not source evidence.\n\n'
+            '**Test improvements**\n' + acknowledgement + '\n\n'
+            '**Remaining unknowns**\nNo additional facts or executed tests are established by this critique.')
+
+
+def guard_revision_changes(body, original):
+    """Do not present an existing blocked test as a newly implemented change."""
+    import re
+    if 'Setup: Blocked' not in original.replace('**', ''):
+        return body
+    lines = body.splitlines()
+    headings = CONTRACTS['revision'].split('; ')
+    normalized = [re.sub(r'[*#_:]', '', line).strip().lower() for line in lines]
+    start = next((i for i, line in enumerate(normalized) if line == headings[0].lower()), None)
+    if start is None:
+        return body
+    end = next((i for i in range(start + 1, len(lines)) if normalized[i] in [h.lower() for h in headings]), len(lines))
+    lines[start + 1:end] = ['', 'The published proposal already blocked the test and requested the missing details. '
+                             'Retaining that stop condition is not a new change. No additional change is verified here.', '']
     return '\n'.join(lines)

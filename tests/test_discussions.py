@@ -37,6 +37,9 @@ class DiscussionTests(unittest.TestCase):
             self.assertTrue(all(r['quality_checks']['status'] == 'review_required' for r in rows))
             self.assertIn('Discussion quality review required', result['final_decision'])
             self.assertIn('AUTOMATIC REVIEW CUES', meeting.call_args_list[1].kwargs['task_description'])
+            self.assertIn('No verified challenge', rows[2]['body'])
+            self.assertIn('ORIGINAL PUBLISHED PROPOSALS', meeting.call_args_list[2].kwargs['task_description'])
+            self.assertNotIn('ORIGINAL PUBLISHED PROPOSALS', meeting.call_args_list[2].kwargs['evidence_text'])
             before = get_company_activity(100)
             self.assertEqual(run_discussion(**fields)['decision_id'], result['decision_id'])
             self.assertEqual(get_company_activity(100), before)
@@ -57,7 +60,7 @@ class DiscussionTests(unittest.TestCase):
             if message['phase'] != 'critique':
                 self.assertIn('Setup: Blocked', message['body'])
                 self.assertNotIn('Create a task with a variable due time', message['body'])
-                self.assertTrue(any('Backend blocked' in w for w in message['quality_checks']['warnings']))
+                self.assertTrue(any('Backend corrected' in w for w in message['quality_checks']['warnings']))
         self.assertIn('Setup: Blocked', result['final_decision'])
         self.assertNotIn('Create a task with a variable due time', result['final_decision'])
         self.assertEqual(result['approval_status'], 'pending')

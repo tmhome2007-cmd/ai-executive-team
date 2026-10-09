@@ -166,3 +166,23 @@ now recognizes these missing-detail statements too. Regression coverage checks
 that both executable steps and predicted observations are removed. Verified:
 81 tests passed, one opt-in Docker test skipped (82 run), 150/150 foundation
 checks passed, and the changed guard passed Bandit. Existing records remain intact.
+
+
+### Published-claim attribution correction
+
+Decision #11 revealed a critique attributing permission to guess/run to a proposal
+that already blocked the test. Critique prompts now require `Claim quote:
+executive_key | verbatim published text` lines. The backend verifies named-speaker
+quotation membership against the guarded, published proposal, allowing only
+Markdown bold removal and whitespace normalization. Critiques without matching
+quotations are replaced with an explicit unverified-attribution notice; already
+blocked proposals are acknowledged. Backend correction warnings remain visible.
+Revision tasks also receive original published proposals separately from source
+evidence. If an original proposal already blocks the test, the changes section
+acknowledges that retaining the stop condition is not a new change.
+
+Quotation membership verifies attribution only, not the interpretation, completeness
+or truth of a critique. These conservative safeguards do not certify arbitrary
+model reasoning. No saved discussions are rewritten or model calls replayed.
+Verified: 83 tests passed, one opt-in Docker test skipped (84 run); 150/150
+foundation checks passed and changed Python files passed Bandit.

@@ -5,7 +5,7 @@ from memory.evidence import source_context
 from memory.discussions import consent_guard, get_discussion
 from memory.experiments import _text
 from workflows.meeting import run_executive_meeting
-from workflows.discussion_contracts import assess_round, guard_missing_prerequisites
+from workflows.discussion_contracts import assess_round, guard_missing_prerequisites, guard_critique_references, guard_revision_changes
 
 
 def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=None, goal_id=None):
@@ -35,6 +35,7 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
     messages = []
     previous = ''
     revised = {}
+    proposals = {}
     for number, phase in enumerate(('proposal', 'critique', 'revision', 'synthesis'), 1):
         participants = ['ceo'] if phase == 'synthesis' else list(agent_keys)
         instruction = {
@@ -43,7 +44,8 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
             'revision': 'Revise your proposal after critique. State what changed and unresolved disagreement, preserving your personality.',
             'synthesis': 'Synthesize the revised views and unresolved disagreements. State evidence gaps and the exact owner review requested; never assert approval.',
         }[phase]
-        result = run_executive_meeting(topic=topic, task_description=evidence + '\nROUND: ' + phase + '\n' + instruction + '\nPUBLISHED PRIOR ROUND (unverified recommendations):\n' + previous,
+        original_context = ('\nORIGINAL PUBLISHED PROPOSALS (compare actual changes against these):\n' + '\n'.join(f'{r}: {b}' for r, b in proposals.items())) if phase == 'revision' else ''
+        result = run_executive_meeting(topic=topic, task_description=evidence + '\nROUND: ' + phase + '\n' + instruction + '\nPUBLISHED PRIOR ROUND (unverified recommendations):\n' + previous + original_context,
             agent_keys=participants, agents_source=EXECUTIVE_AGENTS_NO_TOOLS, evidence_text=evidence,
             meeting_type='strategy', workflow_run_id=f'discussion:{run_key}:{phase}',
             discussion_round=(phase, len(agent_keys) == 1),
@@ -55,12 +57,18 @@ def run_discussion(*, run_key, topic, task_description, agent_keys, source_ids=N
         for role in result['participants']:
             raw_body = consent_guard(outputs[role])
             body = guard_missing_prerequisites(raw_body, phase)
+            if phase == 'critique':
+                body = guard_critique_references(body, proposals)
+            elif phase == 'revision':
+                body = guard_revision_changes(body, proposals.get(role, ''))
             published[role] = body
             quality = assess_round(body, phase, evidence)
             if body != raw_body:
-                quality['warnings'].append('Backend blocked test instructions because the response reports missing reproduction prerequisites')
+                quality['warnings'].append('Backend corrected unverified discussion instructions or attribution; review the published output')
                 quality['status'] = 'review_required'
             messages.append({'round_number': number, 'phase': phase, 'executive_key': role, 'body': body, 'profile': profiles[role], 'quality_checks': quality})
+        if phase == 'proposal':
+            proposals = published.copy()
         if phase == 'revision':
             revised = published
         previous = '\n'.join(f'{role}: {body}' for role, body in published.items())

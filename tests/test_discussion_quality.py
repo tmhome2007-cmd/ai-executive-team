@@ -78,3 +78,27 @@ class MissingReportDetailsTests(unittest.TestCase):
             self.assertIn('Setup: Blocked', guarded)
             self.assertNotIn('Steps: Trigger the reminder.', guarded)
             self.assertNotIn('The reminder will appear.', guarded)
+
+
+class CritiqueReferenceTests(unittest.TestCase):
+    def test_invented_and_uncited_attributions_are_withheld(self):
+        from workflows.discussion_contracts import guard_critique_references
+        proposal = {'ceo': 'Setup: Blocked until missing details are supplied. Steps: Do not run.'}
+        for body in ('The proposal assumes the details are known and permits guessing.',
+                     'Claim quote: ceo | Run the test with a variable due time.',
+                     'Claim quote: cfo | Setup: Blocked until missing details are supplied.'):
+            corrected = guard_critique_references(body, proposal)
+            self.assertIn('already blocks the test', corrected)
+            self.assertNotIn('permits guessing', corrected)
+            self.assertIn('No verified challenge', corrected)
+
+    def test_valid_quote_and_revision_comparison(self):
+        from workflows.discussion_contracts import guard_critique_references, guard_revision_changes
+        original = 'Setup: Blocked until missing details are supplied.'
+        critique = 'Claim quote: ceo | Setup: Blocked until missing details are supplied.\nThe stop condition is already present.'
+        self.assertEqual(guard_critique_references(critique, {'ceo': original}), critique)
+        revision = '**Changes made in response to critique:**\nI added a block.\n**Revised next test:**\nSetup: Blocked'
+        corrected = guard_revision_changes(revision, original)
+        self.assertNotIn('I added a block.', corrected)
+        self.assertIn('not a new change', corrected)
+        self.assertEqual(guard_revision_changes(corrected, original), corrected)
