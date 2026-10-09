@@ -18,4 +18,4 @@ Work one coherent story at a time. Review acceptance examples before coding, ver
 
 Implementation and acceptance steps: [SPRINT_2_LOCAL_REVIEW.md](SPRINT_2_LOCAL_REVIEW.md).
 
-BE-17 discovery is now in progress at the owner's request. Its clarified scope is AI-operated research with €0 spending and €0 permitted loss; the owner's personal professional skills are not a prerequisite. See [BE17_DISCOVERY.md](BE17_DISCOVERY.md) for the existing capability map and proposed acceptance example. Implementation acceptance and option selection remain pending.
+BE-17 discovery is now in progress at the owner's request. Its clarified scope is AI-operated research with €0 spending and €0 permitted loss; the owner's personal professional skills are not a prerequisite. See [BE17_DISCOVERY.md](BE17_DISCOVERY.md) for the existing capability map and proposed acceptance example. The owner approved implementation. The guided workflow is now in Review; owner acceptance and option selection remain pending. See [BE17_LOCAL_REVIEW.md](BE17_LOCAL_REVIEW.md).

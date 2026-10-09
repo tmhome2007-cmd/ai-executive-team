@@ -218,6 +218,8 @@ async def _lifespan_unlocked(app: FastAPI):
     # reconciliation, never automatic replay on a server restart.
     from workflows.step_checkpoints import init_step_checkpoints, reconcile_interrupted_steps
     init_step_checkpoints()
+    from memory.business_discovery import reconcile_discovery
+    reconcile_discovery()
     from memory.planning import reconcile_work
     reconcile_work()
     uncertain_steps = reconcile_interrupted_steps()

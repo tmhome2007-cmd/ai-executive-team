@@ -41,4 +41,4 @@ Given an AI-operated, research-only brief with €0 budget and €0 permitted lo
 
 The initial hypothesis should be about demonstrated capability: “The agents can produce a useful deliverable for the selected option using available tools without spending money.” The specific deliverable, checks and observation date depend on the selected option and remain unapproved.
 
-BE-17 discovery is ready for review; the guided implementation and a business choice are not yet completed. Sales/profit accounting, live delivery integrations and aggregate financial exposure belong to later stories before real commercial activity.
+The owner approved implementing the research and practice workflow. The guided workflow is implemented and in Review; a business choice and owner acceptance remain pending. Sales/profit accounting, live delivery integrations and aggregate financial exposure belong to later stories before real commercial activity.

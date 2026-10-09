@@ -167,3 +167,12 @@ latter two at Low priority. See SPRINT_2_LOCAL_REVIEW.md for scope and test exam
 - [x] BE-16: owner reviewed and accepted the new report view.
 
 Owner authorized PR #30 merge. BE-17–19 remain Backlog. Earlier Review entries are historical.
+
+## BE-17 — research and practice in Review
+
+Owner clarified AI-operated work, €0 spending and €0 permitted loss, then approved
+implementation. The dashboard now supports dated public-source records, a persisted
+research brief, local tool-free comparisons, owner-selected text practice and
+observed pass/fail review. Records grant no action or launch authority. See
+[BE17_LOCAL_REVIEW.md](BE17_LOCAL_REVIEW.md) for verification and explicit limits.
+Owner acceptance is pending; this item is not Done.

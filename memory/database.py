@@ -690,6 +690,8 @@ def init_db() -> None:
     conn.commit()
 
     conn.commit()
+    from memory.business_discovery import init_business_discovery
+    init_business_discovery(cursor)
     from memory.experiments import init_experiments
     init_experiments(cursor)
     from memory.evidence import init_evidence
