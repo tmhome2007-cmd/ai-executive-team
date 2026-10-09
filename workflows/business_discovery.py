@@ -28,7 +28,9 @@ def _reason(prompt, structured=False):
     from workflows.business_research_contract import ResearchComparison
     from workflows.business_revision_contract import PracticeRevision
     from workflows.output_quality import QUALITY_POLICY
-    result = llm.call(messages=[{'role': 'user', 'content': QUALITY_POLICY + '\nRole: ' + agent.role + '\nPersona: ' + agent.backstory[:4000] + '\n' + prompt}], **({'response_model': PracticeRevision if structured == 'revision' else ResearchComparison} if structured else {}))
+    # Revision JSON is validated below; avoid the SDK's additional structured
+    # conversion/retry loop for long deliverables. Our worker owns one repair.
+    result = llm.call(messages=[{'role': 'user', 'content': QUALITY_POLICY + '\nRole: ' + agent.role + '\nPersona: ' + agent.backstory[:4000] + '\n' + prompt}], **({'response_model': ResearchComparison} if structured and structured != 'revision' else {}))
     if structured and isinstance(result, (ResearchComparison, PracticeRevision)):
         result = result.model_dump_json()
     if not isinstance(result, str) or not result.strip():

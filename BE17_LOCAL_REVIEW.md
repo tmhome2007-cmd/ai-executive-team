@@ -63,7 +63,7 @@ The final comparison also supplies concrete minimum review controls (preserved f
 
 ### Feedback revision verification
 
-Sixteen targeted tests pass, covering legacy import, preserved original assessments,
+Seventeen targeted tests pass, covering legacy import, preserved original assessments,
 corrections, duplicate/stale generation claims, crash recovery, completeness and
 unsupported interface details. The copied-dashboard browser test passes the full
 review → correction → revision → fresh review sequence, with no actions or money.
@@ -76,3 +76,8 @@ Actual model testing also exposed a title-only answer and an invented pencil ico
 Both are rejected by the revision contract rather than published as successful
 revisions. These safeguards do not guarantee a useful output from every local model
 attempt. BE-17 remains in owner review; no competence or business launch is approved.
+
+The final disposable regression run passed all 149 tests, including real Docker
+isolation. Revision now requests plain JSON from the existing local model and checks
+it on the server, avoiding a second SDK structured-conversion/retry loop. Research
+retains its per-call structured response model. The worker permits one repair only.

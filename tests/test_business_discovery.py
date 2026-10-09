@@ -276,6 +276,7 @@ class DiscoveryTests(unittest.TestCase):
         payload = json.loads(self.revision_json())
         with self.assertRaises(ValueError):
             render_revision(json.dumps(payload), exercise)
+
         payload['revised_sample'] = ('1. Create a task using the provided task function.\n'
             '2. Edit the task using the provided editing function.\n'
             '3. Complete the task using its completion function.\n'
@@ -286,3 +287,12 @@ class DiscoveryTests(unittest.TestCase):
         payload['revised_sample'] += '\nClick the pencil icon to edit the task.'
         with self.assertRaises(ValueError):
             render_revision(json.dumps(payload), exercise)
+
+    def test_revision_does_not_add_sdk_conversion_retries(self):
+        from unittest.mock import Mock
+        from workflows.business_discovery import _reason
+        agent = Mock(role='Synthetic executive', backstory='Synthetic personality')
+        agent.llm.call.return_value = self.revision_json()
+        with patch('workflows.business_discovery._local_agent', return_value=agent):
+            self.assertEqual(_reason('Synthetic prompt', structured='revision'), self.revision_json())
+        self.assertNotIn('response_model', agent.llm.call.call_args.kwargs)
