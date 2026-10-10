@@ -441,3 +441,7 @@ router.include_router(run_inspector_router)
 from api.workflow_templates import router as workflow_templates_router
 
 router.include_router(workflow_templates_router)
+
+from api.company_knowledge import router as company_knowledge_router
+
+router.include_router(company_knowledge_router)

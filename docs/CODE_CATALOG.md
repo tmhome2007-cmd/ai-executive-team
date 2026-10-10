@@ -55,6 +55,13 @@ Shared strict request validation, private headers and API error mapping.
 - `invoke`: Translate domain lookup, conflict and validation errors into HTTP responses.
 - `StrictRequest`
 
+## [api/company_knowledge.py](../api/company_knowledge.py)
+
+Owner-authenticated read-only company knowledge navigation.
+
+- `knowledge_search`
+- `knowledge_detail`
+
 ## [api/conversation_audio.py](../api/conversation_audio.py)
 
 Owner-requested local conversation audio API routes.
@@ -180,6 +187,10 @@ Dashboard source; component/library responsibility follows its filename.
 Dashboard source; component/library responsibility follows its filename.
 
 ## [executive-dashboard/app/components/character-avatar.tsx](../executive-dashboard/app/components/character-avatar.tsx)
+
+Dashboard source; component/library responsibility follows its filename.
+
+## [executive-dashboard/app/components/company-knowledge.tsx](../executive-dashboard/app/components/company-knowledge.tsx)
 
 Dashboard source; component/library responsibility follows its filename.
 
@@ -539,6 +550,23 @@ Versioned fictional adult character presentation, separate from executive author
 - `save_character`
 - `character_history`
 - `executive_presentations`
+
+## [memory/company_knowledge.py](../memory/company_knowledge.py)
+
+Read-only, source-explained navigation over existing company SQLite records.
+
+- `_identity`
+- `_contract`
+- `_select`
+- `_node`
+- `search_knowledge`
+- `knowledge_record`
+
+## [memory/context_policy.py](../memory/context_policy.py)
+
+One exclusion policy for current executive context and its owner explanation.
+
+- `explanation`
 
 ## [memory/database.py](../memory/database.py)
 
@@ -951,6 +979,12 @@ Optional isolated neural runtime; consumes verified local assets and fixed text.
 
 Module constants/imports only.
 
+## [scripts/knowledge_smoke.py](../scripts/knowledge_smoke.py)
+
+Chromium knowledge navigation over disposable history; no external traffic.
+
+- `main`
+
 ## [scripts/local_audit.py](../scripts/local_audit.py)
 
 Disposable local verification. Upstream findings remain visible, never ignored.
@@ -1121,6 +1155,12 @@ Synthetic provider probes and real SQLite approval/claim scope gates.
 Launcher safety: existing credentials/data/processes are never replaced.
 
 - `CompanyCliTests`
+
+## [tests/test_company_knowledge.py](../tests/test_company_knowledge.py)
+
+Real SQLite navigation, truthful explanations and shared memory exclusions.
+
+- `CompanyKnowledgeTests`
 
 ## [tests/test_company_records.py](../tests/test_company_records.py)
 
@@ -1635,6 +1675,8 @@ Routes still require the application's authentication dependencies; this list gr
 | GET | `/characters/{key}` | [api/people.py](../api/people.py) · `read_character` |
 | GET | `/characters/{key}/history` | [api/people.py](../api/people.py) · `read_character_history` |
 | GET | `/company/activity` | [main.py](../main.py) · `company_activity` |
+| GET | `/company/knowledge` | [api/company_knowledge.py](../api/company_knowledge.py) · `knowledge_search` |
+| GET | `/company/knowledge/{kind}/{ident}` | [api/company_knowledge.py](../api/company_knowledge.py) · `knowledge_detail` |
 | GET | `/conversation-audio/{key}` | [api/conversation_audio.py](../api/conversation_audio.py) · `get_conversation_audio` |
 | GET | `/decisions/history` | [main.py](../main.py) · `get_decision_history` |
 | GET | `/decisions/{decision_id}/conversations` | [main.py](../main.py) · `decision_conversations` |
