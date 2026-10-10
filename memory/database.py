@@ -1,7 +1,6 @@
-"""
-memory/database.py
+"""SQLite schema, transaction boundaries and durable company record operations.
 
-SQLite-opslaglaag voor het opslaan en ophalen van beslissingen 
+SQLite-opslaglaag voor het opslaan en ophalen van beslissingen
 en actievoorstellen van het AI Executive Team.
 """
 
@@ -28,7 +27,6 @@ from workflows.meeting_types import VALID_MEETING_TYPES
 from workflows.capability_policy import require_action_capability
 from memory.activity import activity_origin
 
-
 VALID_ACTION_STATUSES = {
     "pending",
     "approved",
@@ -44,7 +42,14 @@ VALID_DECISION_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
 VALID_PREPARATION_STATUSES = {"not_started", "in_progress", "completed", "failed"}
 VALID_RESOURCE_REQUEST_STATUSES = {"pending", "approved", "rejected", "fulfilled"}
 VALID_RESOURCE_TYPES = {
-    "access", "credential", "plugin", "data", "budget", "service", "hardware", "other"
+    "access",
+    "credential",
+    "plugin",
+    "data",
+    "budget",
+    "service",
+    "hardware",
+    "other",
 }
 VALID_TREASURY_ENTRY_TYPES = {"funding", "spend", "refund"}
 VALID_TREASURY_RESERVATION_STATUSES = {"active", "released", "consumed"}
@@ -100,11 +105,15 @@ _SECRET_LIKE_PATTERNS = (
 )
 
 _SECRET_LIKE_REGEXES = (
-    re.compile(r"(?i)(?<![a-z0-9])sk-"),  # Token prefix, not the suffix of words such as task-name.
+    re.compile(
+        r"(?i)(?<![a-z0-9])sk-"
+    ),  # Token prefix, not the suffix of words such as task-name.
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"\bASIA[0-9A-Z]{16}\b"),
     re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{20,}\b"),  # Telegram bot token shape
-    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),  # JWT
+    re.compile(
+        r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"
+    ),  # JWT
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b"),
 )
 
@@ -125,16 +134,14 @@ def _reject_secret_like_text(*values: str | None) -> None:
 def _sync_signing_key() -> bytes:
     key = (getattr(config, "SYNC_HMAC_KEY", "") or config.API_SECRET_KEY).strip()
     if not key:
-        raise ValueError("SYNC_HMAC_KEY/API_SECRET_KEY is required for authenticated sync")
+        raise ValueError(
+            "SYNC_HMAC_KEY/API_SECRET_KEY is required for authenticated sync"
+        )
     return key.encode("utf-8")
 
 
 def _sync_record_signature(record: dict) -> str:
-    payload = {
-        key: value
-        for key, value in record.items()
-        if key != "_signature"
-    }
+    payload = {key: value for key, value in record.items() if key != "_signature"}
     canonical = json.dumps(
         payload,
         sort_keys=True,
@@ -181,12 +188,12 @@ def _action_approval_payload(action: dict) -> dict:
         "source_decision_sync_uuid": action.get("source_decision_sync_uuid"),
         "source_phase": action.get("source_phase"),
     }
-    if action.get('capability_policy'):
-        payload['capability_policy'] = action['capability_policy']
-    if action.get('experiment_policy'):
-        payload['experiment_policy'] = action['experiment_policy']
-    if action.get('operating_policy_version', 1) > 1:
-        payload['operating_policy_version'] = action['operating_policy_version']
+    if action.get("capability_policy"):
+        payload["capability_policy"] = action["capability_policy"]
+    if action.get("experiment_policy"):
+        payload["experiment_policy"] = action["experiment_policy"]
+    if action.get("operating_policy_version", 1) > 1:
+        payload["operating_policy_version"] = action["operating_policy_version"]
     return payload
 
 
@@ -224,66 +231,144 @@ def _action_row_for_approval(cursor: sqlite3.Cursor, action_id: int) -> dict | N
         return None
     action = dict(row)
     from memory.experiments import experiment_policy
+
     policy = experiment_policy(cursor, action_id)
     if policy:
-        action['experiment_policy'] = policy
+        action["experiment_policy"] = policy
     from memory.capabilities import inventory_policy
+
     capability = inventory_policy(cursor, action_id)
     if capability:
-        action['capability_policy'] = capability
+        action["capability_policy"] = capability
     from memory.operating_policies import current_policy
-    action['operating_policy_version'] = current_policy(cursor)['version']
+
+    action["operating_policy_version"] = current_policy(cursor)["version"]
     return action
 
 
 _SYNC_TABLE_COLUMNS = {
     "decisions": {
-        "timestamp", "topic", "agents_involved", "task_description",
-        "decision_outcome", "sandbox_mode", "sync_uuid", "goal_sync_uuid",
+        "timestamp",
+        "topic",
+        "agents_involved",
+        "task_description",
+        "decision_outcome",
+        "sandbox_mode",
+        "sync_uuid",
+        "goal_sync_uuid",
         "meeting_type",
     },
     "action_queue": {
-        "timestamp", "proposed_by", "action_description", "action_detail",
-        "status", "reviewed_at", "action_type", "result_detail", "sync_uuid",
-        "source_decision_sync_uuid", "source_phase",
+        "timestamp",
+        "proposed_by",
+        "action_description",
+        "action_detail",
+        "status",
+        "reviewed_at",
+        "action_type",
+        "result_detail",
+        "sync_uuid",
+        "source_decision_sync_uuid",
+        "source_phase",
     },
     "action_outcomes": {
-        "action_sync_uuid", "expected_outcome", "expected_impact",
-        "expected_cost_amount", "currency", "outcome_status", "actual_outcome",
-        "actual_impact", "actual_cost_amount", "measured_at",
-        "next_recommendation", "notes", "updated_at", "sync_uuid",
+        "action_sync_uuid",
+        "expected_outcome",
+        "expected_impact",
+        "expected_cost_amount",
+        "currency",
+        "outcome_status",
+        "actual_outcome",
+        "actual_impact",
+        "actual_cost_amount",
+        "measured_at",
+        "next_recommendation",
+        "notes",
+        "updated_at",
+        "sync_uuid",
     },
     "resource_requests": {
-        "timestamp", "requested_by", "resource_type", "resource_name",
-        "reason", "required_for", "amount", "currency", "status",
-        "reviewed_at", "fulfilled_at", "fulfillment_note",
-        "source_decision_sync_uuid", "source_phase", "sync_uuid",
+        "timestamp",
+        "requested_by",
+        "resource_type",
+        "resource_name",
+        "reason",
+        "required_for",
+        "amount",
+        "currency",
+        "status",
+        "reviewed_at",
+        "fulfilled_at",
+        "fulfillment_note",
+        "source_decision_sync_uuid",
+        "source_phase",
+        "sync_uuid",
     },
     "treasury_entries": {
-        "timestamp", "entry_type", "amount", "currency", "note",
-        "source_action_sync_uuid", "source_decision_sync_uuid", "sync_uuid",
+        "timestamp",
+        "entry_type",
+        "amount",
+        "currency",
+        "note",
+        "source_action_sync_uuid",
+        "source_decision_sync_uuid",
+        "sync_uuid",
     },
     "treasury_reservations": {
-        "timestamp", "amount", "currency", "status", "released_at",
-        "consumed_at", "source_action_sync_uuid", "source_decision_sync_uuid",
+        "timestamp",
+        "amount",
+        "currency",
+        "status",
+        "released_at",
+        "consumed_at",
+        "source_action_sync_uuid",
+        "source_decision_sync_uuid",
         "sync_uuid",
     },
     "company_goals": {
-        "created_at", "updated_at", "title", "description", "success_criteria",
-        "priority", "target_date", "status", "completed_at", "completion_note",
+        "created_at",
+        "updated_at",
+        "title",
+        "description",
+        "success_criteria",
+        "priority",
+        "target_date",
+        "status",
+        "completed_at",
+        "completion_note",
         "sync_uuid",
     },
     "followup_events": {
-        "created_at", "updated_at", "event_type", "status", "severity",
-        "reason", "fingerprint", "goal_sync_uuid", "source_action_sync_uuid",
-        "source_decision_sync_uuid", "generated_decision_sync_uuid",
-        "resolved_at", "attempt_count", "last_attempt_at", "last_error",
+        "created_at",
+        "updated_at",
+        "event_type",
+        "status",
+        "severity",
+        "reason",
+        "fingerprint",
+        "goal_sync_uuid",
+        "source_action_sync_uuid",
+        "source_decision_sync_uuid",
+        "generated_decision_sync_uuid",
+        "resolved_at",
+        "attempt_count",
+        "last_attempt_at",
+        "last_error",
         "sync_uuid",
     },
     "executive_memories": {
-        "created_at", "updated_at", "executive_key", "memory_kind", "lesson",
-        "supporting_evidence", "confidence", "is_active", "source_goal_sync_uuid",
-        "source_decision_sync_uuid", "source_action_sync_uuid", "fingerprint",
+        "created_at",
+        "updated_at",
+        "executive_key",
+        "memory_kind",
+        "lesson",
+        "supporting_evidence",
+        "confidence",
+        "is_active",
+        "source_goal_sync_uuid",
+        "source_decision_sync_uuid",
+        "source_action_sync_uuid",
+        "fingerprint",
         "sync_uuid",
     },
 }
@@ -296,7 +381,7 @@ def init_db() -> None:
     """
     db_path = config.DATABASE_PATH
     db_dir = os.path.dirname(db_path)
-    
+
     # 1. Zorg ervoor dat de map van de database bestaat
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
@@ -304,9 +389,10 @@ def init_db() -> None:
     # 2. Verbind met de database en maak de tabellen aan
     conn = sqlite3.connect(db_path)
     from memory.activity import configure_connection, init_activity
+
     configure_connection(conn)
     cursor = conn.cursor()
-    
+
     # Tabel 0: owner-defined company goals / missions.
     # Agents may work toward these goals but cannot silently create or rewrite
     # them; mutations happen only through authenticated owner-facing APIs.
@@ -434,19 +520,28 @@ def init_db() -> None:
         pass
 
     try:
-        cursor.execute("ALTER TABLE decisions ADD COLUMN meeting_type TEXT NOT NULL DEFAULT 'strategy'")
+        cursor.execute(
+            "ALTER TABLE decisions ADD COLUMN meeting_type TEXT NOT NULL DEFAULT 'strategy'"
+        )
         conn.commit()
     except sqlite3.OperationalError:
         pass
 
-    decision_columns = {row[1] for row in cursor.execute("PRAGMA table_info(decisions)")}
+    decision_columns = {
+        row[1] for row in cursor.execute("PRAGMA table_info(decisions)")
+    }
     if "workflow_key" not in decision_columns:
         cursor.execute("ALTER TABLE decisions ADD COLUMN workflow_key TEXT")
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS decisions_workflow_key ON decisions(workflow_key) WHERE workflow_key IS NOT NULL")
+    cursor.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS decisions_workflow_key ON decisions(workflow_key) WHERE workflow_key IS NOT NULL"
+    )
 
     cursor.execute("SELECT id FROM decisions WHERE sync_uuid IS NULL")
     for (row_id,) in cursor.fetchall():
-        cursor.execute("UPDATE decisions SET sync_uuid = ? WHERE id = ?", (str(uuid.uuid4()), row_id))
+        cursor.execute(
+            "UPDATE decisions SET sync_uuid = ? WHERE id = ?",
+            (str(uuid.uuid4()), row_id),
+        )
     conn.commit()
 
     cursor.execute("""
@@ -466,6 +561,7 @@ def init_db() -> None:
     conn.commit()
 
     from memory.agile import init_agile
+
     init_agile(cursor)
     conn.commit()
 
@@ -506,7 +602,9 @@ def init_db() -> None:
     # geeft een OperationalError als de kolom al bestaat — dat vangen we
     # gewoon af, want dan is er niets te doen.
     try:
-        cursor.execute("ALTER TABLE action_queue ADD COLUMN action_type TEXT NOT NULL DEFAULT 'shell'")
+        cursor.execute(
+            "ALTER TABLE action_queue ADD COLUMN action_type TEXT NOT NULL DEFAULT 'shell'"
+        )
         conn.commit()
     except sqlite3.OperationalError:
         pass  # kolom bestaat al — prima, niets te migreren
@@ -532,7 +630,9 @@ def init_db() -> None:
     except sqlite3.OperationalError:
         pass
     try:
-        cursor.execute("ALTER TABLE action_queue ADD COLUMN source_decision_sync_uuid TEXT")
+        cursor.execute(
+            "ALTER TABLE action_queue ADD COLUMN source_decision_sync_uuid TEXT"
+        )
         conn.commit()
     except sqlite3.OperationalError:
         pass
@@ -544,7 +644,10 @@ def init_db() -> None:
 
     cursor.execute("SELECT id FROM action_queue WHERE sync_uuid IS NULL")
     for (row_id,) in cursor.fetchall():
-        cursor.execute("UPDATE action_queue SET sync_uuid = ? WHERE id = ?", (str(uuid.uuid4()), row_id))
+        cursor.execute(
+            "UPDATE action_queue SET sync_uuid = ? WHERE id = ?",
+            (str(uuid.uuid4()), row_id),
+        )
     conn.commit()
 
     # Tabel 3: expliciete menselijke approval gate voor beslissingen.
@@ -562,7 +665,9 @@ def init_db() -> None:
     # Migratie voor databases die de Phase-2 tabel al zonder outcome-kolom
     # hebben gezien.
     try:
-        cursor.execute("ALTER TABLE decision_approvals ADD COLUMN preparation_outcome TEXT")
+        cursor.execute(
+            "ALTER TABLE decision_approvals ADD COLUMN preparation_outcome TEXT"
+        )
         conn.commit()
     except sqlite3.OperationalError:
         pass
@@ -691,28 +796,37 @@ def init_db() -> None:
 
     conn.commit()
     from memory.business_discovery import init_business_discovery
+
     init_business_discovery(cursor)
     from memory.experiments import init_experiments
+
     init_experiments(cursor)
     from memory.evidence import init_evidence
+
     init_evidence(cursor)
     from memory.planning import init_planning
+
     init_planning(cursor)
     from memory.discussions import init_discussions
+
     init_discussions(cursor)
     from memory.capabilities import init_capabilities
+
     init_capabilities(cursor)
     from memory.operating_policies import init_policies
     from memory.memory_reconciliation import init_memory_reconciliation
     from memory.observation_jobs import init_observation_jobs
+
     init_policies(cursor)
     init_memory_reconciliation(cursor)
     init_observation_jobs(cursor)
     from memory.agent_runtime import init_agent_runtime
+
     init_agent_runtime(cursor)
     from memory.character_profiles import init_characters
     from memory.organization import init_organization
     from memory.personal_simulation import init_simulation
+
     init_characters(cursor)
     init_organization(cursor)
     init_simulation(cursor)
@@ -733,6 +847,7 @@ def get_connection():
     """
     conn = sqlite3.connect(config.DATABASE_PATH)
     from memory.activity import configure_connection
+
     configure_connection(conn)
     conn.row_factory = sqlite3.Row
     try:
@@ -744,6 +859,7 @@ def get_connection():
 # ===================================================================
 # COMPANY GOALS / MISSIONS
 # ===================================================================
+
 
 def _normalize_goal_target_date(target_date: str | None) -> str | None:
     if target_date is None or not target_date.strip():
@@ -787,8 +903,15 @@ def create_company_goal(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                now, now, title, description, success_criteria, priority,
-                target_date, status, str(uuid.uuid4()),
+                now,
+                now,
+                title,
+                description,
+                success_criteria,
+                priority,
+                target_date,
+                status,
+                str(uuid.uuid4()),
             ),
         )
         goal_id = cursor.lastrowid
@@ -926,7 +1049,9 @@ def transition_company_goal_status(
         )
     if new_status in {"completed", "abandoned"}:
         if not (completion_note or "").strip():
-            raise ValueError("completion_note is required for completed/abandoned goals")
+            raise ValueError(
+                "completion_note is required for completed/abandoned goals"
+            )
         _reject_secret_like_text(completion_note)
     elif completion_note is not None:
         raise ValueError("completion_note is only valid for completed/abandoned goals")
@@ -1005,9 +1130,14 @@ def transition_company_goal_status(
             WHERE id = ? AND status = ?
             """,
             (
-                new_status, now, new_status, now, new_status,
+                new_status,
+                now,
+                new_status,
+                now,
+                new_status,
                 completion_note.strip() if completion_note else None,
-                goal_id, goal["status"],
+                goal_id,
+                goal["status"],
             ),
         )
         if cursor.rowcount != 1:
@@ -1067,6 +1197,7 @@ def get_company_goal_lineage(goal_id: int) -> dict | None:
 # STRUCTURED EXECUTIVE MEMORY
 # ===================================================================
 
+
 def create_executive_memory(
     *,
     executive_key: str,
@@ -1102,7 +1233,9 @@ def create_executive_memory(
         cursor = conn.cursor()
 
         if source_goal_id is not None:
-            cursor.execute("SELECT sync_uuid FROM company_goals WHERE id = ?", (source_goal_id,))
+            cursor.execute(
+                "SELECT sync_uuid FROM company_goals WHERE id = ?", (source_goal_id,)
+            )
             row = cursor.fetchone()
             if row is None:
                 raise ValueError("Source goal not found")
@@ -1148,7 +1281,9 @@ def create_executive_memory(
         )
         existing = cursor.fetchone()
         if existing:
-            if cursor.execute("SELECT 1 FROM memory_lifecycle WHERE memory_id=?", (existing["id"],)).fetchone():
+            if cursor.execute(
+                "SELECT 1 FROM memory_lifecycle WHERE memory_id=?", (existing["id"],)
+            ).fetchone():
                 return int(existing["id"]), False
             now = datetime.datetime.now().isoformat()
             cursor.execute(
@@ -1182,13 +1317,21 @@ def create_executive_memory(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                now, now, executive_key, memory_kind, lesson,
+                now,
+                now,
+                executive_key,
+                memory_kind,
+                lesson,
                 supporting_evidence.strip() if supporting_evidence else None,
                 float(confidence),
-                source_goal_id, source_goal_sync_uuid,
-                source_decision_id, source_decision_sync_uuid,
-                source_action_id, source_action_sync_uuid,
-                fingerprint, str(uuid.uuid4()),
+                source_goal_id,
+                source_goal_sync_uuid,
+                source_decision_id,
+                source_decision_sync_uuid,
+                source_action_id,
+                source_action_sync_uuid,
+                fingerprint,
+                str(uuid.uuid4()),
             ),
         )
         memory_id = cursor.lastrowid
@@ -1210,9 +1353,15 @@ def get_executive_memories(
     params: list = [executive_key]
     if active_only:
         clauses.append("is_active = 1")
-        clauses.append("NOT EXISTS (SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id AND (l.state!='active' OR (l.expires_at IS NOT NULL AND julianday(l.expires_at)<=julianday('now'))))")
-        clauses.append("NOT EXISTS (SELECT 1 FROM memory_lifecycle l JOIN evidence_sources e ON e.id IN (SELECT value FROM json_each(l.source_ids)) WHERE l.memory_id=executive_memories.id AND (e.verification='disputed' OR (e.expires_at IS NOT NULL AND julianday(e.expires_at)<=julianday('now'))))")
-        clauses.append("NOT EXISTS (SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id AND l.claim_key!='' AND l.claim_key IN (SELECT x.claim_key FROM memory_lifecycle x JOIN executive_memories m ON m.id=x.memory_id WHERE x.state='active' AND m.is_active=1 GROUP BY x.claim_key HAVING COUNT(DISTINCT m.lesson)>1))")
+        clauses.append(
+            "NOT EXISTS (SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id AND (l.state!='active' OR (l.expires_at IS NOT NULL AND julianday(l.expires_at)<=julianday('now'))))"
+        )
+        clauses.append(
+            "NOT EXISTS (SELECT 1 FROM memory_lifecycle l JOIN evidence_sources e ON e.id IN (SELECT value FROM json_each(l.source_ids)) WHERE l.memory_id=executive_memories.id AND (e.verification='disputed' OR (e.expires_at IS NOT NULL AND julianday(e.expires_at)<=julianday('now'))))"
+        )
+        clauses.append(
+            "NOT EXISTS (SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id AND l.claim_key!='' AND l.claim_key IN (SELECT x.claim_key FROM memory_lifecycle x JOIN executive_memories m ON m.id=x.memory_id WHERE x.state='active' AND m.is_active=1 GROUP BY x.claim_key HAVING COUNT(DISTINCT m.lesson)>1))"
+        )
     if goal_id is not None:
         clauses.append("(source_goal_id = ? OR source_goal_id IS NULL)")
         params.append(goal_id)
@@ -1384,6 +1533,7 @@ def create_action_outcome_memories(action_id: int) -> list[int]:
 # AUTONOMOUS FOLLOW-UP EVENTS
 # ===================================================================
 
+
 def create_followup_event(
     *,
     event_type: str,
@@ -1411,7 +1561,9 @@ def create_followup_event(
         cursor = conn.cursor()
 
         if goal_id is not None:
-            cursor.execute("SELECT sync_uuid FROM company_goals WHERE id = ?", (goal_id,))
+            cursor.execute(
+                "SELECT sync_uuid FROM company_goals WHERE id = ?", (goal_id,)
+            )
             row = cursor.fetchone()
             if row is None:
                 raise ValueError("Goal not found")
@@ -1431,7 +1583,9 @@ def create_followup_event(
                 source_decision_sync_uuid = row["source_decision_sync_uuid"]
 
         if source_decision_id is not None and source_decision_sync_uuid is None:
-            cursor.execute("SELECT sync_uuid FROM decisions WHERE id = ?", (source_decision_id,))
+            cursor.execute(
+                "SELECT sync_uuid FROM decisions WHERE id = ?", (source_decision_id,)
+            )
             row = cursor.fetchone()
             if row is None:
                 raise ValueError("Source decision not found")
@@ -1456,10 +1610,18 @@ def create_followup_event(
             ) VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                now, now, event_type, severity, reason, fingerprint,
-                goal_id, goal_sync_uuid,
-                source_action_id, source_action_sync_uuid,
-                source_decision_id, source_decision_sync_uuid,
+                now,
+                now,
+                event_type,
+                severity,
+                reason,
+                fingerprint,
+                goal_id,
+                goal_sync_uuid,
+                source_action_id,
+                source_action_sync_uuid,
+                source_decision_id,
+                source_decision_sync_uuid,
                 str(uuid.uuid4()),
             ),
         )
@@ -1629,6 +1791,7 @@ def link_followup_generated_decision(event_id: int, decision_id: int) -> bool:
 # FUNCTIES VOOR BESTUURSBESLUITEN (DECISIONS)
 # ===================================================================
 
+
 def log_decision(
     topic: str,
     agents_involved: list[str],
@@ -1648,6 +1811,7 @@ def log_decision(
     """
     if source_ids is not None:
         from memory.evidence import source_context
+
         source_context(source_ids)
     timestamp = datetime.datetime.now().isoformat()
     agents_str = ",".join(agents_involved)
@@ -1663,19 +1827,59 @@ def log_decision(
         if workflow_key is not None:
             if not isinstance(workflow_key, str) or not 1 <= len(workflow_key) <= 128:
                 raise ValueError("Invalid decision workflow key")
-            previous = cursor.execute("SELECT * FROM decisions WHERE workflow_key = ?", (workflow_key,)).fetchone()
+            previous = cursor.execute(
+                "SELECT * FROM decisions WHERE workflow_key = ?", (workflow_key,)
+            ).fetchone()
             if previous:
-                expected = (topic, agents_str, task_description, decision_outcome, sandbox_flag, goal_id, meeting_type)
-                actual = tuple(previous[key] for key in ("topic", "agents_involved", "task_description", "decision_outcome", "sandbox_mode", "goal_id", "meeting_type"))
+                expected = (
+                    topic,
+                    agents_str,
+                    task_description,
+                    decision_outcome,
+                    sandbox_flag,
+                    goal_id,
+                    meeting_type,
+                )
+                actual = tuple(
+                    previous[key]
+                    for key in (
+                        "topic",
+                        "agents_involved",
+                        "task_description",
+                        "decision_outcome",
+                        "sandbox_mode",
+                        "goal_id",
+                        "meeting_type",
+                    )
+                )
                 if actual != expected:
-                    raise ValueError("Decision workflow key reused with different inputs")
+                    raise ValueError(
+                        "Decision workflow key reused with different inputs"
+                    )
                 if source_ids:
-                    linked = {r[0] for r in cursor.execute("SELECT source_id FROM evidence_links WHERE entity_kind = 'decision' AND entity_id = ? AND relation = 'context'", (previous['id'],))}
+                    linked = {
+                        r[0]
+                        for r in cursor.execute(
+                            "SELECT source_id FROM evidence_links WHERE entity_kind = 'decision' AND entity_id = ? AND relation = 'context'",
+                            (previous["id"],),
+                        )
+                    }
                     if linked != set(source_ids):
-                        raise ValueError('Decision retry differs from its original evidence sources')
-                _store_contributions(cursor, previous["id"], "decision", individual_outputs, executive_profiles)
+                        raise ValueError(
+                            "Decision retry differs from its original evidence sources"
+                        )
+                _store_contributions(
+                    cursor,
+                    previous["id"],
+                    "decision",
+                    individual_outputs,
+                    executive_profiles,
+                )
                 from memory.discussions import store_discussion
-                store_discussion(cursor, previous['id'], discussion_messages, source_ids)
+
+                store_discussion(
+                    cursor, previous["id"], discussion_messages, source_ids
+                )
                 conn.commit()
                 return previous["id"]
         if goal_id is not None:
@@ -1692,29 +1896,50 @@ def log_decision(
                 )
             goal_sync_uuid = goal["sync_uuid"]
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO decisions (
                 timestamp, topic, agents_involved, task_description, decision_outcome,
                 sandbox_mode, sync_uuid, goal_id, goal_sync_uuid, meeting_type, workflow_key
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            timestamp, topic, agents_str, task_description, decision_outcome,
-            sandbox_flag, new_sync_uuid, goal_id, goal_sync_uuid, meeting_type, workflow_key,
-        ))
-        
+        """,
+            (
+                timestamp,
+                topic,
+                agents_str,
+                task_description,
+                decision_outcome,
+                sandbox_flag,
+                new_sync_uuid,
+                goal_id,
+                goal_sync_uuid,
+                meeting_type,
+                workflow_key,
+            ),
+        )
+
         decision_id = cursor.lastrowid
         from memory.evidence import register_source, link_source
+
         if source_ids:
             for source_id in source_ids:
-                link_source(cursor, source_id, 'decision', decision_id)
+                link_source(cursor, source_id, "decision", decision_id)
         else:
-            source_id = register_source(cursor, source_key='decision-context:' + new_sync_uuid,
-                title='Recorded decision input context', reference='Persisted workflow input; not independently verified',
-                summary=task_description[:12000] or 'No input evidence supplied.',
-                observed_at=datetime.datetime.now(datetime.timezone.utc).isoformat(), source_kind='owner_context')
-            link_source(cursor, source_id, 'decision', decision_id)
-        _store_contributions(cursor, decision_id, "decision", individual_outputs, executive_profiles)
+            source_id = register_source(
+                cursor,
+                source_key="decision-context:" + new_sync_uuid,
+                title="Recorded decision input context",
+                reference="Persisted workflow input; not independently verified",
+                summary=task_description[:12000] or "No input evidence supplied.",
+                observed_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                source_kind="owner_context",
+            )
+            link_source(cursor, source_id, "decision", decision_id)
+        _store_contributions(
+            cursor, decision_id, "decision", individual_outputs, executive_profiles
+        )
         from memory.discussions import store_discussion
+
         store_discussion(cursor, decision_id, discussion_messages, source_ids)
         cursor.execute(
             """
@@ -1773,7 +1998,9 @@ def transition_decision_approval(
     """Atomische menselijke approval/reject overgang voor een beslissing."""
     if new_status not in VALID_DECISION_APPROVAL_STATUSES:
         raise ValueError(f"Unsupported decision approval status: {new_status}")
-    if not allowed_from or any(s not in VALID_DECISION_APPROVAL_STATUSES for s in allowed_from):
+    if not allowed_from or any(
+        s not in VALID_DECISION_APPROVAL_STATUSES for s in allowed_from
+    ):
         raise ValueError(f"Invalid decision allowed_from statuses: {allowed_from}")
 
     now = datetime.datetime.now().isoformat()
@@ -1837,7 +2064,13 @@ def finish_decision_preparation(
         )
         changed = cursor.rowcount == 1
         if changed and success:
-            _store_contributions(cursor, decision_id, "preparation", individual_outputs, executive_profiles)
+            _store_contributions(
+                cursor,
+                decision_id,
+                "preparation",
+                individual_outputs,
+                executive_profiles,
+            )
         conn.commit()
         return changed
 
@@ -1874,7 +2107,8 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
     """
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 d.id, d.timestamp, d.topic, d.agents_involved, d.task_description,
                 d.decision_outcome, d.sandbox_mode, d.sync_uuid,
@@ -1900,8 +2134,10 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
             LEFT JOIN company_goals g ON g.id = d.goal_id
             ORDER BY d.timestamp DESC
             LIMIT ? OFFSET ?
-        """, (limit, offset))
-        
+        """,
+            (limit, offset),
+        )
+
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
@@ -1909,6 +2145,7 @@ def get_recent_decisions(limit: int = 10, offset: int = 0) -> list[dict]:
 # ===================================================================
 # ACTION PROVENANCE CONTEXT
 # ===================================================================
+
 
 @contextmanager
 def action_provenance_scope(
@@ -1960,6 +2197,7 @@ def _current_action_provenance() -> dict | None:
 # ===================================================================
 # STRUCTURED RESOURCE / CAPABILITY REQUESTS
 # ===================================================================
+
 
 def browser_url_allowed_by_provenance(url: str) -> bool:
     """
@@ -2019,8 +2257,14 @@ def propose_resource_request(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
             """,
             (
-                timestamp, requested_by, resource_type, resource_name,
-                reason, required_for, amount, currency,
+                timestamp,
+                requested_by,
+                resource_type,
+                resource_name,
+                reason,
+                required_for,
+                amount,
+                currency,
                 provenance.get("decision_id") if provenance else None,
                 provenance.get("decision_sync_uuid") if provenance else None,
                 provenance.get("phase") if provenance else None,
@@ -2063,7 +2307,9 @@ def get_resource_requests(
     with get_connection() as conn:
         cursor = conn.cursor()
         if statuses:
-            if any(status not in VALID_RESOURCE_REQUEST_STATUSES for status in statuses):
+            if any(
+                status not in VALID_RESOURCE_REQUEST_STATUSES for status in statuses
+            ):
                 raise ValueError("Unsupported resource request status")
             placeholders = ", ".join("?" for _ in statuses)
             cursor.execute(
@@ -2121,10 +2367,14 @@ def transition_resource_request_status(
 ) -> bool:
     if new_status not in VALID_RESOURCE_REQUEST_STATUSES:
         raise ValueError(f"Unsupported resource request status: {new_status}")
-    if not allowed_from or any(s not in VALID_RESOURCE_REQUEST_STATUSES for s in allowed_from):
+    if not allowed_from or any(
+        s not in VALID_RESOURCE_REQUEST_STATUSES for s in allowed_from
+    ):
         raise ValueError(f"Invalid resource request allowed_from: {allowed_from}")
     if new_status == "fulfilled" and not (fulfillment_note or "").strip():
-        raise ValueError("fulfillment_note is required when marking a request fulfilled")
+        raise ValueError(
+            "fulfillment_note is required when marking a request fulfilled"
+        )
     if fulfillment_note is not None:
         _reject_secret_like_text(fulfillment_note)
 
@@ -2140,7 +2390,14 @@ def transition_resource_request_status(
                     fulfilled_at = ?, fulfillment_note = ?
                 WHERE id = ? AND status IN ({placeholders})
                 """,  # nosec B608 # IN contains only generated question-mark placeholders.
-                (new_status, now, now, fulfillment_note.strip(), request_id, *allowed_from),
+                (
+                    new_status,
+                    now,
+                    now,
+                    fulfillment_note.strip(),
+                    request_id,
+                    *allowed_from,
+                ),
             )
         else:
             cursor.execute(
@@ -2158,6 +2415,7 @@ def transition_resource_request_status(
 # ===================================================================
 # COMPANY TREASURY / BUDGET
 # ===================================================================
+
 
 def _normalize_currency(currency: str) -> str:
     value = (currency or "").strip().upper()
@@ -2196,9 +2454,16 @@ def add_treasury_entry(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                datetime.datetime.now().isoformat(), entry_type, amount, currency, note,
-                source_action_id, source_action_sync_uuid,
-                source_decision_id, source_decision_sync_uuid, str(uuid.uuid4()),
+                datetime.datetime.now().isoformat(),
+                entry_type,
+                amount,
+                currency,
+                note,
+                source_action_id,
+                source_action_sync_uuid,
+                source_decision_id,
+                source_decision_sync_uuid,
+                str(uuid.uuid4()),
             ),
         )
         entry_id = cursor.lastrowid
@@ -2230,7 +2495,10 @@ def get_treasury_summary(currency: str | None = None) -> dict:
             """,  # nosec B608 # Optional WHERE is a literal currency clause; value is bound.
             params,
         )
-        balances = {row["currency"]: float(row["cash_balance"] or 0) for row in cursor.fetchall()}
+        balances = {
+            row["currency"]: float(row["cash_balance"] or 0)
+            for row in cursor.fetchall()
+        }
 
         reservation_where = (
             "WHERE currency = ? AND status = 'active'"
@@ -2246,7 +2514,9 @@ def get_treasury_summary(currency: str | None = None) -> dict:
             """,  # nosec B608 # Optional reservation WHERE is literal; currency is bound.
             params,
         )
-        reserved = {row["currency"]: float(row["reserved"] or 0) for row in cursor.fetchall()}
+        reserved = {
+            row["currency"]: float(row["reserved"] or 0) for row in cursor.fetchall()
+        }
 
         currencies = sorted(set(balances) | set(reserved))
         by_currency = {}
@@ -2300,7 +2570,9 @@ def reserve_action_budget(action_id: int) -> dict | None:
     if amount is None or amount == 0:
         return None
     if amount < 0 or not currency:
-        raise ValueError("Paid actions require a non-negative expected cost and currency")
+        raise ValueError(
+            "Paid actions require a non-negative expected cost and currency"
+        )
     currency = _normalize_currency(currency)
 
     existing = get_treasury_reservation_for_action(action_id)
@@ -2330,9 +2602,13 @@ def reserve_action_budget(action_id: int) -> dict | None:
             ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
             """,
             (
-                datetime.datetime.now().isoformat(), amount, currency,
-                action_id, action.get("sync_uuid"),
-                action.get("source_decision_id"), action.get("source_decision_sync_uuid"),
+                datetime.datetime.now().isoformat(),
+                amount,
+                currency,
+                action_id,
+                action.get("sync_uuid"),
+                action.get("source_decision_id"),
+                action.get("source_decision_sync_uuid"),
                 str(uuid.uuid4()),
             ),
         )
@@ -2356,13 +2632,18 @@ def approve_action_with_treasury(action_id: int) -> dict:
             raise ValueError("Action not found")
         if action["status"] != "pending":
             conn.rollback()
-            raise ValueError(f"Action cannot be approved from status '{action['status']}'")
+            raise ValueError(
+                f"Action cannot be approved from status '{action['status']}'"
+            )
 
         from memory.experiments import check_experiment_budget
+
         check_experiment_budget(cursor, action)
         from memory.operating_policies import check_policy
+
         check_policy(cursor, action)
         from memory.capabilities import check_inventory_requirements
+
         check_inventory_requirements(cursor, action)
 
         amount = action.get("expected_cost_amount")
@@ -2417,8 +2698,11 @@ def approve_action_with_treasury(action_id: int) -> dict:
                 ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
                 """,
                 (
-                    now, float(amount), currency,
-                    action_id, action.get("sync_uuid"),
+                    now,
+                    float(amount),
+                    currency,
+                    action_id,
+                    action.get("sync_uuid"),
                     action.get("source_decision_id"),
                     action.get("source_decision_sync_uuid"),
                     str(uuid.uuid4()),
@@ -2486,7 +2770,11 @@ def reject_action_with_treasury(action_id: int) -> dict:
         )
         released = cursor.rowcount == 1
         conn.commit()
-        return {"action_id": action_id, "status": "rejected", "reservation_released": released}
+        return {
+            "action_id": action_id,
+            "status": "rejected",
+            "reservation_released": released,
+        }
 
 
 def release_action_budget(action_id: int) -> bool:
@@ -2505,7 +2793,9 @@ def release_action_budget(action_id: int) -> bool:
         return cursor.rowcount == 1
 
 
-def record_action_spend(action_id: int, amount: float, currency: str, note: str | None = None) -> dict:
+def record_action_spend(
+    action_id: int, amount: float, currency: str, note: str | None = None
+) -> dict:
     if amount < 0:
         raise ValueError("actual spend cannot be negative")
     action = get_action_by_id(action_id)
@@ -2623,6 +2913,7 @@ def get_treasury_for_decision(decision_id: int) -> dict:
 # FUNCTIES VOOR ACTIEVOORSTELLEN (ACTION QUEUE)
 # ===================================================================
 
+
 def propose_action(
     proposed_by: str,
     action_description: str,
@@ -2667,24 +2958,35 @@ def propose_action(
     new_sync_uuid = str(uuid.uuid4())
     provenance = _current_action_provenance()
     source_decision_id = provenance.get("decision_id") if provenance else None
-    source_decision_sync_uuid = provenance.get("decision_sync_uuid") if provenance else None
+    source_decision_sync_uuid = (
+        provenance.get("decision_sync_uuid") if provenance else None
+    )
     source_phase = provenance.get("phase") if provenance else None
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO action_queue (
                 timestamp, proposed_by, action_description, action_detail,
                 status, action_type, sync_uuid,
                 source_decision_id, source_decision_sync_uuid, source_phase
             )
             VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-        """, (
-            timestamp, proposed_by, action_description, action_detail,
-            action_type, new_sync_uuid,
-            source_decision_id, source_decision_sync_uuid, source_phase,
-        ))
-        
+        """,
+            (
+                timestamp,
+                proposed_by,
+                action_description,
+                action_detail,
+                action_type,
+                new_sync_uuid,
+                source_decision_id,
+                source_decision_sync_uuid,
+                source_phase,
+            ),
+        )
+
         action_id = cursor.lastrowid
         cursor.execute(
             """
@@ -2769,7 +3071,7 @@ def get_pending_actions() -> list[dict]:
             WHERE q.status IN ('pending', 'approved', 'executing')
             ORDER BY q.timestamp DESC
         """)
-        
+
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
@@ -2787,11 +3089,14 @@ def update_action_status(action_id: int, new_status: str) -> bool:
     reviewed_at = datetime.datetime.now().isoformat()
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE action_queue
             SET status = ?, reviewed_at = ?
             WHERE id = ?
-        """, (new_status, reviewed_at, action_id))
+        """,
+            (new_status, reviewed_at, action_id),
+        )
 
         conn.commit()
         return cursor.rowcount > 0
@@ -2828,10 +3133,13 @@ def transition_action_status(
                 conn.rollback()
                 return False
             from memory.experiments import check_experiment_budget
+
             check_experiment_budget(cursor, action)
             from memory.operating_policies import check_policy
+
             check_policy(cursor, action)
             from memory.capabilities import check_inventory_requirements
+
             check_inventory_requirements(cursor, action)
             amount = action.get("expected_cost_amount")
             if amount is not None and float(amount) > 0:
@@ -2919,10 +3227,13 @@ def claim_action_for_execution(action_id: int) -> bool:
             )
 
         from memory.experiments import check_experiment_budget
+
         check_experiment_budget(cursor, action)
         from memory.operating_policies import check_policy
+
         check_policy(cursor, action)
         from memory.capabilities import check_inventory_requirements
+
         check_inventory_requirements(cursor, action)
         cursor.execute(
             """
@@ -2950,14 +3261,18 @@ def record_execution_result(action_id: int, result_detail_json: str) -> bool:
     """
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE action_queue
             SET result_detail = ?
             WHERE id = ?
-        """, (result_detail_json, action_id))
+        """,
+            (result_detail_json, action_id),
+        )
 
         conn.commit()
         return cursor.rowcount > 0
+
 
 def get_action_outcome(action_id: int) -> dict | None:
     """Retourneert de business-outcome tracking voor één actie."""
@@ -3065,7 +3380,9 @@ def update_action_outcome_with_treasury(
         raise ValueError("expected_cost_amount cannot be negative")
     if actual_cost_amount is not None and actual_cost_amount < 0:
         raise ValueError("actual_cost_amount cannot be negative")
-    normalized_currency = _normalize_currency(currency) if currency is not None else None
+    normalized_currency = (
+        _normalize_currency(currency) if currency is not None else None
+    )
 
     now = datetime.datetime.now().isoformat()
     with get_connection() as conn:
@@ -3089,7 +3406,9 @@ def update_action_outcome_with_treasury(
         action = dict(action_row)
 
         effective_currency = normalized_currency or action.get("existing_currency")
-        if (expected_cost_amount is not None or actual_cost_amount is not None) and not effective_currency:
+        if (
+            expected_cost_amount is not None or actual_cost_amount is not None
+        ) and not effective_currency:
             conn.rollback()
             raise ValueError("currency is required when recording a monetary amount")
         if effective_currency:
@@ -3112,8 +3431,14 @@ def update_action_outcome_with_treasury(
         if actual_cost_amount is not None:
             if action["actual_cost_amount"] is not None:
                 conn.rollback()
-                raise ValueError("Actual cost has already been recorded for this action")
-            if action["status"] not in {"executed", "execution_failed", "blocked_dangerous"}:
+                raise ValueError(
+                    "Actual cost has already been recorded for this action"
+                )
+            if action["status"] not in {
+                "executed",
+                "execution_failed",
+                "blocked_dangerous",
+            }:
                 conn.rollback()
                 raise ValueError(
                     "Actual cost can only be recorded after a live terminal execution state"
@@ -3132,7 +3457,9 @@ def update_action_outcome_with_treasury(
             if reservation and reservation["status"] == "active":
                 if reservation["currency"] != effective_currency:
                     conn.rollback()
-                    raise ValueError("Actual spend currency must match the reserved currency")
+                    raise ValueError(
+                        "Actual spend currency must match the reserved currency"
+                    )
                 reserved_amount = float(reservation["amount"])
 
             cursor.execute(
@@ -3308,13 +3635,15 @@ def recover_interrupted_actions() -> int:
     menselijke beoordeling.
     """
     reviewed_at = datetime.datetime.now().isoformat()
-    result_detail = json.dumps({
-        "error": (
-            "Execution was interrupted by a process shutdown/crash while the "
-            "action was marked 'executing'. Real-world outcome is unknown; "
-            "manual review is required before proposing any retry."
-        )
-    })
+    result_detail = json.dumps(
+        {
+            "error": (
+                "Execution was interrupted by a process shutdown/crash while the "
+                "action was marked 'executing'. Real-world outcome is unknown; "
+                "manual review is required before proposing any retry."
+            )
+        }
+    )
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM action_queue WHERE status = 'executing'")
@@ -3368,7 +3697,8 @@ def get_action_by_id(action_id: int) -> dict | None:
     """
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
                    q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                    q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
@@ -3382,7 +3712,9 @@ def get_action_by_id(action_id: int) -> dict | None:
             LEFT JOIN company_goals g ON g.id = d.goal_id
             LEFT JOIN action_outcomes o ON o.action_id = q.id
             WHERE q.id = ?
-        """, (action_id,))
+        """,
+            (action_id,),
+        )
 
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -3429,7 +3761,9 @@ def get_decision_lineage(decision_id: int) -> dict | None:
     }
 
 
-def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | None = None) -> list[dict]:
+def get_action_history(
+    limit: int = 20, offset: int = 0, status_filter: str | None = None
+) -> list[dict]:
     """
     Haalt de meest recente acties op UIT ALLE STATUSSEN (pending, approved,
     rejected, executed, executed_dry_run, blocked_dangerous, execution_failed) —
@@ -3445,7 +3779,8 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
     with get_connection() as conn:
         cursor = conn.cursor()
         if status_filter:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
                        q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                        q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
@@ -3461,9 +3796,12 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                 WHERE q.status = ?
                 ORDER BY q.timestamp DESC
                 LIMIT ? OFFSET ?
-            """, (status_filter, limit, offset))
+            """,
+                (status_filter, limit, offset),
+            )
         else:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT q.id, q.timestamp, q.proposed_by, q.action_description, q.action_detail,
                        q.status, q.reviewed_at, q.action_type, q.result_detail, q.sync_uuid,
                        q.source_decision_id, q.source_decision_sync_uuid, q.source_phase,
@@ -3478,7 +3816,9 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
                 LEFT JOIN action_outcomes o ON o.action_id = q.id
                 ORDER BY q.timestamp DESC
                 LIMIT ? OFFSET ?
-            """, (limit, offset))
+            """,
+                (limit, offset),
+            )
 
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
@@ -3499,6 +3839,7 @@ def get_action_history(limit: int = 20, offset: int = 0, status_filter: str | No
 #   Export: python -c "from memory.database import export_history_to_jsonl; export_history_to_jsonl('sync/history_export.jsonl')"
 #   Verplaats dat bestand via een vertrouwd privé-kanaal naar de andere machine.
 #   Import: python -c "from memory.database import import_history_from_jsonl; import_history_from_jsonl('sync/history_export.jsonl')"
+
 
 def export_history_to_jsonl(export_path: str) -> dict:
     """
@@ -3618,6 +3959,7 @@ def export_history_to_jsonl(export_path: str) -> dict:
         pass
 
     from memory.artifact_retention import register_sync_export
+
     register_sync_export(export_path)
 
     return {
@@ -3701,37 +4043,82 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 allowed_columns = _SYNC_TABLE_COLUMNS[table]
                 required_columns = {
                     "company_goals": {
-                        "created_at", "updated_at", "title", "description",
-                        "success_criteria", "priority", "status", "sync_uuid",
+                        "created_at",
+                        "updated_at",
+                        "title",
+                        "description",
+                        "success_criteria",
+                        "priority",
+                        "status",
+                        "sync_uuid",
                     },
                     "followup_events": {
-                        "created_at", "updated_at", "event_type", "status",
-                        "severity", "reason", "fingerprint", "sync_uuid",
+                        "created_at",
+                        "updated_at",
+                        "event_type",
+                        "status",
+                        "severity",
+                        "reason",
+                        "fingerprint",
+                        "sync_uuid",
                     },
                     "executive_memories": {
-                        "created_at", "updated_at", "executive_key", "memory_kind",
-                        "lesson", "confidence", "is_active", "fingerprint", "sync_uuid",
+                        "created_at",
+                        "updated_at",
+                        "executive_key",
+                        "memory_kind",
+                        "lesson",
+                        "confidence",
+                        "is_active",
+                        "fingerprint",
+                        "sync_uuid",
                     },
                     "decisions": {
-                        "timestamp", "topic", "agents_involved", "task_description",
-                        "decision_outcome", "sandbox_mode", "sync_uuid",
+                        "timestamp",
+                        "topic",
+                        "agents_involved",
+                        "task_description",
+                        "decision_outcome",
+                        "sandbox_mode",
+                        "sync_uuid",
                     },
                     "action_queue": {
-                        "timestamp", "proposed_by", "action_description", "action_detail",
-                        "status", "action_type", "sync_uuid",
+                        "timestamp",
+                        "proposed_by",
+                        "action_description",
+                        "action_detail",
+                        "status",
+                        "action_type",
+                        "sync_uuid",
                     },
                     "action_outcomes": {
-                        "action_sync_uuid", "outcome_status", "updated_at", "sync_uuid",
+                        "action_sync_uuid",
+                        "outcome_status",
+                        "updated_at",
+                        "sync_uuid",
                     },
                     "resource_requests": {
-                        "timestamp", "requested_by", "resource_type", "resource_name",
-                        "reason", "status", "sync_uuid",
+                        "timestamp",
+                        "requested_by",
+                        "resource_type",
+                        "resource_name",
+                        "reason",
+                        "status",
+                        "sync_uuid",
                     },
                     "treasury_entries": {
-                        "timestamp", "entry_type", "amount", "currency", "sync_uuid",
+                        "timestamp",
+                        "entry_type",
+                        "amount",
+                        "currency",
+                        "sync_uuid",
                     },
                     "treasury_reservations": {
-                        "timestamp", "amount", "currency", "status", "sync_uuid",
+                        "timestamp",
+                        "amount",
+                        "currency",
+                        "status",
+                        "sync_uuid",
                     },
                 }[table]
 
@@ -3821,13 +4208,22 @@ def import_history_from_jsonl(import_path: str) -> dict:
                             continue
                         row["source_decision_id"] = source_decision["id"]
                 if table in {"treasury_entries", "treasury_reservations"}:
-                    if table == "treasury_entries" and row.get("entry_type") not in VALID_TREASURY_ENTRY_TYPES:
+                    if (
+                        table == "treasury_entries"
+                        and row.get("entry_type") not in VALID_TREASURY_ENTRY_TYPES
+                    ):
                         skipped += 1
                         continue
-                    if table == "treasury_reservations" and row.get("status") not in VALID_TREASURY_RESERVATION_STATUSES:
+                    if (
+                        table == "treasury_reservations"
+                        and row.get("status") not in VALID_TREASURY_RESERVATION_STATUSES
+                    ):
                         skipped += 1
                         continue
-                    if table == "treasury_reservations" and row.get("status") == "active":
+                    if (
+                        table == "treasury_reservations"
+                        and row.get("status") == "active"
+                    ):
                         # A remote reservation represents remote approval.
                         # Preserve the audit row but never import it as local
                         # spending authority.
@@ -3886,10 +4282,13 @@ def import_history_from_jsonl(import_path: str) -> dict:
                             skipped += 1
                             continue
                         importable_fields = [
-                            key for key in row.keys()
+                            key
+                            for key in row.keys()
                             if key not in {"action_id", "action_sync_uuid"}
                         ]
-                        assignments = ", ".join(f"{key} = ?" for key in importable_fields)
+                        assignments = ", ".join(
+                            f"{key} = ?" for key in importable_fields
+                        )
                         cursor.execute(
                             f"""
                             UPDATE action_outcomes
@@ -3918,8 +4317,16 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     for uuid_key, table_name, id_key in (
                         ("goal_sync_uuid", "company_goals", "goal_id"),
                         ("source_action_sync_uuid", "action_queue", "source_action_id"),
-                        ("source_decision_sync_uuid", "decisions", "source_decision_id"),
-                        ("generated_decision_sync_uuid", "decisions", "generated_decision_id"),
+                        (
+                            "source_decision_sync_uuid",
+                            "decisions",
+                            "source_decision_id",
+                        ),
+                        (
+                            "generated_decision_sync_uuid",
+                            "decisions",
+                            "generated_decision_id",
+                        ),
                     ):
                         foreign_uuid = row.get(uuid_key)
                         if foreign_uuid:
@@ -3954,7 +4361,11 @@ def import_history_from_jsonl(import_path: str) -> dict:
 
                     for uuid_key, table_name, id_key in (
                         ("source_goal_sync_uuid", "company_goals", "source_goal_id"),
-                        ("source_decision_sync_uuid", "decisions", "source_decision_id"),
+                        (
+                            "source_decision_sync_uuid",
+                            "decisions",
+                            "source_decision_id",
+                        ),
                         ("source_action_sync_uuid", "action_queue", "source_action_id"),
                     ):
                         foreign_uuid = row.get(uuid_key)
@@ -3972,7 +4383,10 @@ def import_history_from_jsonl(import_path: str) -> dict:
                     if row is None:
                         continue
 
-                cursor.execute(f"SELECT 1 FROM {table} WHERE sync_uuid = ?", (sync_uuid_value,))  # nosec B608 # Table name already passed _SYNC_TABLE_COLUMNS whitelist.
+                cursor.execute(
+                    f"SELECT 1 FROM {table} WHERE sync_uuid = ?",  # nosec B608 # Table name passed _SYNC_TABLE_COLUMNS whitelist.
+                    (sync_uuid_value,),
+                )
                 if cursor.fetchone():
                     skipped += 1
                     continue
@@ -3984,7 +4398,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
                 try:
                     cursor.execute(
                         f"INSERT INTO {table} ({columns}) VALUES ({placeholders})",  # nosec B608 # Table and columns already passed the explicit import whitelist.
-                        tuple(row.values())
+                        tuple(row.values()),
                     )
                 except (sqlite3.IntegrityError, sqlite3.OperationalError):
                     # Eén beschadigde/onvolledige regel mag een volledige
@@ -4045,6 +4459,7 @@ def import_history_from_jsonl(import_path: str) -> dict:
 # AUTOMATISCHE BACKUPS
 # ===================================================================
 
+
 def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     """
     Kopieert het huidige databasebestand naar backup_dir met een tijdstempel
@@ -4057,12 +4472,17 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
     """
     if config.BACKUP_ENCRYPTION_KEY:
         from memory.encrypted_backup import backup_encrypted_database
-        return backup_encrypted_database(backup_dir, config.BACKUP_ENCRYPTION_KEY, keep_last)
+
+        return backup_encrypted_database(
+            backup_dir, config.BACKUP_ENCRYPTION_KEY, keep_last
+        )
 
     import datetime as _dt
 
     if not isinstance(keep_last, int) or keep_last < 1:
-        raise ValueError("keep_last must be a positive integer; never delete all backups")
+        raise ValueError(
+            "keep_last must be a positive integer; never delete all backups"
+        )
     if os.path.islink(backup_dir):
         raise ValueError("Backup directory must not be a symlink")
     os.makedirs(backup_dir, exist_ok=True)
@@ -4093,7 +4513,11 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
         pass
 
     existing_backups = sorted(
-        [f for f in os.listdir(backup_dir) if f.startswith("executive_team_backup_") and f.endswith(".db")]
+        [
+            f
+            for f in os.listdir(backup_dir)
+            if f.startswith("executive_team_backup_") and f.endswith(".db")
+        ]
     )
     while len(existing_backups) > keep_last:
         oldest = existing_backups.pop(0)
@@ -4108,6 +4532,7 @@ def backup_database(backup_dir: str = "backups", keep_last: int = 7) -> str:
 # ===================================================================
 # SYSTEEMSTATISTIEKEN
 # ===================================================================
+
 
 def get_system_stats() -> dict:
     """
@@ -4125,18 +4550,26 @@ def get_system_stats() -> dict:
         cursor.execute("SELECT COUNT(*) as count FROM action_queue")
         total_actions = cursor.fetchone()["count"]
 
-        cursor.execute("SELECT status, COUNT(*) as count FROM action_queue GROUP BY status")
+        cursor.execute(
+            "SELECT status, COUNT(*) as count FROM action_queue GROUP BY status"
+        )
         actions_by_status = {row["status"]: row["count"] for row in cursor.fetchall()}
 
-        cursor.execute("SELECT COUNT(*) as count FROM decisions WHERE topic = 'Daily Research Findings'")
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM decisions WHERE topic = 'Daily Research Findings'"
+        )
         research_success_count = cursor.fetchone()["count"]
 
-        cursor.execute("SELECT COUNT(*) as count FROM decisions WHERE topic LIKE 'Daily Research FAILED%'")
+        cursor.execute(
+            "SELECT COUNT(*) as count FROM decisions WHERE topic LIKE 'Daily Research FAILED%'"
+        )
         research_failed_count = cursor.fetchone()["count"]
 
     total_research_runs = research_success_count + research_failed_count
     research_success_rate = (
-        round(research_success_count / total_research_runs * 100, 1) if total_research_runs > 0 else None
+        round(research_success_count / total_research_runs * 100, 1)
+        if total_research_runs > 0
+        else None
     )
 
     return {
@@ -4176,21 +4609,42 @@ def _store_contributions(cursor, decision_id, phase, outputs, profiles):
         return
     if not isinstance(outputs, dict) or len(outputs) > 11:
         raise ValueError("Invalid executive contribution set")
-    allowed = {'ceo', 'cfo', 'coo', 'cso', 'cmo', 'cto', 'cpo', 'chro', 'general_counsel', 'board_director', 'cco'}
+    allowed = {
+        "ceo",
+        "cfo",
+        "coo",
+        "cso",
+        "cmo",
+        "cto",
+        "cpo",
+        "chro",
+        "general_counsel",
+        "board_director",
+        "cco",
+    }
     validated = []
     for sequence, (key, body) in enumerate(outputs.items(), 1):
         if key not in allowed or not isinstance(body, str) or len(body) > 100000:
             raise ValueError("Invalid executive contribution")
         profile = (profiles or {}).get(key, {})
-        if not isinstance(profile, dict) or set(profile) - {'name', 'role', 'goal', 'backstory'}:
+        if not isinstance(profile, dict) or set(profile) - {
+            "name",
+            "role",
+            "goal",
+            "backstory",
+        }:
             raise ValueError("Invalid executive profile snapshot")
-        if any(not isinstance(value, str) or len(value) > 20000 for value in profile.values()):
+        if any(
+            not isinstance(value, str) or len(value) > 20000
+            for value in profile.values()
+        ):
             raise ValueError("Invalid executive profile text")
         _reject_secret_like_text(body, *profile.values())
         validated.append((sequence, key, body, json.dumps(profile, sort_keys=True)))
     existing = cursor.execute(
         "SELECT sequence, executive_key, body, profile_json FROM decision_contributions WHERE decision_id = ? AND phase = ? ORDER BY sequence",
-        (decision_id, phase)).fetchall()
+        (decision_id, phase),
+    ).fetchall()
     if existing:
         if [tuple(row) for row in existing] != validated:
             raise ValueError("Recorded executive contributions are immutable")
@@ -4198,22 +4652,27 @@ def _store_contributions(cursor, decision_id, phase, outputs, profiles):
     now = datetime.datetime.now().isoformat()
     cursor.executemany(
         "INSERT INTO decision_contributions (decision_id, phase, sequence, executive_key, body, profile_json, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(decision_id, phase, *row, now) for row in validated])
+        [(decision_id, phase, *row, now) for row in validated],
+    )
 
 
 def get_decision_contributions(decision_id: int) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, decision_id, phase, sequence, executive_key, body, profile_json, captured_at FROM decision_contributions WHERE decision_id = ? ORDER BY CASE phase WHEN 'decision' THEN 0 ELSE 1 END, sequence",
-            (decision_id,)).fetchall()
+            (decision_id,),
+        ).fetchall()
         result = []
         for row in rows:
             item = dict(row)
-            item['profile'] = json.loads(item.pop('profile_json'))
+            item["profile"] = json.loads(item.pop("profile_json"))
             result.append(item)
         return result
 
 
-def get_company_activity(limit: int = 50, offset: int = 0, before_id: int | None = None) -> list[dict]:
+def get_company_activity(
+    limit: int = 50, offset: int = 0, before_id: int | None = None
+) -> list[dict]:
     from memory.activity import list_activity
+
     return list_activity(limit, offset, before_id)

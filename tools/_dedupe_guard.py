@@ -1,5 +1,4 @@
-"""
-tools/_dedupe_guard.py
+"""Short-lived duplicate invocation guard for agent tool requests.
 
 Gedeelde, in-memory bescherming tegen een agent die dezelfde tool-aanroep
 herhaaldelijk achter elkaar doet (waargenomen incident: CFO riep
@@ -37,7 +36,9 @@ def check_and_register_proposal(dedupe_key: str) -> Optional[str]:
     # Check + registratie moeten één atomische kritieke sectie zijn; tools
     # kunnen vanuit verschillende worker-threads tegelijk worden aangeroepen.
     with _dedupe_lock:
-        stale_keys = [k for k, ts in _recent_proposals.items() if now - ts > DEDUPE_WINDOW_SECONDS]
+        stale_keys = [
+            k for k, ts in _recent_proposals.items() if now - ts > DEDUPE_WINDOW_SECONDS
+        ]
         for k in stale_keys:
             del _recent_proposals[k]
 

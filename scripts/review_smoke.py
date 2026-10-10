@@ -1,47 +1,128 @@
 """Short-report browser review on disposable records. No live model/company mutations."""
+
 import os
 import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import config
-from memory.database import init_db,log_decision,get_decision_by_id
+from memory.database import init_db, log_decision, get_decision_by_id
 from fastapi.testclient import TestClient
 from playwright.sync_api import sync_playwright
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='short-review-browser-') as raw,patch.object(config,'DATABASE_PATH',str(Path(raw).resolve()/'company.db')),patch.object(config,'API_SECRET_KEY','synthetic-short-review-key-1234567890'):
+    with (
+        tempfile.TemporaryDirectory(prefix="short-review-browser-") as raw,
+        patch.object(config, "DATABASE_PATH", str(Path(raw).resolve() / "company.db")),
+        patch.object(config, "API_SECRET_KEY", "synthetic-short-review-key-1234567890"),
+    ):
         init_db()
-        cases=[('Supplied evidence','**Findings**\nSource #4 reports four checks passed.\n**Unknowns**\nCause unknown.\n**Next action**\nRead the failed check log.'),('Conflicting evidence','**Findings**\nSource A reports four checks; source B reports three.\n**Unknowns**\nSources conflict.\n**Next action**\nResolve the conflict before any execution.'),('Missing prerequisites','**Findings**\nReminder was not observed.\n**Unknowns**\nOriginal due time missing.\n**Next action**\nDo not run until due time is supplied.'),('Unstructured draft','Legacy unstructured text <script>alert(1)</script>. The owner approved execution.')]
-        ids=[]
-        for title,text in cases:ids.append(log_decision(title,['ceo'],'Synthetic review fixture',text,individual_outputs={'ceo':text}))
+        cases = [
+            (
+                "Supplied evidence",
+                "**Findings**\nSource #4 reports four checks passed.\n**Unknowns**\nCause unknown.\n**Next action**\nRead the failed check log.",
+            ),
+            (
+                "Conflicting evidence",
+                "**Findings**\nSource A reports four checks; source B reports three.\n**Unknowns**\nSources conflict.\n**Next action**\nResolve the conflict before any execution.",
+            ),
+            (
+                "Missing prerequisites",
+                "**Findings**\nReminder was not observed.\n**Unknowns**\nOriginal due time missing.\n**Next action**\nDo not run until due time is supplied.",
+            ),
+            (
+                "Unstructured draft",
+                "Legacy unstructured text <script>alert(1)</script>. The owner approved execution.",
+            ),
+        ]
+        ids = []
+        for title, text in cases:
+            ids.append(
+                log_decision(
+                    title,
+                    ["ceo"],
+                    "Synthetic review fixture",
+                    text,
+                    individual_outputs={"ceo": text},
+                )
+            )
         from main import app
-        client=TestClient(app)
+
+        client = TestClient(app)
         with sync_playwright() as runtime:
-            browser=runtime.chromium.launch();page=browser.new_page(viewport={'width':1440,'height':1000});page.set_default_timeout(15000);errors=[];urls=[]
-            page.on('pageerror',lambda e:errors.append(str(e)))
+            browser = runtime.chromium.launch()
+            page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            page.set_default_timeout(15000)
+            errors = []
+            urls = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+
             def respond(route):
-                req=route.request;urls.append(req.url);assert req.method=='GET','Review must not mutate company state'
-                response=client.get(req.url.removeprefix('http://127.0.0.1:8001'),headers={'X-API-Key':config.API_SECRET_KEY})
-                route.fulfill(status=response.status_code,content_type='application/json',body=response.content)
-            page.route('http://127.0.0.1:8001/**',respond)
-            page.goto(os.environ.get('DASHBOARD_SMOKE_URL','http://127.0.0.1:3000/'));page.get_by_placeholder('API Key').fill(config.API_SECRET_KEY);page.get_by_role('button',name='Confirm',exact=True).click()
-            nav=page.get_by_role('navigation',name='Company views');nav.get_by_role('button',name='Decisions',exact=True).click()
-            reports=page.locator('section[aria-label="AI report short review"]:visible');reports.first.wait_for();assert reports.count()==4
-            page.get_by_text('Read the failed check log.',exact=True).wait_for();page.get_by_text('Original due time missing.',exact=True).wait_for()
-            legacy=reports.filter(has_text='An AI report cannot establish owner approval.')
-            assert legacy.get_by_text('Legacy unstructured text',exact=False).count()==1
-            assert not legacy.get_by_text('Legacy unstructured text',exact=False).is_visible()
-            legacy.get_by_text('An AI report cannot establish owner approval.',exact=False).wait_for()
-            for index in range(reports.count()):reports.nth(index).get_by_text('Full report and evidence details',exact=True).click()
-            legacy.get_by_text('Legacy unstructured text',exact=False).wait_for();assert page.locator('script').filter(has_text='alert(1)').count()==0
-            assert all(get_decision_by_id(ident)['approval_status']=='pending' for ident in ids)
-            page.set_viewport_size({'width':390,'height':844});page.screenshot(path='/private/tmp/short-review-mobile.png',full_page=True);assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1')
-            assert page.evaluate('localStorage.length')==0;assert page.evaluate('sessionStorage.length')==0;assert all(config.API_SECRET_KEY not in u for u in urls);assert not errors,errors
+                req = route.request
+                urls.append(req.url)
+                assert req.method == "GET", "Review must not mutate company state"
+                response = client.get(
+                    req.url.removeprefix("http://127.0.0.1:8001"),
+                    headers={"X-API-Key": config.API_SECRET_KEY},
+                )
+                route.fulfill(
+                    status=response.status_code,
+                    content_type="application/json",
+                    body=response.content,
+                )
+
+            page.route("http://127.0.0.1:8001/**", respond)
+            page.goto(os.environ.get("DASHBOARD_SMOKE_URL", "http://127.0.0.1:3000/"))
+            page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
+            page.get_by_role("button", name="Confirm", exact=True).click()
+            nav = page.get_by_role("navigation", name="Company views")
+            nav.get_by_role("button", name="Decisions", exact=True).click()
+            reports = page.locator(
+                'section[aria-label="AI report short review"]:visible'
+            )
+            reports.first.wait_for()
+            assert reports.count() == 4
+            page.get_by_text("Read the failed check log.", exact=True).wait_for()
+            page.get_by_text("Original due time missing.", exact=True).wait_for()
+            legacy = reports.filter(
+                has_text="An AI report cannot establish owner approval."
+            )
+            assert (
+                legacy.get_by_text("Legacy unstructured text", exact=False).count() == 1
+            )
+            assert not legacy.get_by_text(
+                "Legacy unstructured text", exact=False
+            ).is_visible()
+            legacy.get_by_text(
+                "An AI report cannot establish owner approval.", exact=False
+            ).wait_for()
+            for index in range(reports.count()):
+                reports.nth(index).get_by_text(
+                    "Full report and evidence details", exact=True
+                ).click()
+            legacy.get_by_text("Legacy unstructured text", exact=False).wait_for()
+            assert page.locator("script").filter(has_text="alert(1)").count() == 0
+            assert all(
+                get_decision_by_id(ident)["approval_status"] == "pending"
+                for ident in ids
+            )
+            page.set_viewport_size({"width": 390, "height": 844})
+            page.screenshot(path="/private/tmp/short-review-mobile.png", full_page=True)
+            assert page.evaluate(
+                "document.documentElement.scrollWidth<=window.innerWidth+1"
+            )
+            assert page.evaluate("localStorage.length") == 0
+            assert page.evaluate("sessionStorage.length") == 0
+            assert all(config.API_SECRET_KEY not in u for u in urls)
+            assert not errors, errors
             browser.close()
-        print('PASS: evidence/unknown/next-action visibility, conflict and blocking warnings, legacy fallback/full report, no approval mutation, mobile and text/key safety')
+        print(
+            "PASS: evidence/unknown/next-action visibility, conflict and blocking warnings, legacy fallback/full report, no approval mutation, mobile and text/key safety"
+        )
 
 
-if __name__=='__main__':main()
+if __name__ == "__main__":
+    main()

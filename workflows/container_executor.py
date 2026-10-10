@@ -5,6 +5,7 @@ It never controls Docker flags, mounts, image, user, network or capabilities.
 Docker must be locally installed and the configured image pre-pulled.
 Never mount the Docker socket into this worker.
 """
+
 import os
 from pathlib import Path
 import shutil
@@ -12,7 +13,9 @@ import secrets
 import stat
 import subprocess
 
-WORKER_IMAGE = "alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
+WORKER_IMAGE = (
+    "alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
+)
 MAX_OUTPUT_BYTES = 65536
 
 
@@ -24,7 +27,9 @@ class ContainerTimeoutError(ContainerExecutionError):
     pass
 
 
-def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedProcess[str]:
+def run_in_container(
+    command: str, workspace_root: str
+) -> subprocess.CompletedProcess[str]:
     if not isinstance(command, str) or not command.strip():
         raise ContainerExecutionError("Empty command rejected")
     root = Path(workspace_root).resolve(strict=True)
@@ -34,6 +39,7 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
     # path characters as mount parameters (or splitting log/CLI arguments).
     if any(ch in str(root) for ch in (",", "\\n", "\\r")):
         raise ContainerExecutionError("Unsupported workspace path in Docker mount")
+
     # A host Unix socket or device node within the bind mount could expose
     # host services (including Docker itself) to otherwise isolated code.
     # Check before launch; a dedicated workspace with no concurrent writers
@@ -42,7 +48,9 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
         raise ContainerExecutionError("Workspace traversal denied") from exc
 
     scanned = 0
-    for directory, subdirs, files in os.walk(root, followlinks=False, onerror=_walk_failed):
+    for directory, subdirs, files in os.walk(
+        root, followlinks=False, onerror=_walk_failed
+    ):
         for name in subdirs + files:
             scanned += 1
             if scanned > 10000:
@@ -61,33 +69,61 @@ def run_in_container(command: str, workspace_root: str) -> subprocess.CompletedP
         raise ContainerExecutionError("Docker unavailable: fail closed")
     container_name = "executive-worker-" + secrets.token_hex(12)
     args = [
-        docker, "run", "--rm", "--name", container_name, "--pull=never",
-        "--network=none", "--ipc=none", "--read-only",
-        "--cap-drop=ALL", "--security-opt=no-new-privileges",
-        "--pids-limit=64", "--memory=256m", "--cpus=1",
+        docker,
+        "run",
+        "--rm",
+        "--name",
+        container_name,
+        "--pull=never",
+        "--network=none",
+        "--ipc=none",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--pids-limit=64",
+        "--memory=256m",
+        "--cpus=1",
         f"--user={os.getuid()}:{os.getgid()}",
-        "--mount", f"type=bind,source={root},target=/workspace",
+        "--mount",
+        f"type=bind,source={root},target=/workspace",
         "--workdir=/workspace",
         "--tmpfs=/tmp:rw,noexec,nosuid,size=16m",
-        WORKER_IMAGE, "/bin/sh", "-c", command,
+        WORKER_IMAGE,
+        "/bin/sh",
+        "-c",
+        command,
     ]
     try:
         result = subprocess.run(
-            args, shell=False, text=True, capture_output=True,
-            timeout=30, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+            args,
+            shell=False,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
         # Killing the Docker CLI does not always kill the container in the daemon.
         try:
-            subprocess.run([docker, "rm", "-f", container_name], shell=False,
-                           capture_output=True, timeout=10, check=False)
+            subprocess.run(
+                [docker, "rm", "-f", container_name],
+                shell=False,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
         except (OSError, subprocess.TimeoutExpired):
             pass
-        raise ContainerTimeoutError("Container timed out; attempted forced cleanup") from exc
+        raise ContainerTimeoutError(
+            "Container timed out; attempted forced cleanup"
+        ) from exc
     except OSError as exc:
         raise ContainerExecutionError("Container invocation failed") from exc
     # Fail closed on unexpectedly large output instead of recording it.
-    if len(result.stdout.encode("utf-8")) + len(result.stderr.encode("utf-8")) > MAX_OUTPUT_BYTES:
+    if (
+        len(result.stdout.encode("utf-8")) + len(result.stderr.encode("utf-8"))
+        > MAX_OUTPUT_BYTES
+    ):
         raise ContainerExecutionError("Container output exceeded bounded result size")
     return result

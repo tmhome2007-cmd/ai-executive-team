@@ -1,5 +1,4 @@
-"""
-workflows/autonomous_followup.py
+"""Scheduled outcome follow-ups using persisted company records.
 
 Deterministic autonomous follow-up watcher.
 
@@ -34,7 +33,6 @@ from memory.database import (
 from notifications.telegram_bot import send_notification_async, escape_html
 from workflows.meeting import run_executive_meeting
 from config import config
-
 
 _REASONING_EVENT_TYPES = {
     "strategy_review",
@@ -100,47 +98,53 @@ def classify_goal_followups(
 
     if not decisions:
         if is_overdue:
-            candidates.append({
-                "event_type": "overdue_goal_review",
-                "severity": "critical",
-                "reason": (
-                    f"Active goal '{goal['title']}' has no linked executive decision "
-                    f"and passed its target date ({target_date}). One tool-free strategy "
-                    "review is required before any preparation."
-                ),
-                "fingerprint": f"goal:{goal_sync}:overdue-no-strategy:{target_date}",
-                "meeting_required": True,
-                "source_decision_id": None,
-                "source_action_id": None,
-            })
+            candidates.append(
+                {
+                    "event_type": "overdue_goal_review",
+                    "severity": "critical",
+                    "reason": (
+                        f"Active goal '{goal['title']}' has no linked executive decision "
+                        f"and passed its target date ({target_date}). One tool-free strategy "
+                        "review is required before any preparation."
+                    ),
+                    "fingerprint": f"goal:{goal_sync}:overdue-no-strategy:{target_date}",
+                    "meeting_required": True,
+                    "source_decision_id": None,
+                    "source_action_id": None,
+                }
+            )
         else:
-            candidates.append({
-                "event_type": "strategy_review",
-                "severity": "attention",
-                "reason": (
-                    f"Active goal '{goal['title']}' has no linked executive decision yet. "
-                    "A tool-free strategy review is required before any preparation."
-                ),
-                "fingerprint": f"goal:{goal_sync}:strategy-review:v1",
-                "meeting_required": True,
-                "source_decision_id": None,
-                "source_action_id": None,
-            })
+            candidates.append(
+                {
+                    "event_type": "strategy_review",
+                    "severity": "attention",
+                    "reason": (
+                        f"Active goal '{goal['title']}' has no linked executive decision yet. "
+                        "A tool-free strategy review is required before any preparation."
+                    ),
+                    "fingerprint": f"goal:{goal_sync}:strategy-review:v1",
+                    "meeting_required": True,
+                    "source_decision_id": None,
+                    "source_action_id": None,
+                }
+            )
         return candidates
 
     if is_overdue:
-        candidates.append({
-            "event_type": "overdue_goal_review",
-            "severity": "critical",
-            "reason": (
-                f"Active goal '{goal['title']}' passed its target date "
-                f"({target_date}) and needs an evidence-based strategy review."
-            ),
-            "fingerprint": f"goal:{goal_sync}:overdue:{target_date}",
-            "meeting_required": True,
-            "source_decision_id": decisions[-1]["decision"]["id"],
-            "source_action_id": None,
-        })
+        candidates.append(
+            {
+                "event_type": "overdue_goal_review",
+                "severity": "critical",
+                "reason": (
+                    f"Active goal '{goal['title']}' passed its target date "
+                    f"({target_date}) and needs an evidence-based strategy review."
+                ),
+                "fingerprint": f"goal:{goal_sync}:overdue:{target_date}",
+                "meeting_required": True,
+                "source_decision_id": decisions[-1]["decision"]["id"],
+                "source_action_id": None,
+            }
+        )
 
     # Owner-facing unresolved gates are surfaced without generating extra
     # strategy meetings. The owner already has a concrete item to review.
@@ -150,101 +154,115 @@ def classify_goal_followups(
         preparation = decision.get("preparation_status")
 
         if approval == "pending":
-            candidates.append({
-                "event_type": "owner_decision_review",
-                "severity": "attention",
-                "reason": (
-                    f"Decision #{decision['id']} for goal '{goal['title']}' is waiting "
-                    "for owner approval/rejection."
-                ),
-                "fingerprint": f"decision:{decision['sync_uuid']}:approval:pending",
-                "meeting_required": False,
-                "source_decision_id": decision["id"],
-                "source_action_id": None,
-            })
+            candidates.append(
+                {
+                    "event_type": "owner_decision_review",
+                    "severity": "attention",
+                    "reason": (
+                        f"Decision #{decision['id']} for goal '{goal['title']}' is waiting "
+                        "for owner approval/rejection."
+                    ),
+                    "fingerprint": f"decision:{decision['sync_uuid']}:approval:pending",
+                    "meeting_required": False,
+                    "source_decision_id": decision["id"],
+                    "source_action_id": None,
+                }
+            )
         elif approval == "approved" and preparation == "not_started":
-            candidates.append({
-                "event_type": "owner_preparation_review",
-                "severity": "attention",
-                "reason": (
-                    f"Approved Decision #{decision['id']} for goal '{goal['title']}' "
-                    "is waiting for owner-triggered preparation."
-                ),
-                "fingerprint": f"decision:{decision['sync_uuid']}:preparation:not-started",
-                "meeting_required": False,
-                "source_decision_id": decision["id"],
-                "source_action_id": None,
-            })
+            candidates.append(
+                {
+                    "event_type": "owner_preparation_review",
+                    "severity": "attention",
+                    "reason": (
+                        f"Approved Decision #{decision['id']} for goal '{goal['title']}' "
+                        "is waiting for owner-triggered preparation."
+                    ),
+                    "fingerprint": f"decision:{decision['sync_uuid']}:preparation:not-started",
+                    "meeting_required": False,
+                    "source_decision_id": decision["id"],
+                    "source_action_id": None,
+                }
+            )
 
         for resource in decision_lineage.get("resource_requests", []):
             if resource.get("status") in {"pending", "approved"}:
-                candidates.append({
-                    "event_type": "owner_resource_review",
-                    "severity": "attention",
-                    "reason": (
-                        f"Resource request #{resource['id']} ({resource['resource_name']}) "
-                        f"for goal '{goal['title']}' is {resource['status']} and needs owner attention."
-                    ),
-                    "fingerprint": (
-                        f"resource:{resource['sync_uuid']}:status:{resource['status']}"
-                    ),
-                    "meeting_required": False,
-                    "source_decision_id": decision.get("id"),
-                    "source_action_id": None,
-                })
+                candidates.append(
+                    {
+                        "event_type": "owner_resource_review",
+                        "severity": "attention",
+                        "reason": (
+                            f"Resource request #{resource['id']} ({resource['resource_name']}) "
+                            f"for goal '{goal['title']}' is {resource['status']} and needs owner attention."
+                        ),
+                        "fingerprint": (
+                            f"resource:{resource['sync_uuid']}:status:{resource['status']}"
+                        ),
+                        "meeting_required": False,
+                        "source_decision_id": decision.get("id"),
+                        "source_action_id": None,
+                    }
+                )
 
         for action in decision_lineage.get("actions", []):
             action_status = action.get("status")
             outcome_status = action.get("outcome_status")
 
             if action_status in {"pending", "approved"}:
-                candidates.append({
-                    "event_type": "owner_action_review",
-                    "severity": "attention",
-                    "reason": (
-                        f"Action #{action['id']} for goal '{goal['title']}' is "
-                        f"{action_status} and needs owner review/execution."
-                    ),
-                    "fingerprint": f"action:{action['sync_uuid']}:status:{action_status}",
-                    "meeting_required": False,
-                    "source_decision_id": decision.get("id"),
-                    "source_action_id": action["id"],
-                })
+                candidates.append(
+                    {
+                        "event_type": "owner_action_review",
+                        "severity": "attention",
+                        "reason": (
+                            f"Action #{action['id']} for goal '{goal['title']}' is "
+                            f"{action_status} and needs owner review/execution."
+                        ),
+                        "fingerprint": f"action:{action['sync_uuid']}:status:{action_status}",
+                        "meeting_required": False,
+                        "source_decision_id": decision.get("id"),
+                        "source_action_id": action["id"],
+                    }
+                )
 
             if outcome_status == "measurement_pending":
-                candidates.append({
-                    "event_type": "outcome_measurement",
-                    "severity": "attention",
-                    "reason": (
-                        f"Action #{action['id']} executed for goal '{goal['title']}', "
-                        "but its business outcome still needs measurement."
-                    ),
-                    "fingerprint": (
-                        f"action:{action['sync_uuid']}:outcome:measurement-pending:"
-                        f"{action.get('updated_at') or action.get('measured_at') or 'current'}"
-                    ),
-                    "meeting_required": False,
-                    "source_decision_id": decision.get("id"),
-                    "source_action_id": action["id"],
-                })
+                candidates.append(
+                    {
+                        "event_type": "outcome_measurement",
+                        "severity": "attention",
+                        "reason": (
+                            f"Action #{action['id']} executed for goal '{goal['title']}', "
+                            "but its business outcome still needs measurement."
+                        ),
+                        "fingerprint": (
+                            f"action:{action['sync_uuid']}:outcome:measurement-pending:"
+                            f"{action.get('updated_at') or action.get('measured_at') or 'current'}"
+                        ),
+                        "meeting_required": False,
+                        "source_decision_id": decision.get("id"),
+                        "source_action_id": action["id"],
+                    }
+                )
 
             if outcome_status in {"failed", "partial", "inconclusive"}:
-                candidates.append({
-                    "event_type": "adverse_outcome_review",
-                    "severity": "critical" if outcome_status == "failed" else "attention",
-                    "reason": (
-                        f"Action #{action['id']} for goal '{goal['title']}' has measured "
-                        f"business outcome '{outcome_status}'. A new tool-free executive "
-                        "review should decide what to recommend next."
-                    ),
-                    "fingerprint": (
-                        f"action:{action['sync_uuid']}:adverse:{outcome_status}:"
-                        f"{action.get('updated_at') or action.get('measured_at') or 'current'}"
-                    ),
-                    "meeting_required": True,
-                    "source_decision_id": decision.get("id"),
-                    "source_action_id": action["id"],
-                })
+                candidates.append(
+                    {
+                        "event_type": "adverse_outcome_review",
+                        "severity": (
+                            "critical" if outcome_status == "failed" else "attention"
+                        ),
+                        "reason": (
+                            f"Action #{action['id']} for goal '{goal['title']}' has measured "
+                            f"business outcome '{outcome_status}'. A new tool-free executive "
+                            "review should decide what to recommend next."
+                        ),
+                        "fingerprint": (
+                            f"action:{action['sync_uuid']}:adverse:{outcome_status}:"
+                            f"{action.get('updated_at') or action.get('measured_at') or 'current'}"
+                        ),
+                        "meeting_required": True,
+                        "source_decision_id": decision.get("id"),
+                        "source_action_id": action["id"],
+                    }
+                )
 
     return candidates
 
@@ -277,7 +295,8 @@ def _followup_meeting_prompt(goal: dict, event: dict, lineage: dict) -> str:
             f"{recent_decision['topic']}\n"
             f"Current approval state: {recent_decision.get('approval_status')}\n"
             f"Current preparation state: {recent_decision.get('preparation_status')}\n\n"
-            if recent_decision else ""
+            if recent_decision
+            else ""
         )
         + (
             f"Measured source action: #{source_action['id']} — "
@@ -289,7 +308,8 @@ def _followup_meeting_prompt(goal: dict, event: dict, lineage: dict) -> str:
             f"Outcome status: {source_action.get('outcome_status') or 'unknown'}\n"
             f"Next recommendation already recorded: "
             f"{source_action.get('next_recommendation') or 'none'}\n\n"
-            if source_action else ""
+            if source_action
+            else ""
         )
         + "Produce a concise follow-up recommendation. This meeting has NO tools. "
         "Do not claim any action was executed, do not invent URLs/resources/costs, "
@@ -331,9 +351,7 @@ async def run_autonomous_followup() -> dict:
                     source_decision_id=candidate.get("source_decision_id"),
                 )
             except Exception as exc:
-                errors.append(
-                    f"Goal #{goal['id']} {candidate['event_type']}: {exc}"
-                )
+                errors.append(f"Goal #{goal['id']} {candidate['event_type']}: {exc}")
                 continue
 
             if not created:
@@ -344,7 +362,9 @@ async def run_autonomous_followup() -> dict:
                 if (
                     existing_event is None
                     or existing_event.get("generated_decision_id") is not None
-                    or not claim_followup_meeting_attempt(event_id, min_retry_seconds=900)
+                    or not claim_followup_meeting_attempt(
+                        event_id, min_retry_seconds=900
+                    )
                 ):
                     continue
                 try:
@@ -427,9 +447,7 @@ async def run_autonomous_followup() -> dict:
                     errors.append(
                         f"Could not persist retryable failure for event #{event_id}: {persist_exc}"
                     )
-                errors.append(
-                    f"Follow-up meeting for event #{event_id} failed: {exc}"
-                )
+                errors.append(f"Follow-up meeting for event #{event_id} failed: {exc}")
 
     # Reconcile old open events after scanning. Non-reasoning alerts close
     # automatically when their deterministic condition disappears. Reasoning
@@ -445,7 +463,10 @@ async def run_autonomous_followup() -> dict:
                 should_resolve = True
             elif generated_decision_id is not None:
                 generated = get_decision_by_id(generated_decision_id)
-                if generated is not None and generated.get("approval_status") in {"approved", "rejected"}:
+                if generated is not None and generated.get("approval_status") in {
+                    "approved",
+                    "rejected",
+                }:
                     should_resolve = True
             elif event.get("fingerprint") not in active_fingerprints:
                 should_resolve = True

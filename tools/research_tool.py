@@ -1,5 +1,4 @@
-"""
-tools/research_tool.py
+"""Bounded public research reads and captured source records.
 
 Aangepaste tool voor het inlezen van webpagina's met geschikte User-Agent headers.
 
@@ -33,13 +32,16 @@ from crewai.tools import BaseTool
 _CALL_COUNT = 0
 _FETCHED_SOURCES = {}
 
+
 def reset_call_count():
     global _CALL_COUNT
     _CALL_COUNT = 0
     _FETCHED_SOURCES.clear()
 
+
 def get_fetched_sources():
     return dict(_FETCHED_SOURCES)
+
 
 def get_call_count():
     return _CALL_COUNT
@@ -104,7 +106,9 @@ def _is_safe_research_url(url: str) -> str | None:
     return None
 
 
-def _get_safe_response(url: str, headers: dict, timeout: float = 10.0, max_redirects: int = 5):
+def _get_safe_response(
+    url: str, headers: dict, timeout: float = 10.0, max_redirects: int = 5
+):
     """
     Volgt redirects handmatig zodat ELKE redirect-target opnieuw door de
     SSRF-check gaat. requests.get(..., allow_redirects=True) zou anders een
@@ -130,6 +134,7 @@ def _get_safe_response(url: str, headers: dict, timeout: float = 10.0, max_redir
             if not location:
                 return response
             from urllib.parse import urljoin
+
             current_url = urljoin(current_url, location)
             response.close()
             continue
@@ -156,17 +161,22 @@ class PageReaderTool(BaseTool):
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
-            
+
             # Volg redirects handmatig; ieder doel wordt opnieuw tegen de
             # private/loopback/link-local SSRF-regels gevalideerd.
             response = _get_safe_response(url, headers=headers, timeout=10)
-            
+
             if response.status_code != 200:
                 response.close()
-                return f"Error: Received status code {response.status_code} for URL {url}"
+                return (
+                    f"Error: Received status code {response.status_code} for URL {url}"
+                )
 
             content_type = (response.headers.get("Content-Type") or "").lower()
-            if not any(kind in content_type for kind in ("text/html", "text/plain", "application/xhtml+xml")):
+            if not any(
+                kind in content_type
+                for kind in ("text/html", "text/plain", "application/xhtml+xml")
+            ):
                 response.close()
                 return f"Error: Unsupported content type '{content_type or 'unknown'}'."
 
@@ -194,10 +204,18 @@ class PageReaderTool(BaseTool):
             # UTF-8 punctuation. Honour an explicit HTTP charset; otherwise
             # let the HTML parser inspect meta tags and the bounded bytes.
             content_header = Message()
-            content_header['Content-Type'] = response.headers.get('Content-Type', '')
-            soup = BeautifulSoup(bytes(body), "html.parser", from_encoding=content_header.get_content_charset())
+            content_header["Content-Type"] = response.headers.get("Content-Type", "")
+            soup = BeautifulSoup(
+                bytes(body),
+                "html.parser",
+                from_encoding=content_header.get_content_charset(),
+            )
             paragraphs = [p.get_text() for p in soup.find_all("p")]
-            full_text = (soup.get_text() if 'text/plain' in content_type else " ".join(paragraphs)).strip()
+            full_text = (
+                soup.get_text()
+                if "text/plain" in content_type
+                else " ".join(paragraphs)
+            ).strip()
 
             if not full_text:
                 return "Error: No textual paragraph content found on page."
@@ -211,7 +229,7 @@ class PageReaderTool(BaseTool):
 
             # Beperk de tekstlengte om de contextruimte van het model te besparen
             return full_text[:2000]
-            
+
         except Exception:
             return "Error: Public page could not be read."
         finally:

@@ -1,5 +1,4 @@
-"""
-config.py
+"""Environment configuration and startup validation; never log credential values.
 
 Centrale configuratieklasse voor het AI Executive Team project.
 Laadt omgevingsvariabelen uit .env en stelt veilige standaardwaarden in.
@@ -25,9 +24,11 @@ class Config:
 
     # Ollama LLM Instellingen
     OLLAMA_BASE_URL: str = field(
-        default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip()
+        default_factory=lambda: os.getenv(
+            "OLLAMA_BASE_URL", "http://localhost:11434"
+        ).strip()
     )
-    
+
     # CrewAI / LiteLLM heeft het voorvoegsel 'ollama/' nodig om te weten welk protocol gebruikt moet worden
     OLLAMA_MODEL: str = field(
         default_factory=lambda: (
@@ -39,25 +40,34 @@ class Config:
 
     # Database Instellingen
     DATABASE_PATH: str = field(
-        default_factory=lambda: os.getenv("DATABASE_PATH", "./memory/executive_team.db").strip()
+        default_factory=lambda: os.getenv(
+            "DATABASE_PATH", "./memory/executive_team.db"
+        ).strip()
     )
 
     CONVERSATION_AUDIO_RETENTION_DAYS: int = field(
-        default_factory=lambda: int(os.getenv("CONVERSATION_AUDIO_RETENTION_DAYS", "30"))
+        default_factory=lambda: int(
+            os.getenv("CONVERSATION_AUDIO_RETENTION_DAYS", "30")
+        )
     )
 
     ARTIFACT_RETENTION_DAYS: int = field(
         default_factory=lambda: int(os.getenv("ARTIFACT_RETENTION_DAYS", "30"))
     )
-    SYNC_EXPORT_DIR: str = field(default_factory=lambda: os.getenv("SYNC_EXPORT_DIR", "sync").strip())
+    SYNC_EXPORT_DIR: str = field(
+        default_factory=lambda: os.getenv("SYNC_EXPORT_DIR", "sync").strip()
+    )
 
     BACKUP_RETENTION_COUNT: int = field(
-        default_factory=lambda: max(1, min(365, int(os.getenv("BACKUP_RETENTION_COUNT", "7"))))
+        default_factory=lambda: max(
+            1, min(365, int(os.getenv("BACKUP_RETENTION_COUNT", "7")))
+        )
     )
 
     # Optional Fernet key supplied by the owner, never written to backups.
     BACKUP_ENCRYPTION_KEY: str = field(
-        default_factory=lambda: os.getenv("BACKUP_ENCRYPTION_KEY", "").strip(), repr=False
+        default_factory=lambda: os.getenv("BACKUP_ENCRYPTION_KEY", "").strip(),
+        repr=False,
     )
 
     # Telegram Notificatie Instellingen
@@ -72,14 +82,16 @@ class Config:
     TELEGRAM_INCLUDE_SENSITIVE_DETAILS: bool = field(
         default_factory=lambda: os.getenv(
             "TELEGRAM_INCLUDE_SENSITIVE_DETAILS", "false"
-        ).lower() in ("true", "1", "yes")
+        ).lower()
+        in ("true", "1", "yes")
     )
     # Telegram is a third-party transport. Remote approve/execute is disabled
     # unless the owner explicitly opts in after accepting that trust boundary.
     TELEGRAM_ALLOW_REMOTE_CONTROL: bool = field(
         default_factory=lambda: os.getenv(
             "TELEGRAM_ALLOW_REMOTE_CONTROL", "false"
-        ).lower() in ("true", "1", "yes")
+        ).lower()
+        in ("true", "1", "yes")
     )
 
     # API Beveiliging Key
@@ -98,7 +110,8 @@ class Config:
         )
     )
     SANDBOX_MODE: bool = field(
-        default_factory=lambda: os.getenv("SANDBOX_MODE", "true").lower() in ("true", "1", "yes")
+        default_factory=lambda: os.getenv("SANDBOX_MODE", "true").lower()
+        in ("true", "1", "yes")
     )
     # Optionele, komma-gescheiden lijst van toegestane domeinen voor browser_action.
     # Leeg (standaard) = geen beperking, elk http/https-domein is toegestaan.
@@ -120,7 +133,8 @@ class Config:
     # execution now uses the isolated Docker worker, never a host shell.
     # Requires Docker and a pre-pulled worker image; otherwise fails closed.
     ALLOW_UNSAFE_RAW_SHELL: bool = field(
-        default_factory=lambda: os.getenv("ALLOW_UNSAFE_RAW_SHELL", "false").lower() in ("true", "1", "yes")
+        default_factory=lambda: os.getenv("ALLOW_UNSAFE_RAW_SHELL", "false").lower()
+        in ("true", "1", "yes")
     )
     # Local-only by default. A non-loopback bind exposes the API key over the
     # network; refuse it unless the owner explicitly acknowledges transport risk.
@@ -128,16 +142,14 @@ class Config:
         default_factory=lambda: os.getenv("BIND_HOST", "127.0.0.1").strip()
     )
     ALLOW_INSECURE_REMOTE_HTTP: bool = field(
-        default_factory=lambda: os.getenv(
-            "ALLOW_INSECURE_REMOTE_HTTP", "false"
-        ).lower() in ("true", "1", "yes")
+        default_factory=lambda: os.getenv("ALLOW_INSECURE_REMOTE_HTTP", "false").lower()
+        in ("true", "1", "yes")
     )
     # Executive prompts, memory and research context can be highly sensitive.
     # A non-loopback model endpoint therefore requires explicit opt-in.
     ALLOW_REMOTE_LLM: bool = field(
-        default_factory=lambda: os.getenv(
-            "ALLOW_REMOTE_LLM", "false"
-        ).lower() in ("true", "1", "yes")
+        default_factory=lambda: os.getenv("ALLOW_REMOTE_LLM", "false").lower()
+        in ("true", "1", "yes")
     )
 
 
@@ -207,6 +219,7 @@ def set_sandbox_mode(enabled: bool) -> None:
 
 class ConfigValidationError(Exception):
     """Wordt gegooid bij een fatale configuratiefout — de app mag dan niet starten."""
+
     pass
 
 

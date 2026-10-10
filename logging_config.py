@@ -1,5 +1,4 @@
-"""
-logging_config.py
+"""Private rotating application logs with shared secret redaction.
 
 Centrale logging-configuratie voor het hele project. Tot nu toe gebruikte
 elke module gewone print()-statements — prima voor interactief testen, maar
@@ -23,7 +22,10 @@ from logging.handlers import RotatingFileHandler
 
 _LOG_DIR = os.getenv("LOG_DIR", "logs")
 _LOG_FILE = os.path.join(_LOG_DIR, "app.log")
-_MAX_BYTES = max(1024, min(100 * 1024 * 1024, int(os.getenv("LOG_ROTATION_BYTES", str(5 * 1024 * 1024)))))
+_MAX_BYTES = max(
+    1024,
+    min(100 * 1024 * 1024, int(os.getenv("LOG_ROTATION_BYTES", str(5 * 1024 * 1024)))),
+)
 _BACKUP_COUNT = max(1, min(100, int(os.getenv("LOG_RETENTION_COUNT", "3"))))
 
 _configured = False
@@ -51,7 +53,9 @@ class PrivateRotatingFileHandler(RotatingFileHandler):
             try:
                 with open(self.baseFilename, encoding="utf-8") as previous:
                     first = previous.readline(256)
-                self.period_start = datetime.datetime.strptime(first[:19], "%Y-%m-%d %H:%M:%S").timestamp()
+                self.period_start = datetime.datetime.strptime(
+                    first[:19], "%Y-%m-%d %H:%M:%S"
+                ).timestamp()
             except (OSError, ValueError):
                 pass
         stream = super()._open()
@@ -59,7 +63,9 @@ class PrivateRotatingFileHandler(RotatingFileHandler):
         return stream
 
     def shouldRollover(self, record):
-        return time.time() - self.period_start >= 86400 or super().shouldRollover(record)
+        return time.time() - self.period_start >= 86400 or super().shouldRollover(
+            record
+        )
 
     def doRollover(self):
         self.period_start = time.time()
@@ -96,7 +102,9 @@ def setup_logging(level: int = logging.INFO) -> None:
         _LOG_FILE, maxBytes=_MAX_BYTES, backupCount=_BACKUP_COUNT, encoding="utf-8"
     )
     file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.DEBUG)  # bestand bewaart alles, console toont minder ruis
+    file_handler.setLevel(
+        logging.DEBUG
+    )  # bestand bewaart alles, console toont minder ruis
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
@@ -126,7 +134,10 @@ def rotate_aged_active_log(*, now: float) -> None:
     """Rotate the current directory's active handler before age pruning."""
     target = os.path.abspath(_LOG_FILE)
     for handler in logging.getLogger().handlers:
-        if isinstance(handler, PrivateRotatingFileHandler) and handler.baseFilename == target:
+        if (
+            isinstance(handler, PrivateRotatingFileHandler)
+            and handler.baseFilename == target
+        ):
             handler.acquire()
             try:
                 if now - handler.period_start >= 86400:

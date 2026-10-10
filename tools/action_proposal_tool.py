@@ -1,5 +1,4 @@
-"""
-tools/action_proposal_tool.py
+"""Agent tool to propose actions for separate owner approval.
 
 CrewAI tool waarmee agenten acties voorstellen in plaats van ze direct uit te voeren.
 Slaat voorstellen op in de action_queue database en stuurt een Telegram-notificatie.
@@ -19,30 +18,31 @@ from tools._dedupe_guard import check_and_register_proposal
 
 class ActionProposalInput(BaseModel):
     """Input schema voor ProposeActionTool."""
+
     action_description: str = Field(
-        ..., 
-        description="A clear, human-readable description of what action is being proposed."
+        ...,
+        description="A clear, human-readable description of what action is being proposed.",
     )
     action_detail: str = Field(
         ...,
-        description="A concrete shell command string to propose. For file changes use propose_file_operation; for web navigation use propose_browser_action."
+        description="A concrete shell command string to propose. For file changes use propose_file_operation; for web navigation use propose_browser_action.",
     )
     expected_outcome: str | None = Field(
         default=None,
-        description="What concrete business/operational result should happen if this action works. Do not invent metrics."
+        description="What concrete business/operational result should happen if this action works. Do not invent metrics.",
     )
     expected_impact: str | None = Field(
         default=None,
-        description="Qualitative impact expected from the action. Keep unsupported claims explicitly conditional."
+        description="Qualitative impact expected from the action. Keep unsupported claims explicitly conditional.",
     )
     expected_cost_amount: float | None = Field(
         default=None,
         ge=0,
-        description="Expected monetary cost only when known from evidence. Leave empty if unknown."
+        description="Expected monetary cost only when known from evidence. Leave empty if unknown.",
     )
     currency: str | None = Field(
         default=None,
-        description="3-letter currency code such as EUR or USD when expected_cost_amount is known."
+        description="3-letter currency code such as EUR or USD when expected_cost_amount is known.",
     )
 
 
@@ -55,7 +55,7 @@ class ProposeActionTool(BaseTool):
         "anything — it only logs the command for a human to approve or reject later."
     )
     args_schema: Type[BaseModel] = ActionProposalInput
-    
+
     # De rol van de agent wordt ingesteld bij het aanmaken van de tool-instantie
     role: str
 
@@ -98,7 +98,9 @@ class ProposeActionTool(BaseTool):
                 action_detail=action_detail,
             )
         except Exception as e:
-            print(f"Warning: Telegram action-proposal notification failed ({type(e).__name__}); transport details suppressed.")
+            print(
+                f"Warning: Telegram action-proposal notification failed ({type(e).__name__}); transport details suppressed."
+            )
 
         # 3. Retourneer de bevestiging naar de agent
         return (

@@ -4,6 +4,7 @@ The ledger intentionally never automatically retries an interrupted/unknown
 side-effect. Approved actions and synchronous agent tasks use this ledger.
 Unknown outcomes require owner reconciliation rather than automatic replay.
 """
+
 import datetime
 from memory.database import get_connection
 
@@ -26,11 +27,18 @@ def init_step_checkpoints() -> None:
                 PRIMARY KEY (run_id, step_id)
             )
         """)
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(workflow_step_checkpoints)")}
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(workflow_step_checkpoints)")
+        }
         if "input_digest" not in columns:
-            conn.execute("ALTER TABLE workflow_step_checkpoints ADD COLUMN input_digest TEXT")
+            conn.execute(
+                "ALTER TABLE workflow_step_checkpoints ADD COLUMN input_digest TEXT"
+            )
         if "result_json" not in columns:
-            conn.execute("ALTER TABLE workflow_step_checkpoints ADD COLUMN result_json TEXT")
+            conn.execute(
+                "ALTER TABLE workflow_step_checkpoints ADD COLUMN result_json TEXT"
+            )
         conn.commit()
 
 
@@ -85,7 +93,7 @@ def reconcile_interrupted_steps() -> int:
 def get_step(run_id: str, step_id: str) -> dict | None:
     with get_connection() as conn:
         row = conn.execute(
-            'SELECT * FROM workflow_step_checkpoints WHERE run_id = ? AND step_id = ?',
+            "SELECT * FROM workflow_step_checkpoints WHERE run_id = ? AND step_id = ?",
             (run_id, step_id),
         ).fetchone()
         return dict(row) if row else None
@@ -102,49 +110,59 @@ def run_json_step(run_id: str, step_id: str, input_digest: str, callback):
     including a crash between a callback's effect and saving its result.
     """
     import json
+
     init_step_checkpoints()
     with get_connection() as conn:
-        conn.execute('BEGIN IMMEDIATE')
+        conn.execute("BEGIN IMMEDIATE")
         existing = conn.execute(
-            'SELECT * FROM workflow_step_checkpoints WHERE run_id = ? AND step_id = ?',
+            "SELECT * FROM workflow_step_checkpoints WHERE run_id = ? AND step_id = ?",
             (run_id, step_id),
         ).fetchone()
         if existing:
-            if existing['input_digest'] != input_digest:
-                raise StepNeedsReview('Checkpoint inputs changed; use a new owner-reviewed run')
-            if existing['status'] == 'succeeded' and existing['result_json'] is not None:
-                return json.loads(existing['result_json'])
-            raise StepNeedsReview('Step is running or interrupted; manual reconciliation required')
+            if existing["input_digest"] != input_digest:
+                raise StepNeedsReview(
+                    "Checkpoint inputs changed; use a new owner-reviewed run"
+                )
+            if (
+                existing["status"] == "succeeded"
+                and existing["result_json"] is not None
+            ):
+                return json.loads(existing["result_json"])
+            raise StepNeedsReview(
+                "Step is running or interrupted; manual reconciliation required"
+            )
         for value in (run_id, step_id):
             if not isinstance(value, str) or not 1 <= len(value) <= 128:
-                raise ValueError('Invalid checkpoint key')
+                raise ValueError("Invalid checkpoint key")
         if not isinstance(input_digest, str) or len(input_digest) != 64:
-            raise ValueError('Invalid checkpoint input digest')
+            raise ValueError("Invalid checkpoint input digest")
         now = _utcnow()
         conn.execute(
-            '''INSERT INTO workflow_step_checkpoints
+            """INSERT INTO workflow_step_checkpoints
                (run_id, step_id, status, created_at, updated_at, input_digest)
-               VALUES (?, ?, 'running', ?, ?, ?)''',
+               VALUES (?, ?, 'running', ?, ?, ?)""",
             (run_id, step_id, now, now, input_digest),
         )
         conn.commit()
     try:
         result = callback()
         encoded = json.dumps(result, ensure_ascii=False, allow_nan=False)
-        if len(encoded.encode('utf-8')) > 2 * 1024 * 1024:
-            raise ValueError('Checkpoint result exceeds 2 MiB')
+        if len(encoded.encode("utf-8")) > 2 * 1024 * 1024:
+            raise ValueError("Checkpoint result exceeds 2 MiB")
         with get_connection() as conn:
-            conn.execute('BEGIN IMMEDIATE')
+            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
-                '''UPDATE workflow_step_checkpoints
+                """UPDATE workflow_step_checkpoints
                    SET status = 'succeeded', result_json = ?, updated_at = ?
-                   WHERE run_id = ? AND step_id = ? AND status = 'running' ''',
+                   WHERE run_id = ? AND step_id = ? AND status = 'running' """,
                 (encoded, _utcnow(), run_id, step_id),
             )
             if cursor.rowcount != 1:
-                raise StepNeedsReview('Step completion raced with recovery; manual reconciliation required')
+                raise StepNeedsReview(
+                    "Step completion raced with recovery; manual reconciliation required"
+                )
             conn.commit()
         return result
     except BaseException:
-        finish_step(run_id, step_id, 'inconclusive')
+        finish_step(run_id, step_id, "inconclusive")
         raise

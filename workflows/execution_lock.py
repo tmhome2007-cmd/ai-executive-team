@@ -1,5 +1,4 @@
-"""
-workflows/execution_lock.py
+"""Cross-process locking for action execution claims.
 
 Eén gedeelde, systeembrede lock die voorkomt dat er ooit twee zware CrewAI-runs
 tegelijk draaien — bijvoorbeeld de geplande dagelijkse research die toevallig

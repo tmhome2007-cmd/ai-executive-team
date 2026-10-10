@@ -1,11 +1,11 @@
-"""
-main.py
+"""FastAPI entry point: startup, owner authentication, scheduling and core company routes.
 
 Hoofdbestand voor de FastAPI applicatie van het AI Executive Team.
 Beheert de API-endpoints en de geautomatiseerde (catch-up) achtergrondtaken.
 """
 
 from logging_config import setup_logging, get_logger
+
 setup_logging()  # Moet als EERSTE gebeuren, vóór andere imports die loggen
 logger = get_logger(__name__)
 
@@ -81,7 +81,11 @@ from memory.database import (
 from workflows.daily_research import run_daily_research
 from workflows.autonomous_followup import run_autonomous_followup
 from workflows.meeting import run_executive_meeting
-from workflows.meeting_types import MEETING_TYPES, VALID_MEETING_TYPES, resolve_meeting_agents
+from workflows.meeting_types import (
+    MEETING_TYPES,
+    VALID_MEETING_TYPES,
+    resolve_meeting_agents,
+)
 from agents.executive_agents import EXECUTIVE_AGENTS, EXECUTIVE_AGENTS_NO_TOOLS
 from workflows.action_executor import execute_action
 from workflows.action_control import (
@@ -91,10 +95,20 @@ from workflows.action_control import (
     execute_action_control,
 )
 from notifications.telegram_bot import send_notification, escape_html
-from notifications.telegram_interactive import start_telegram_listener, stop_telegram_listener, is_telegram_listener_alive
+from notifications.telegram_interactive import (
+    start_telegram_listener,
+    stop_telegram_listener,
+    is_telegram_listener_alive,
+)
 from config import config, set_sandbox_mode, validate_config, ConfigValidationError
-from system_checks import check_ollama_reachable, check_database_writable, check_telegram_configured, check_playwright_browser_installed, run_startup_checks, get_uptime_seconds
-
+from system_checks import (
+    check_ollama_reachable,
+    check_database_writable,
+    check_telegram_configured,
+    check_playwright_browser_installed,
+    run_startup_checks,
+    get_uptime_seconds,
+)
 
 # 1. Globale status dictionary voor het monitoren van de laatste run
 LAST_RUN_STATUS = {
@@ -216,11 +230,17 @@ async def _lifespan_unlocked(app: FastAPI):
 
     # Durable step checkpoints: interrupted effects require explicit human
     # reconciliation, never automatic replay on a server restart.
-    from workflows.step_checkpoints import init_step_checkpoints, reconcile_interrupted_steps
+    from workflows.step_checkpoints import (
+        init_step_checkpoints,
+        reconcile_interrupted_steps,
+    )
+
     init_step_checkpoints()
     from memory.business_discovery import reconcile_discovery
+
     reconcile_discovery()
     from memory.planning import reconcile_work
+
     reconcile_work()
     uncertain_steps = reconcile_interrupted_steps()
     if uncertain_steps:
@@ -234,8 +254,10 @@ async def _lifespan_unlocked(app: FastAPI):
     # markeer zulke 'executing' acties als failed voor menselijke review.
     from memory.observation_jobs import recover_observations
     from memory.memory_reconciliation import expire_memories
+
     recover_observations()
     from memory.agent_runtime import recover_agent_runtime
+
     recover_agent_runtime()
     expire_memories()
     recovered_actions = recover_interrupted_actions()
@@ -246,6 +268,7 @@ async def _lifespan_unlocked(app: FastAPI):
         )
 
     from memory.artifact_retention import prune_generated_artifacts
+
     retained = await asyncio.to_thread(prune_generated_artifacts)
     logger.info("Generated artifact retention applied: %s", retained)
 
@@ -264,14 +287,43 @@ async def _lifespan_unlocked(app: FastAPI):
     # Gebruik AsyncIOScheduler voor asynchrone achtergrondtaken
     scheduler = AsyncIOScheduler()
     from memory.observation_jobs import run_observation_jobs
-    scheduler.add_job(run_observation_jobs, trigger=IntervalTrigger(minutes=1), id='observation_collectors', replace_existing=True, max_instances=1, coalesce=True)
-    scheduler.add_job(expire_memories, trigger=IntervalTrigger(minutes=15), id='memory_expiry', replace_existing=True, max_instances=1, coalesce=True)
+
+    scheduler.add_job(
+        run_observation_jobs,
+        trigger=IntervalTrigger(minutes=1),
+        id="observation_collectors",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        expire_memories,
+        trigger=IntervalTrigger(minutes=15),
+        id="memory_expiry",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     from workflows.capability_inventory import refresh_verified_capabilities
-    scheduler.add_job(refresh_verified_capabilities, trigger=IntervalTrigger(minutes=15),
-                      id='capability_health', replace_existing=True, max_instances=1, coalesce=True)
+
+    scheduler.add_job(
+        refresh_verified_capabilities,
+        trigger=IntervalTrigger(minutes=15),
+        id="capability_health",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     from workflows.executive_planning import dispatch_planned_work
-    scheduler.add_job(dispatch_planned_work, trigger=IntervalTrigger(minutes=15),
-                      id='executive_work_plans', replace_existing=True, max_instances=1, coalesce=True)
+
+    scheduler.add_job(
+        dispatch_planned_work,
+        trigger=IntervalTrigger(minutes=15),
+        id="executive_work_plans",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.add_job(
         scheduled_research_job,
         trigger=IntervalTrigger(minutes=15),
@@ -303,8 +355,10 @@ async def _lifespan_unlocked(app: FastAPI):
     scheduler.add_job(
         prune_generated_artifacts,
         trigger=IntervalTrigger(hours=24),
-        id="generated_artifact_retention_job", replace_existing=True,
-        max_instances=1, coalesce=True,
+        id="generated_artifact_retention_job",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
     scheduler.start()
     app.state.scheduler = scheduler
@@ -339,6 +393,7 @@ async def _lifespan_unlocked(app: FastAPI):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from workflows.instance_lock import database_instance_lock
+
     with database_instance_lock(config.DATABASE_PATH):
         async with _lifespan_unlocked(app):
             yield
@@ -369,15 +424,25 @@ app.add_middleware(
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     # Attribution is the initiating owner API, not a claim about model/tool identity.
-    supplied = request.headers.get('X-API-Key')
-    actor = 'owner' if config.API_SECRET_KEY and supplied and hmac.compare_digest(supplied.encode('utf-8'), config.API_SECRET_KEY.encode('utf-8')) else 'system'
-    source = f'http:{request.method} {request.url.path}'
-    if not re.fullmatch(r'[A-Za-z0-9_/:. -]{1,180}', source):
-        source = 'http'
+    supplied = request.headers.get("X-API-Key")
+    actor = (
+        "owner"
+        if config.API_SECRET_KEY
+        and supplied
+        and hmac.compare_digest(
+            supplied.encode("utf-8"), config.API_SECRET_KEY.encode("utf-8")
+        )
+        else "system"
+    )
+    source = f"http:{request.method} {request.url.path}"
+    if not re.fullmatch(r"[A-Za-z0-9_/:. -]{1,180}", source):
+        source = "http"
     with activity_origin(actor, source):
         response = await call_next(request)
     duration_ms = round((time.time() - start_time) * 1000, 1)
-    logger.info(f'{request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)')
+    logger.info(
+        f"{request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)"
+    )
     return response
 
 
@@ -392,12 +457,18 @@ class DailyResearchResponse(BaseModel):
 
 class DecisionRequest(BaseModel):
     source_ids: list[int] = Field(default_factory=list, max_length=20)
-    workflow_run_id: Optional[str] = Field(default=None, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9:_-]+$")
+    workflow_run_id: Optional[str] = Field(
+        default=None, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9:_-]+$"
+    )
     topic: str = Field(min_length=1, max_length=200)
     task_description: str = Field(min_length=1, max_length=12000)
     meeting_type: Literal[
-        "strategy", "operating_review", "incident",
-        "capital_allocation", "retrospective", "planning"
+        "strategy",
+        "operating_review",
+        "incident",
+        "capital_allocation",
+        "retrospective",
+        "planning",
     ] = "strategy"
     agent_keys: Optional[list[str]] = Field(default=None, min_length=1, max_length=11)
     goal_id: Optional[int] = Field(default=None, ge=1)
@@ -503,7 +574,8 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
     now = time.time()
 
     attempts = [
-        t for t in _failed_auth_attempts.get(client_ip, [])
+        t
+        for t in _failed_auth_attempts.get(client_ip, [])
         if now - t < _LOCKOUT_WINDOW_SECONDS
     ]
 
@@ -511,7 +583,7 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
     is_valid = (
         bool(server_key)
         and x_api_key is not None
-        and hmac.compare_digest(x_api_key.encode('utf-8'), server_key.encode('utf-8'))
+        and hmac.compare_digest(x_api_key.encode("utf-8"), server_key.encode("utf-8"))
     )
 
     # A valid owner credential must never be denied because an attacker (or a
@@ -644,6 +716,7 @@ async def trigger_daily_research():
 # AUTONOMOUS FOLLOW-UP
 # ===================================================================
 
+
 @app.get(
     "/workflows/autonomous-followup/status",
     summary="Get Autonomous Follow-Up Status",
@@ -744,6 +817,7 @@ def dismiss_followup(event_id: int):
 # ===================================================================
 # COMPANY GOALS / MISSIONS
 # ===================================================================
+
 
 @app.post(
     "/goals",
@@ -869,10 +943,12 @@ def list_meeting_types():
 def trigger_ad_hoc_decision(request: DecisionRequest):
     """Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op."""
     import uuid
+
     workflow_run_id = request.workflow_run_id or f"decision:{uuid.uuid4()}"
     goal = None
     meeting_task = request.task_description
     from memory.evidence import source_context
+
     try:
         registered_context = source_context(request.source_ids)
     except (ValueError, LookupError) as error:
@@ -905,7 +981,10 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         )
 
     if registered_context:
-        meeting_task += '\nREGISTERED SOURCES (preserve freshness/review labels):\n' + registered_context
+        meeting_task += (
+            "\nREGISTERED SOURCES (preserve freshness/review labels):\n"
+            + registered_context
+        )
     try:
         meeting_result = run_executive_meeting(
             topic=request.topic,
@@ -955,7 +1034,9 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         message = f"📌 <b>Ad-Hoc Decision Triggered</b>\n\n<b>Topic:</b> {escape_html(request.topic)}\n\n<b>Decision Snippet:</b>\n{escape_html(snippet)}..."
         send_notification(message)
     except Exception as notify_err:
-        print(f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}")
+        print(
+            f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}"
+        )
 
     return DecisionResponse(
         workflow_run_id=workflow_run_id,
@@ -1031,7 +1112,9 @@ def reject_decision(decision_id: int):
     if decision is None:
         raise HTTPException(status_code=404, detail="Decision not found.")
 
-    if not transition_decision_approval(decision_id, "rejected", ("pending", "approved")):
+    if not transition_decision_approval(
+        decision_id, "rejected", ("pending", "approved")
+    ):
         current = get_decision_by_id(decision_id)
         raise HTTPException(
             status_code=409,
@@ -1132,7 +1215,8 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             f"Goal success criteria: {goal['success_criteria']}\n"
             f"Goal priority: {goal['priority']}\n"
             f"Goal target date: {goal.get('target_date') or 'none'}\n\n"
-            if goal else ""
+            if goal
+            else ""
         )
         + "Your job is NOT to re-decide whether the direction should happen. "
         "Translate the approved direction into a concrete, safe preparation plan. "
@@ -1162,7 +1246,10 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
     def _run_preparation_meeting(task_text: str):
         return run_executive_meeting(
-            workflow_run_id="prepare:" + decision["sync_uuid"] + ":" + hashlib.sha256(task_text.encode()).hexdigest()[:24],
+            workflow_run_id="prepare:"
+            + decision["sync_uuid"]
+            + ":"
+            + hashlib.sha256(task_text.encode()).hexdigest()[:24],
             topic=f"Preparation for Decision #{decision_id}",
             task_description=task_text,
             agent_keys=request.agent_keys,
@@ -1201,7 +1288,8 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
     def _provenance_mismatches(action_ids, resource_ids, actions, resources):
         provenance_mismatches = [
-            action for action in actions
+            action
+            for action in actions
             if (
                 action.get("source_decision_id") != decision_id
                 or action.get("source_decision_sync_uuid") != decision["sync_uuid"]
@@ -1214,7 +1302,8 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             )
 
         resource_provenance_mismatches = [
-            resource for resource in resources
+            resource
+            for resource in resources
             if (
                 resource.get("source_decision_id") != decision_id
                 or resource.get("source_decision_sync_uuid") != decision["sync_uuid"]
@@ -1237,8 +1326,12 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         """
         allowed_top = {"name", "parameters"}
         allowed_params = {
-            "resource_type", "resource_name", "reason", "required_for",
-            "amount", "currency",
+            "resource_type",
+            "resource_name",
+            "reason",
+            "required_for",
+            "amount",
+            "currency",
         }
         parsed_payloads: list[dict] = []
         seen: set[tuple] = set()
@@ -1305,9 +1398,10 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             amount = params.get("amount")
             currency = params.get("currency")
 
-            if not all(isinstance(v, str) and v.strip() for v in (
-                resource_type, resource_name, reason
-            )):
+            if not all(
+                isinstance(v, str) and v.strip()
+                for v in (resource_type, resource_name, reason)
+            ):
                 continue
             if required_for is not None and not isinstance(required_for, str):
                 continue
@@ -1320,7 +1414,9 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 "resource_type": resource_type.strip(),
                 "resource_name": resource_name.strip(),
                 "reason": reason.strip(),
-                "required_for": required_for.strip() if isinstance(required_for, str) else None,
+                "required_for": (
+                    required_for.strip() if isinstance(required_for, str) else None
+                ),
                 "amount": amount,
                 "currency": currency.strip() if isinstance(currency, str) else None,
             }
@@ -1337,7 +1433,6 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 parsed_payloads.append(normalized)
 
         return parsed_payloads
-
 
     def _materialize_resource_requests_from_text(text: str) -> list[int]:
         payloads = _extract_resource_request_payloads(text)
@@ -1374,14 +1469,16 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
 
         return created_ids
 
-
     try:
         meeting_result = _run_preparation_meeting(preparation_prompt)
         participants = meeting_result.get("participants", [])
         final_plan = meeting_result.get("final_decision", "")
-        proposed_action_ids, proposed_resource_request_ids, new_actions, new_resource_requests = (
-            _load_created_items(meeting_result)
-        )
+        (
+            proposed_action_ids,
+            proposed_resource_request_ids,
+            new_actions,
+            new_resource_requests,
+        ) = _load_created_items(meeting_result)
 
         provenance_mismatches, resource_provenance_mismatches = _provenance_mismatches(
             proposed_action_ids,
@@ -1419,14 +1516,14 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         pseudo_resource_call = bool(
             re.search(
                 r'(?is)(?:"name"\s*:\s*"propose_resource_request"|'
-                r'\bpropose_resource_request\s*\()',
+                r"\bpropose_resource_request\s*\()",
                 final_plan,
             )
         )
         pseudo_action_call = bool(
             re.search(
                 r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action)"|'
-                r'\bpropose_(?:action|file_operation|browser_action)\s*\()',
+                r"\bpropose_(?:action|file_operation|browser_action)\s*\()",
                 final_plan,
             )
         )
@@ -1449,9 +1546,12 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             meeting_result = _run_preparation_meeting(retry_prompt)
             participants = meeting_result.get("participants", [])
             final_plan = meeting_result.get("final_decision", "")
-            proposed_action_ids, proposed_resource_request_ids, new_actions, new_resource_requests = (
-                _load_created_items(meeting_result)
-            )
+            (
+                proposed_action_ids,
+                proposed_resource_request_ids,
+                new_actions,
+                new_resource_requests,
+            ) = _load_created_items(meeting_result)
 
             retry_action_mismatch, retry_resource_mismatch = _provenance_mismatches(
                 proposed_action_ids,
@@ -1473,29 +1573,30 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             pseudo_resource_call = bool(
                 re.search(
                     r'(?is)(?:"name"\s*:\s*"propose_resource_request"|'
-                    r'\bpropose_resource_request\s*\()',
+                    r"\bpropose_resource_request\s*\()",
                     final_plan,
                 )
             )
             pseudo_action_call = bool(
                 re.search(
                     r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action)"|'
-                    r'\bpropose_(?:action|file_operation|browser_action)\s*\()',
+                    r"\bpropose_(?:action|file_operation|browser_action)\s*\()",
                     final_plan,
                 )
             )
             pseudo_tool_call = bool(pseudo_action_call or pseudo_resource_call)
 
         if pseudo_resource_call and not new_resource_requests:
-            materialized_resource_ids = _materialize_resource_requests_from_text(final_plan)
+            materialized_resource_ids = _materialize_resource_requests_from_text(
+                final_plan
+            )
             if materialized_resource_ids:
                 proposed_resource_request_ids = materialized_resource_ids
                 new_resource_requests = [
                     resource_request
                     for request_id in materialized_resource_ids
-                    if (
-                        resource_request := get_resource_request_by_id(request_id)
-                    ) is not None
+                    if (resource_request := get_resource_request_by_id(request_id))
+                    is not None
                 ]
                 _, resource_provenance_mismatches = _provenance_mismatches(
                     [],
@@ -1518,9 +1619,8 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                     )
                 pseudo_resource_call = False
 
-        if (
-            (pseudo_action_call and not new_actions)
-            or (pseudo_resource_call and not new_resource_requests)
+        if (pseudo_action_call and not new_actions) or (
+            pseudo_resource_call and not new_resource_requests
         ):
             finish_decision_preparation(
                 decision_id,
@@ -1539,9 +1639,13 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
                 ),
             )
 
-        finish_decision_preparation(decision_id, True, final_plan,
+        finish_decision_preparation(
+            decision_id,
+            True,
+            final_plan,
             individual_outputs=meeting_result.get("individual_outputs", {}),
-            executive_profiles=get_executive_profiles())
+            executive_profiles=get_executive_profiles(),
+        )
     except HTTPException:
         raise
     except ValueError as e:
@@ -1623,7 +1727,9 @@ def reject_resource_request(request_id: int):
     current = get_resource_request_by_id(request_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Resource request not found.")
-    if not transition_resource_request_status(request_id, "rejected", ("pending", "approved")):
+    if not transition_resource_request_status(
+        request_id, "rejected", ("pending", "approved")
+    ):
         refreshed = get_resource_request_by_id(request_id)
         raise HTTPException(
             status_code=409,
@@ -1687,6 +1793,7 @@ def read_decision_lineage(decision_id: int):
 # EXECUTIVE MEMORY
 # ===================================================================
 
+
 @app.get(
     "/memory/{executive_key}",
     summary="Get Structured Executive Memory",
@@ -1713,7 +1820,9 @@ def read_executive_memory(
     summary="Activate or Deactivate Executive Memory",
     dependencies=[Depends(verify_api_key)],
 )
-def change_executive_memory_status(memory_id: int, request: ExecutiveMemoryStatusRequest):
+def change_executive_memory_status(
+    memory_id: int, request: ExecutiveMemoryStatusRequest
+):
     if not set_executive_memory_active(memory_id, request.active):
         raise HTTPException(status_code=404, detail="Executive memory not found.")
     return {"memory_id": memory_id, "active": request.active}
@@ -1726,8 +1835,12 @@ def change_executive_memory_status(memory_id: int, request: ExecutiveMemoryStatu
     dependencies=[Depends(verify_api_key)],
 )
 def get_decision_history(
-    limit: int = Query(default=20, ge=1, le=100, description="Aantal op te halen besluiten (1-100)"),
-    offset: int = Query(default=0, ge=0, description="Aantal over te slaan besluiten (voor paginering)"),
+    limit: int = Query(
+        default=20, ge=1, le=100, description="Aantal op te halen besluiten (1-100)"
+    ),
+    offset: int = Query(
+        default=0, ge=0, description="Aantal over te slaan besluiten (voor paginering)"
+    ),
 ):
     """Retourneert een lijst van recent opgeslagen besluiten."""
     try:
@@ -1736,7 +1849,7 @@ def get_decision_history(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Fout bij het ophalen van de besluthistorie: {str(e)}"
+            detail=f"Fout bij het ophalen van de besluthistorie: {str(e)}",
         )
 
 
@@ -1745,9 +1858,11 @@ def favicon():
     """Vangt favicon-verzoeken op om 404-fouten in de serverlogs te voorkomen."""
     return Response(status_code=204)
 
+
 # ===================================================================
 # COMPANY TREASURY ENDPOINTS
 # ===================================================================
+
 
 @app.get(
     "/treasury/summary",
@@ -1820,6 +1935,7 @@ def read_action_treasury_reservation(action_id: int):
 # SYSTEM ENDPOINTS
 # ===================================================================
 
+
 @app.get(
     "/system/sandbox-status",
     summary="Get Sandbox Mode Status",
@@ -1845,7 +1961,9 @@ def get_system_health():
     pw_ok, pw_msg = check_playwright_browser_installed()
     tg_listener_ok, tg_listener_error = is_telegram_listener_alive()
 
-    overall_ok = ollama_ok and db_ok  # Telegram/Playwright zijn optioneel, blokkeren 'healthy' niet
+    overall_ok = (
+        ollama_ok and db_ok
+    )  # Telegram/Playwright zijn optioneel, blokkeren 'healthy' niet
 
     return {
         "status": "healthy" if overall_ok else "degraded",
@@ -1855,7 +1973,10 @@ def get_system_health():
             "ollama": {"ok": ollama_ok, "message": ollama_msg},
             "database": {"ok": db_ok, "message": db_msg},
             "telegram_configured": {"ok": tg_ok, "message": tg_msg},
-            "telegram_listener_running": {"ok": tg_listener_ok, "message": tg_listener_error or "ok"},
+            "telegram_listener_running": {
+                "ok": tg_listener_ok,
+                "message": tg_listener_error or "ok",
+            },
             "playwright_browser": {"ok": pw_ok, "message": pw_msg},
         },
     }
@@ -1938,9 +2059,13 @@ _SCREENSHOT_FILENAME_PATTERN = re.compile(r"^action_\d+\.png$")
 def get_screenshot(filename: str):
     """Retourneert de PNG-screenshot van een uitgevoerde browser-actie, indien aanwezig."""
     if not _SCREENSHOT_FILENAME_PATTERN.match(filename):
-        raise HTTPException(status_code=400, detail="Invalid screenshot filename format.")
+        raise HTTPException(
+            status_code=400, detail="Invalid screenshot filename format."
+        )
 
-    workspace_root = os.path.realpath(os.path.expanduser(config.WORKSPACE_ROOT or "./workspace"))
+    workspace_root = os.path.realpath(
+        os.path.expanduser(config.WORKSPACE_ROOT or "./workspace")
+    )
     screenshots_root = os.path.realpath(os.path.join(workspace_root, "screenshots"))
     screenshot_path = os.path.realpath(os.path.join(screenshots_root, filename))
 
@@ -1967,6 +2092,7 @@ def get_screenshot(filename: str):
 # ACTION APPROVAL QUEUE ENDPOINTS
 # ===================================================================
 
+
 @app.get(
     "/actions/pending",
     summary="Get Pending Action Proposals",
@@ -1992,6 +2118,7 @@ def read_action_history(
     """Retourneert een lijst van de meest recente acties, ongeacht status (tenzij gefilterd)."""
     if status is not None:
         from memory.database import VALID_ACTION_STATUSES
+
         if status not in VALID_ACTION_STATUSES:
             raise HTTPException(
                 status_code=400,
@@ -2084,7 +2211,11 @@ def patch_action_outcome(action_id: int, request: OutcomeUpdateRequest):
         "next_recommendation",
     }
     if terminal_result_fields.intersection(payload):
-        if action["status"] not in {"executed", "execution_failed", "blocked_dangerous"}:
+        if action["status"] not in {
+            "executed",
+            "execution_failed",
+            "blocked_dangerous",
+        }:
             raise HTTPException(
                 status_code=409,
                 detail=(
@@ -2108,7 +2239,12 @@ def patch_action_outcome(action_id: int, request: OutcomeUpdateRequest):
     if updated is None:
         raise HTTPException(status_code=404, detail="Outcome record not found.")
 
-    if updated.get("outcome_status") in {"succeeded", "failed", "partial", "inconclusive"}:
+    if updated.get("outcome_status") in {
+        "succeeded",
+        "failed",
+        "partial",
+        "inconclusive",
+    }:
         try:
             create_action_outcome_memories(action_id)
         except Exception as memory_err:
@@ -2127,7 +2263,9 @@ def approve_action(action_id: int):
     """Markeert een voorgestelde actie als 'approved'."""
     action = get_action_by_id(action_id)
     if action is None:
-        raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Action proposal with ID {action_id} not found."
+        )
 
     try:
         return approve_action_control(action_id)
@@ -2136,12 +2274,16 @@ def approve_action(action_id: int):
         if current is None:
             raise HTTPException(status_code=404, detail=str(e))
         detail = str(e)
-        status_code = 409 if (
-            "cannot be approved" in detail.lower()
-            or "insufficient available treasury funds" in detail.lower()
-            or "race" in detail.lower()
-            or "linked company goal" in detail.lower()
-        ) else 400
+        status_code = (
+            409
+            if (
+                "cannot be approved" in detail.lower()
+                or "insufficient available treasury funds" in detail.lower()
+                or "race" in detail.lower()
+                or "linked company goal" in detail.lower()
+            )
+            else 400
+        )
         raise HTTPException(status_code=status_code, detail=detail)
 
 
@@ -2155,7 +2297,9 @@ def reject_action(action_id: int):
     """Markeert een voorgestelde actie als 'rejected'."""
     action = get_action_by_id(action_id)
     if action is None:
-        raise HTTPException(status_code=404, detail=f"Action proposal with ID {action_id} not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Action proposal with ID {action_id} not found."
+        )
 
     try:
         return reject_action_control(action_id)
@@ -2164,6 +2308,8 @@ def reject_action(action_id: int):
         if current is None:
             raise HTTPException(status_code=404, detail=str(e))
         raise HTTPException(status_code=409, detail=str(e))
+
+
 @app.post(
     "/actions/{action_id}/execute",
     summary="Execute Approved Action",
@@ -2180,16 +2326,20 @@ def execute_approved_action(action_id: int):
         detail = str(e)
         status_code = 409 if "linked company goal" in detail.lower() else 400
         raise HTTPException(status_code=status_code, detail=detail)
-    
+
     if not result.get("success", False):
         error_msg = result.get("error", "Execution failed")
         if error_msg == "Action not found":
             raise HTTPException(status_code=404, detail=error_msg)
-        if "must be 'approved'" in error_msg or "could not be claimed for execution" in error_msg:
+        if (
+            "must be 'approved'" in error_msg
+            or "could not be claimed for execution" in error_msg
+        ):
             raise HTTPException(status_code=409, detail=error_msg)
         raise HTTPException(status_code=400, detail=error_msg)
-        
+
     return result
+
 
 if __name__ == "__main__":
     import uvicorn
@@ -2206,42 +2356,63 @@ if __name__ == "__main__":
     # overlap workers, which is unsafe for the single Telegram poller.
     uvicorn.run("main:app", host=bind_host, port=8000, reload=False)
 
+
 @app.get("/executives/profiles", dependencies=[Depends(verify_api_key)])
 def executive_profiles():
     return get_executive_profiles(include_presentation=True)
 
 
-@app.get("/decisions/{decision_id}/conversations", dependencies=[Depends(verify_api_key)])
+@app.get(
+    "/decisions/{decision_id}/conversations", dependencies=[Depends(verify_api_key)]
+)
 def decision_conversations(decision_id: int):
     if get_decision_by_id(decision_id) is None:
         raise HTTPException(status_code=404, detail="Decision not found.")
-    return {"decision_id": decision_id, "contributions": get_decision_contributions(decision_id),
-            "scope": "Published executive task outputs in task order; not a verbatim conversation or hidden reasoning."}
+    return {
+        "decision_id": decision_id,
+        "contributions": get_decision_contributions(decision_id),
+        "scope": "Published executive task outputs in task order; not a verbatim conversation or hidden reasoning.",
+    }
 
 
 @app.get("/company/activity", dependencies=[Depends(verify_api_key)])
-def company_activity(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0), before_id: Optional[int] = Query(default=None, ge=1)):
+def company_activity(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    before_id: Optional[int] = Query(default=None, ge=1),
+):
     items = get_company_activity(limit, offset, before_id)
-    return {"items": items, "limit": limit, "offset": offset,
-            "next_before_id": items[-1]['id'] if len(items) == limit else None,
-            "scope": "Retained database changes since ledger installation. Legacy snapshots have unknown earlier history; actor identifies the initiating context."}
+    return {
+        "items": items,
+        "limit": limit,
+        "offset": offset,
+        "next_before_id": items[-1]["id"] if len(items) == limit else None,
+        "scope": "Retained database changes since ledger installation. Legacy snapshots have unknown earlier history; actor identifies the initiating context.",
+    }
 
 
 # Owner-controlled planning boards. A task transition never executes an action.
-from memory.agile import create_board, list_boards, list_tasks, create_task, update_task, create_roadmap_board
+from memory.agile import (
+    create_board,
+    list_boards,
+    list_tasks,
+    create_task,
+    update_task,
+    create_roadmap_board,
+)
 
 
 class BoardCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    kind: Literal['development', 'company']
+    kind: Literal["development", "company"]
 
 
 class AgileTaskCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
-    description: str = Field(default='', max_length=10000)
-    acceptance_criteria: str = Field(default='', max_length=10000)
-    assignee: str = Field(default='owner', max_length=40)
-    priority: Literal['critical', 'high', 'medium', 'low'] = 'medium'
+    description: str = Field(default="", max_length=10000)
+    acceptance_criteria: str = Field(default="", max_length=10000)
+    assignee: str = Field(default="owner", max_length=40)
+    priority: Literal["critical", "high", "medium", "low"] = "medium"
     goal_id: Optional[int] = Field(default=None, ge=1)
     decision_id: Optional[int] = Field(default=None, ge=1)
     action_id: Optional[int] = Field(default=None, ge=1)
@@ -2250,9 +2421,11 @@ class AgileTaskCreateRequest(BaseModel):
 class AgileTaskUpdateRequest(AgileTaskCreateRequest):
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
     expected_version: int = Field(ge=1)
-    status: Literal['backlog', 'ready', 'in_progress', 'review', 'done', 'blocked'] = 'backlog'
-    blocked_reason: str = Field(default='', max_length=2000)
-    completion_note: str = Field(default='', max_length=10000)
+    status: Literal["backlog", "ready", "in_progress", "review", "done", "blocked"] = (
+        "backlog"
+    )
+    blocked_reason: str = Field(default="", max_length=2000)
+    completion_note: str = Field(default="", max_length=10000)
 
 
 def _agile_call(callback, *args, **kwargs):
@@ -2266,43 +2439,56 @@ def _agile_call(callback, *args, **kwargs):
         raise HTTPException(status_code=400, detail=str(error))
 
 
-@app.get('/boards', dependencies=[Depends(verify_api_key)])
-def get_agile_boards(limit: int = Query(default=100, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+@app.get("/boards", dependencies=[Depends(verify_api_key)])
+def get_agile_boards(
+    limit: int = Query(default=100, ge=1, le=100), offset: int = Query(default=0, ge=0)
+):
     return list_boards(limit, offset)
 
 
-@app.post('/boards', dependencies=[Depends(verify_api_key)])
+@app.post("/boards", dependencies=[Depends(verify_api_key)])
 def post_agile_board(request: BoardCreateRequest):
-    return {'id': _agile_call(create_board, request.name, request.kind)}
+    return {"id": _agile_call(create_board, request.name, request.kind)}
 
 
-@app.get('/boards/{board_id}/tasks', dependencies=[Depends(verify_api_key)])
-def get_agile_tasks(board_id: int, limit: int = Query(default=100, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+@app.get("/boards/{board_id}/tasks", dependencies=[Depends(verify_api_key)])
+def get_agile_tasks(
+    board_id: int,
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
     return _agile_call(list_tasks, board_id, limit, offset)
 
 
-@app.post('/boards/{board_id}/tasks', dependencies=[Depends(verify_api_key)])
+@app.post("/boards/{board_id}/tasks", dependencies=[Depends(verify_api_key)])
 def post_agile_task(board_id: int, request: AgileTaskCreateRequest):
     return _agile_call(create_task, board_id, **request.model_dump())
 
 
-@app.patch('/tasks/{task_id}', dependencies=[Depends(verify_api_key)])
+@app.patch("/tasks/{task_id}", dependencies=[Depends(verify_api_key)])
 def patch_agile_task(task_id: int, request: AgileTaskUpdateRequest):
     fields = request.model_dump(exclude_unset=True)
-    version = fields.pop('expected_version')
+    version = fields.pop("expected_version")
     return _agile_call(update_task, task_id, version, **fields)
 
 
-@app.post('/boards/roadmap', dependencies=[Depends(verify_api_key)])
+@app.post("/boards/roadmap", dependencies=[Depends(verify_api_key)])
 def post_development_roadmap():
     return _agile_call(create_roadmap_board)
 
 
-from memory.experiments import create_experiment, update_experiment, get_experiment, list_experiments, record_observation, list_observations
+from memory.experiments import (
+    create_experiment,
+    update_experiment,
+    get_experiment,
+    list_experiments,
+    record_observation,
+    list_observations,
+)
 
 
 class ExperimentPlanRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     title: str = Field(min_length=1, max_length=200)
     hypothesis: str = Field(min_length=1, max_length=4000)
     baseline_note: str = Field(min_length=1, max_length=4000)
@@ -2310,11 +2496,11 @@ class ExperimentPlanRequest(BaseModel):
     metric_name: str = Field(min_length=1, max_length=120)
     unit: str = Field(min_length=1, max_length=40)
     target_value: Optional[float] = Field(default=None, strict=True)
-    direction: Literal['increase', 'decrease'] = 'increase'
+    direction: Literal["increase", "decrease"] = "increase"
     expected_result: str = Field(min_length=1, max_length=4000)
     budget_amount: float = Field(ge=0, le=1e15, strict=True)
     risk_limit: float = Field(ge=0, le=1e15, strict=True)
-    currency: str = Field(pattern=r'^[A-Z]{3}$')
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
     observation_due_at: str = Field(max_length=40)
 
 
@@ -2323,7 +2509,7 @@ class ExperimentCreateRequest(ExperimentPlanRequest):
 
 
 class ExperimentUpdateRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     expected_version: int = Field(ge=1)
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
     hypothesis: Optional[str] = Field(default=None, min_length=1, max_length=4000)
@@ -2332,60 +2518,73 @@ class ExperimentUpdateRequest(BaseModel):
     metric_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     unit: Optional[str] = Field(default=None, min_length=1, max_length=40)
     target_value: Optional[float] = Field(default=None, strict=True)
-    direction: Optional[Literal['increase', 'decrease']] = None
+    direction: Optional[Literal["increase", "decrease"]] = None
     expected_result: Optional[str] = Field(default=None, min_length=1, max_length=4000)
     budget_amount: Optional[float] = Field(default=None, ge=0, le=1e15, strict=True)
     risk_limit: Optional[float] = Field(default=None, ge=0, le=1e15, strict=True)
-    currency: Optional[str] = Field(default=None, pattern=r'^[A-Z]{3}$')
+    currency: Optional[str] = Field(default=None, pattern=r"^[A-Z]{3}$")
     observation_due_at: Optional[str] = Field(default=None, max_length=40)
 
 
 class ObservationRequest(BaseModel):
     source_ids: list[int] | None = Field(default=None, max_length=20)
-    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
-    idempotency_key: str = Field(min_length=1, max_length=80, pattern=r'^[A-Za-z0-9:_-]+$')
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    idempotency_key: str = Field(
+        min_length=1, max_length=80, pattern=r"^[A-Za-z0-9:_-]+$"
+    )
     observed_at: str = Field(max_length=40)
     value: Optional[float] = Field(default=None, strict=True)
     evidence: str = Field(min_length=1, max_length=12000)
-    notes: str = Field(default='', max_length=4000)
+    notes: str = Field(default="", max_length=4000)
 
 
-@app.get('/experiments', dependencies=[Depends(verify_api_key)])
-def experiments_list(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+@app.get("/experiments", dependencies=[Depends(verify_api_key)])
+def experiments_list(
+    limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)
+):
     return list_experiments(limit, offset)
 
 
-@app.post('/experiments', dependencies=[Depends(verify_api_key)])
+@app.post("/experiments", dependencies=[Depends(verify_api_key)])
 def experiment_create(request: ExperimentCreateRequest):
     fields = request.model_dump()
-    action_id = fields.pop('action_id')
+    action_id = fields.pop("action_id")
     return _agile_call(create_experiment, action_id, **fields)
 
 
-@app.get('/experiments/{experiment_id}', dependencies=[Depends(verify_api_key)])
+@app.get("/experiments/{experiment_id}", dependencies=[Depends(verify_api_key)])
 def experiment_get(experiment_id: int):
     plan = get_experiment(experiment_id)
     if plan is None:
-        raise HTTPException(status_code=404, detail='Experiment not found')
+        raise HTTPException(status_code=404, detail="Experiment not found")
     return plan
 
 
-@app.patch('/experiments/{experiment_id}', dependencies=[Depends(verify_api_key)])
+@app.patch("/experiments/{experiment_id}", dependencies=[Depends(verify_api_key)])
 def experiment_patch(experiment_id: int, request: ExperimentUpdateRequest):
     fields = request.model_dump(exclude_unset=True)
-    version = fields.pop('expected_version')
+    version = fields.pop("expected_version")
     return _agile_call(update_experiment, experiment_id, version, **fields)
 
 
-@app.get('/experiments/{experiment_id}/observations', dependencies=[Depends(verify_api_key)])
-def observations_list(experiment_id: int, limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+@app.get(
+    "/experiments/{experiment_id}/observations", dependencies=[Depends(verify_api_key)]
+)
+def observations_list(
+    experiment_id: int,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
     return _agile_call(list_observations, experiment_id, limit, offset)
 
 
-@app.post('/experiments/{experiment_id}/observations', dependencies=[Depends(verify_api_key)])
+@app.post(
+    "/experiments/{experiment_id}/observations", dependencies=[Depends(verify_api_key)]
+)
 def observation_create(experiment_id: int, request: ObservationRequest):
     return _agile_call(record_observation, experiment_id, **request.model_dump())
 
 
 from foundation_api import router as foundation_router
+
 app.include_router(foundation_router, dependencies=[Depends(verify_api_key)])

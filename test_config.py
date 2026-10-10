@@ -1,3 +1,5 @@
+"""Regression checks for config."""
+
 # test_config.py
 from config import config
 

@@ -1,5 +1,4 @@
-"""
-workflows/capability_policy.py
+"""Role-specific tool capability policy independent of presentation.
 
 Deterministic executive capability policy.
 
