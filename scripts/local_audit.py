@@ -19,7 +19,7 @@ KNOWN_CHROMA = {'PYSEC-2026-311', 'PYSEC-2026-3813', 'PYSEC-2026-3814', 'PYSEC-2
 
 def main():
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=ROOT, text=True).strip()
-    if branch not in {'chatgpt/foundation-hardening', 'main', 'codex/operating-foundation-sprint', 'codex/identity-organization-simulation', 'codex/sprint-2-local-review', 'codex/business-experiment-discovery', 'codex/pre-sprint-3-audit', 'codex/sprint-3-practice-evidence'}:
+    if branch not in {'chatgpt/foundation-hardening', 'main', 'codex/operating-foundation-sprint', 'codex/identity-organization-simulation', 'codex/sprint-2-local-review', 'codex/business-experiment-discovery', 'codex/pre-sprint-3-audit', 'codex/sprint-3-practice-evidence', 'codex/local-executive-conversations'}:
         raise SystemExit('Stop: use the foundation-hardening or main development baseline for this disposable audit.')
     stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     report = ROOT / 'audit-results' / stamp
@@ -128,7 +128,7 @@ def main():
                         results.append({'check': 'browser-dashboard-ready', 'status': 'PASS' if ready else 'FAIL'})
                         if ready:
                             for feature in ('dashboard', 'agile', 'experiments', 'organizational',
-                                            'operating', 'review', 'business_discovery', 'people'):
+                                            'operating', 'review', 'business_discovery', 'people', 'conversation_audio'):
                                 run('browser-' + feature, [sys.executable, str(ROOT / 'scripts' / (feature + '_smoke.py'))], timeout=180)
                     finally:
                         server.terminate()

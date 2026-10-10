@@ -189,3 +189,5 @@ The owner confirmed the corrected neural auditions play, completed review and au
 ## Sprint 3 selected scope — 10 October 2026
 
 Pre-Sprint 3 audit PR #34 is merged. The owner selected BE-20–22: useful deliverables, evidence-backed business comparisons and measurable feedback improvement. BE-23 (actual local voiced contributions) is deferred. See [SPRINT_3_PLAN.md](SPRINT_3_PLAN.md). Implementation is in Review, with acceptance steps in [SPRINT_3_PRACTICE_EVIDENCE.md](SPRINT_3_PRACTICE_EVIDENCE.md). Owner acceptance and merge remain pending; live board cards are not automatically changed.
+
+BE-20–22: owner acceptance and merge confirmed on 10 October 2026, PR #36 (`7d0acdb`). The owner then selected BE-23 local voiced contributions; it is in implementation on a separate branch. Live board cards are not automatically changed.
