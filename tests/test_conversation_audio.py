@@ -120,6 +120,16 @@ class ConversationAudioTests(unittest.TestCase):
             self.assertEqual(client.delete('/conversation-audio/'+key,headers=headers).status_code,200)
             self.assertEqual(client.get('/conversation-audio/'+key,headers=headers).status_code,404)
 
+    def test_cleanup_defers_while_cache_writer_is_owned(self):
+        import fcntl
+        with patch.object(speech,'synthesize',return_value=wav()): record=self.generate()
+        directory=speech._directory();lock=os.open('.writer-lock',os.O_RDWR,dir_fd=directory);fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        try:
+            self.assertEqual(speech.prune_audio(now=record['expires_at']+1),0)
+            with self.assertRaisesRegex(RuntimeError,'writer is busy'): speech.delete_audio(record['cache_key'])
+        finally: os.close(lock);os.close(directory)
+        self.assertEqual(speech.prune_audio(now=record['expires_at']+1),1)
+
     def test_synthesis_timeout_kills_worker_and_strips_credentials(self):
         import subprocess
         from unittest.mock import Mock

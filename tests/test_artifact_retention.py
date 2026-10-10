@@ -43,7 +43,7 @@ class ArtifactRetentionTests(unittest.TestCase):
                 with get_connection() as conn:
                     conn.execute('UPDATE generated_sync_exports SET generated_at = ?', (old,))
                     conn.commit()
-                self.assertEqual(prune_generated_artifacts(now=now), {'logs':1,'screenshots':1,'sync_exports':1})
+                self.assertEqual(prune_generated_artifacts(now=now), {'conversation_audio':0,'logs':1,'screenshots':1,'sync_exports':1})
                 for name in ['logs/app.log', 'logs/unrelated.txt', 'workspace/screenshots/action_recent.png',
                              'workspace/screenshots/action_link.png', 'workspace/screenshots/action_hardlink.png',
                              'sync/unregistered.jsonl', 'outside.txt', 'history.db']:
