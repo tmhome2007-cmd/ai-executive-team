@@ -1,5 +1,4 @@
-"""
-notifications/telegram_interactive.py
+"""Owner-verified Telegram callbacks for approval and execution controls.
 
 Maakt Telegram-notificaties over voorgestelde acties interactief: elk bericht
 krijgt echte, aantikbare Approve / Reject / Execute knoppen, die rechtstreeks
@@ -69,14 +68,20 @@ def is_telegram_listener_alive() -> tuple[bool, Optional[str]]:
     deze bot-token) zichtbaar is zonder in logs/app.log te hoeven graven.
     """
     thread = _state.get("thread")
-    alive = thread is not None and thread.is_alive() and _state.get("started_successfully", False)
+    alive = (
+        thread is not None
+        and thread.is_alive()
+        and _state.get("started_successfully", False)
+    )
     return alive, _state.get("last_error")
 
 
 # ------------------------------------------------------------------
 # BERICHT- EN TOETSENBORD-OPBOUW
 # ------------------------------------------------------------------
-def build_action_keyboard(action_id: int, status: str) -> Optional[InlineKeyboardMarkup]:
+def build_action_keyboard(
+    action_id: int, status: str
+) -> Optional[InlineKeyboardMarkup]:
     """
     Bouwt de juiste set knoppen voor de huidige status van een actie.
     - pending    -> Approve / Reject
@@ -86,15 +91,31 @@ def build_action_keyboard(action_id: int, status: str) -> Optional[InlineKeyboar
     if not getattr(config, "TELEGRAM_ALLOW_REMOTE_CONTROL", False):
         return None
     if status == "pending":
-        return InlineKeyboardMarkup([[
-            InlineKeyboardButton("✅ Approve", callback_data=f"approve:{action_id}"),
-            InlineKeyboardButton("❌ Reject", callback_data=f"reject:{action_id}"),
-        ]])
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "✅ Approve", callback_data=f"approve:{action_id}"
+                    ),
+                    InlineKeyboardButton(
+                        "❌ Reject", callback_data=f"reject:{action_id}"
+                    ),
+                ]
+            ]
+        )
     elif status == "approved":
-        return InlineKeyboardMarkup([[
-            InlineKeyboardButton("⚡ Execute", callback_data=f"execute:{action_id}"),
-            InlineKeyboardButton("❌ Reject", callback_data=f"reject:{action_id}"),
-        ]])
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "⚡ Execute", callback_data=f"execute:{action_id}"
+                    ),
+                    InlineKeyboardButton(
+                        "❌ Reject", callback_data=f"reject:{action_id}"
+                    ),
+                ]
+            ]
+        )
     return None
 
 
@@ -187,7 +208,9 @@ def send_proposal_notification(
 # ------------------------------------------------------------------
 # KNOP-CALLBACK HANDLER
 # ------------------------------------------------------------------
-async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_button_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     query = update.callback_query
 
     if not getattr(config, "TELEGRAM_ALLOW_REMOTE_CONTROL", False):
@@ -198,7 +221,9 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             )
         except Exception:
             pass
-        logger.warning("Blocked Telegram action callback because remote control is disabled.")
+        logger.warning(
+            "Blocked Telegram action callback because remote control is disabled."
+        )
         return
 
     # KRITIEKE CONTROLE: verifieer dat dit bericht ECHT van de eigenaar komt.
@@ -208,7 +233,9 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # geen geheim — dit moet ALTIJD expliciet worden gecontroleerd.
     sender_chat_id = str(update.effective_chat.id) if update.effective_chat else None
     sender_user_id = str(update.effective_user.id) if update.effective_user else None
-    chat_type = getattr(update.effective_chat, "type", None) if update.effective_chat else None
+    chat_type = (
+        getattr(update.effective_chat, "type", None) if update.effective_chat else None
+    )
     owner_chat_id = str(getattr(config, "TELEGRAM_CHAT_ID", "")).strip()
 
     # Remote approvals are intentionally supported ONLY from a private chat
@@ -228,7 +255,9 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("Unauthorized.", show_alert=True)
         except Exception:
             pass
-        logger.warning("Blocked unauthorized Telegram callback; sender identifiers suppressed.")
+        logger.warning(
+            "Blocked unauthorized Telegram callback; sender identifiers suppressed."
+        )
         return
 
     try:
@@ -251,7 +280,9 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # ---- APPROVE ----
     if action_type == "approve":
         if current_status != "pending":
-            await query.answer(f"Already '{current_status}' — cannot approve again.", show_alert=True)
+            await query.answer(
+                f"Already '{current_status}' — cannot approve again.", show_alert=True
+            )
             return
         try:
             approve_action_control(action_id)
@@ -261,13 +292,17 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer("Approved ✅")
         action = get_action_by_id(action_id) or action
         action["status"] = "approved"
-        new_text = format_action_message(action, footer="✅ <b>APPROVED</b> via Telegram.")
+        new_text = format_action_message(
+            action, footer="✅ <b>APPROVED</b> via Telegram."
+        )
         new_keyboard = build_action_keyboard(action_id, "approved")
 
     # ---- REJECT ----
     elif action_type == "reject":
         if current_status not in ("pending", "approved"):
-            await query.answer(f"Already '{current_status}' — cannot reject now.", show_alert=True)
+            await query.answer(
+                f"Already '{current_status}' — cannot reject now.", show_alert=True
+            )
             return
         try:
             reject_action_control(action_id)
@@ -277,13 +312,18 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer("Rejected ❌")
         action = get_action_by_id(action_id) or action
         action["status"] = "rejected"
-        new_text = format_action_message(action, footer="❌ <b>REJECTED</b> via Telegram.")
+        new_text = format_action_message(
+            action, footer="❌ <b>REJECTED</b> via Telegram."
+        )
         new_keyboard = None
 
     # ---- EXECUTE ----
     elif action_type == "execute":
         if current_status != "approved":
-            await query.answer(f"Must be 'approved' first (currently '{current_status}').", show_alert=True)
+            await query.answer(
+                f"Must be 'approved' first (currently '{current_status}').",
+                show_alert=True,
+            )
             return
         await query.answer("Executing...")
         # execute_action() is sync and may run a real subprocess (up to the
@@ -331,7 +371,9 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     try:
-        await query.edit_message_text(text=new_text, parse_mode="HTML", reply_markup=new_keyboard)
+        await query.edit_message_text(
+            text=new_text, parse_mode="HTML", reply_markup=new_keyboard
+        )
     except Exception as e:
         # Bewerken kan falen als het bericht al identiek is, of te oud is —
         # dit mag de bot nooit laten crashen.
@@ -370,7 +412,9 @@ def _run_listener_in_thread() -> None:
 
             _state["started_successfully"] = True
             _state["last_error"] = None
-            logger.info("Telegram interactive listener started (polling for button taps).")
+            logger.info(
+                "Telegram interactive listener started (polling for button taps)."
+            )
 
             await stop_event.wait()
             logger.info("Telegram interactive listener shutting down...")
@@ -380,7 +424,9 @@ def _run_listener_in_thread() -> None:
                 "Conflict: another process is already polling this bot token. "
                 "Stop any other running instance of this app before retrying."
             )
-            logger.error("Telegram listener failed to start because another poller is active.")
+            logger.error(
+                "Telegram listener failed to start because another poller is active."
+            )
 
         except Exception as exc:
             _state["last_error"] = (
@@ -401,17 +447,23 @@ def _run_listener_in_thread() -> None:
                     try:
                         await application.updater.stop()
                     except Exception as cleanup_err:
-                        logger.warning(f"Telegram updater cleanup failed: {cleanup_err}")
+                        logger.warning(
+                            f"Telegram updater cleanup failed: {cleanup_err}"
+                        )
                 if started:
                     try:
                         await application.stop()
                     except Exception as cleanup_err:
-                        logger.warning(f"Telegram application stop failed: {cleanup_err}")
+                        logger.warning(
+                            f"Telegram application stop failed: {cleanup_err}"
+                        )
                 if initialized:
                     try:
                         await application.shutdown()
                     except Exception as cleanup_err:
-                        logger.warning(f"Telegram application shutdown failed: {cleanup_err}")
+                        logger.warning(
+                            f"Telegram application shutdown failed: {cleanup_err}"
+                        )
 
     try:
         loop.run_until_complete(_main())
@@ -439,14 +491,18 @@ def start_telegram_listener() -> None:
     zodat het systeem prima blijft werken zonder Telegram als dat gewenst is.
     """
     if not getattr(config, "TELEGRAM_BOT_TOKEN", "").strip():
-        logger.warning("Telegram interactive listener NOT started: TELEGRAM_BOT_TOKEN is not set.")
+        logger.warning(
+            "Telegram interactive listener NOT started: TELEGRAM_BOT_TOKEN is not set."
+        )
         return
 
     if _state["thread"] is not None and _state["thread"].is_alive():
         logger.info("Telegram interactive listener is already running.")
         return
 
-    thread = threading.Thread(target=_run_listener_in_thread, daemon=True, name="telegram-listener")
+    thread = threading.Thread(
+        target=_run_listener_in_thread, daemon=True, name="telegram-listener"
+    )
     _state["thread"] = thread
     thread.start()
 
@@ -471,7 +527,9 @@ def stop_telegram_listener() -> None:
     except RuntimeError as e:
         # Race: de listener-thread kan precies tussen de state-read hierboven
         # en deze call zijn gestopt. Dat mag application shutdown niet breken.
-        logger.warning(f"Telegram listener loop was already closed during shutdown: {e}")
+        logger.warning(
+            f"Telegram listener loop was already closed during shutdown: {e}"
+        )
 
     if thread is not None:
         thread.join(timeout=10)

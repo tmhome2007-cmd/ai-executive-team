@@ -1,5 +1,4 @@
-"""
-system_checks.py
+"""Runtime readiness checks for local model, storage, browser and notifications.
 
 Kleine, gedeelde diagnostische controles — gebruikt zowel bij het opstarten
 (een duidelijke waarschuwing als Ollama niet bereikbaar is, in plaats van een
@@ -40,7 +39,10 @@ def check_ollama_reachable(timeout: float = 3.0) -> tuple[bool, str]:
             return True, "ok"
         return False, f"Ollama antwoordde met status {response.status_code}"
     except requests.exceptions.ConnectionError:
-        return False, f"Kan geen verbinding maken met Ollama op {config.OLLAMA_BASE_URL} — draait 'ollama serve'?"
+        return (
+            False,
+            f"Kan geen verbinding maken met Ollama op {config.OLLAMA_BASE_URL} — draait 'ollama serve'?",
+        )
     except requests.exceptions.Timeout:
         return False, f"Ollama reageerde niet binnen {timeout}s"
     except Exception as e:
@@ -88,6 +90,7 @@ def check_playwright_browser_installed() -> tuple[bool, str]:
     """
     try:
         from playwright.sync_api import sync_playwright
+
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             browser.close()

@@ -1,5 +1,4 @@
-"""
-workflows/meeting_types.py
+"""Meeting contracts: participants, evidence expectations and output sections.
 
 Central meeting-type policy. Meeting types shape reasoning and output, never
 execution authority. All real-world effects remain behind the existing owner,
@@ -139,14 +138,17 @@ def get_meeting_type_profile(meeting_type: str) -> dict:
     return MEETING_TYPES[meeting_type]
 
 
-def resolve_meeting_agents(meeting_type: str, agent_keys: list[str] | None) -> list[str]:
+def resolve_meeting_agents(
+    meeting_type: str, agent_keys: list[str] | None
+) -> list[str]:
     profile = get_meeting_type_profile(meeting_type)
-    resolved = list(agent_keys) if agent_keys is not None else list(profile["default_agents"])
+    resolved = (
+        list(agent_keys) if agent_keys is not None else list(profile["default_agents"])
+    )
     if not resolved:
         raise ValueError("Meeting must include at least one executive")
     missing_required = [
-        key for key in profile["required_agents"]
-        if key not in resolved
+        key for key in profile["required_agents"] if key not in resolved
     ]
     if missing_required:
         raise ValueError(
@@ -164,7 +166,8 @@ def meeting_type_prompt(meeting_type: str) -> str:
         f"Required response structure: {profile['response_structure']}\n"
         + (
             f"Evidence-section rule: {profile['evidence_section_rule']}\n"
-            if profile.get("evidence_section_rule") else ""
+            if profile.get("evidence_section_rule")
+            else ""
         )
         + f"Authority posture: {profile['approval_posture']}\n"
         "The meeting type changes reasoning structure only. It never expands tool, "

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:lint-glob": "node vendor/native-directory-glob/test.cjs && node tests/review-summary.mjs",
-    "test:review-summary": "node tests/review-summary.mjs"
+    "test:review-summary": "node tests/review-summary.mjs",
+    "format": "prettier --write app tests *.ts *.mjs package.json",
+    "format:check": "prettier --check app tests *.ts *.mjs package.json"
   },
   "dependencies": {
     "next": "16.3.8",
@@ -22,9 +24,10 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
+    "fast-glob": "file:vendor/native-directory-glob",
+    "prettier": "3.6.2",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "fast-glob": "file:vendor/native-directory-glob"
+    "typescript": "^5"
   },
   "overrides": {
     "fast-glob": "$fast-glob"

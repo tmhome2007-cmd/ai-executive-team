@@ -47,14 +47,14 @@ executive_crew = Crew(
     agents=[ceo_agent, cfo_agent],
     tasks=[budget_request_task],
     process=Process.sequential,
-    verbose=True
+    verbose=True,
 )
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("STARTING FULL END-TO-END WORKFLOW TEST")
     print("=" * 60 + "\n")
-    
+
     # Stap 1: Initialiseer de SQLite-database
     init_db()
 
@@ -63,7 +63,7 @@ if __name__ == "__main__":
         print("🤖 [1/3] AI Executive Team is aan het overleggen via Ollama...")
         result = executive_crew.kickoff()
         result_str = str(result)
-        
+
         print("\n" + "=" * 60)
         print("EXECUTIVE TEAM DECISION RESULT:")
         print("=" * 60)
@@ -77,7 +77,7 @@ if __name__ == "__main__":
             agents_involved=["CEO", "CFO"],
             task_description=task_prompt,
             decision_outcome=result_str,
-            sandbox_mode=config.SANDBOX_MODE
+            sandbox_mode=config.SANDBOX_MODE,
         )
         print(f"✅ Opgeslagen onder Database ID: {record_id}\n")
 

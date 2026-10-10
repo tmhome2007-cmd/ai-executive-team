@@ -1,10 +1,161 @@
 "use client";
 import { useEffect, useState } from "react";
-type Context = { version: number; category: string; services: string[]; publication_date: string | null; note: string };
-type Request = (path: string, method?: string, body?: unknown, signal?: AbortSignal) => Promise<Context>;
-export default function BusinessSourceContext({ sourceId, request, disabled }: { sourceId: number; request: Request; disabled: boolean }) {
-  const [value, setValue] = useState<Context | null>(null), [error, setError] = useState(""), [saving, setSaving] = useState(false);
-  useEffect(() => { const controller = new AbortController(); request(`/business-discovery/source-context/${sourceId}`, "GET", undefined, controller.signal).then(setValue).catch(e => { if (!controller.signal.aborted) setError(e.message); }); return () => controller.abort(); }, [sourceId, request]);
-  const save = async () => { if (!value) return; setSaving(true); setError(""); try { setValue(await request(`/business-discovery/source-context/${sourceId}`, "POST", { expected_version: value.version, category: value.category, services: value.services, publication_date: value.publication_date || null, note: value.note })); } catch (e) { setError(e instanceof Error ? e.message : "Classification unavailable"); } finally { setSaving(false); } };
-  return <details className="my-2"><summary>Classify source #{sourceId} for business research</summary><p className="text-xs text-gray-400">Your classification describes relevance; it does not verify demand. Earlier reports keep their original source snapshot. Publication date is separate from the date the page was read. Public reads have a 30-day review window; this does not prove their contents remain accurate.</p>{error && <p role="alert">{error}</p>}{value && <fieldset disabled={disabled || saving} className="space-y-2"><label className="block">Evidence category<select aria-label={`Source ${sourceId} evidence category`} className="agile-input w-full" value={value.category} onChange={e => setValue({ ...value, category: e.target.value })}>{["unknown", "demand", "buyer", "platform", "constraint", "contradiction"].map(c => <option key={c}>{c}</option>)}</select></label><div>Relevant services{["documentation", "editing", "support_drafts"].map(service => <label key={service} className="block"><input type="checkbox" checked={value.services.includes(service)} onChange={e => setValue({ ...value, services: e.target.checked ? [...value.services, service] : value.services.filter(s => s !== service) })} /> {service.replaceAll("_", " ")}</label>)}</div><label className="block">Source publication date (leave blank if unknown)<input aria-label={`Source ${sourceId} publication date`} type="date" className="agile-input w-full" value={value.publication_date || ""} onChange={e => setValue({ ...value, publication_date: e.target.value })} /></label><label className="block">Why this source is relevant<textarea aria-label={`Source ${sourceId} relevance`} maxLength={1000} className="agile-input w-full" value={value.note} onChange={e => setValue({ ...value, note: e.target.value })} /></label><button type="button" className="office-filter" onClick={save}>Save classification for source #{sourceId}</button><button type="button" className="office-filter" onClick={async () => { setSaving(true); setError(""); try { setValue(await request(`/business-discovery/source-context/${sourceId}`)); } catch (e) { setError(e instanceof Error ? e.message : "Refresh failed"); } finally { setSaving(false); } }}>Refresh classification</button><p className="text-xs">Saved classification version: {value.version}</p></fieldset>}</details>;
+type Context = {
+  version: number;
+  category: string;
+  services: string[];
+  publication_date: string | null;
+  note: string;
+};
+type Request = (
+  path: string,
+  method?: string,
+  body?: unknown,
+  signal?: AbortSignal,
+) => Promise<Context>;
+export default function BusinessSourceContext({
+  sourceId,
+  request,
+  disabled,
+}: {
+  sourceId: number;
+  request: Request;
+  disabled: boolean;
+}) {
+  const [value, setValue] = useState<Context | null>(null),
+    [error, setError] = useState(""),
+    [saving, setSaving] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    request(
+      `/business-discovery/source-context/${sourceId}`,
+      "GET",
+      undefined,
+      controller.signal,
+    )
+      .then(setValue)
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      });
+    return () => controller.abort();
+  }, [sourceId, request]);
+  const save = async () => {
+    if (!value) return;
+    setSaving(true);
+    setError("");
+    try {
+      setValue(
+        await request(`/business-discovery/source-context/${sourceId}`, "POST", {
+          expected_version: value.version,
+          category: value.category,
+          services: value.services,
+          publication_date: value.publication_date || null,
+          note: value.note,
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Classification unavailable");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <details className="my-2">
+      <summary>Classify source #{sourceId} for business research</summary>
+      <p className="text-xs text-gray-400">
+        Your classification describes relevance; it does not verify demand. Earlier
+        reports keep their original source snapshot. Publication date is separate from
+        the date the page was read. Public reads have a 30-day review window; this does
+        not prove their contents remain accurate.
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {value && (
+        <fieldset disabled={disabled || saving} className="space-y-2">
+          <label className="block">
+            Evidence category
+            <select
+              aria-label={`Source ${sourceId} evidence category`}
+              className="agile-input w-full"
+              value={value.category}
+              onChange={(e) => setValue({ ...value, category: e.target.value })}
+            >
+              {[
+                "unknown",
+                "demand",
+                "buyer",
+                "platform",
+                "constraint",
+                "contradiction",
+              ].map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <div>
+            Relevant services
+            {["documentation", "editing", "support_drafts"].map((service) => (
+              <label key={service} className="block">
+                <input
+                  type="checkbox"
+                  checked={value.services.includes(service)}
+                  onChange={(e) =>
+                    setValue({
+                      ...value,
+                      services: e.target.checked
+                        ? [...value.services, service]
+                        : value.services.filter((s) => s !== service),
+                    })
+                  }
+                />{" "}
+                {service.replaceAll("_", " ")}
+              </label>
+            ))}
+          </div>
+          <label className="block">
+            Source publication date (leave blank if unknown)
+            <input
+              aria-label={`Source ${sourceId} publication date`}
+              type="date"
+              className="agile-input w-full"
+              value={value.publication_date || ""}
+              onChange={(e) => setValue({ ...value, publication_date: e.target.value })}
+            />
+          </label>
+          <label className="block">
+            Why this source is relevant
+            <textarea
+              aria-label={`Source ${sourceId} relevance`}
+              maxLength={1000}
+              className="agile-input w-full"
+              value={value.note}
+              onChange={(e) => setValue({ ...value, note: e.target.value })}
+            />
+          </label>
+          <button type="button" className="office-filter" onClick={save}>
+            Save classification for source #{sourceId}
+          </button>
+          <button
+            type="button"
+            className="office-filter"
+            onClick={async () => {
+              setSaving(true);
+              setError("");
+              try {
+                setValue(
+                  await request(`/business-discovery/source-context/${sourceId}`),
+                );
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Refresh failed");
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            Refresh classification
+          </button>
+          <p className="text-xs">Saved classification version: {value.version}</p>
+        </fieldset>
+      )}
+    </details>
+  );
 }

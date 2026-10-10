@@ -1,0 +1,2 @@
+# Development tools only; not required to run the company.
+black==26.10.1

@@ -1,5 +1,4 @@
-"""
-tools/browser_action_tool.py
+"""Browser action proposal tool; execution remains separately controlled.
 
 CrewAI tool waarmee agenten een browser-actie voorstellen: naar een URL
 navigeren en optioneel één element aanklikken. Bewust beperkt tot navigeren
@@ -25,34 +24,32 @@ from tools._dedupe_guard import check_and_register_proposal
 
 class BrowserActionInput(BaseModel):
     """Input schema voor ProposeBrowserActionTool."""
-    url: str = Field(
-        ...,
-        description="The full URL to navigate to, including https://"
-    )
+
+    url: str = Field(..., description="The full URL to navigate to, including https://")
     click_selector: Optional[str] = Field(
         default=None,
-        description="Optional CSS selector of a single element to click after navigating (e.g. 'button.submit', '#accept-cookies'). Leave empty to only navigate and observe."
+        description="Optional CSS selector of a single element to click after navigating (e.g. 'button.submit', '#accept-cookies'). Leave empty to only navigate and observe.",
     )
     reason: str = Field(
         ...,
-        description="A short, human-readable explanation of why this browser action is being proposed."
+        description="A short, human-readable explanation of why this browser action is being proposed.",
     )
     expected_outcome: str | None = Field(
         default=None,
-        description="What observable result should follow from this browser action if it succeeds."
+        description="What observable result should follow from this browser action if it succeeds.",
     )
     expected_impact: str | None = Field(
         default=None,
-        description="Qualitative business/operational impact expected from the browser action."
+        description="Qualitative business/operational impact expected from the browser action.",
     )
     expected_cost_amount: float | None = Field(
         default=None,
         ge=0,
-        description="Expected monetary cost only when known from evidence; otherwise leave empty."
+        description="Expected monetary cost only when known from evidence; otherwise leave empty.",
     )
     currency: str | None = Field(
         default=None,
-        description="3-letter currency code such as EUR or USD when expected_cost_amount is known."
+        description="3-letter currency code such as EUR or USD when expected_cost_amount is known.",
     )
 
 
@@ -85,7 +82,12 @@ class ProposeBrowserActionTool(BaseTool):
         # empty string) instead of actually omitting an optional field. Treat
         # all of these as "no selector provided" so we never try to click an
         # element literally named "null".
-        if click_selector is not None and click_selector.strip().lower() in ("null", "none", "n/a", ""):
+        if click_selector is not None and click_selector.strip().lower() in (
+            "null",
+            "none",
+            "n/a",
+            "",
+        ):
             click_selector = None
 
         if not browser_url_allowed_by_provenance(url):
@@ -106,7 +108,11 @@ class ProposeBrowserActionTool(BaseTool):
         }
         action_detail_json = json.dumps(action_detail_dict)
 
-        description = f"Navigate to '{url}'" + (f" and click '{click_selector}'" if click_selector else "") + f": {reason}"
+        description = (
+            f"Navigate to '{url}'"
+            + (f" and click '{click_selector}'" if click_selector else "")
+            + f": {reason}"
+        )
 
         action_id = propose_action(
             proposed_by=self.role,
@@ -119,7 +125,9 @@ class ProposeBrowserActionTool(BaseTool):
             currency=currency,
         )
 
-        summary = f"[navigate] {url}" + (f"\n[click] {click_selector}" if click_selector else "")
+        summary = f"[navigate] {url}" + (
+            f"\n[click] {click_selector}" if click_selector else ""
+        )
         try:
             send_proposal_notification(
                 action_id=action_id,
@@ -128,7 +136,9 @@ class ProposeBrowserActionTool(BaseTool):
                 action_detail=summary,
             )
         except Exception as e:
-            print(f"Warning: Telegram browser-proposal notification failed ({type(e).__name__}); transport details suppressed.")
+            print(
+                f"Warning: Telegram browser-proposal notification failed ({type(e).__name__}); transport details suppressed."
+            )
 
         return (
             f"Browser action proposal logged successfully with ID #{action_id}. "

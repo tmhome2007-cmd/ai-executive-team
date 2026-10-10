@@ -1,5 +1,4 @@
-"""
-notifications/telegram_bot.py
+"""Outbound Telegram notifications with bounded, redacted content.
 
 Module voor het versturen van Telegram-notificaties vanuit het AI Executive Team systeem.
 Gebruikt de moderne asynchrone API van python-telegram-bot met een synchrone wrapper.
@@ -69,9 +68,7 @@ async def send_notification_async(message: str) -> None:
     try:
         bot = Bot(token=token)
         await bot.send_message(
-            chat_id=chat_id,
-            text=_private_notification_text(message),
-            parse_mode="HTML"
+            chat_id=chat_id, text=_private_notification_text(message), parse_mode="HTML"
         )
         logger.info("Telegram notification sent successfully.")
     except Exception as exc:

@@ -1,4 +1,4 @@
-"""tools/resource_request_tool.py
+"""Agent tool to record missing resources without granting access.
 
 CrewAI tool for proposing structured resources/capabilities the team needs.
 This never grants access, stores secrets, or executes anything.
@@ -18,8 +18,14 @@ from tools._dedupe_guard import check_and_register_proposal
 
 class ResourceRequestInput(BaseModel):
     resource_type: Literal[
-        "access", "credential", "plugin", "data",
-        "budget", "service", "hardware", "other"
+        "access",
+        "credential",
+        "plugin",
+        "data",
+        "budget",
+        "service",
+        "hardware",
+        "other",
     ] = Field(
         ...,
         description=(
@@ -81,7 +87,9 @@ class ProposeResourceRequestTool(BaseTool):
         amount: float | None = None,
         currency: str | None = None,
     ) -> str:
-        dedupe_key = f"resource:{self.role}:{resource_type}:{resource_name.strip().lower()}"
+        dedupe_key = (
+            f"resource:{self.role}:{resource_type}:{resource_name.strip().lower()}"
+        )
         duplicate_message = check_and_register_proposal(dedupe_key)
         if duplicate_message:
             return duplicate_message
@@ -99,7 +107,8 @@ class ProposeResourceRequestTool(BaseTool):
         try:
             amount_text = (
                 f"\n<b>Amount:</b> {amount} {escape_html((currency or '').upper())}"
-                if amount is not None else ""
+                if amount is not None
+                else ""
             )
             send_notification(
                 f"🧩 <b>RESOURCE REQUEST #{request_id}</b>\n\n"
@@ -111,7 +120,9 @@ class ProposeResourceRequestTool(BaseTool):
                 "Pending owner review. No access has been granted and no secret was stored."
             )
         except Exception as e:
-            print(f"Warning: Telegram resource-request notification failed ({type(e).__name__}); transport details suppressed.")
+            print(
+                f"Warning: Telegram resource-request notification failed ({type(e).__name__}); transport details suppressed."
+            )
 
         return (
             f"Resource request logged successfully with ID #{request_id}. "

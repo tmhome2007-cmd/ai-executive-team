@@ -1,4 +1,5 @@
 """Verify SQLite backup recovery, retention and unsafe path rejection."""
+
 import os
 import sqlite3
 import tempfile
@@ -22,8 +23,15 @@ class BackupRecoveryTests(unittest.TestCase):
                 backup_dir = Path(temporary) / "backups"
                 snapshot = backup_database(str(backup_dir), keep_last=1)
                 with sqlite3.connect(snapshot) as restored:
-                    self.assertEqual(restored.execute("PRAGMA integrity_check").fetchone()[0], "ok")
-                    self.assertEqual(restored.execute("SELECT message FROM recovery_probe").fetchone()[0], "restorable")
+                    self.assertEqual(
+                        restored.execute("PRAGMA integrity_check").fetchone()[0], "ok"
+                    )
+                    self.assertEqual(
+                        restored.execute(
+                            "SELECT message FROM recovery_probe"
+                        ).fetchone()[0],
+                        "restorable",
+                    )
                 self.assertEqual(os.stat(snapshot).st_mode & 0o777, 0o600)
                 with self.assertRaises(ValueError):
                     backup_database(str(backup_dir), keep_last=0)

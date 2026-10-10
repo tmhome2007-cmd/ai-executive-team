@@ -1,5 +1,4 @@
-"""
-agents/executive_agents.py
+"""CrewAI executive definitions, role-specific tools and public profile metadata.
 
 Module die de LLM-instantie en alle 10 Executive Agenten definieert voor de CrewAI workflows.
 Exposeert de 'EXECUTIVE_AGENTS' dictionary met sleutels voor elke bestuursrol.
@@ -58,7 +57,10 @@ cfo_agent = Agent(
     verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
-    tools=[ProposeFileOperationTool(role="CFO"), ProposeResourceRequestTool(role="CFO")],
+    tools=[
+        ProposeFileOperationTool(role="CFO"),
+        ProposeResourceRequestTool(role="CFO"),
+    ],
 )
 
 # CSO — Alex Sterling
@@ -115,7 +117,10 @@ general_counsel_agent = Agent(
     verbose=False,
     allow_delegation=False,
     max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
-    tools=[ProposeFileOperationTool(role="General Counsel"), ProposeResourceRequestTool(role="General Counsel")],
+    tools=[
+        ProposeFileOperationTool(role="General Counsel"),
+        ProposeResourceRequestTool(role="General Counsel"),
+    ],
 )
 
 # COO — Marcus Rivera
@@ -247,7 +252,7 @@ EXECUTIVE_AGENTS = {
     "coo": coo_agent,
     "cso": cso_agent,
     "cmo": cmo_agent,
-    "cto": cto_agent,  
+    "cto": cto_agent,
     "cpo": cpo_agent,
     "chro": chro_agent,
     "general_counsel": general_counsel_agent,
@@ -292,12 +297,19 @@ from agents.identities import EXECUTIVE_NAMES
 
 
 def get_executive_profiles(*, include_presentation=False) -> dict:
-    profiles = {key: {'name': EXECUTIVE_NAMES[key], 'role': agent.role,
-                     'goal': agent.goal, 'backstory': agent.backstory}
-                for key, agent in EXECUTIVE_AGENTS.items()}
+    profiles = {
+        key: {
+            "name": EXECUTIVE_NAMES[key],
+            "role": agent.role,
+            "goal": agent.goal,
+            "backstory": agent.backstory,
+        }
+        for key, agent in EXECUTIVE_AGENTS.items()
+    }
     if include_presentation:
         from memory.character_profiles import executive_presentations
+
         presentations = executive_presentations()
         for key, profile in profiles.items():
-            profile['presentation'] = presentations.get(key)
+            profile["presentation"] = presentations.get(key)
     return profiles

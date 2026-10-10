@@ -1,3 +1,5 @@
+"""Regression checks for cso tool."""
+
 import os
 import sys
 from pathlib import Path
@@ -17,8 +19,8 @@ load_dotenv()
 
 # 2. Configure the LLM instance
 ollama_llm = LLM(
-    model=config.OLLAMA_MODEL,       # Uses model name from config
-    base_url=config.OLLAMA_BASE_URL  # Uses URL from config
+    model=config.OLLAMA_MODEL,  # Uses model name from config
+    base_url=config.OLLAMA_BASE_URL,  # Uses URL from config
 )
 
 # 3. Instantiate the web-reading tool
@@ -32,7 +34,7 @@ cso_agent = Agent(
     tools=[page_reader_tool],  # Link tool to the agent
     llm=ollama_llm,
     verbose=True,
-    allow_delegation=False
+    allow_delegation=False,
 )
 
 # 5. Create Task with English instructions
@@ -44,15 +46,11 @@ task = Task(
         "Then, summarize the main definition of artificial intelligence from the text in 2-3 English sentences."
     ),
     expected_output="A concise 2-3 sentence summary in English based strictly on the fetched web page.",
-    agent=cso_agent
+    agent=cso_agent,
 )
 
 # 6. Run the Crew
-crew = Crew(
-    agents=[cso_agent],
-    tasks=[task],
-    verbose=True
-)
+crew = Crew(agents=[cso_agent], tasks=[task], verbose=True)
 
 if __name__ == "__main__":
     print("=" * 60)

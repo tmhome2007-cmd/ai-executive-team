@@ -1,5 +1,4 @@
-"""
-tools/file_operation_tool.py
+"""Workspace file operation proposal tool with owner approval.
 
 CrewAI tool waarmee agenten een GESTRUCTUREERDE bestandsoperatie voorstellen
 (read/write/append) in plaats van een ruwe shell-string. Dit is bewust
@@ -25,38 +24,39 @@ from tools._dedupe_guard import check_and_register_proposal
 
 class FileOperationInput(BaseModel):
     """Input schema voor ProposeFileOperationTool."""
+
     operation: Literal["read", "write", "append"] = Field(
         ...,
-        description="The file operation to propose: 'read' (view contents), 'write' (overwrite/create), or 'append' (add to end)."
+        description="The file operation to propose: 'read' (view contents), 'write' (overwrite/create), or 'append' (add to end).",
     )
     file_path: str = Field(
         ...,
-        description="Path to the file, relative to the project's workspace directory. Cannot escape the workspace."
+        description="Path to the file, relative to the project's workspace directory. Cannot escape the workspace.",
     )
     content: str = Field(
         default="",
-        description="The text content to write or append. Not used for 'read' operations."
+        description="The text content to write or append. Not used for 'read' operations.",
     )
     reason: str = Field(
         ...,
-        description="A short, human-readable explanation of why this file operation is being proposed."
+        description="A short, human-readable explanation of why this file operation is being proposed.",
     )
     expected_outcome: str | None = Field(
         default=None,
-        description="What concrete result should exist after this file operation is approved and executed."
+        description="What concrete result should exist after this file operation is approved and executed.",
     )
     expected_impact: str | None = Field(
         default=None,
-        description="Qualitative impact expected from creating/reading/updating the file."
+        description="Qualitative impact expected from creating/reading/updating the file.",
     )
     expected_cost_amount: float | None = Field(
         default=None,
         ge=0,
-        description="Expected monetary cost only when evidence supports one; otherwise leave empty."
+        description="Expected monetary cost only when evidence supports one; otherwise leave empty.",
     )
     currency: str | None = Field(
         default=None,
-        description="3-letter currency code such as EUR or USD when expected_cost_amount is known."
+        description="3-letter currency code such as EUR or USD when expected_cost_amount is known.",
     )
 
 
@@ -127,10 +127,13 @@ class ProposeFileOperationTool(BaseTool):
                 action_id=action_id,
                 proposed_by=self.role,
                 action_description=description,
-                action_detail=f"[{operation}] {file_path}" + (f"\n\n{content[:200]}" if content else ""),
+                action_detail=f"[{operation}] {file_path}"
+                + (f"\n\n{content[:200]}" if content else ""),
             )
         except Exception as e:
-            print(f"Warning: Telegram file-proposal notification failed ({type(e).__name__}); transport details suppressed.")
+            print(
+                f"Warning: Telegram file-proposal notification failed ({type(e).__name__}); transport details suppressed."
+            )
 
         return (
             f"File operation proposal logged successfully with ID #{action_id}. "

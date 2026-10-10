@@ -4,6 +4,12 @@ A local-first, owner-controlled AI company command center. Eleven executives res
 
 The current business workflow is **€0 research and private text practice**. The agents draft; the owner approves the exercise and assesses the sample. Passing a practice check does not establish customer demand, professional competence, profit or launch permission.
 
+## Code documentation and maintenance
+
+Start with [the developer guide](docs/DEVELOPMENT.md) for architecture, where to put changes, debugging and maintenance commands. [The searchable code catalog](docs/CODE_CATALOG.md) lists source modules, functions/classes and API handlers; it is generated from code without starting the application.
+
+`./company format` applies consistent formatting and refreshes the catalog. `./company check-code` checks formatting and documentation freshness. The guide includes CI templates; enabling them requires GitHub workflow-write permission. Install the separate development tools as described in the guide. Use `./company audit` for functional verification.
+
 ## Conceptual foundation
 
 ```mermaid
@@ -306,7 +312,7 @@ BE-18/19 were reviewed and accepted by the owner on 10 October 2026. Feminine po
 
 See [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) for the current conceptual, security, privacy and bug review. `./company audit` now includes eight application browser suites, actual audition playback, Docker isolation and local Ollama inference using disposable data and logs. Passing project checks does not establish business demand, earned profit or production readiness; the dependency findings remain visible.
 
-Sprint 3 selected scope and acceptance examples: [SPRINT_3_PLAN.md](SPRINT_3_PLAN.md). BE-20–22 add structured private exercises, frozen business evidence comparisons and assessment-based feedback tracking within €0/no-launch constraints. Implementation and review steps: [SPRINT_3_PRACTICE_EVIDENCE.md](SPRINT_3_PRACTICE_EVIDENCE.md). BE-20–22 are accepted and merged in PR #36. BE-23 local spoken contributions are implemented in draft PR #37, awaiting owner listening review.
+Sprint 3 selected scope and acceptance examples: [SPRINT_3_PLAN.md](SPRINT_3_PLAN.md). BE-20–22 add structured private exercises, frozen business evidence comparisons and assessment-based feedback tracking within €0/no-launch constraints. Implementation and review steps: [SPRINT_3_PRACTICE_EVIDENCE.md](SPRINT_3_PRACTICE_EVIDENCE.md). BE-20–22 are accepted and merged in PR #36. BE-23 local spoken contributions were reviewed by the owner and merged in PR #37.
 
 ### Local spoken contributions (BE-23)
 

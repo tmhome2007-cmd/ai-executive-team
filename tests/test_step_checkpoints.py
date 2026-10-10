@@ -1,11 +1,15 @@
 """Transactional checkpoint and no-replay behavior using real SQLite."""
+
 import concurrent.futures
 import os
 import tempfile
 import unittest
 from config import config
 from workflows.step_checkpoints import (
-    init_step_checkpoints, claim_step, finish_step, reconcile_interrupted_steps,
+    init_step_checkpoints,
+    claim_step,
+    finish_step,
+    reconcile_interrupted_steps,
 )
 
 
@@ -17,7 +21,9 @@ class DurableStepCheckpointTests(unittest.TestCase):
                 config.DATABASE_PATH = os.path.join(temp, "checkpoint.db")
                 init_step_checkpoints()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                    futures = [pool.submit(claim_step, "run-A", "payment-1") for _ in range(2)]
+                    futures = [
+                        pool.submit(claim_step, "run-A", "payment-1") for _ in range(2)
+                    ]
                     results = [f.result(timeout=15) for f in futures]
                 self.assertEqual(sorted(results), [False, True])
                 self.assertEqual(reconcile_interrupted_steps(), 1)

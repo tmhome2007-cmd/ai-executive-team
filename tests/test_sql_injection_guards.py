@@ -1,14 +1,21 @@
 """Adversarial SQL-identifier/status input tests against real SQLite."""
+
 import json
 import os
 import tempfile
 import unittest
 from config import config
 from memory.database import (
-    init_db, get_company_goals, get_followup_events,
-    import_history_from_jsonl, _sync_record_signature, create_company_goal,
-    update_company_goal, get_company_goal,
-    get_resource_requests, transition_action_status,
+    init_db,
+    get_company_goals,
+    get_followup_events,
+    import_history_from_jsonl,
+    _sync_record_signature,
+    create_company_goal,
+    update_company_goal,
+    get_company_goal,
+    get_resource_requests,
+    transition_action_status,
 )
 
 
@@ -20,11 +27,20 @@ class SQLInjectionGuardTests(unittest.TestCase):
                 config.DATABASE_PATH = os.path.join(temp, "imports.db")
                 config.SYNC_HMAC_KEY = "test-only-signed-import-key"
                 init_db()
-                row = {"_table": "company_goals", "sync_uuid": "test-uuid",
-                       "created_at": "2026-10-08", "updated_at": "2026-10-08",
-                       "title": "Test", "description": "Test", "success_criteria": "Test",
-                       "priority": "low", "status": "active"}
-                bad_table = dict(row, _table="company_goals; DROP TABLE action_queue; --")
+                row = {
+                    "_table": "company_goals",
+                    "sync_uuid": "test-uuid",
+                    "created_at": "2026-10-08",
+                    "updated_at": "2026-10-08",
+                    "title": "Test",
+                    "description": "Test",
+                    "success_criteria": "Test",
+                    "priority": "low",
+                    "status": "active",
+                }
+                bad_table = dict(
+                    row, _table="company_goals; DROP TABLE action_queue; --"
+                )
                 bad_column = dict(row)
                 bad_column["title); DROP TABLE action_queue; --"] = "attack"
                 path = os.path.join(temp, "import.jsonl")

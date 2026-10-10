@@ -1,5 +1,4 @@
-"""
-workflows/action_control.py
+"""Shared action eligibility and authorization checks.
 
 Single owner-control path for action approval/rejection/execution.
 Every interface (FastAPI, Telegram, future UI) must call these functions so

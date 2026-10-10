@@ -1,5 +1,4 @@
-"""
-workflows/meeting.py
+"""Executive meetings and preparation with durable published contributions.
 
 Module voor het uitvoeren van een sequentieel overleg tussen meerdere CrewAI executive agents.
 Agents bouwen voort op elkaars antwoorden en leveren zowel een individuele als gezamenlijke uitkomst.
@@ -64,25 +63,37 @@ def _is_evidence_request_window(text: str, start: int, end: int) -> bool:
     niet een forecast/payback/timeline. Negeer zulke historische
     evidence-window formuleringen.
     """
-    before = (text or "")[max(0, start - 80):start].lower()
-    after = (text or "")[end:min(len(text or ""), end + 50)].lower()
+    before = (text or "")[max(0, start - 80) : start].lower()
+    after = (text or "")[end : min(len(text or ""), end + 50)].lower()
     context = before + (text or "")[start:end].lower() + after
 
     historical_markers = (
-        "past ", "last ", "previous ", "prior ", "historical ",
-        "data for the ", "data from the ", "history for the ",
+        "past ",
+        "last ",
+        "previous ",
+        "prior ",
+        "historical ",
+        "data for the ",
+        "data from the ",
+        "history for the ",
     )
     evidence_markers = (
-        "evidence", "data", "history", "records", "metrics", "actuals",
+        "evidence",
+        "data",
+        "history",
+        "records",
+        "metrics",
+        "actuals",
     )
 
-    return (
-        any(marker in before for marker in historical_markers)
-        and any(marker in context for marker in evidence_markers)
+    return any(marker in before for marker in historical_markers) and any(
+        marker in context for marker in evidence_markers
     )
 
 
-def find_unsupported_quantitative_claims(source_text: str, output_text: str) -> List[str]:
+def find_unsupported_quantitative_claims(
+    source_text: str, output_text: str
+) -> List[str]:
     """
     Detecteert precieze financiële/tijd-claims die in de meeting-output
     verschijnen maar nergens in het oorspronkelijke evidence/task-pakket
@@ -110,7 +121,9 @@ def find_unsupported_quantitative_claims(source_text: str, output_text: str) -> 
     return unsupported
 
 
-def find_repeated_analysis(individual_outputs: Dict[str, str], min_chars: int = 120) -> Dict[str, List[str]]:
+def find_repeated_analysis(
+    individual_outputs: Dict[str, str], min_chars: int = 120
+) -> Dict[str, List[str]]:
     """
     Markeert lange zinnen die door meerdere executives vrijwel letterlijk
     worden herhaald. Korte kopjes/standaardzinnen worden bewust genegeerd.
@@ -136,11 +149,15 @@ def find_repeated_analysis(individual_outputs: Dict[str, str], min_chars: int = 
 
 def _retrospective_has_explicit_evidence_gap(source_text: str) -> bool:
     """Recognize explicit absence declarations, not general semantic truth."""
-    return re.search(
-        r"\bno\s+(?:real\s+)?(?:company|business)\s+(?:data|evidence)\b"
-        r"|\bno\s+(?:(?:outcome|performance|retrospective)\s+)?evidence\s+(?:was\s+|is\s+)?(?:supplied|provided)\b",
-        source_text, re.IGNORECASE,
-    ) is not None
+    return (
+        re.search(
+            r"\bno\s+(?:real\s+)?(?:company|business)\s+(?:data|evidence)\b"
+            r"|\bno\s+(?:(?:outcome|performance|retrospective)\s+)?evidence\s+(?:was\s+|is\s+)?(?:supplied|provided)\b",
+            source_text,
+            re.IGNORECASE,
+        )
+        is not None
+    )
 
 
 _INSUFFICIENT_RETROSPECTIVE = """**Expected vs Actual**
@@ -184,7 +201,8 @@ def _guard_owner_acknowledgement(output_text: str) -> tuple[str, bool]:
         re.MULTILINE | re.DOTALL | re.IGNORECASE,
     )
     corrected = section.sub(
-        lambda match: match.group(1) + "\n\nPending owner review. This meeting does not record owner acknowledgement or approval.\n\n",
+        lambda match: match.group(1)
+        + "\n\nPending owner review. This meeting does not record owner acknowledgement or approval.\n\n",
         output_text,
     )
     return corrected, corrected != output_text
@@ -200,7 +218,7 @@ def _apply_evidence_guard(source_text: str, output_text: str) -> tuple[str, List
         "claim(s) that were not present in the supplied evidence: "
         + ", ".join(unsupported)
         + ". Treat these figures as unverified and do not use them for approval "
-          "or execution until evidence is supplied.\n\n"
+        "or execution until evidence is supplied.\n\n"
     )
     return warning + output_text, unsupported
 
@@ -232,7 +250,7 @@ def _find_memory_evidence_leaks(memory_text: str, output_text: str) -> List[str]
     seen = set()
     for size in (10, 8, 6):
         for i in range(0, max(0, len(words) - size + 1)):
-            phrase = " ".join(words[i:i + size])
+            phrase = " ".join(words[i : i + size])
             if len(phrase) < 45 or phrase in seen:
                 continue
             if phrase in evidence_section:
@@ -324,6 +342,7 @@ def run_executive_meeting(
         agents_source = EXECUTIVE_AGENTS
 
     from workflows.durable_task import DurableTask
+
     workflow_run_id = workflow_run_id or f"meeting:{uuid.uuid4()}"
     meeting_profile = get_meeting_type_profile(meeting_type)
     meeting_policy = meeting_type_prompt(meeting_type)
@@ -358,16 +377,15 @@ def run_executive_meeting(
     agent_instances = []
     role_memory_blocks: Dict[str, str] = {}
 
-    memory_enabled = True if memory_context is None else bool(memory_context.get("enabled", True))
+    memory_enabled = (
+        True if memory_context is None else bool(memory_context.get("enabled", True))
+    )
     memory_goal_id = None if memory_context is None else memory_context.get("goal_id")
     memory_limit = 5 if memory_context is None else int(memory_context.get("limit", 5))
     memory_limit = max(0, min(memory_limit, 8))
 
     def _meeting_response_structure(role_memory: str) -> str:
-        prefix = (
-            "Historical Context; "
-            if role_memory else ""
-        )
+        prefix = "Historical Context; " if role_memory else ""
         return (
             prefix
             + meeting_profile["response_structure"]
@@ -399,9 +417,7 @@ def run_executive_meeting(
                 f"{memory['lesson']}"
             )
             if memory.get("supporting_evidence"):
-                lines.append(
-                    f"  Historical support: {memory['supporting_evidence']}"
-                )
+                lines.append(f"  Historical support: {memory['supporting_evidence']}")
         return "\n".join(lines)
 
     # 2. Taken opbouwen in sequentiële volgorde
@@ -413,23 +429,18 @@ def run_executive_meeting(
 
         if index == 0:
             # De eerste agent start de discussie
-            description = (
-                f"{task_description}\n\n"
-                + f"{meeting_policy}\n\n"
-                + (f"{role_memory}\n\n" if role_memory else "")
-                + f"{EVIDENCE_DISCIPLINE}\n\n"
-                "Required response structure:\n"
-                + _meeting_response_structure(role_memory)
-                + "\n"
-                + (
-                    "Historical Context must contain ONLY remembered lessons and must be explicitly labeled not-current-evidence.\n"
-                    if role_memory else ""
-                )
-                + (
-                    meeting_profile.get("evidence_section_rule", "")
-                    + "\n"
-                    if meeting_profile.get("evidence_section_rule") else ""
-                )
+            description = f"{task_description}\n\n" + f"{meeting_policy}\n\n" + (
+                f"{role_memory}\n\n" if role_memory else ""
+            ) + f"{EVIDENCE_DISCIPLINE}\n\n" "Required response structure:\n" + _meeting_response_structure(
+                role_memory
+            ) + "\n" + (
+                "Historical Context must contain ONLY remembered lessons and must be explicitly labeled not-current-evidence.\n"
+                if role_memory
+                else ""
+            ) + (
+                meeting_profile.get("evidence_section_rule", "") + "\n"
+                if meeting_profile.get("evidence_section_rule")
+                else ""
             )
             expected_output = (
                 "A role-specific assessment that clearly separates evidence, assumptions/unknowns, "
@@ -438,7 +449,7 @@ def run_executive_meeting(
             current_task = Task(
                 description=description,
                 expected_output=expected_output,
-                agent=agent_obj
+                agent=agent_obj,
             )
         else:
             # Vervolgentaken ontvangen de historie van vorige taken als context
@@ -457,14 +468,16 @@ def run_executive_meeting(
                 "If a prior executive introduced an unsupported number or company fact, explicitly reject or label it as unverified. "
                 + (
                     "When historical memory is present, start with a 'Historical context' section containing ONLY remembered lessons and explicitly label them not-current-evidence. "
-                    if role_memory else ""
+                    if role_memory
+                    else ""
                 )
                 + "Use this meeting-type response structure exactly: "
                 + _meeting_response_structure(role_memory)
                 + ". "
                 + (
                     meeting_profile.get("evidence_section_rule", "") + " "
-                    if meeting_profile.get("evidence_section_rule") else ""
+                    if meeting_profile.get("evidence_section_rule")
+                    else ""
                 )
             )
             if key == "ceo":
@@ -494,18 +507,23 @@ def run_executive_meeting(
                 description=description,
                 expected_output=expected_output,
                 agent=agent_obj,
-                context=list(tasks)  # Geef alle voorgaande taken mee als context
+                context=list(tasks),  # Geef alle voorgaande taken mee als context
             )
 
         if discussion_round is not None:
             from workflows.discussion_contracts import round_contract
+
             contract = round_contract(*discussion_round)
             # Discussion phases must not inherit the strategy template or automatic
             # CEO synthesis instructions intended for a different meeting workflow.
             current_task.description = (
-                task_description + "\n\n" + EVIDENCE_DISCIPLINE + "\n\n"
+                task_description
+                + "\n\n"
+                + EVIDENCE_DISCIPLINE
+                + "\n\n"
                 + (role_memory + "\n\n" if role_memory else "")
-                + "PUBLISHED DISCUSSION ROUND CONTRACT:\n" + contract
+                + "PUBLISHED DISCUSSION ROUND CONTRACT:\n"
+                + contract
                 + "\nContribute from your canonical role and personality."
             )
             current_task.expected_output = contract
@@ -516,9 +534,11 @@ def run_executive_meeting(
             agent=agent_obj,
             context=list(tasks) if tasks else None,
             quality_enabled=True,
-            quality_phase=discussion_round[0] if discussion_round else '',
+            quality_phase=discussion_round[0] if discussion_round else "",
             quality_proposals=discussion_proposals or {},
-            quality_evidence=evidence_text if evidence_text is not None else task_description,
+            quality_evidence=(
+                evidence_text if evidence_text is not None else task_description
+            ),
             checkpoint_run_id=workflow_run_id,
             checkpoint_step_id=f"agent:{index}:{key}",
         )
@@ -530,7 +550,7 @@ def run_executive_meeting(
         tasks=tasks,
         process=Process.sequential,
         tracing=False,
-        verbose=False
+        verbose=False,
     )
 
     # De daadwerkelijke kickoff is de zware, CPU/GPU-intensieve stap — deze
@@ -605,7 +625,9 @@ def run_executive_meeting(
         raw_final_decision,
     )
 
-    guarded_final_decision, owner_acknowledgement_corrected = _guard_owner_acknowledgement(guarded_final_decision)
+    guarded_final_decision, owner_acknowledgement_corrected = (
+        _guard_owner_acknowledgement(guarded_final_decision)
+    )
 
     guarded_individual_outputs: Dict[str, str] = {}
     individual_quality_warnings: Dict[str, List[str]] = {}
@@ -640,8 +662,7 @@ def run_executive_meeting(
             "was repeated inside an Evidence-Supported section "
             f"(affected: {leaking_roles}). Treat those memory-derived statements "
             "as historical context only, not current evidence. Revalidate them "
-            "against the current task before approval.\n\n"
-            + guarded_final_decision
+            "against the current task before approval.\n\n" + guarded_final_decision
         )
 
     incident_fact_speculation: Dict[str, List[str]] = {}
@@ -660,8 +681,7 @@ def run_executive_meeting(
                 "⚠️ INCIDENT EVIDENCE-SEPARATION WARNING — Speculative possibilities "
                 "appeared inside a Known Facts/current-evidence section "
                 f"(affected: {affected}). Treat those statements as hypotheses/unknowns "
-                "until independently verified.\n\n"
-                + guarded_final_decision
+                "until independently verified.\n\n" + guarded_final_decision
             )
 
     repeated_analysis = find_repeated_analysis(individual_outputs)
@@ -675,18 +695,31 @@ def run_executive_meeting(
         )
 
     insufficient_retrospective_evidence = (
-        meeting_type == "retrospective" and _retrospective_has_explicit_evidence_gap(guard_source)
+        meeting_type == "retrospective"
+        and _retrospective_has_explicit_evidence_gap(guard_source)
     )
     if insufficient_retrospective_evidence:
         # Never publish model-invented outcomes when the source explicitly says
         # there is no business evidence. Historical memory is not current evidence.
         guarded_final_decision = _INSUFFICIENT_RETROSPECTIVE
-        guarded_individual_outputs = {key: _INSUFFICIENT_RETROSPECTIVE for key in individual_outputs}
+        guarded_individual_outputs = {
+            key: _INSUFFICIENT_RETROSPECTIVE for key in individual_outputs
+        }
 
-    shared_quality = {key: assess_output(body, guard_source) for key, body in guarded_individual_outputs.items()}
-    shared_quality['final_decision'] = assess_output(guarded_final_decision, guard_source)
-    guarded_individual_outputs = {key: review_notice(body, shared_quality[key]) for key, body in guarded_individual_outputs.items()}
-    guarded_final_decision = review_notice(guarded_final_decision, shared_quality['final_decision'])
+    shared_quality = {
+        key: assess_output(body, guard_source)
+        for key, body in guarded_individual_outputs.items()
+    }
+    shared_quality["final_decision"] = assess_output(
+        guarded_final_decision, guard_source
+    )
+    guarded_individual_outputs = {
+        key: review_notice(body, shared_quality[key])
+        for key, body in guarded_individual_outputs.items()
+    }
+    guarded_final_decision = review_notice(
+        guarded_final_decision, shared_quality["final_decision"]
+    )
     return {
         "workflow_run_id": workflow_run_id,
         "final_decision": guarded_final_decision,
@@ -717,7 +750,7 @@ if __name__ == "__main__":
         meeting_result = run_executive_meeting(
             topic="Test Meeting",
             task_description="Should we open a new office in Austin, Texas next year?",
-            agent_keys=["cfo", "coo", "ceo"]
+            agent_keys=["cfo", "coo", "ceo"],
         )
 
         print("\n" + "=" * 60)
