@@ -16,10 +16,10 @@ from memory.character_profiles import get_character
 from workflows.local_voice_samples import VOICES, ASSET_ROOT
 
 ROOT = Path(__file__).resolve().parents[1]
-MAX_TEXT = 1200
-MAX_BYTES = 8 * 1024 * 1024
+MAX_TEXT = 12000
+MAX_BYTES = 64 * 1024 * 1024
 MAX_FILES = 40
-MAX_CACHE_BYTES = 128 * 1024 * 1024
+MAX_CACHE_BYTES = 256 * 1024 * 1024
 MODEL_DIGESTS = {'kokoro-v1.0.onnx': 'beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a',
                  'voices-v1.0.bin': 'bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d'}
 _BUSY = threading.Lock()
@@ -64,7 +64,7 @@ def validate_wave(data):
     try:
         with wave.open(io.BytesIO(data), 'rb') as audio:
             frames = audio.getnframes()
-            if audio.getnchannels()!=1 or audio.getsampwidth()!=2 or audio.getframerate()!=24000 or not 0 < frames <= 24000*120:
+            if audio.getnchannels()!=1 or audio.getsampwidth()!=2 or audio.getframerate()!=24000 or not 0 < frames <= 24000*1200:
                 raise ValueError('Invalid audio format or duration')
             if len(audio.readframes(frames)) != frames*2: raise ValueError('Truncated audio')
             return frames/24000
@@ -137,7 +137,7 @@ def synthesize(text, voice, job):
         job['process']=process
         if job['cancelled'].is_set(): process.terminate()
     try:
-        data,_=process.communicate(json.dumps({'text':text,'voice':voice}).encode(),timeout=90)
+        data,_=process.communicate(json.dumps({'text':text,'voice':voice}).encode(),timeout=240)
     except subprocess.TimeoutExpired:
         process.kill();process.communicate()
         raise RuntimeError('Local speech timed out; nothing was published. Retry a shorter contribution.') from None

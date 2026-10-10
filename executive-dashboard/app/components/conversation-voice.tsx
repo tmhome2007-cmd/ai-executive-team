@@ -44,7 +44,7 @@ export default function ConversationVoice({ sourceKind, sourceId, apiKey, onAuth
       if (!media.headers.get("content-type")?.startsWith("audio/wav")) throw new Error("Invalid local audio response.");
       const blob = await media.blob();
       if (current.signal.aborted) return;
-      if (!blob.size || blob.size > 8 * 1024 * 1024) throw new Error("Invalid local audio size.");
+      if (!blob.size || blob.size > 64 * 1024 * 1024) throw new Error("Invalid local audio size.");
       objectUrl.current = URL.createObjectURL(blob); setSource(objectUrl.current);
       setMessage(`${result.cached ? "Loaded saved" : "Generated"} audio · ${result.voice} · character version ${result.profile_version} · ${Math.ceil(result.duration)} seconds. Expires ${new Date(result.expires_at * 1000).toLocaleString()}. Press Play below.`);
     } catch (error) { if (!current.signal.aborted) setMessage(error instanceof Error ? error.message : "Speech failed."); }

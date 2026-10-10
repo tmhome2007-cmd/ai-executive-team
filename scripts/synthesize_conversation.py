@@ -17,8 +17,8 @@ onnxruntime.disable_telemetry_events()
 import espeakng_loader
 from kokoro_onnx import Kokoro, EspeakConfig
 import soundfile
-payload=json.loads(sys.stdin.buffer.read(10000))
-if set(payload)!={'text','voice'} or not isinstance(payload['text'],str) or not 0<len(payload['text'])<=1200 or payload['voice'] not in {'am_michael','am_fenrir','am_adam','af_heart','af_bella','af_sarah'}:
+payload=json.loads(sys.stdin.buffer.read(150000))
+if set(payload)!={'text','voice'} or not isinstance(payload['text'],str) or not 0<len(payload['text'])<=12000 or payload['voice'] not in {'am_michael','am_fenrir','am_adam','af_heart','af_bella','af_sarah'}:
     raise ValueError('Invalid speech request')
 assets=Path(__file__).resolve().parents[1]/'.voice-assets'
 with tempfile.TemporaryDirectory(prefix='speech-') as raw:
@@ -27,6 +27,6 @@ with tempfile.TemporaryDirectory(prefix='speech-') as raw:
     session=onnxruntime.InferenceSession(str(assets/'kokoro-v1.0.onnx'),sess_options=options,providers=['CPUExecutionProvider'])
     engine=Kokoro.from_session(session,str(assets/'voices-v1.0.bin'),espeak_config=EspeakConfig(data_path=str(data)))
     audio,rate=engine.create(payload['text'],voice=payload['voice'],speed=1.0,lang='en-us')
-    if rate!=24000 or not 0<len(audio)<=24000*120: raise ValueError('Speech duration exceeded')
+    if rate!=24000 or not 0<len(audio)<=24000*1200: raise ValueError('Speech duration exceeded')
     output=io.BytesIO();soundfile.write(output,audio,rate,format='WAV',subtype='PCM_16')
     sys.stdout.buffer.write(output.getvalue())

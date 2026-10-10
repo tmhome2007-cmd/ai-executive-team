@@ -53,10 +53,23 @@ class ConversationAudioTests(unittest.TestCase):
                 self.assertEqual(conn.execute('SELECT COUNT(*) FROM action_queue').fetchone()[0],0)
                 with self.assertRaises(Exception): conn.execute('UPDATE conversation_audio SET voice=\'af_heart\'')
 
+    def test_full_long_contribution_reaches_engine_and_replays(self):
+        text=('First finding. Evidence remains unknown. '*90)+'Final finding preserved.'
+        self.assertGreater(len(text),1200)
+        with get_connection() as conn:
+            conn.execute('UPDATE decision_contributions SET body=? WHERE id=?',(text,self.ident))
+            conn.commit()
+        with patch.object(speech,'synthesize',return_value=wav()) as engine:
+            first=self.generate()
+            self.assertEqual(engine.call_args.args[0],text)
+            self.assertTrue(self.generate('b'*32)['cached'])
+            engine.assert_called_once()
+            self.assertEqual(speech.audio_bytes(first['cache_key']),wav())
+
     def test_scope_limits_links_corruption_and_expiry(self):
         for invalid in ('../file','https://cloud.example', 'bad'):
             with self.assertRaises(ValueError): speech.audio_bytes(invalid)
-        with self.assertRaises(ValueError): speech.spoken_text('x'*1201)
+        with self.assertRaises(ValueError): speech.spoken_text('x'*(speech.MAX_TEXT+1))
         self.assertEqual(speech.spoken_text('**Hello** [evidence](https://site.test/path)'), 'Hello evidence')
         with patch.object(speech,'synthesize',return_value=wav()): record=self.generate()
         target=self.root/'conversation-audio'/(record['cache_key']+'.wav')
