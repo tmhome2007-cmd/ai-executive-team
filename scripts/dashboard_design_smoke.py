@@ -25,12 +25,12 @@ def main():
         from config import config
         from main import app
         from fastapi.testclient import TestClient
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import sync_playwright, expect
 
         f = CompanyKnowledgeTests()
         f.setUp()
         try:
-            f.chain()
+            _, _, action_id, _ = f.chain()
             with (
                 patch.object(config, "API_SECRET_KEY", "synthetic-design-key"),
                 sync_playwright() as runtime,
@@ -46,6 +46,7 @@ def main():
                         "DASHBOARD_SMOKE_URL", "http://127.0.0.1:3002"
                     )
                     allowed = urlsplit(dashboard).netloc
+                    fail_actions = False
 
                     def route(route):
                         req = route.request
@@ -55,6 +56,13 @@ def main():
                                 "GET",
                                 "OPTIONS",
                             }, "Visual review must not mutate company records"
+                            if fail_actions and p.path == "/actions/history":
+                                route.fulfill(
+                                    status=503,
+                                    content_type="application/json",
+                                    body='{"detail":"Synthetic unavailable records"}',
+                                )
+                                return
                             r = client.request(
                                 req.method,
                                 p.path + ("?" + p.query if p.query else ""),
@@ -92,6 +100,127 @@ def main():
                     assert page.get_by_role(
                         "button", name="Sandbox mode", exact=True
                     ).count()
+                    nav.get_by_role("button", name="Virtual office", exact=True).click()
+                    room = page.get_by_role(
+                        "region", name="3D executive floor", exact=True
+                    )
+                    room.get_by_text(
+                        "Idle presentation — no executing action in loaded records",
+                        exact=True,
+                    ).wait_for()
+                    room.get_by_label("Office camera angle", exact=True).fill("-45")
+                    room.get_by_label("Office room zoom", exact=True).fill("75")
+                    room.get_by_role("button", name="Reset camera", exact=True).click()
+                    assert (
+                        room.get_by_label(
+                            "Office camera angle", exact=True
+                        ).input_value()
+                        == "-28"
+                    )
+                    page.screenshot(
+                        path="/private/tmp/office-floor-desktop.png", full_page=True
+                    )
+                    page.emulate_media(reduced_motion="reduce")
+                    room.get_by_role(
+                        "button", name="Enable decorative movement", exact=True
+                    ).wait_for()
+                    expect(
+                        room.get_by_role(
+                            "button", name="Enable decorative movement", exact=True
+                        )
+                    ).to_be_disabled()
+                    page.emulate_media(reduced_motion="no-preference")
+                    expect(
+                        room.get_by_role(
+                            "button", name="Enable decorative movement", exact=True
+                        )
+                    ).to_be_enabled()
+                    room.get_by_role(
+                        "button", name="Enable decorative movement", exact=True
+                    ).click()
+                    expect(room.locator(".office-3d-person")).to_have_css(
+                        "animation-play-state", "running"
+                    )
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    expect(room.locator(".office-3d-person")).to_have_css(
+                        "animation-play-state", "paused"
+                    )
+                    room.scroll_into_view_if_needed()
+                    expect(room.locator(".office-3d-person")).to_have_css(
+                        "animation-play-state", "running"
+                    )
+                    frame_gaps = page.evaluate(
+                        """() => new Promise(resolve => { const gaps=[]; let previous; function frame(t) { if(previous !== undefined) gaps.push(t-previous); previous=t; if(gaps.length===60) resolve(gaps); else requestAnimationFrame(frame); } requestAnimationFrame(frame); })"""
+                    )
+                    ordered = sorted(frame_gaps)
+                    print(
+                        f"OFFICE local Chromium frame intervals: median {ordered[30]:.1f}ms, p95 {ordered[57]:.1f}ms; synthetic room only"
+                    )
+                    page.evaluate(
+                        "Object.defineProperty(document, 'hidden', {configurable:true, value:true}); document.dispatchEvent(new Event('visibilitychange'))"
+                    )
+                    expect(room.locator(".office-3d-person")).to_have_css(
+                        "animation-play-state", "paused"
+                    )
+                    page.evaluate(
+                        "Object.defineProperty(document, 'hidden', {configurable:true, value:false}); document.dispatchEvent(new Event('visibilitychange'))"
+                    )
+                    from memory.database import get_connection
+
+                    with get_connection() as connection:
+                        connection.execute(
+                            "UPDATE action_queue SET proposed_by='ceo', status='executing'"
+                        )
+                        connection.commit()
+                    page.get_by_role(
+                        "button", name="Refresh company data", exact=True
+                    ).click()
+                    room.get_by_text(
+                        f"Recorded execution · Action #{action_id}", exact=True
+                    ).wait_for()
+                    fail_actions = True
+                    page.get_by_role(
+                        "button", name="Refresh company data", exact=True
+                    ).click()
+                    room.get_by_text(
+                        "Unknown — records unavailable or stale", exact=True
+                    ).wait_for()
+                    fail_actions = False
+                    with get_connection() as connection:
+                        connection.execute(
+                            "UPDATE action_queue SET proposed_by='cto', status='pending'"
+                        )
+                        connection.commit()
+                    page.get_by_role(
+                        "button", name="Refresh company data", exact=True
+                    ).click()
+                    room.get_by_text(
+                        "Idle presentation — no executing action in loaded records",
+                        exact=True,
+                    ).wait_for()
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    assert page.evaluate(
+                        "document.documentElement.scrollWidth <= innerWidth"
+                    )
+                    page.screenshot(
+                        path="/private/tmp/office-floor-mobile.png", full_page=True
+                    )
+                    bounds = room.locator(".office-3d-person").bounding_box()
+                    viewport = room.locator(".office-3d-viewport").bounding_box()
+                    assert (
+                        bounds["x"] >= viewport["x"]
+                        and bounds["x"] + bounds["width"]
+                        <= viewport["x"] + viewport["width"]
+                    )
+
+                    room.get_by_role(
+                        "button", name="Inspect CEO records", exact=True
+                    ).click()
+                    assert room.count() == 0
+                    page.get_by_role(
+                        "complementary", name="Executive inspector", exact=True
+                    ).wait_for()
+                    page.set_viewport_size({"width": 1440, "height": 1000})
                     names = [b.inner_text() for b in nav.get_by_role("button").all()]
                     for name in names:
                         nav.get_by_role("button", name=name, exact=True).click()
@@ -171,7 +300,7 @@ def main():
                     )
                     assert not errors, errors
                     print(
-                        "PASS all workspace destinations, overview loaded counts, retained practice draft, business tabs, view finder, live-mode confirmation cancellation, responsive navigation/Escape and no external traffic"
+                        "PASS office camera, state snapshots, reduced motion, hidden/offscreen pause, mobile framing; all workspace destinations, overview loaded counts, retained practice draft, business tabs, view finder, live-mode confirmation cancellation, responsive navigation/Escape and no external traffic"
                     )
                 finally:
                     browser.close()

@@ -53,7 +53,7 @@
     "acceptance_criteria": "Render one floor and one existing executive with recorded activity and clear idle/unknown states. Preserve Kai’s specified appearance and approved identities. Pause when hidden; retain accessible 2D fallback. Measure responsiveness on the owner’s Mac. Animation is fictional presentation, never proof of work; full office, all employees and personal-life simulation expansion are later increments.",
     "assignee": "owner",
     "priority": "low",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-31 · Sprint contracts, privacy and reuse review",

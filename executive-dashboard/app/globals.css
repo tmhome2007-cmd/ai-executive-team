@@ -1056,3 +1056,204 @@ body {
 .workspace-body > :not([hidden]) + :not([hidden]) {
   margin-top: 24px;
 }
+
+/* Original CSS perspective room: no models, textures, WebGL or external requests. */
+.office-3d-heading,
+.office-3d-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.office-3d-controls {
+  justify-content: flex-start;
+  margin: 20px 0 10px;
+}
+.office-3d-controls label {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  color: #b7c7c3;
+}
+.office-3d-controls input {
+  accent-color: #bde6b5;
+  width: 140px;
+}
+.office-3d-viewport {
+  height: 440px;
+  position: relative;
+  overflow: hidden;
+  perspective: 1100px;
+  background: radial-gradient(ellipse at center, #233b34, #0d171c 70%);
+  border-radius: 16px;
+  margin-top: 16px;
+}
+.office-3d-room {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: 380px;
+  height: 300px;
+  transform-style: preserve-3d;
+  transform: translate(-50%, -50%) scale(calc(var(--room-zoom) * var(--room-fit, 1)))
+    rotateX(58deg) rotateZ(var(--room-angle));
+}
+.office-3d-room > div {
+  position: absolute;
+  transform-style: preserve-3d;
+}
+.office-3d-ground {
+  inset: 0;
+  background: repeating-linear-gradient(90deg, #a69d84 0 35px, #8f876f 36px 38px);
+  box-shadow:
+    0 18px 0 #343d35,
+    0 40px 50px #0008;
+}
+.office-3d-back {
+  width: 380px;
+  height: 160px;
+  top: -160px;
+  transform-origin: bottom;
+  transform: rotateX(-90deg);
+  background: #253c36;
+  border: 8px solid #40554b;
+}
+.office-3d-back > span {
+  position: absolute;
+  left: 16px;
+  top: 20px;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #d2ddba;
+}
+.office-3d-window {
+  position: absolute;
+  right: 18px;
+  top: 15px;
+  width: 130px;
+  height: 108px;
+  background: linear-gradient(160deg, #97baba, #385953);
+  border: 7px solid #182b28;
+  box-shadow: inset 0 0 0 2px #b6cec2;
+}
+.office-3d-side {
+  width: 160px;
+  height: 300px;
+  left: -160px;
+  transform-origin: right;
+  transform: rotateY(90deg);
+  background: #354b40;
+  border: 8px solid #40554b;
+}
+.office-3d-rug {
+  left: 65px;
+  top: 65px;
+  width: 240px;
+  height: 190px;
+  background: #345950;
+  border: 9px solid #b4bb91;
+  transform: translateZ(2px);
+}
+.office-3d-desk {
+  width: 180px;
+  height: 70px;
+  left: 110px;
+  top: 100px;
+  background: #775d40;
+  transform: translateZ(48px);
+  box-shadow: 0 8px 0 #4d3d2d;
+}
+.office-3d-desk::after {
+  content: "";
+  position: absolute;
+  width: 180px;
+  height: 48px;
+  top: 70px;
+  background: #4d3d2d;
+  transform-origin: top;
+  transform: rotateX(-90deg);
+}
+.office-3d-desk span {
+  position: absolute;
+  width: 48px;
+  height: 32px;
+  left: 65px;
+  top: 10px;
+  background: #a4d4c4;
+  border: 5px solid #111b20;
+  transform-origin: bottom;
+  transform: rotateX(-65deg);
+}
+.office-3d-seat {
+  width: 48px;
+  height: 45px;
+  left: 180px;
+  top: 30px;
+  background: #18272c;
+  transform: translateZ(30px);
+  border-radius: 10px;
+}
+.office-3d-plant {
+  left: 28px;
+  top: 25px;
+  font-size: 72px;
+  color: #88ad75;
+  transform: rotateX(-90deg);
+  transform-origin: bottom;
+  text-shadow: 3px 3px #213d27;
+}
+.office-3d-person {
+  left: 275px;
+  top: 90px;
+  width: 95px;
+  height: 145px;
+  transform-origin: bottom;
+  transform: rotateX(-90deg);
+  animation: office-gentle-motion 5s ease-in-out infinite paused;
+}
+.office-3d-person svg {
+  width: 95px;
+  height: 145px;
+}
+.office-3d-state {
+  border-left: 3px solid #bde6b5;
+  padding-left: 15px;
+  margin-top: 20px;
+  font-size: 14px;
+}
+.office-3d-state p {
+  margin-top: 8px;
+  color: #b7c7c3;
+}
+@keyframes office-gentle-motion {
+  0%,
+  100% {
+    transform: rotateX(-90deg) translateY(0);
+  }
+  50% {
+    transform: rotateX(-90deg) translateY(-3px);
+  }
+}
+@media (max-width: 760px) {
+  .office-3d-viewport {
+    height: 330px;
+  }
+  .office-3d-room {
+    left: 50%;
+    --room-fit: 0.58;
+  }
+  .office-3d-controls {
+    gap: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-3d-person {
+    animation: none;
+  }
+}
+@supports not (transform-style: preserve-3d) {
+  .office-3d-viewport {
+    display: none;
+  }
+}

@@ -102,3 +102,5 @@ BE-25 is implemented for review on `codex/sprint-4-skills`; see [review instruct
 ## Owner-added dashboard redesign before BE-30
 
 UX-01 is ready for review: grouped sidebar navigation, a calmer overview, consistent forms and responsive mobile navigation. Business research separates practice, runs and skills while retaining drafts between those tabs. See [DASHBOARD_REDESIGN.md](docs/DASHBOARD_REDESIGN.md). BE-30 remains the next backend item after this layout review.
+
+BE-30 is implemented for review on `codex/sprint-4-office`: [first floor scope and review](docs/BE30_OFFICE_FLOOR.md). It is a CSS perspective room with the existing illustrated Kai; fully modelled bodies and the full office remain future work. UX-01 was accepted by the owner; merge remains pending.
