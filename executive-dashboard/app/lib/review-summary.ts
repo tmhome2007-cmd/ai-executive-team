@@ -3,7 +3,7 @@ type Bucket = "findings" | "unknowns" | "next";
 const groups: Record<string, Bucket> = {
   "findings": "findings", "supported findings": "findings", "known facts": "findings", "evidence and gaps": "findings", "expected vs actual": "findings", "what worked": "findings", "observations": "findings",
   "unknowns": "unknowns", "unresolved questions": "unknowns", "what remains unknown": "unknowns", "remaining unknowns": "unknowns", "what failed / unknown": "unknowns", "evidence still required": "unknowns", "missing prerequisites": "unknowns", "prerequisites": "unknowns",
-  "next action": "next", "next step": "next", "proposed next test": "next", "revised next test": "next", "recommended next test and observable result": "next", "recommendation": "next", "recommended next steps": "next", "what to repeat / stop / change": "next", "steps": "next",
+  "practice candidate only": "next", "next research step": "next", "next action": "next", "next step": "next", "proposed next test": "next", "revised next test": "next", "recommended next test and observable result": "next", "recommendation": "next", "recommended next steps": "next", "what to repeat / stop / change": "next", "steps": "next",
 };
 export function reviewSummary(text: string): ReviewSummary {
   const result: ReviewSummary = { findings: [], unknowns: [], next: [], warnings: [] };
@@ -20,6 +20,8 @@ export function reviewSummary(text: string): ReviewSummary {
       continue;
     }
     if (!line) continue;
+    // Source proposals have their own validated controls; they are not next actions.
+    if (line.startsWith("Proposed public source (not read): ")) continue;
     if (/\b(?:blocked until|do not (?:run|execute|create)|missing prerequisites|sources? conflict)\b/i.test(line)) result.warnings.push(line.slice(0, 400));
     if (/AI QUALITY REVIEW REQUIRED|AI cannot establish owner consent/i.test(line)) result.warnings.push(line.slice(0, 400));
     if (bucket) result[bucket].push(line.replace(/^[-*+]\s+/, ""));

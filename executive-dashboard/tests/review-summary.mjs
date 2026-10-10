@@ -27,3 +27,18 @@ assert.equal(reviewSummary(unsafe).findings[0],'<script>alert(1)</script>'); // 
 assert.equal(reviewSummary('**Findings**\n'+Array(10).fill('A'.repeat(400)).join('\n')).findings[0].length,291);
 assert.ok(reviewSummary('**Next action**\n- Read records.\n- Ask owner.\n- Check sources.\n- Blocked until original conditions supplied.').warnings.some(x=>x.includes('Blocked')));
 console.log('PASS: empty, supplied, conflicting, missing-prerequisite, legacy, consent, text-safety and bounded-excerpt cases');
+
+const historical = reviewSummary('**Next action**\nPractice candidate only: Documentation service. Owner selection required.\n**Next research step**\nFind recent buyer requests.');
+assert.deepEqual(historical.next, ['Documentation service. Owner selection required.', 'Find recent buyer requests.']);
+const proposalFile = path.resolve(__dirname, '../app/lib/business-proposals.ts');
+const proposalModule = new Module(proposalFile);
+proposalModule._compile(ts.transpileModule(fs.readFileSync(proposalFile, 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText, proposalFile);
+const { businessProposals } = proposalModule.exports;
+const urls = ['https://example.org/public-page', 'https://docs.example.com/x', 'https://public.example/x', 'https://github.com/orgs/community/discussions'];
+const suggestions = businessProposals(urls.map(url => 'Proposed public source (not read): '+url+' — Unknown contents').join('\n'));
+assert.equal(suggestions.withheld, 3);
+assert.equal(suggestions.sources.length, 1);
+console.log('PASS: historical next actions and placeholder source controls');
+
+assert.deepEqual(reviewSummary('**Next research step**\nFind recent buyer requests.\nProposed public source (not read): https://example.org/public-page — buyer evidence to investigate').next, ['Find recent buyer requests.']);
+console.log('PASS: source proposal text stays outside action excerpts');

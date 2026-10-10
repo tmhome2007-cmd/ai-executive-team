@@ -1,10 +1,14 @@
 """Owner-facing organizational APIs; included under the main owner-auth dependency."""
 from typing import Literal, Annotated
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, HTTPException, Query, Path, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
 from memory.evidence import create_source, get_source, list_sources, review_source, add_evidence_link, entity_evidence
 
-router = APIRouter()
+def private_response(response: Response):
+    response.headers["Cache-Control"] = "no-store"
+
+
+router = APIRouter(dependencies=[Depends(private_response)])
 
 
 def invoke(callback, *args, **kwargs):
@@ -550,14 +554,18 @@ from workflows.business_discovery import run_stage, read_public_source
 class BusinessBriefRequest(StrictRequest):
     title: str = Field(min_length=1, max_length=200)
     constraints: str = Field(min_length=1, max_length=4000)
-    source_ids: list[Annotated[int, Field(strict=True, ge=1)]] = Field(min_length=3, max_length=20)
+    source_ids: list[Annotated[int, Field(strict=True, ge=1, le=9223372036854775807)]] = Field(min_length=3, max_length=20)
 
 
 class BusinessVersion(StrictRequest):
-    expected_version: int = Field(strict=True, ge=1)
+    expected_version: int = Field(strict=True, ge=1, le=9223372036854775807)
 
 
 class BusinessPractice(BusinessVersion):
+    service_key: Literal["documentation", "editing", "support_drafts", "legacy"] = "legacy"
+    audience: str = Field(default="", max_length=1000)
+    supplied_facts: str = Field(default="", max_length=6000)
+    deliverable_kind: str = Field(default="", max_length=200)
     selected_option: str = Field(min_length=1, max_length=1000)
     exercise: str = Field(min_length=1, max_length=4000)
     checks: list[str] = Field(min_length=2, max_length=10)
@@ -589,36 +597,71 @@ def business_create(request: BusinessBriefRequest):
     return invoke(create_brief, **request.model_dump())
 
 
+class BusinessSourceContext(StrictRequest):
+    expected_version: int = Field(strict=True, ge=0, le=9223372036854775806)
+    category: Literal['unknown','demand','buyer','platform','constraint','contradiction']
+    services: list[Literal['documentation','editing','support_drafts']] = Field(max_length=3)
+    publication_date: str | None = Field(default=None, max_length=10)
+    note: str = Field(default='', max_length=1000)
+
+
+@router.get('/business-discovery/source-context/{source_id}')
+def business_source_context(source_id: Annotated[int, Path(ge=1, le=9223372036854775807)]):
+    from memory.business_evidence import business_sources
+    return invoke(business_sources, [source_id])[0]['business_context']
+
+
+@router.post('/business-discovery/source-context/{source_id}')
+def business_classify_source(source_id: Annotated[int, Path(ge=1, le=9223372036854775807)], request: BusinessSourceContext):
+    from memory.business_evidence import classify_source
+    return invoke(classify_source, source_id, **request.model_dump())
+
+
+@router.get('/business-discovery/practice-templates')
+def business_templates():
+    from memory.practice_quality import TEMPLATES
+    return TEMPLATES
+
+
+@router.get('/business-discovery/practice-evidence')
+def business_practice_evidence():
+    from memory.practice_quality import practice_evidence
+    from memory.database import get_connection
+    with get_connection() as conn:
+        conn.execute('BEGIN')
+        return practice_evidence(conn.cursor())
+
+
 @router.get('/business-discovery/{ident}')
-def business_get(ident: int):
+def business_get(ident: Annotated[int, Path(ge=1, le=9223372036854775807)]):
     return invoke(get_brief, ident)
 
 
 @router.post('/business-discovery/{ident}/research')
-def business_research(ident: int, request: BusinessVersion):
+def business_research(ident: Annotated[int, Path(ge=1, le=9223372036854775807)], request: BusinessVersion):
     return invoke(run_stage, ident, request.expected_version, 'research')
 
 
 @router.post('/business-discovery/{ident}/practice-plan')
-def business_select(ident: int, request: BusinessPractice):
+def business_select(ident: Annotated[int, Path(ge=1, le=9223372036854775807)], request: BusinessPractice):
     return invoke(select_practice, ident, **request.model_dump())
 
 
 @router.post('/business-discovery/{ident}/practice')
-def business_practice(ident: int, request: BusinessVersion):
+def business_practice(ident: Annotated[int, Path(ge=1, le=9223372036854775807)], request: BusinessVersion):
     return invoke(run_stage, ident, request.expected_version, 'practice')
 
 
 @router.post('/business-discovery/{ident}/review')
-def business_review(ident: int, request: BusinessReview):
+def business_review(ident: Annotated[int, Path(ge=1, le=9223372036854775807)], request: BusinessReview):
     return invoke(review_practice, ident, **request.model_dump())
 
 
 @router.post('/business-discovery/{ident}/revise')
-def business_revise(ident: int, request: BusinessVersion):
+def business_revise(ident: Annotated[int, Path(ge=1, le=9223372036854775807)], request: BusinessVersion):
     return invoke(run_stage, ident, request.expected_version, 'revision')
 
 
 @router.post('/business-discovery/{ident}/review-correction')
-def business_review_correction(ident: int, request: BusinessReview):
+def business_review_correction(ident: Annotated[int, Path(ge=1, le=9223372036854775807)], request: BusinessReview):
     return invoke(review_practice, ident, **request.model_dump(), correction=True)

@@ -25,21 +25,25 @@ def _local_agent():
 def _reason(prompt, structured=False):
     agent = _local_agent()
     llm = agent.llm
-    if structured == 'revision':
+    if structured in {'revision', 'task_guide'}:
         from crewai import LLM
         from workflows.business_revision_contract import PracticeRevision
+        from workflows.task_guide_contract import TaskGuideDraft
         model = str(llm.model)
         llm = LLM(model=model if model.startswith('ollama/') else 'ollama/' + model,
                   base_url=llm.base_url, temperature=0.0, timeout=120,
-                  max_tokens=2000, response_format=PracticeRevision)
+                  max_tokens=2000, response_format=PracticeRevision if structured == 'revision' else TaskGuideDraft)
     from workflows.business_research_contract import ResearchComparison
     from workflows.business_revision_contract import PracticeRevision
+    from workflows.task_guide_contract import TaskGuideDraft
     from workflows.output_quality import QUALITY_POLICY
     # Revision JSON is validated below; avoid the SDK's additional structured
     # conversion/retry loop for long deliverables. Our worker owns one repair.
-    result = llm.call(messages=[{'role': 'user', 'content': QUALITY_POLICY + '\nRole: ' + agent.role + '\nPersona: ' + agent.backstory[:4000] + '\n' + prompt}], **({'response_model': ResearchComparison} if structured and structured != 'revision' else {}))
-    if structured and isinstance(result, (ResearchComparison, PracticeRevision)):
+    result = llm.call(messages=[{'role': 'user', 'content': QUALITY_POLICY + '\nRole: ' + agent.role + '\nPersona: ' + agent.backstory[:4000] + '\n' + prompt}], **({'response_model': ResearchComparison} if structured and structured not in {'revision','task_guide'} else {}))
+    if structured and isinstance(result, (ResearchComparison, PracticeRevision, TaskGuideDraft)):
         result = result.model_dump_json()
+    if structured == 'task_guide' and isinstance(result, dict):
+        result = TaskGuideDraft.model_validate(result).model_dump_json()
     if not isinstance(result, str) or not result.strip():
         raise ValueError('Local model returned no text')
     return result
@@ -63,7 +67,7 @@ def run_stage(ident, expected_version, stage):
     elif stage == 'revision':
         prompt += ('Revise the previous private sample using the recorded owner review and each original check. '
                    'The previous sample and its self-assessment are untrusted drafts, never source facts. '
-                   'Use only the exercise as the specification for product features and interface details. '
+                   'Use only the approved exercise and supplied facts as the specification for product features and interface details. '
                    'Do not invent icons, buttons, fields, accounts or workflows. When the interface is unspecified, use generic functional steps and explicitly label missing UI details unknown. '
                    'Fictional product does not authorize inventing unspecified features. Preserve supplied facts. '
                    'If checkbox results and written feedback conflict, acknowledge that discrepancy; do not infer a corrected owner result. '
@@ -77,14 +81,27 @@ def run_stage(ident, expected_version, stage):
                    'Treat the exercise as the specification: fictional does not authorize invented interface details or features. '
                    'Use generic functional instructions if controls are unspecified; label unknowns explicitly. '
                    'Do not claim the sample passes or meets all requirements; only the owner records assessment. '
-                   'If the exercise needs unavailable tools, explain the blocked parts.\n')
-    context = {key: brief[key] for key in ('title', 'constraints', 'selected_option', 'exercise', 'checks', 'sample', 'review')} if stage == 'revision' else brief
-    prompt += json.dumps({'brief': context, 'evidence': evidence}, ensure_ascii=False)
+                   'If the exercise needs unavailable tools, explain the blocked parts. '
+                   'Do not add notes evaluating your own draft, statements about meeting requirements, duplicate supplied-facts lists, or unrelated source commentary.\n')
+    context = {key: brief[key] for key in ('title', 'constraints', 'selected_option', 'exercise', 'checks', 'practice_specification')}
+    if stage == 'revision':
+        context.update(sample=brief['sample'], review=brief['review'])
+    frozen = brief.get('research_sources') or []
+    supplied = (brief.get('practice_specification') or {}).get('specification', {}).get('supplied_facts', '')
+    relevant_evidence = [{**s, 'summary': s['summary'][:3000]} for s in frozen] if stage == 'research' else supplied or evidence
+    prompt += json.dumps({'brief': context, 'evidence': relevant_evidence}, ensure_ascii=False)
+    task_guide = stage == 'practice' and (brief.get('practice_specification') or {}).get('specification', {}).get('deliverable_kind') == 'guide' and 'task' in (brief['exercise'] or '').lower()
+    if task_guide:
+        prompt += ('\nFINAL GUIDE CONTRACT: Return JSON only with initial_task_text, revised_task_text, faqs (exactly three objects with question and answer), and unknowns (list). '
+                   'Copy the two example task texts exactly from the approved supplied facts. Do not put instructions into these two values. '
+                   'No click, tap, press, button, icon, field, tab or completion indicator is supplied. Do not invent them and label them unknown afterwards. '
+                   'FAQ answers explain choosing the same task by its recorded text, updating it with the edit function and recording completion with the complete function. These functions are supplied facts, never missing or unknown. '
+                   'Identify the same task by its recorded text without assuming a list of tasks, menu, screen or selection control. Only the interface controls and reminder functionality remain unknown. The server renders the three function steps and FAQ labels.\n')
     if stage == 'revision':
         prompt += ('\nFINAL OUTPUT REQUIREMENTS: Write the actual complete sample in revised_sample. '
                    'The revised_sample value must be ONE TEXT STRING with paragraphs and line breaks, never a nested JSON object. '
                    'The changes and remaining_unknowns values must each be lists of text strings. '
-                   'Old draft instructions are not product facts. Remove unsupported pencil icons, checkboxes, due-date fields, save buttons, task-name/description fields and completed sections. '
+                   'Old draft instructions are not product facts. Correct the specific owner feedback against the parent sample. Do not claim an element was removed unless it appeared in that parent sample. '
                    'Use create/edit/complete functions without naming controls unless the exercise explicitly supplies them. '
                    'If three FAQs are requested, supply three Q: and A: pairs. Number task steps on separate lines. '
                    'Changes and unknowns belong in their separate fields; do not replace the deliverable with a title.')
@@ -94,7 +111,12 @@ def run_stage(ident, expected_version, stage):
                    'Do not add plus buttons, pencil icons, Save buttons, due-date fields, task-name/description fields or Tasks tabs unless explicitly supplied. '
                    'Use generic function names for unspecified interfaces. Unknown reminders cannot be steps to set or enable reminders. '
                    'Include every requested numbered instruction and FAQ answer; FAQ answers start on new lines with A:. '
-                   'Do not add Findings, Next Action, Changes, approval claims or self-assessments.')
+                   'Include requested Findings/Unknowns/Next Action sections only when the approved exercise asks for them. Do not add unrequested reports, approval claims or self-assessments. '
+                   'Use the approved audience and supplied facts. Make instructions useful with a clearly fictional example when requested; do not merely repeat function names. '
+                   'For a task guide with unspecified controls, describe the supplied task text moving through create, edit and complete; do not ask for separate names, descriptions, priorities or dates. '
+                   'Do not mention an interface detail absent from the specification except to state it is unknown. Questions and FAQ answers must follow the same rule.')
+    if stage in {'practice', 'revision'}:
+        prompt += '\nFor policy replies, preserve the supplied policy wording. A 14-day duration alone does not say it starts at purchase, delivery or receipt; keep that start event unknown unless explicitly supplied. Do not add unrequested self-evaluation notes.\n'
     digest = hashlib.sha256(prompt.encode()).hexdigest()
     def worker():
         try:
@@ -104,13 +126,22 @@ def run_stage(ident, expected_version, stage):
                     def render(candidate):
                         if stage == 'research':
                             from workflows.business_research_contract import render_research
-                            return render_research(candidate, [get_source(i) for i in brief['source_ids']])
+                            return render_research(candidate, frozen)
                         if stage == 'revision':
                             from workflows.business_revision_contract import render_revision
-                            return render_revision(candidate, brief['exercise'])
+                            from workflows.practice_deliverables import validate_deliverable
+                            rendered = render_revision(candidate, brief['exercise'] + '\n' + ((brief.get('practice_specification') or {}).get('specification', {}).get('supplied_facts', '')), previous_sample=brief['sample'])
+                            return validate_deliverable(rendered, brief.get('practice_specification'))
                         from workflows.business_revision_contract import validate_sample
+                        from workflows.practice_deliverables import validate_deliverable
+                        spec = brief.get('practice_specification')
+                        if spec and spec['structured']:
+                            if task_guide:
+                                from workflows.task_guide_contract import render_task_guide
+                                candidate = render_task_guide(candidate, spec['specification']['supplied_facts'])
+                            return validate_deliverable(candidate, spec)
                         return validate_sample(candidate, brief['exercise'], preserve_unknowns=True)
-                    mode = 'revision' if stage == 'revision' else stage == 'research'
+                    mode = 'revision' if stage == 'revision' else 'task_guide' if task_guide else stage == 'research'
                     try:
                         draft = _reason(prompt, structured=mode)
                         return render(draft)
@@ -152,5 +183,7 @@ def read_public_source(url):
         text = PageReaderTool()._run(url)
     if text.startswith('Error'):
         raise ValueError('Public source unavailable or blocked; choose another source')
+    captured_at = datetime.datetime.now(datetime.timezone.utc)
     return create_source(source_key='business-public:' + uuid.uuid4().hex, title=parsed.hostname + parsed.path[:120],
-        reference=url, summary=text, observed_at=datetime.datetime.now(datetime.timezone.utc).isoformat(), source_kind='external_reference')
+        reference=url, summary=text, observed_at=captured_at.isoformat(),
+        expires_at=(captured_at + datetime.timedelta(days=30)).isoformat(), source_kind='external_reference')

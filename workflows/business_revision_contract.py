@@ -14,7 +14,7 @@ class PracticeRevision(BaseModel):
     remaining_unknowns: list[str] = Field(min_length=1, max_length=10)
 
 
-def render_revision(raw, exercise):
+def render_revision(raw, exercise, previous_sample=None):
     if isinstance(raw, str):
         wrapper = re.fullmatch(r'\s*```(?:json)?\s*\n(.*)\n```\s*', raw, re.S | re.I)
         if wrapper:
@@ -24,10 +24,21 @@ def render_revision(raw, exercise):
     except (ValueError, TypeError):
         raise ValueError('Return a JSON object with revised_sample as one text string (not a nested object), changes as a list of strings, and remaining_unknowns as a list of strings') from None
     sample = validate_sample(result.revised_sample, exercise)
-    changes = [_text(c, 'change description', 700) for c in result.changes]
+    # Validate model metadata, but never publish its unsupported change claims.
+    [_text(c, 'change description', 700) for c in result.changes]
+    comparison = 'Previous sample unavailable; no change comparison is established.'
+    if previous_sample is not None:
+        from difflib import SequenceMatcher
+        before = clean_deliverable(previous_sample, exercise=exercise).splitlines()
+        after = sample.splitlines()
+        removed = added = 0
+        for tag, i, j, k, l in SequenceMatcher(None, before, after, autojunk=False).get_opcodes():
+            if tag in {'replace', 'delete'}: removed += sum(bool(line.strip()) for line in before[i:j])
+            if tag in {'replace', 'insert'}: added += sum(bool(line.strip()) for line in after[k:l])
+        comparison = f'Literal text comparison with the parent sample: {removed} non-empty lines removed or replaced; {added} non-empty lines added or replaced. These counts do not establish correctness or improvement. Compare the saved samples and record a fresh review.'
     unknowns = [_text(c, 'remaining unknown', 700) for c in result.remaining_unknowns]
     return ('**Revised practice sample — awaiting owner assessment**\n\n' + sample
-            + '\n\n**Changes described by AI — verify against the previous sample**\n' + '\n'.join('- ' + c for c in changes)
+            + '\n\n**Text comparison — recorded samples, not AI change claims**\n' + comparison
             + '\n\n**Remaining unknowns**\n' + '\n'.join('- ' + c for c in unknowns)
             + '\n\nNo passing result, learned competence or launch approval is recorded by this revision.')
 
@@ -35,7 +46,9 @@ def render_revision(raw, exercise):
 def clean_deliverable(body, preserve_unknowns=True, exercise=""):
     """Drop report scaffolding, keeping actual deliverable sections in order."""
     metadata = {'findings', 'unknowns', 'next action', 'changes', 'remaining unknowns',
-                'model-suggested checks', 'minimum review controls'}
+                'model-suggested checks', 'minimum review controls',
+                'changes described by ai — verify against the previous sample',
+                'text comparison — recorded samples, not ai change claims'}
     metadata = {heading for heading in metadata if not re.search(r'\b' + re.escape(heading) + r'\b', exercise, re.I)}
     lines = []
     unknowns = []
@@ -91,7 +104,7 @@ def validate_sample(raw, exercise, preserve_unknowns=False):
                     raise ValueError('Revision still invents an interface detail absent from the exercise: ' + detail)
     if re.search(r'\b(?:meets all|passes all|all checks (?:pass|passed)|owner (?:approved|accepted))\b', sample, re.I):
         raise ValueError('AI revision cannot establish passing checks or owner approval')
-    if re.search(r'reminder.*unknown', exercise, re.I):
+    if re.search(r'reminders?\s+(?:(?:functionality|behavior|support|feature)\s+)?(?:is\s+|are\s+)?(?:unknown|unspecified)', exercise, re.I):
         for line in sample.splitlines():
             action = re.search(r'\b(?:set|enable|configure|add)\b[^\n.]{0,80}\breminders?\b', line, re.I)
             negative = re.search(r'\b(?:do not|cannot|can.not)\s+(?:set|enable|configure|add)\b', line, re.I)
@@ -99,6 +112,6 @@ def validate_sample(raw, exercise, preserve_unknowns=False):
             observation = re.search(r'\b(?:ability|whether|unknown|unspecified)\b', line, re.I) and not re.match(r'\s*(?:\d+[.)]\s+|[-*]\s+|A:\s*)?(?:set|enable|configure|add|you)\b', line, re.I)
             if action and not (negative or question or observation):
                 raise ValueError('Unknown reminder functionality cannot be an instruction to set a reminder')
-    if re.search(r'reminder.*unknown', exercise, re.I) and not re.search(r'reminder.*unknown', sample, re.I):
+    if re.search(r'reminders?\s+(?:(?:functionality|behavior|support|feature)\s+)?(?:is\s+|are\s+)?(?:unknown|unspecified)', exercise, re.I) and not re.search(r'reminder.*unknown', sample, re.I):
         sample += '\n\nReminder functionality is unknown, as specified in the exercise.'
     return sample

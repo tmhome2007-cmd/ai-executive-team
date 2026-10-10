@@ -185,3 +185,7 @@ Owner accepted the bounded research/private-practice workflow and authorized PR 
 ## Owner acceptance — 10 October 2026
 
 The owner confirmed the corrected neural auditions play, completed review and authorized merge. BE-18 and BE-19 are Done for the implemented character presentation, local voice comparison and neural audition/preference scope. Earlier pending/rejected review entries remain historical. Sprint 2 review is complete. Generated-conversation neural synthesis, 3D animation and paid/cloud voices remain future work.
+
+## Sprint 3 selected scope — 10 October 2026
+
+Pre-Sprint 3 audit PR #34 is merged. The owner selected BE-20–22: useful deliverables, evidence-backed business comparisons and measurable feedback improvement. BE-23 (actual local voiced contributions) is deferred. See [SPRINT_3_PLAN.md](SPRINT_3_PLAN.md). Implementation is in Review, with acceptance steps in [SPRINT_3_PRACTICE_EVIDENCE.md](SPRINT_3_PRACTICE_EVIDENCE.md). Owner acceptance and merge remain pending; live board cards are not automatically changed.
