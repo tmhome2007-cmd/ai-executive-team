@@ -132,7 +132,7 @@ def main():
             # Use a precise ISO time via the input's supported seconds precision.
             import datetime
 
-            precise = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+            precise = datetime.datetime.now().isoformat(timespec="seconds")
             page.get_by_label("Observation observed_at", exact=True).fill(precise)
             page.get_by_role("button", name="Save observation", exact=True).click()
             page.get_by_text(
