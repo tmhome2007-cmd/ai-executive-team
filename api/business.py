@@ -18,6 +18,9 @@ from workflows.business_discovery import run_stage, read_public_source
 
 
 class BusinessBriefRequest(StrictRequest):
+    workflow_template_id: (
+        Annotated[int, Field(strict=True, ge=1, le=9223372036854775807)] | None
+    ) = None
     title: str = Field(min_length=1, max_length=200)
     constraints: str = Field(min_length=1, max_length=4000)
     source_ids: list[

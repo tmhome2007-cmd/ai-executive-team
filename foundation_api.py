@@ -437,3 +437,7 @@ router.include_router(artifacts_router)
 from api.run_inspector import router as run_inspector_router
 
 router.include_router(run_inspector_router)
+
+from api.workflow_templates import router as workflow_templates_router
+
+router.include_router(workflow_templates_router)

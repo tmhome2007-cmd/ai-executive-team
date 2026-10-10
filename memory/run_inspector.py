@@ -362,6 +362,9 @@ def claim_continuation(ident, expected_control, expected_brief):
             or not _summary(conn, row)["can_continue"]
         ):
             raise RuntimeError("Run cannot continue or controls changed; refresh")
+        from memory.workflow_templates import template_context
+
+        template_context(conn.cursor(), row["brief_id"])
         assert_specification(conn.cursor(), row["brief_id"])
         skill_context(conn.cursor(), row["brief_id"])
         cursor = conn.execute(

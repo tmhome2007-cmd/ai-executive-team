@@ -807,6 +807,11 @@ def init_db() -> None:
     from memory.run_inspector import init_inspector
 
     init_inspector(cursor)
+    from memory.workflow_templates import init_templates
+    from memory.research_queue import init_queue
+
+    init_templates(cursor)
+    init_queue(cursor)
     from memory.experiments import init_experiments
 
     init_experiments(cursor)
