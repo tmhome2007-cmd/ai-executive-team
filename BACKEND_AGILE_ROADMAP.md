@@ -195,3 +195,7 @@ The owner then selected BE-23 local voiced contributions. Implementation is in R
 ## Sprint 4 selected backlog — 10 October 2026
 
 [SPRINT_4_PLAN.md](SPRINT_4_PLAN.md) defines BE-24–33 and dependencies. All seven researched improvements are selected as bounded first increments, alongside privacy/reuse contracts, an integration audit and retrospective. Cards are planned, not completed.
+
+## Sprint 5 backlog — 11 October 2026
+
+Sprint 4 is accepted and merged. [SPRINT_5_PLAN.md](SPRINT_5_PLAN.md) defines BE-34–42 around useful AI output, concise next steps, earlier integration checks, guarded recovery and reproducible local model identity, followed by an end-to-end review, audit and retrospective. Start with BE-34; other work follows its documented dependencies. Budget/loss remain €0. Cards are planning, not implementation evidence.

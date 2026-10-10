@@ -1,0 +1,74 @@
+[
+  {
+    "title": "BE-34 · AI quality failure analysis and comparable baseline",
+    "description": "Sprint 5. As the owner, I want to see why generated work fails before we change prompts. Dependencies: None. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Inspect all six failing JSON-mode benchmark attempts and classify exact failures without rewriting raw reports. Preserve the original 30-attempt dataset, rubric, checker, prompt and model digest; rerun a comparable baseline or explicitly report missing local raw evidence. Show counts, denominators, errors and limits. Distinguish contract coverage from semantic usefulness; do not weaken checks to improve scores.",
+    "assignee": "owner",
+    "priority": "high",
+    "status": "ready"
+  },
+  {
+    "title": "BE-35 · Useful evidence-grounded private deliverables",
+    "description": "Sprint 5. As the owner, I want the executives to draft useful work I can assess rather than repeat the assignment. Dependencies: BE-34. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Deliver one documentation exercise and one unfamiliar transfer example using frozen supplied facts and exact owner rubrics. Include actionable instructions without invented controls, facts or approval. Missing information produces a specific question or clearly bounded draft. Compare prompt changes against the retained BE-34 baseline; preserve raw failures and revisions. Owner separately assesses usefulness; no claim of model training, general competence or revenue.",
+    "assignee": "owner",
+    "priority": "high",
+    "status": "backlog"
+  },
+  {
+    "title": "BE-36 · Clear next steps and concise owner review",
+    "description": "Sprint 5. As an owner who scans text, I want to know the current state and the one next step immediately. Dependencies: BE-35. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Research and practice cards show current state, one eligible next step and a concise explanation when blocked. Separate supplied evidence, unknowns and recommendations; expose full text and provenance on demand. Pending assessments, rejected work and missing evidence have distinct examples. No invented recommendation when information is insufficient; preserve draft inputs and existing approval gates. Owner can explain the next step from the summary alone.",
+    "assignee": "owner",
+    "priority": "high",
+    "status": "backlog"
+  },
+  {
+    "title": "BE-37 · Earlier browser and calendar integration checks",
+    "description": "Sprint 5. As the implementer, I want navigation and date regressions caught before the full audit. Dependencies: None. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Centralize shared production-browser navigation helpers and run affected feature smokes after UI changes. Cover desktop/mobile destinations, hidden-tab polling and draft retention. Add deterministic UTC/local calendar and canonical fractional datetime cases without weakening execution-order validation. Verify selected checks fail on a representative regression and pass after correction. Keep the full audit as the final gate; use disposable data and synthetic public reads.",
+    "assignee": "owner",
+    "priority": "high",
+    "status": "ready"
+  },
+  {
+    "title": "BE-38 · Consistent interruption and permission-change guidance",
+    "description": "Sprint 5. As the owner, I want a stopped or invalidated run to tell me what can safely happen next. Dependencies: BE-37. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Cover interrupted local work, revoked skills, withdrawn templates and corrected source assessments together. UI eligibility matches authoritative transactional checks; stale concurrent requests cannot publish or duplicate results. Show sanitized reasons and explicit recovery actions while preserving earlier samples/artifacts. Test private headers on success/error responses. Uncertain external outcomes require reconciliation; no automatic replay or renewed authority.",
+    "assignee": "owner",
+    "priority": "high",
+    "status": "backlog"
+  },
+  {
+    "title": "BE-39 · Reproducible model identity for private runs",
+    "description": "Sprint 5. As the owner, I want to know whether a resumed run uses the same local model. Dependencies: BE-34, BE-38. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Capture the resolved local Ollama model digest and relevant configuration for new supported private runs without exposing prompts or secrets. Verify identity again before continuation; changed or unresolved identity blocks automatic reuse with a clear explanation. Legacy tag-only records remain explicitly unknown and are not backfilled with invented digests. Test changed-tag and unavailable-model cases; no automatic model downloads or cloud fallback.",
+    "assignee": "owner",
+    "priority": "medium",
+    "status": "backlog"
+  },
+  {
+    "title": "BE-40 · End-to-end private work acceptance scenario",
+    "description": "Sprint 5. As the owner, I want one understandable test of the complete private-work flow. Dependencies: BE-35, BE-36, BE-38, BE-39. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Document a fictional brief through draft, exact-rubric assessment, failed-check feedback, revision, private file comparison and reviewed procedure reuse. Preserve every record and show what each transition proves. Automated tests use disposable data; any real local generation is separately labelled and owner assessed. Supply a short ./company review guide with the existing key, no database reset and no spending/publishing/customer contact.",
+    "assignee": "owner",
+    "priority": "high",
+    "status": "backlog"
+  },
+  {
+    "title": "BE-41 · Sprint 5 integration, security and privacy audit",
+    "description": "Sprint 5. As the owner, I want fixable project defects resolved before acceptance. Dependencies: Selected implementation cards ready for review. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Audit the final selected changes across domain relationships, authorization, privacy, recovery, retention, dependency findings and browser behavior. Fix actionable project findings; preserve failed evidence and rerun appropriate checks. Report exact implementation commit, actual test counts, model-quality limits and upstream findings separately. Keep generated artifacts at 30-day retention and budget/loss at €0. No claim of a clean release gate if advisories remain.",
+    "assignee": "owner",
+    "priority": "high",
+    "status": "backlog"
+  },
+  {
+    "title": "BE-42 · Sprint 5 retrospective and closure",
+    "description": "Sprint 5. As the owner learning agile, I want evidence of what we delivered and how to improve. Dependencies: BE-41 and owner review. Planning only; no company execution authority. See SPRINT_5_PLAN.md.",
+    "acceptance_criteria": "Compare intended and delivered scope with actual tests, quality measurements and owner feedback. Record confusing review steps, defects and proposed improvements without invented velocity or earnings. Mark Done only after documented owner acceptance and actual merge evidence. Keep deferred cards visible; propose next-sprint priorities separately from completed work.",
+    "assignee": "owner",
+    "priority": "medium",
+    "status": "backlog"
+  }
+]

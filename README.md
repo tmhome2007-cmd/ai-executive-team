@@ -343,3 +343,5 @@ Sprint 4 integration audit: [BE-32 findings, boundaries and short review command
 Sprint 4 retrospective: [BE-33 evidence, lessons and proposed next-sprint actions](SPRINT_4_RETROSPECTIVE.md). Next-sprint priorities and pending merges require owner agreement.
 
 Sprint 4 owner review and merge are complete: BE-24–33 and UX-01 are Done for their documented scope (PRs #39–48). Next-sprint priorities remain proposed; known upstream findings stay visible in the security release gate.
+
+Sprint 5 planning: [useful AI work, clearer review and reliable recovery](SPRINT_5_PLAN.md), BE-34–42. Planning cards only; implementation has not started.
