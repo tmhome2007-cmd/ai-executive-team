@@ -104,6 +104,20 @@ def main():
                     panel.get_by_role(
                         "button", name="Download TXT sample 1", exact=True
                     ).wait_for()
+                    panel.get_by_text(
+                        "To compare revisions, export two different saved samples first.",
+                        exact=False,
+                    ).wait_for()
+                    rows = list_artifacts(b["id"])
+                    panel.get_by_label("Original artifact").select_option(
+                        str(rows[0]["id"])
+                    )
+                    panel.get_by_label("Revised artifact").select_option(
+                        str(rows[0]["id"])
+                    )
+                    assert panel.get_by_role(
+                        "button", name="Compare files", exact=True
+                    ).is_disabled()
                     with page.expect_download() as captured:
                         panel.get_by_role(
                             "button", name="Download TXT sample 1", exact=True
@@ -127,6 +141,9 @@ def main():
                         "button", name="Download MD sample 2", exact=True
                     ).wait_for()
                     rows = list_artifacts(b["id"])
+                    panel.get_by_text(
+                        "Both fields select the same file.", exact=False
+                    ).wait_for()
                     panel.get_by_label("Original artifact").select_option(
                         str(rows[0]["id"])
                     )

@@ -206,6 +206,17 @@ export default function PracticeArtifacts({
           Load older files
         </button>
       )}
+      <p className="text-sm" role="status">
+        {new Set(
+          rows.filter((r) => r.availability === "available").map((r) => r.sample_id),
+        ).size < 2
+          ? "To compare revisions, export two different saved samples first. Choosing a sample above does not export it; click Export saved sample."
+          : !before || !after
+            ? "Choose an original file and a revised file below."
+            : before === after
+              ? "Both fields select the same file. Choose a different revised file."
+              : "Ready to compare the selected files."}
+      </p>
       <div className="flex flex-wrap gap-2">
         <select
           aria-label="Original artifact"
