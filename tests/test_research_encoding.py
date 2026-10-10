@@ -30,3 +30,26 @@ class ResearchEncodingTests(unittest.TestCase):
 
     def test_plain_text_is_readable_without_html_paragraphs(self):
         self.assertEqual(self.read('Public €0 constraints'.encode(), 'text/plain; charset=utf-8'), 'Public €0 constraints')
+
+
+    def test_invalid_ports_fail_before_any_network_request(self):
+        with patch('tools.research_tool.requests.get') as fetch:
+            for url in ('https://example.org:invalid', 'https://example.org:99999'):
+                self.assertTrue(PageReaderTool()._run(url).startswith('Error:'))
+            fetch.assert_not_called()
+
+    def test_redirect_and_stream_failure_close_responses_without_error_details(self):
+        from unittest.mock import Mock
+        from tools.research_tool import _get_safe_response
+        redirect = Mock(is_redirect=True, headers={'Location': '/next'})
+        final = Mock(is_redirect=False, is_permanent_redirect=False)
+        with patch('tools.research_tool._is_safe_research_url', return_value=None), patch('tools.research_tool.requests.get', side_effect=[redirect, final]):
+            self.assertIs(_get_safe_response('https://example.org/start', {}), final)
+        redirect.close.assert_called_once()
+        failing = Response(b'', 'text/html')
+        failing.iter_content = Mock(side_effect=RuntimeError('synthetic-private-transport-detail'))
+        failing.close = Mock()
+        with patch('tools.research_tool._is_safe_research_url', return_value=None), patch('tools.research_tool._get_safe_response', return_value=failing):
+            result = PageReaderTool()._run('https://example.org')
+        self.assertEqual(result, 'Error: Public page could not be read.')
+        failing.close.assert_called_once()

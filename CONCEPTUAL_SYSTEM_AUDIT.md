@@ -195,3 +195,8 @@ The map was checked against `main.py`, `foundation_api.py`, agent definitions an
 Generated logs, screenshots and registered sync exports have the owner's 30-day retention policy; approval/execution and other domain histories remain retained. SQLite is not application-encrypted; authenticated encrypted backups are optional. Four recorded Chroma advisories and other deployment gates remain separate from the conceptual MVP assessment.
 
 This review identifies structure and gaps. It does not prove all model answers truthful, certify profit, or replace runtime/security tests for subsequent code changes.
+
+
+## Post-Sprint 2 review
+
+BE-18/19 are accepted and merged; earlier Backlog/Review text above is historical. Profiles and local neural audition preferences are implemented, while generated-conversation neural synthesis and 3D offices remain future scope. [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) records the fresh conceptual/security/privacy/bug review and its test evidence.

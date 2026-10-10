@@ -1,6 +1,7 @@
 """Dashboard navigation/privacy smoke test with synthetic API responses only.
 Start the production dashboard on localhost:3000 before running this script.
 """
+import os
 import json
 from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
@@ -35,6 +36,7 @@ def main():
             '/workflows/daily-research/status': {'success': None, 'last_run_time': None, 'message': 'Not run'},
             '/decisions/history': [decision], '/actions/pending': [], '/actions/history': [action],
             '/resources/pending': [], '/goals': [], '/followups/open': [],
+            '/organization/office-roster': [],
             '/workflows/autonomous-followup/status': {'success': None, 'message': 'No run recorded', 'last_run_time': None, 'scanned_goal_count': 0, 'created_event_ids': [], 'generated_decision_ids': [], 'resolved_event_ids': [], 'errors': []},
             '/memory/ceo': [], '/memory/cfo': [], '/meeting-types': {},
             '/treasury/summary': {'currencies': {'EUR': {'available': 15, 'reserved': 5, 'cash_balance': 20}}},
@@ -58,15 +60,15 @@ def main():
             requests.append(request.method)
             path = urlsplit(request.url).path
             if path == '/treasury/summary' and treasury_down[0]:
-                route.fulfill(status=503, headers={'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'}, content_type='application/json', body='{}')
+                route.fulfill(status=503, headers={'Access-Control-Allow-Origin': os.environ.get('DASHBOARD_SMOKE_URL','http://127.0.0.1:3000/').rstrip('/')}, content_type='application/json', body='{}')
                 return
             assert request.method == 'GET', 'Navigation must never approve or execute an action'
-            assert request.headers.get('x-api-key') == 'synthetic-dashboard-key'
-            route.fulfill(status=200, headers={'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'}, content_type='application/json', body=json.dumps(fixtures.get(path, {})))
+            assert request.headers.get('x-api-key') == 'synthetic-dashboard-key-1234567890'
+            route.fulfill(status=200, headers={'Access-Control-Allow-Origin': os.environ.get('DASHBOARD_SMOKE_URL','http://127.0.0.1:3000/').rstrip('/')}, content_type='application/json', body=json.dumps(fixtures.get(path, {})))
 
         page.route(API + '/**', respond)
-        page.goto('http://127.0.0.1:3000/')
-        page.get_by_placeholder('API Key').fill('synthetic-dashboard-key')
+        page.goto(os.environ.get('DASHBOARD_SMOKE_URL','http://127.0.0.1:3000/'))
+        page.get_by_placeholder('API Key').fill('synthetic-dashboard-key-1234567890')
         page.get_by_role('button', name='Confirm').click()
         page.get_by_role('heading', name='Company command center').wait_for()
         page.get_by_text('15 available · 5 reserved').wait_for()
@@ -78,10 +80,12 @@ def main():
             nav.get_by_role('button', name=name, exact=True).click()
             assert page.get_by_role('heading', name=heading, exact=True).is_visible()
         nav.get_by_role('button', name='Decisions', exact=True).click()
-        assert page.get_by_text('<script>alert(1)</script>', exact=True).is_visible()
-        assert page.locator('.report strong').filter(has_text='Expected vs Actual').count() == 1
-        assert page.locator('.report li').filter(has_text='Four checks passed.').count() == 1
-        assert page.locator('.report script').count() == 0
+        assert page.get_by_text('<script>alert(1)</script>', exact=True).filter(visible=True).first.is_visible()
+        report = page.get_by_role('region', name='AI report short review').filter(visible=True)
+        assert report.get_by_role('heading', name='Reported findings', exact=True).is_visible()
+        report.get_by_text('Full report and evidence details', exact=True).click()
+        assert report.get_by_text(decision['decision_outcome'], exact=True).is_visible()
+        assert report.locator('script').count() == 0
         nav.get_by_role('button', name='Overview', exact=True).click()
         nav.get_by_role('button', name='Virtual office', exact=True).click()
         page.get_by_role('heading', name='Virtual office', exact=True).wait_for()
@@ -110,9 +114,11 @@ def main():
         page.get_by_text('Outcome measured: partial', exact=True).wait_for()
         page.get_by_role('combobox', name='Meeting for contributions').select_option('105')
         page.get_by_role('heading', name='Kai Akira', exact=True).wait_for()
+        page.locator('.contribution').filter(has=page.get_by_role('heading', name='Kai Akira', exact=True)).get_by_text('Full report and evidence details', exact=True).click()
         assert page.get_by_text('Published CEO recommendation <script>alert(1)</script>', exact=True).is_visible()
         assert page.locator('.contribution script').count() == 0
         page.get_by_role('combobox', name='Contribution phase').select_option('preparation')
+        page.locator('.contribution').get_by_text('Full report and evidence details', exact=True).click()
         assert page.get_by_text('Published technical preparation', exact=True).is_visible()
         assert page.get_by_role('heading', name='Kai Akira', exact=True).count() == 0
         page.get_by_role('combobox', name='Contribution phase').select_option('all')

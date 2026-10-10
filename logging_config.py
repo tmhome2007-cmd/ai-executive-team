@@ -21,7 +21,7 @@ import datetime
 import time
 from logging.handlers import RotatingFileHandler
 
-_LOG_DIR = "logs"
+_LOG_DIR = os.getenv("LOG_DIR", "logs")
 _LOG_FILE = os.path.join(_LOG_DIR, "app.log")
 _MAX_BYTES = max(1024, min(100 * 1024 * 1024, int(os.getenv("LOG_ROTATION_BYTES", str(5 * 1024 * 1024)))))
 _BACKUP_COUNT = max(1, min(100, int(os.getenv("LOG_RETENTION_COUNT", "3"))))

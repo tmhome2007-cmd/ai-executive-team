@@ -249,3 +249,8 @@ is unchanged. The 150 foundation checks and all other project checks passed.
 The first PR #28 CI run passed compile, backend tests, live Docker, foundation,
 Bandit and frontend checks; its sole failed step found the same four unpatched
 Chroma advisories. The dependency gate remains visibly unclean.
+
+
+## Pre-Sprint 3 audit — 10 October 2026
+
+See [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) for baseline, fixes and limits. The post-fix local audit in `audit-results/20261010-145734` passed 167 backend tests with real Docker, 150 foundation checks, Bandit medium/high, clean frontend installation/tests/lint/build/npm audit, eight application browser suites including actual audio playback, Chromium and local Ollama inference. Audit logging is now disposable; malformed owner headers fail closed; research/practice completion checks claim versions; public reads close responses and withhold raw transport errors. Four unpatched Chroma dependency advisories remain visible and production release remains uncleared. Sprint 3 has not started; fixes await PR review.

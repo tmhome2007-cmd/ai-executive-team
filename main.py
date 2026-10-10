@@ -370,7 +370,7 @@ async def log_requests(request: Request, call_next):
     start_time = time.time()
     # Attribution is the initiating owner API, not a claim about model/tool identity.
     supplied = request.headers.get('X-API-Key')
-    actor = 'owner' if config.API_SECRET_KEY and supplied and hmac.compare_digest(supplied, config.API_SECRET_KEY) else 'system'
+    actor = 'owner' if config.API_SECRET_KEY and supplied and hmac.compare_digest(supplied.encode('utf-8'), config.API_SECRET_KEY.encode('utf-8')) else 'system'
     source = f'http:{request.method} {request.url.path}'
     if not re.fullmatch(r'[A-Za-z0-9_/:. -]{1,180}', source):
         source = 'http'
@@ -496,8 +496,8 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
       wordt gevonden, wat in theorie de sleutel karakter-voor-karakter zou
       kunnen lekken via timing).
     - Een simpele lockout: na 5 mislukte pogingen vanaf hetzelfde IP binnen
-      5 minuten wordt verder proberen geblokkeerd (429), ongeacht of de
-      daaropvolgende poging toevallig wél de juiste sleutel zou zijn.
+      5 minuten worden alleen ongeldige pogingen geblokkeerd (429).
+      De juiste eigenaarssleutel blijft toegang geven.
     """
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
@@ -511,7 +511,7 @@ def verify_api_key(request: Request, x_api_key: str = Header(None)) -> bool:
     is_valid = (
         bool(server_key)
         and x_api_key is not None
-        and hmac.compare_digest(x_api_key, server_key)
+        and hmac.compare_digest(x_api_key.encode('utf-8'), server_key.encode('utf-8'))
     )
 
     # A valid owner credential must never be denied because an attacker (or a

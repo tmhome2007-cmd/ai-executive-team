@@ -64,8 +64,12 @@ def _is_safe_research_url(url: str) -> str | None:
     if parsed.username is not None or parsed.password is not None:
         return "Credentials embedded in URLs are not allowed"
 
-    if parsed.port is not None and parsed.port not in {80, 443}:
-        return f"Research URL port {parsed.port} is not allowed"
+    try:
+        port = parsed.port
+    except ValueError:
+        return "Research URL has an invalid port"
+    if port is not None and port not in {80, 443}:
+        return f"Research URL port {port} is not allowed"
 
     try:
         resolved_addresses = {
@@ -127,6 +131,7 @@ def _get_safe_response(url: str, headers: dict, timeout: float = 10.0, max_redir
                 return response
             from urllib.parse import urljoin
             current_url = urljoin(current_url, location)
+            response.close()
             continue
 
         return response
@@ -145,6 +150,7 @@ class PageReaderTool(BaseTool):
         if block_reason:
             return f"Error: URL blocked for safety — {block_reason}"
 
+        response = None
         try:
             # Stel een User-Agent in om te voorkomen dat Wikipedia/servers het verzoek blokkeren (HTTP 403)
             headers = {
@@ -206,5 +212,8 @@ class PageReaderTool(BaseTool):
             # Beperk de tekstlengte om de contextruimte van het model te besparen
             return full_text[:2000]
             
-        except Exception as err:
-            return f"Error reading page {url}: {str(err)}"
+        except Exception:
+            return "Error: Public page could not be read."
+        finally:
+            if response is not None:
+                response.close()

@@ -67,7 +67,7 @@ def prune_generated_artifacts(*, now: float | None = None) -> dict:
         names = {row[0] for row in conn.execute(
             'SELECT filename FROM generated_sync_exports WHERE generated_at < ?', (cutoff,))}
     return {
-        'logs': _prune_directory('logs', lambda name: re.fullmatch(r'app\.log\.[1-9][0-9]*', name) is not None, cutoff),
+        'logs': _prune_directory(os.getenv('LOG_DIR', 'logs'), lambda name: re.fullmatch(r'app\.log\.[1-9][0-9]*', name) is not None, cutoff),
         'screenshots': _prune_directory(os.path.join(config.WORKSPACE_ROOT, 'screenshots'),
                                       lambda name: re.fullmatch(r'action_[A-Za-z0-9_-]+\.png', name) is not None, cutoff),
         'sync_exports': _prune_directory(config.SYNC_EXPORT_DIR, lambda name: name in names, cutoff),

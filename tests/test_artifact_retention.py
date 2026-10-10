@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from config import config
 from memory.database import init_db, get_connection
@@ -9,6 +10,11 @@ from memory.artifact_retention import register_sync_export, prune_generated_arti
 
 
 class ArtifactRetentionTests(unittest.TestCase):
+    def setUp(self):
+        self.logs = patch.dict(os.environ, {'LOG_DIR': 'logs'})
+        self.logs.start()
+        self.addCleanup(self.logs.stop)
+
     def test_expiry_preserves_recent_unknown_linked_files_and_database_history(self):
         saved = config.DATABASE_PATH, config.WORKSPACE_ROOT, config.SYNC_EXPORT_DIR, config.ARTIFACT_RETENTION_DAYS
         cwd = os.getcwd()
