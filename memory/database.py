@@ -1366,16 +1366,9 @@ def get_executive_memories(
     clauses = ["executive_key = ?"]
     params: list = [executive_key]
     if active_only:
-        clauses.append("is_active = 1")
-        clauses.append(
-            "NOT EXISTS (SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id AND (l.state!='active' OR (l.expires_at IS NOT NULL AND julianday(l.expires_at)<=julianday('now'))))"
-        )
-        clauses.append(
-            "NOT EXISTS (SELECT 1 FROM memory_lifecycle l JOIN evidence_sources e ON e.id IN (SELECT value FROM json_each(l.source_ids)) WHERE l.memory_id=executive_memories.id AND (e.verification='disputed' OR (e.expires_at IS NOT NULL AND julianday(e.expires_at)<=julianday('now'))))"
-        )
-        clauses.append(
-            "NOT EXISTS (SELECT 1 FROM memory_lifecycle l WHERE l.memory_id=executive_memories.id AND l.claim_key!='' AND l.claim_key IN (SELECT x.claim_key FROM memory_lifecycle x JOIN executive_memories m ON m.id=x.memory_id WHERE x.state='active' AND m.is_active=1 GROUP BY x.claim_key HAVING COUNT(DISTINCT m.lesson)>1))"
-        )
+        from memory.context_policy import CURRENT_WHERE
+
+        clauses.append(CURRENT_WHERE)
     if goal_id is not None:
         clauses.append("(source_goal_id = ? OR source_goal_id IS NULL)")
         params.append(goal_id)

@@ -45,7 +45,7 @@
     "acceptance_criteria": "Use existing SQLite records to navigate goals, decisions, actions, outcomes, lessons and skills. Explain retrieved sources and timestamps; surface conflicts, expiry and corrections. Generated relationships remain unverified until reviewed. Corrected facts stop influencing current retrieval while historical provenance remains visible.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-30 · 3D office first floor prototype",

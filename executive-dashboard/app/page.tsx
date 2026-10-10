@@ -9,6 +9,7 @@ import RunInspector from "./components/run-inspector";
 import ExecutiveSkills from "./components/executive-skills";
 import Experiments from "./components/experiments";
 import OrganizationalWork from "./components/organizational-work";
+import CompanyKnowledge from "./components/company-knowledge";
 import CompanyRecords, { type ExecutiveProfile } from "./components/company-records";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(
@@ -24,6 +25,7 @@ const VIEWS = [
   ["boards", "Agile boards"],
   ["office", "Virtual office"],
   ["records", "Conversations & activity"],
+  ["knowledge", "Company knowledge"],
   ["goals", "Goals"],
   ["treasury", "Treasury"],
   ["decisions", "Decisions"],
@@ -2090,6 +2092,9 @@ export default function DashboardPage() {
             onAuthFailure={handleAuthFailure}
             onActions={() => setView("actions")}
           />
+        )}
+        {view === "knowledge" && apiKey && (
+          <CompanyKnowledge apiKey={apiKey} onAuthFailure={handleAuthFailure} />
         )}
         {view === "records" && apiKey && (
           <CompanyRecords

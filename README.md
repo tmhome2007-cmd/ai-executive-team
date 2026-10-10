@@ -331,3 +331,5 @@ BE-26 adds [private practice files](docs/BE26_PRIVATE_ARTIFACTS.md): exact TXT/M
 BE-27 adds the [Run inspector](docs/BE27_RUN_INSPECTOR.md) under Business research: private progress metadata, cooperative stop and explicit guarded continuation. Uncertain external actions are never replayed by this feature.
 
 Reviewed workflow patterns and explicit source proposals: [BE-28 review and recovery](docs/BE28_WORKFLOW_QUEUE.md). Templates retain the existing practice approval gates; queued URLs do not count as evidence.
+
+Company knowledge links existing goals, decisions, actions, outcomes, lessons and review-backed skills. It explains why corrected or stale memories are withheld from current agent context: [BE-29 review and retrieval limits](docs/BE29_COMPANY_KNOWLEDGE.md).
