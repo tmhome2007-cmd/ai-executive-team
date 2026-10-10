@@ -34,9 +34,11 @@ interface Existing {
 export default function RunInspector({
   apiKey,
   onAuthFailure,
+  active = true,
 }: {
   apiKey: string;
   onAuthFailure: () => void;
+  active?: boolean;
 }) {
   const [runs, setRuns] = useState<Run[]>([]);
   const [steps, setSteps] = useState<Existing[]>([]);
@@ -79,6 +81,7 @@ export default function RunInspector({
     [offset, request],
   );
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     const poll = () => {
       if (!document.hidden)
@@ -92,7 +95,7 @@ export default function RunInspector({
       controller.abort();
       clearInterval(timer);
     };
-  }, [refresh]);
+  }, [refresh, active]);
   async function control(r: Run, action: "stop" | "continue") {
     setBusy(true);
     setError("");

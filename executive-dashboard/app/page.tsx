@@ -2089,7 +2089,11 @@ export default function DashboardPage() {
               ))}
             </nav>
             <div hidden={businessView !== "runs"}>
-              <RunInspector apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+              <RunInspector
+                active={businessView === "runs"}
+                apiKey={apiKey}
+                onAuthFailure={handleAuthFailure}
+              />
             </div>
             <div hidden={businessView !== "practice"}>
               <BusinessDiscovery apiKey={apiKey} onAuthFailure={handleAuthFailure} />

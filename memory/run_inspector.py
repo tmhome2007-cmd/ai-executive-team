@@ -193,6 +193,21 @@ def _summary(conn, row, checkpoint=None):
         ).fetchone()[0]
         if not (b["sample"] and b["review_json"] and 1 <= count < 10):
             can_continue = False
+    continuation_blocked_reason = ""
+    if can_continue:
+        # A visible continuation button must honor the current approval bindings,
+        # not just the brief/run versions. Claiming rechecks them transactionally.
+        from memory.workflow_templates import template_context
+        from memory.practice_quality import assert_specification
+        from memory.executive_skills import skill_context
+
+        try:
+            template_context(conn.cursor(), row["brief_id"])
+            assert_specification(conn.cursor(), row["brief_id"])
+            skill_context(conn.cursor(), row["brief_id"])
+        except (ValueError, RuntimeError) as error:
+            can_continue = False
+            continuation_blocked_reason = str(error)
     terminal = row["phase"] in {"completed", "failed", "stopped", "interrupted"}
     return dict(
         id=row["id"],
@@ -210,21 +225,26 @@ def _summary(conn, row, checkpoint=None):
             if checkpoint and checkpoint["status"] == "inconclusive"
             else ""
         ),
+        continuation_blocked_reason=continuation_blocked_reason,
         pending_input=(
-            "Wait for the current local model call to finish; its output will be discarded."
-            if active and row["stop_requested"]
+            continuation_blocked_reason
+            if continuation_blocked_reason
             else (
-                "Owner may continue the same private exercise."
-                if can_continue
+                "Wait for the current local model call to finish; its output will be discarded."
+                if active and row["stop_requested"]
                 else (
-                    "Create a new research brief; existing evidence snapshots stay unchanged."
-                    if terminal
-                    and row["stage"] == "research"
-                    and row["phase"] != "completed"
+                    "Owner may continue the same private exercise."
+                    if can_continue
                     else (
-                        "Owner sample assessment remains separate."
-                        if row["phase"] == "completed"
-                        else ""
+                        "Create a new research brief; existing evidence snapshots stay unchanged."
+                        if terminal
+                        and row["stage"] == "research"
+                        and row["phase"] != "completed"
+                        else (
+                            "Owner sample assessment remains separate."
+                            if row["phase"] == "completed"
+                            else ""
+                        )
                     )
                 )
             )

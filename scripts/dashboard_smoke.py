@@ -184,7 +184,7 @@ def main():
         page.goto(os.environ.get("DASHBOARD_SMOKE_URL", "http://127.0.0.1:3000/"))
         page.get_by_placeholder("API Key").fill("synthetic-dashboard-key-1234567890")
         page.get_by_role("button", name="Confirm").click()
-        page.get_by_role("heading", name="Company command center").wait_for()
+        page.get_by_role("heading", name="Overview", exact=True).wait_for()
         page.get_by_text("15 available · 5 reserved").wait_for()
         nav = page.get_by_role("navigation", name="Company views")
         for name, heading in [
@@ -196,7 +196,9 @@ def main():
             ("System health", "System health"),
         ]:
             nav.get_by_role("button", name=name, exact=True).click()
-            assert page.get_by_role("heading", name=heading, exact=True).is_visible()
+            assert page.get_by_role(
+                "heading", name=heading, exact=True
+            ).last.is_visible()
         nav.get_by_role("button", name="Decisions", exact=True).click()
         assert (
             page.get_by_text("<script>alert(1)</script>", exact=True)
@@ -214,7 +216,7 @@ def main():
         assert report.locator("script").count() == 0
         nav.get_by_role("button", name="Overview", exact=True).click()
         nav.get_by_role("button", name="Virtual office", exact=True).click()
-        page.get_by_role("heading", name="Virtual office", exact=True).wait_for()
+        page.get_by_role("heading", name="Virtual office", exact=True).last.wait_for()
         assert page.get_by_role("button", name="Inspect ", exact=False).count() == 11
         page.get_by_role("button", name="Inspect CTO", exact=True).click()
         inspector = page.get_by_role("complementary", name="Executive inspector")
@@ -300,7 +302,7 @@ def main():
             path="/private/tmp/company-dashboard-v2-mobile.png", full_page=True
         )
         page.reload()
-        page.get_by_role("heading", name="Access Required").wait_for()
+        page.get_by_role("heading", name="Your company awaits.", exact=True).wait_for()
         assert all(method == "GET" for method in requests)
         assert not failures, failures
         browser.close()

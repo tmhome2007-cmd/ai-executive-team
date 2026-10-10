@@ -1328,6 +1328,12 @@ Fixed rubrics, exact source attribution and representative useful deliverables.
 
 - `SprintThreeTests`
 
+## [tests/test_sprint4_integration.py](../tests/test_sprint4_integration.py)
+
+Combined Sprint 4 privacy and recovery checks using disposable company data.
+
+- `SprintFourIntegrationTests`
+
 ## [tests/test_sql_injection_guards.py](../tests/test_sql_injection_guards.py)
 
 Adversarial SQL-identifier/status input tests against real SQLite.

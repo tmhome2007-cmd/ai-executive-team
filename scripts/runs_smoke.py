@@ -65,6 +65,7 @@ def main():
                     page = browser.new_page(viewport={"width": 1440, "height": 1000})
                     page.set_default_timeout(30000)
                     errors = []
+                    run_reads = []
                     page.on("pageerror", lambda e: errors.append(str(e)))
                     dashboard = os.environ.get(
                         "DASHBOARD_SMOKE_URL", "http://127.0.0.1:3002"
@@ -75,6 +76,8 @@ def main():
                         req = route.request
                         parsed = urlsplit(req.url)
                         if parsed.netloc == "127.0.0.1:8001":
+                            if parsed.path == "/runs" and req.method == "GET":
+                                run_reads.append(req.url)
                             response = client.request(
                                 req.method,
                                 parsed.path
@@ -128,6 +131,22 @@ def main():
                     panel.get_by_text("Phase: completed", exact=False).wait_for()
                     assert len(get_brief(b["id"])["attempts"]) == 1
                     assert len(calls) == 2
+                    page.get_by_role(
+                        "navigation", name="Business research sections"
+                    ).get_by_role(
+                        "button", name="Research & practice", exact=True
+                    ).click()
+                    reads_when_hidden = len(run_reads)
+                    page.wait_for_timeout(16000)
+                    assert (
+                        len(run_reads) == reads_when_hidden
+                    ), "Hidden run inspector kept polling"
+                    page.get_by_role(
+                        "navigation", name="Business research sections"
+                    ).get_by_role("button", name="Run inspector", exact=True).click()
+                    panel.get_by_text("Phase: completed", exact=False).wait_for()
+                    # Re-entry loads current metadata without starting another generation.
+                    assert len(get_brief(b["id"])["attempts"]) == 1
                     page.set_viewport_size({"width": 390, "height": 844})
                     assert page.evaluate(
                         "document.documentElement.scrollWidth <= window.innerWidth"

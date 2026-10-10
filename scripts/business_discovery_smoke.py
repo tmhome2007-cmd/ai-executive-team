@@ -143,8 +143,17 @@ def main():
             ).click()
             reader.assert_not_called()
             page.get_by_role(
-                "button", name="Read proposed source 1", exact=True
+                "button", name="Queue proposed source 1", exact=True
             ).click()
+            reader.assert_not_called()
+            from memory.research_queue import list_proposals
+
+            proposal = list_proposals()[0]
+            page.get_by_role(
+                "button", name=f"Read queued public page #{proposal['id']}", exact=True
+            ).click()
+            page.get_by_text("Available evidence records (4)", exact=True).wait_for()
+            page.locator("label").filter(has_text="#4 ").locator("input").check()
             page.get_by_text(
                 "4 sources selected — ready. Next: Save research brief below.",
                 exact=True,
