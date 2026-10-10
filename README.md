@@ -300,3 +300,8 @@ See [FOUNDATION_AUDIT.md](FOUNDATION_AUDIT.md) for the pre-frontend security/pri
 ## Character and voice review
 
 BE-18/19 were reviewed and accepted by the owner on 10 October 2026. Feminine portraits now have a distinct illustrated face and professional silhouette; Kai’s specified appearance is retained. Local system voices can be compared, and optional Kokoro neural auditions can be prepared with `./company voices`. This creates a separate pinned `.voice-venv`, downloads digest-verified models, and generates fixed public comparison samples locally. No cloud speech text or paid provider is used. Audition/preferences do not yet voice generated conversations. See [SPRINT_2_CHARACTER_VOICE_REVIEW.md](SPRINT_2_CHARACTER_VOICE_REVIEW.md) for listening instructions, installation limits and test evidence.
+
+
+## Before Sprint 3
+
+See [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) for the current conceptual, security, privacy and bug review. `./company audit` now includes eight application browser suites, actual audition playback, Docker isolation and local Ollama inference using disposable data and logs. Passing project checks does not establish business demand, earned profit or production readiness; the dependency findings remain visible.

@@ -73,3 +73,8 @@ this command. No real external side effects are tested.
 Share the final summary and any failed stage's log, keeping credentials private.
 Do not share .env files. A missing Docker/Ollama/runtime is a setup failure, not a
 reason to disable a security check. There is no need to repeat dashboard tests #2–#6.
+
+
+## Pre-Sprint 3 runner update
+
+The current audit also serves its temporary production build on an available loopback port and runs dashboard, board, experiment, organizational, operations, review, business-discovery and people/voice browser tests. API calls are intercepted into synthetic fixtures or disposable SQLite. Logs use a temporary `LOG_DIR`; your existing app logs are not modified. The audit branch `codex/pre-sprint-3-audit` is supported. See [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) for the current evidence.

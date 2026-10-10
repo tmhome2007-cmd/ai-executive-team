@@ -5,6 +5,10 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
+import time
+import urllib.request
+import urllib.error
 import subprocess
 import sys
 import tempfile
@@ -15,7 +19,7 @@ KNOWN_CHROMA = {'PYSEC-2026-311', 'PYSEC-2026-3813', 'PYSEC-2026-3814', 'PYSEC-2
 
 def main():
     branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=ROOT, text=True).strip()
-    if branch not in {'chatgpt/foundation-hardening', 'main', 'codex/operating-foundation-sprint', 'codex/identity-organization-simulation', 'codex/sprint-2-local-review', 'codex/business-experiment-discovery'}:
+    if branch not in {'chatgpt/foundation-hardening', 'main', 'codex/operating-foundation-sprint', 'codex/identity-organization-simulation', 'codex/sprint-2-local-review', 'codex/business-experiment-discovery', 'codex/pre-sprint-3-audit'}:
         raise SystemExit('Stop: use the foundation-hardening or main development baseline for this disposable audit.')
     stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     report = ROOT / 'audit-results' / stamp
@@ -25,7 +29,7 @@ def main():
         temp = Path(raw).resolve()
         env = dict(os.environ)
         env.update({
-            'DATABASE_PATH': str(temp / 'history.db'), 'WORKSPACE_ROOT': str(temp / 'workspace'),
+            'LOG_DIR': str(temp / 'logs'), 'DATABASE_PATH': str(temp / 'history.db'), 'WORKSPACE_ROOT': str(temp / 'workspace'),
             'CREWAI_STORAGE_DIR': str(temp / 'crewai'), 'SYNC_EXPORT_DIR': str(temp / 'sync'),
             'API_SECRET_KEY': 'disposable-local-audit-key-1234567890',
             'OPENAI_API_KEY': 'ollama-local-test', 'TELEGRAM_BOT_TOKEN': '', 'TELEGRAM_CHAT_ID': '',
@@ -95,10 +99,43 @@ def main():
                 manifest = json.loads((dashboard / '.next' / 'routes-manifest.json').read_text())
                 policies = [header['value'] for entry in manifest['headers'] for header in entry['headers']
                             if header['key'].lower() == 'content-security-policy']
-                valid = any("connect-src 'self' http://127.0.0.1:8001" in policy for policy in policies)
+                valid = any("media-src 'self' blob:" in policy and "connect-src 'self' http://127.0.0.1:8001" in policy for policy in policies)
                 results.append({'check': 'frontend-api-policy', 'status': 'PASS' if valid else 'FAIL'})
                 print(f'{results[-1]["status"]:5} frontend-api-policy', flush=True)
             run('frontend-dependencies', ['npm', 'audit'], cwd=dashboard)
+            if built:
+                # Exercise production UI against intercepted real APIs and disposable
+                # SQLite. Bind only a free loopback port, never the owner's apps.
+                with socket.socket() as probe:
+                    probe.bind(('127.0.0.1', 0))
+                    port = probe.getsockname()[1]
+                env['DASHBOARD_SMOKE_URL'] = f'http://127.0.0.1:{port}/'
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                with (report / 'dashboard-server.log').open('w') as server_log:
+                    server = subprocess.Popen(['node', 'node_modules/next/dist/bin/next', 'start',
+                        '--hostname', '127.0.0.1', '--port', str(port)], cwd=dashboard, env=env,
+                        stdout=server_log, stderr=subprocess.STDOUT)
+                    try:
+                        deadline = time.monotonic() + 30
+                        ready = False
+                        while time.monotonic() < deadline and server.poll() is None:
+                            try:
+                                with opener.open(env['DASHBOARD_SMOKE_URL'], timeout=2) as response:
+                                    ready = response.status == 200
+                                if ready: break
+                            except (OSError, urllib.error.URLError): pass
+                            time.sleep(.2)
+                        results.append({'check': 'browser-dashboard-ready', 'status': 'PASS' if ready else 'FAIL'})
+                        if ready:
+                            for feature in ('dashboard', 'agile', 'experiments', 'organizational',
+                                            'operating', 'review', 'business_discovery', 'people'):
+                                run('browser-' + feature, [sys.executable, str(ROOT / 'scripts' / (feature + '_smoke.py'))], timeout=180)
+                    finally:
+                        server.terminate()
+                        try: server.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            server.kill(); server.wait()
+
         browser_smoke = (
             "from playwright.sync_api import sync_playwright\n"
             "with sync_playwright() as runtime:\n"

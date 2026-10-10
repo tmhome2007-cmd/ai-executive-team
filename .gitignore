@@ -19,3 +19,8 @@ sync/*.jsonl
 audit-results/
 .voice-venv/
 .voice-assets/
+
+# Local framework state and environment variants may contain private settings.
+.crewai/
+.env.*
+!.env.example

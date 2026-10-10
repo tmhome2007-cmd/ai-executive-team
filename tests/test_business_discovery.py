@@ -366,3 +366,24 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(result['state'], 'needs_review')
         self.assertIsNone(result['sample'])
         self.assertEqual(result['attempts'], [])
+
+
+    def test_research_and_practice_completion_require_claimed_version(self):
+        for stage in ('research', 'practice'):
+            brief = self.brief if stage == 'research' else self.plan()
+            claimed = claim_stage(brief['id'], brief['version'], stage)
+            with get_connection() as conn:
+                conn.execute('UPDATE business_discovery SET version=version+1 WHERE id=?', (brief['id'],))
+                conn.commit()
+            before = get_brief(brief['id'])
+            for output in ('Stale worker output', None):
+                after = finish_stage(brief['id'], stage, output, claimed_version=claimed['version'])
+                self.assertEqual(after, before)
+            self.assertEqual(before['attempts'], [])
+            completed = finish_stage(brief['id'], stage, 'Current worker output', claimed_version=before['version'])
+            self.assertEqual(completed['state'], 'research_ready' if stage == 'research' else 'sample_ready')
+            if stage == 'practice':
+                self.assertEqual(len(completed['attempts']), 1)
+            else:
+                # Start another independent brief for the practice case.
+                self.brief = create_brief('Next recovery test', 'Zero budget', self.ids)

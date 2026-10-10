@@ -134,7 +134,13 @@ def finish_stage(ident, stage, output=None, claimed_version=None):
              'practice': "UPDATE business_discovery SET sample=?,state=?,sample_created_at=?,version=version+1 WHERE id=? AND state='practice_running'"}[stage]
     state = ('research_ready' if stage == 'research' else 'sample_ready') if output else 'needs_review'
     with get_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
         parameters = (output, state, ident) if stage == 'research' else (output, state, datetime.datetime.now(datetime.timezone.utc).isoformat() if output else None, ident)
+        if claimed_version is not None:
+            if type(claimed_version) is not int or claimed_version < 1:
+                raise ValueError('Invalid claimed version')
+            query += ' AND version=?'
+            parameters += (claimed_version,)
         cursor = conn.execute(query, parameters)
         if stage == 'practice' and output and cursor.rowcount == 1:
             conn.execute('INSERT INTO business_practice_samples(brief_id,attempt,sample,created_at) VALUES (?,1,?,?)', (ident, output, parameters[2]))

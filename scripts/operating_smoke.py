@@ -41,7 +41,7 @@ def main():
                 path=request.url.removeprefix('http://127.0.0.1:8001')
                 if request.method!='GET': assert path.startswith(('/operating-policy','/memory-review','/observation-jobs')),path
                 response=client.request(request.method,path,headers={'X-API-Key':config.API_SECRET_KEY,'Content-Type':'application/json'},content=request.post_data)
-                route.fulfill(status=response.status_code,content_type='application/json',headers={'Access-Control-Allow-Origin':'http://127.0.0.1:3001'},body=response.content)
+                route.fulfill(status=response.status_code,content_type='application/json',headers={'Access-Control-Allow-Origin':os.environ.get('DASHBOARD_SMOKE_URL','http://127.0.0.1:3000/').rstrip('/')},body=response.content)
             page.route('http://127.0.0.1:8001/**',respond)
             page.goto(os.environ.get('DASHBOARD_SMOKE_URL','http://127.0.0.1:3000/'))
             page.get_by_placeholder('API Key').fill(config.API_SECRET_KEY);page.get_by_role('button',name='Confirm',exact=True).click()
