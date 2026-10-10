@@ -801,6 +801,9 @@ def init_db() -> None:
     from memory.executive_skills import init_skills
 
     init_skills(cursor)
+    from memory.practice_artifacts import init_artifacts
+
+    init_artifacts(cursor)
     from memory.experiments import init_experiments
 
     init_experiments(cursor)

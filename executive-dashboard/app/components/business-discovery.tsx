@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { businessProposals } from "../lib/business-proposals";
 import AiReport from "./ai-report";
+import PracticeArtifacts from "./practice-artifacts";
 import BusinessSourceContext from "./business-source-context";
 const API = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(
   /\/$/,
@@ -838,6 +839,15 @@ export default function BusinessDiscovery({
                 </p>
               </details>
             </>
+          )}
+          {selected.attempts?.length > 0 && (
+            <PracticeArtifacts
+              key={selected.id}
+              briefId={selected.id}
+              samples={selected.attempts}
+              apiKey={apiKey}
+              onAuthFailure={onAuthFailure}
+            />
           )}
           {(selected.state === "sample_ready" ||
             (selected.state === "reviewed" && correcting)) && (

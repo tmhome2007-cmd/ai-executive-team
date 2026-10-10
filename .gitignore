@@ -30,3 +30,5 @@ audit-results/
 
 # Private fictional benchmark snapshots
 quality-results/
+
+**/practice-artifacts/

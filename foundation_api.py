@@ -429,3 +429,7 @@ router.include_router(conversation_audio_router)
 from api.skills import router as skills_router
 
 router.include_router(skills_router)
+
+from api.practice_artifacts import router as artifacts_router
+
+router.include_router(artifacts_router)
