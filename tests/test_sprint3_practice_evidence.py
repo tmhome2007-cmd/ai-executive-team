@@ -183,6 +183,20 @@ class SprintThreeTests(unittest.TestCase):
             draft['faqs'][0]['answer']=invalid
             with self.assertRaises(ValueError): validate_deliverable(render_task_guide(json.dumps(draft)),dict(structured=True,specification=TEMPLATES[0]))
 
+    def test_revision_does_not_publish_invented_change_claims(self):
+        from workflows.business_revision_contract import render_revision
+        original='A private evidence summary records four passed checks.\nThe cause is unknown.'
+        revised='A private evidence summary records four passed checks.\nThe cause is unknown. Request the original reproduction steps.'
+        payload=dict(revised_sample=revised,changes=['Removed unsupported pencil icons','Removed checkboxes'],remaining_unknowns=['Cause unknown'])
+        report=render_revision(json.dumps(payload),'Write an evidence summary.',previous_sample=original)
+        self.assertNotIn('pencil icons',report)
+        self.assertNotIn('checkboxes',report)
+        self.assertIn('1 non-empty lines removed or replaced; 1 non-empty lines added or replaced',report)
+        self.assertIn('do not establish correctness or improvement',report)
+        from workflows.business_revision_contract import clean_deliverable
+        historical = revised + '\n\n**Changes described by AI — verify against the previous sample**\n- Removed unsupported pencil icons\n\n**Remaining unknowns**\n- Cause unknown'
+        self.assertNotIn('pencil icons',clean_deliverable(historical))
+
     def test_three_representative_deliverables_and_observed_failure(self):
         samples=[
             '**Task guide**\n1. Create a task for the fictional example “Read chapter one” using the create function; exact controls are unknown.\n2. Edit that same task to “Read chapter two” using the edit function; keep the revised text with that task.\n3. Complete that task using the complete function after the fictional reading activity; check its recorded completion.\n**FAQ**\nQ: How do I start?\nA: Choose a short task description and use the create function.\nQ: How do I change it?\nA: Update the chosen task using the edit function.\nQ: How do I finish it?\nA: Use the complete function for the task you finished.\nInterface controls and reminder functionality are unknown.',

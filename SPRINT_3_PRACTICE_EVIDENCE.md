@@ -51,3 +51,7 @@ The prompt no longer supplies an example source URL that the model can copy. Res
 ### Task-guide FAQ review correction
 
 Owner review exposed an unsupported task-list interface in a FAQ. Unknown-interface checks now also reject instructions using invented task views, and generation/schema guidance explicitly prohibits assuming a task list or selection control. Source-proposal lines are excluded from action excerpts, including historical placeholder proposals; original reports remain intact. The 34 business/practice tests, summary tests, lint and production build pass. A disposable real local Ollama task-guide run (`audit-results/sprint3-examples-20261010-172953`) produced FAQs without the invented task list and passed structural checks. Usefulness remains an owner assessment.
+
+### Revision attribution correction
+
+A revised guide corrected the task-list error but its model-generated change list claimed removal of controls absent from the parent. Revision rendering now discards those semantic change claims and reports literal non-empty-line changes against the saved parent; counts grant no quality verdict. Prompt guidance no longer supplies a removal list for the model to echo. Historical reports remain intact, while sample display omits their unverified change section. Verified with 35 business/practice tests, including the observed invented-removal regression and historical display handling, and the disposable browser revision/review flow.

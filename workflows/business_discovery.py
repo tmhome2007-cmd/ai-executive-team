@@ -101,7 +101,7 @@ def run_stage(ident, expected_version, stage):
         prompt += ('\nFINAL OUTPUT REQUIREMENTS: Write the actual complete sample in revised_sample. '
                    'The revised_sample value must be ONE TEXT STRING with paragraphs and line breaks, never a nested JSON object. '
                    'The changes and remaining_unknowns values must each be lists of text strings. '
-                   'Old draft instructions are not product facts. Remove unsupported pencil icons, checkboxes, due-date fields, save buttons, task-name/description fields and completed sections. '
+                   'Old draft instructions are not product facts. Correct the specific owner feedback against the parent sample. Do not claim an element was removed unless it appeared in that parent sample. '
                    'Use create/edit/complete functions without naming controls unless the exercise explicitly supplies them. '
                    'If three FAQs are requested, supply three Q: and A: pairs. Number task steps on separate lines. '
                    'Changes and unknowns belong in their separate fields; do not replace the deliverable with a title.')
@@ -128,7 +128,7 @@ def run_stage(ident, expected_version, stage):
                         if stage == 'revision':
                             from workflows.business_revision_contract import render_revision
                             from workflows.practice_deliverables import validate_deliverable
-                            rendered = render_revision(candidate, brief['exercise'] + '\n' + ((brief.get('practice_specification') or {}).get('specification', {}).get('supplied_facts', '')))
+                            rendered = render_revision(candidate, brief['exercise'] + '\n' + ((brief.get('practice_specification') or {}).get('specification', {}).get('supplied_facts', '')), previous_sample=brief['sample'])
                             return validate_deliverable(rendered, brief.get('practice_specification'))
                         from workflows.business_revision_contract import validate_sample
                         from workflows.practice_deliverables import validate_deliverable

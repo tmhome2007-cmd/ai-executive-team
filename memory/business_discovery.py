@@ -236,7 +236,7 @@ def finish_revision(ident, output, claimed_version=None):
                 review = conn.execute('SELECT id FROM business_practice_reviews WHERE sample_id=? ORDER BY id DESC LIMIT 1', (previous['id'],)).fetchone()
                 now = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 saved = conn.execute('''INSERT INTO business_practice_samples(brief_id,attempt,sample,created_at,parent_sample_id,feedback_review_id,changes)
-                    VALUES (?,?,?,?,?,?,?)''', (ident, previous['attempt']+1, output, now, previous['id'], review['id'], 'See revision report; AI-described changes remain unverified'))
+                    VALUES (?,?,?,?,?,?,?)''', (ident, previous['attempt']+1, output, now, previous['id'], review['id'], 'Compare saved parent and revised samples; improvement requires a fresh owner review'))
                 bind_sample(conn.cursor(), ident, saved.lastrowid)
                 conn.execute("UPDATE business_discovery SET sample=?,sample_created_at=?,review_json=NULL,state='sample_ready',version=version+1 WHERE id=?", (output, now, ident))
             else:
