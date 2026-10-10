@@ -1,6 +1,7 @@
 /** Office navigation and presentation of recorded organizational state. */
 "use client";
 import AiReport from "./ai-report";
+import OfficeFloor3D from "./office-floor-3d";
 
 import { useState } from "react";
 import OfficeWorkforce from "./office-workforce";
@@ -182,6 +183,7 @@ export default function VirtualOffice({
   onNavigate: (view: Destination) => void;
   onMemory: (executive: string) => void;
 }) {
+  const [dimension, setDimension] = useState("3d");
   const [selected, setSelected] = useState("ceo");
   const [floor, setFloor] = useState("all");
   const executive = EXECUTIVES.find((e) => e.key === selected)!;
@@ -225,6 +227,34 @@ export default function VirtualOffice({
           Some office data is unavailable or stale. Refresh before relying on these
           records.
         </p>
+      )}
+      <div className="flex flex-wrap gap-2" aria-label="Office presentation">
+        <button
+          className="office-filter"
+          aria-pressed={dimension === "3d"}
+          onClick={() => setDimension("3d")}
+        >
+          3D executive floor
+        </button>
+        <button
+          className="office-filter"
+          aria-pressed={dimension === "2d"}
+          onClick={() => setDimension("2d")}
+        >
+          2D office directory
+        </button>
+      </div>
+      {dimension === "3d" && (
+        <OfficeFloor3D
+          profile={profiles.ceo}
+          available={available.actions}
+          stale={errors}
+          actions={actions}
+          onInspect={() => {
+            setSelected("ceo");
+            setDimension("2d");
+          }}
+        />
       )}
       <div className="office-layout">
         <div className="space-y-5">

@@ -218,6 +218,10 @@ Dashboard source; component/library responsibility follows its filename.
 
 Dashboard source; component/library responsibility follows its filename.
 
+## [executive-dashboard/app/components/office-floor-3d.tsx](../executive-dashboard/app/components/office-floor-3d.tsx)
+
+Dashboard source; component/library responsibility follows its filename.
+
 ## [executive-dashboard/app/components/office-workforce.tsx](../executive-dashboard/app/components/office-workforce.tsx)
 
 Dashboard source; component/library responsibility follows its filename.

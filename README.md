@@ -335,3 +335,5 @@ Reviewed workflow patterns and explicit source proposals: [BE-28 review and reco
 Company knowledge links existing goals, decisions, actions, outcomes, lessons and review-backed skills. It explains why corrected or stale memories are withheld from current agent context: [BE-29 review and retrieval limits](docs/BE29_COMPANY_KNOWLEDGE.md).
 
 Dashboard redesign: see [the layout and verification notes](docs/DASHBOARD_REDESIGN.md). Navigation is grouped in the sidebar; Business research has separate practice, run inspector and skill tabs.
+
+Virtual office now includes the [BE-30 executive floor prototype](docs/BE30_OFFICE_FLOOR.md), with local camera controls, opt-in decorative movement and the existing 2D directory.
