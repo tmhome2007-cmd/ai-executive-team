@@ -191,3 +191,7 @@ The owner confirmed the corrected neural auditions play, completed review and au
 Pre-Sprint 3 audit PR #34 is merged. BE-20–22 (useful deliverables, evidence-backed business comparisons and measurable feedback improvement) were accepted and merged on 10 October 2026 via PR #36 (`7d0acdb`). See [SPRINT_3_PLAN.md](SPRINT_3_PLAN.md) and [SPRINT_3_PRACTICE_EVIDENCE.md](SPRINT_3_PRACTICE_EVIDENCE.md).
 
 The owner then selected BE-23 local voiced contributions. Implementation is in Review in draft PR #37; listening acceptance remains pending. Generated audio expires after the owner-confirmed 30 days. Live board cards are not automatically changed.
+
+## Sprint 4 selected backlog — 10 October 2026
+
+[SPRINT_4_PLAN.md](SPRINT_4_PLAN.md) defines BE-24–33 and dependencies. All seven researched improvements are selected as bounded first increments, alongside privacy/reuse contracts, an integration audit and retrospective. Cards are planned, not completed.
