@@ -92,3 +92,7 @@ Patterns come from [Promptfoo](https://github.com/promptfoo/promptfoo), [Langfus
 ## Development board
 
 The matching planning cards are stored in [docs/planning/sprint-4-cards.json](docs/planning/sprint-4-cards.json). They belong on the separate **Sprint 4 development plan** board. Existing development and company cards are preserved. The old “Create development roadmap” button still imports the historical BE-01–14 template; it does not import this sprint.
+
+## Implementation progress — 10 October 2026
+
+BE-31 contracts and BE-24 benchmark tooling are in Review, pending owner acceptance. See [contracts](docs/SPRINT_4_CONTRACTS.md) and [quality measurements](docs/BE24_QUALITY_BENCHMARKS.md). BE-25 is next; BE-25–30/32–33 remain unimplemented. The first measured JSON-mode run passes 24/30 narrow checks; unresolved measurements remain visible.

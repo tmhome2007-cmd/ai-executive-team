@@ -321,3 +321,5 @@ Save an executive's Kokoro neural voice in People & simulation, then use **Load 
 ## Sprint 4 planning
 
 See [SPRINT_4_PLAN.md](SPRINT_4_PLAN.md) for BE-24–33: quality benchmarks, reusable skills, private artifacts, run inspection, workflow templates, evidence-linked knowledge and a first 3D floor, followed by integration audit and retrospective. These are planned features; current budget and permitted loss remain €0.
+
+Sprint 4 first review increment: [shared contracts](docs/SPRINT_4_CONTRACTS.md) and [local AI quality benchmarks](docs/BE24_QUALITY_BENCHMARKS.md). Run `./company quality` or `./company quality run --json-output`, then `./company quality summary`. These fictional measurements preserve raw failures and do not approve company work.

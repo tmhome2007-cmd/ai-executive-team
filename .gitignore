@@ -27,3 +27,6 @@ audit-results/
 
 # Owner-only generated conversation media
 **/conversation-audio/
+
+# Private fictional benchmark snapshots
+quality-results/
