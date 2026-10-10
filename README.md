@@ -341,3 +341,5 @@ Virtual office now includes the [BE-30 executive floor prototype](docs/BE30_OFFI
 Sprint 4 integration audit: [BE-32 findings, boundaries and short review commands](docs/BE32_SPRINT4_AUDIT.md). Use `./company audit` for disposable checks; your existing key and company database are preserved.
 
 Sprint 4 retrospective: [BE-33 evidence, lessons and proposed next-sprint actions](SPRINT_4_RETROSPECTIVE.md). Next-sprint priorities and pending merges require owner agreement.
+
+Sprint 4 owner review and merge are complete: BE-24–33 and UX-01 are Done for their documented scope (PRs #39–48). Next-sprint priorities remain proposed; known upstream findings stay visible in the security release gate.

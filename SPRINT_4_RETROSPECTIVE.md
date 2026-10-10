@@ -1,6 +1,6 @@
 # Sprint 4 retrospective — BE-33
 
-11 October 2026. Ready for owner review; Sprint 4 merge and next-sprint agreement remain pending.
+11 October 2026. Owner reviewed and authorized merge; Sprint 4 is closed for the documented scope. Next-sprint priorities remain proposed. Earlier review-stage statements below are historical.
 
 A sprint review asks whether the delivered features meet the need. This retrospective asks how we worked and what we should change next time. Passing tests, owner acceptance and merging are separate milestones.
 
@@ -71,3 +71,9 @@ Do not expand spending, customer contact, paid services or launch authority: bud
 ## Owner feedback and closure
 
 Existing feedback above is grounded in the conversation. Fresh Sprint 4 feedback has been requested; no answer or acknowledgement is invented. Before closing the sprint, record owner review and merge evidence. Before starting the next sprint, choose and refine the proposed priorities into concrete stories with examples and acceptance checks.
+
+## Owner acceptance and merge — 11 October 2026
+
+The owner confirmed all Sprint 4 work was reviewed and authorized merging to main. PRs #39–48 were merged in dependency order; final integration merge: `44f80176a5a52690d99e1934e9a0b4d2b943e245`. The merged tree exactly matches the reviewed retrospective branch. BE-24–33 and UX-01 are Done for their documented bounded scope. Earlier pending statuses above are historical. The sprint is closed; next-sprint proposals still require priority selection and story refinement.
+
+GitHub run [38090596050](https://github.com/tmhome2007-cmd/ai-executive-team/actions/runs/38090596050) passed frontend install/lint/build/npm audits, Docker isolation, foundation checks and Bandit medium/high. Its Python dependency audit failed only on the four previously tracked unpatched Chroma advisories. This failure remains visible; the security release gate is not claimed clean.

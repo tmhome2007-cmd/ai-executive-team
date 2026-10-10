@@ -110,3 +110,9 @@ BE-32 integration audit fixes are on `codex/sprint-4-audit`: [findings and verif
 ## Retrospective — 11 October 2026
 
 BE-33 is ready for review: [Sprint 4 retrospective](SPRINT_4_RETROSPECTIVE.md). It records the complete local audit, the remaining AI quality gap, integration failures and proposed next-sprint actions. Owner acceptance of UX-01 and the bounded BE-30 prototype is recorded; pending PR merges are not Done. Next-sprint priorities remain proposals until agreed.
+
+## Owner acceptance and merge — 11 October 2026
+
+The owner confirmed all Sprint 4 work was reviewed and authorized merging to main. PRs #39–48 were merged in dependency order; final integration merge: `44f80176a5a52690d99e1934e9a0b4d2b943e245`. The merged tree exactly matches the reviewed retrospective branch. BE-24–33 and UX-01 are Done for their documented bounded scope. Earlier pending statuses above are historical. The sprint is closed; next-sprint proposals still require priority selection and story refinement.
+
+GitHub run [38090596050](https://github.com/tmhome2007-cmd/ai-executive-team/actions/runs/38090596050) passed frontend install/lint/build/npm audits, Docker isolation, foundation checks and Bandit medium/high. Its Python dependency audit failed only on the four previously tracked unpatched Chroma advisories. This failure remains visible; the security release gate is not claimed clean.
