@@ -21,7 +21,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='people-browser-') as raw,patch.object(config,'DATABASE_PATH',str(Path(raw).resolve()/'company.db')),patch.object(config,'API_SECRET_KEY','synthetic-people-browser-key-1234567890'),patch.object(local_voice_samples,'ASSET_ROOT',Path(raw)/'voices'):
         local_voice_samples.ASSET_ROOT.mkdir()
         with wave.open(str(local_voice_samples.ASSET_ROOT/'am_michael.wav'),'wb') as recording:
-            recording.setnchannels(1);recording.setsampwidth(2);recording.setframerate(24000);recording.writeframes(b'\0\0'*2400)
+            recording.setnchannels(1);recording.setsampwidth(2);recording.setframerate(24000);recording.writeframes(b'\0\0'*24000)
         init_db();board=create_board('Synthetic company work','company');task=create_task(board,title='Synthetic staff task',acceptance_criteria='Owner reviews work',status='ready')['id']
         from main import app
         client=TestClient(app)
@@ -72,7 +72,16 @@ def main():
             page.get_by_role('button',name='Load neural audition',exact=True).click()
             page.get_by_label('Neural audition playback',exact=True).wait_for(state='visible')
             assert page.get_by_label('Neural audition playback',exact=True).get_attribute('src').startswith('blob:')
+            page.wait_for_function("() => {const a=document.querySelector('audio[aria-label=\"Neural audition playback\"]');return a && Number.isFinite(a.duration) && a.duration > .9 && a.readyState >= 2;}")
+            page.get_by_label('Neural audition playback',exact=True).evaluate('(audio) => audio.play()')
+            page.wait_for_function("() => document.querySelector('audio[aria-label=\"Neural audition playback\"]').currentTime > .05")
             page.get_by_role('button',name='Stop neural audition',exact=True).click()
+            assert page.get_by_label('Neural audition playback',exact=True).evaluate('(audio) => audio.paused')
+            blocked_requests=[]
+            page.route('https://example.test/blocked-audio.wav',lambda route: (blocked_requests.append(route.request.url),route.abort()))
+            page.evaluate("() => {window.__mediaViolations=[];document.addEventListener('securitypolicyviolation',e => {if(e.effectiveDirective==='media-src')window.__mediaViolations.push(e.blockedURI)});window.__blockedAudio=new Audio('https://example.test/blocked-audio.wav');window.__blockedAudio.load();}")
+            page.wait_for_function("() => window.__mediaViolations.includes('https://example.test/blocked-audio.wav')")
+            assert not blocked_requests,blocked_requests
             page.get_by_role('button',name='Save neural voice preference',exact=True).click()
             page.get_by_text('190 cm · well built · version 5',exact=True).wait_for()
             assert get_character('executive:ceo')['voice']['provider']=='kokoro_local'
