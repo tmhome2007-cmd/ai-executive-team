@@ -1,0 +1,5 @@
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+required-version = "26.10.1"
+extend-exclude = '/(audit-results|node_modules|\.venv|\.voice-venv|\.voice-assets)/'

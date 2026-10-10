@@ -1,0 +1,95 @@
+name: Security and Foundation Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install backend and audit tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pip-audit bandit
+          pip check
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall -q api agents config.py logging_config.py main.py foundation_api.py memory notifications system_checks.py tools workflows privacy_bootstrap.py
+
+      - name: Container boundary unit tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Pre-pull verified worker image for live isolation tests
+        run: docker pull alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+
+      - name: Test live Docker worker network and filesystem boundary
+        env:
+          RUN_DOCKER_INTEGRATION: "1"
+        run: python -m unittest discover -s tests -p 'test_container_runtime.py' -v
+
+      - name: System regression verification
+        if: ${{ always() }}
+        env:
+          API_SECRET_KEY: "ci-local-regression-placeholder-1234567890"
+          TELEGRAM_BOT_TOKEN: ""
+          TELEGRAM_CHAT_ID: ""
+          SANDBOX_MODE: "true"
+          ALLOW_UNSAFE_RAW_SHELL: "false"
+        run: python verify_system.py
+
+      - name: Bandit medium/high findings
+        if: ${{ always() }}
+        run: bandit -r api agents memory notifications tools workflows main.py foundation_api.py config.py system_checks.py -ll
+
+      - name: Audit Python dependencies
+        if: ${{ always() }}
+        run: pip-audit
+
+  frontend-security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: executive-dashboard
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: executive-dashboard/package-lock.json
+
+      - name: Install exact frontend dependencies
+        run: npm ci
+
+      - name: Verify native directory-glob adapter
+        run: npm run test:lint-glob
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        if: ${{ always() }}
+        run: npm run build
+
+      - name: Audit production npm dependencies
+        if: ${{ always() }}
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit high/critical npm vulnerabilities
+        if: ${{ always() }}
+        run: npm audit --audit-level=high
