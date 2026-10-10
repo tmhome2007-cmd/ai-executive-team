@@ -82,8 +82,12 @@ def prune_generated_artifacts(*, now: float | None = None) -> dict:
     from workflows.conversation_audio import prune_audio
 
     audio_deleted = prune_audio(now=current)
+    from memory.practice_artifacts import prune_artifacts
+
+    artifacts_deleted = prune_artifacts(now=current)
     return {
         "conversation_audio": audio_deleted,
+        "practice_artifacts": artifacts_deleted,
         "logs": _prune_directory(
             os.getenv("LOG_DIR", "logs"),
             lambda name: re.fullmatch(r"app\.log\.[1-9][0-9]*", name) is not None,

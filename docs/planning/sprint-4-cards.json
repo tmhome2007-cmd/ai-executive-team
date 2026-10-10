@@ -21,7 +21,7 @@
     "acceptance_criteria": "Create owner-only text/Markdown artifacts with hashes, versions and source/rubric links. Download and compare revisions. Reject traversal, symlink escapes and unsafe active content; never execute generated code. Apply 30-day generated-file retention while preserving durable review metadata and reporting expired content honestly.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-27 · Run inspector and guarded continuation",

@@ -67,6 +67,7 @@ class ArtifactRetentionTests(unittest.TestCase):
                     prune_generated_artifacts(now=now),
                     {
                         "conversation_audio": 0,
+                        "practice_artifacts": 0,
                         "logs": 1,
                         "screenshots": 1,
                         "sync_exports": 1,

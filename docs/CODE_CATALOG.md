@@ -102,6 +102,16 @@ Character presentation, workforce and fictional simulation API routes.
 - `write_personal_event`
 - `read_office_roster`
 
+## [api/practice_artifacts.py](../api/practice_artifacts.py)
+
+Owner-authenticated inert exports and bounded comparisons of saved samples.
+
+- `ArtifactExport`
+- `artifact_export`
+- `artifact_list`
+- `artifact_compare`
+- `artifact_download`
+
 ## [api/skills.py](../api/skills.py)
 
 Owner-only skill proposals and decisions; no business execution authority.
@@ -178,6 +188,10 @@ Dashboard source; component/library responsibility follows its filename.
 Dashboard source; component/library responsibility follows its filename.
 
 ## [executive-dashboard/app/components/people-simulation.tsx](../executive-dashboard/app/components/people-simulation.tsx)
+
+Dashboard source; component/library responsibility follows its filename.
+
+## [executive-dashboard/app/components/practice-artifacts.tsx](../executive-dashboard/app/components/practice-artifacts.tsx)
 
 Dashboard source; component/library responsibility follows its filename.
 
@@ -725,6 +739,22 @@ Reviewed executive work plans. Dispatch creates tool-free recommendations only.
 - `reconcile_work`
 - `workload`
 
+## [memory/practice_artifacts.py](../memory/practice_artifacts.py)
+
+Private immutable sample exports; expiring bytes never confer approval.
+
+- `init_artifacts`
+- `_directory`
+- `_bytes`
+- `_record`
+- `_content`
+- `_public`
+- `export_sample`: Export exact saved text once per format; retries cannot extend its expiry.
+- `list_artifacts`
+- `download_artifact`
+- `compare_artifacts`
+- `prune_artifacts`: Remove expired owned files and 30-day crash orphans, keeping all metadata.
+
 ## [memory/practice_quality.py](../memory/practice_quality.py)
 
 Immutable approved specifications and assessment bindings; no competence authority.
@@ -772,6 +802,12 @@ Module constants/imports only.
 ## [scripts/agile_smoke.py](../scripts/agile_smoke.py)
 
 Real SQLite/FastAPI task-board UI checks, entirely on disposable data.
+
+- `main`
+
+## [scripts/artifacts_smoke.py](../scripts/artifacts_smoke.py)
+
+Real Chromium downloads and revision diff against a disposable owner API.
 
 - `main`
 
@@ -1107,6 +1143,12 @@ Fictional adult presentation/workforce/social tests; no external services or bus
 Regression checks for planning.
 
 - `PlanningTests`
+
+## [tests/test_practice_artifacts.py](../tests/test_practice_artifacts.py)
+
+Disposable artifact confinement, recovery, expiry and owner API checks.
+
+- `ArtifactTests`
 
 ## [tests/test_quality_benchmark.py](../tests/test_quality_benchmark.py)
 
@@ -1505,6 +1547,9 @@ Routes still require the application's authentication dependencies; this list gr
 | GET | `/organization/office-roster` | [api/people.py](../api/people.py) · `read_office_roster` |
 | GET | `/plans` | [foundation_api.py](../foundation_api.py) · `plans` |
 | GET | `/plans/{plan_id}` | [foundation_api.py](../foundation_api.py) · `plan_get` |
+| GET | `/practice-artifacts` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_list` |
+| GET | `/practice-artifacts/compare` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_compare` |
+| GET | `/practice-artifacts/{ident}/download` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_download` |
 | GET | `/resources/history` | [main.py](../main.py) · `read_resource_request_history` |
 | GET | `/resources/pending` | [main.py](../main.py) · `read_pending_resource_requests` |
 | GET | `/screenshots/{filename}` | [main.py](../main.py) · `get_screenshot` |
@@ -1573,6 +1618,7 @@ Routes still require the application's authentication dependencies; this list gr
 | POST | `/plans` | [foundation_api.py](../foundation_api.py) · `plan_create` |
 | POST | `/plans/generate` | [foundation_api.py](../foundation_api.py) · `plan_generate` |
 | POST | `/plans/{plan_id}/review` | [foundation_api.py](../foundation_api.py) · `plan_review` |
+| POST | `/practice-artifacts` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_export` |
 | POST | `/resources/{request_id}/approve` | [main.py](../main.py) · `approve_resource_request` |
 | POST | `/resources/{request_id}/fulfill` | [main.py](../main.py) · `fulfill_resource_request` |
 | POST | `/resources/{request_id}/reject` | [main.py](../main.py) · `reject_resource_request` |

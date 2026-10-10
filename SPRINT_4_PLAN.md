@@ -95,6 +95,6 @@ The matching planning cards are stored in [docs/planning/sprint-4-cards.json](do
 
 ## Implementation progress — 10 October 2026
 
-BE-31 contracts and BE-24 benchmark tooling are in Review, pending owner acceptance. See [contracts](docs/SPRINT_4_CONTRACTS.md) and [quality measurements](docs/BE24_QUALITY_BENCHMARKS.md). BE-25 is also implemented for review; BE-26–30/32–33 remain unimplemented. The first measured JSON-mode run passes 24/30 narrow checks; unresolved measurements remain visible.
+BE-31 contracts and BE-24 benchmark tooling are in Review, pending owner acceptance. See [contracts](docs/SPRINT_4_CONTRACTS.md) and [quality measurements](docs/BE24_QUALITY_BENCHMARKS.md). BE-25 is also implemented for review; BE-27–30/32–33 remain unimplemented. The first measured JSON-mode run passes 24/30 narrow checks; unresolved measurements remain visible.
 
-BE-25 is implemented for review on `codex/sprint-4-skills`; see [review instructions and limitations](docs/BE25_EXECUTIVE_SKILLS.md). BE-26 is next. Owner acceptance and merge remain pending.
+BE-25 is implemented for review on `codex/sprint-4-skills`; see [review instructions and limitations](docs/BE25_EXECUTIVE_SKILLS.md). BE-26 is implemented for review on `codex/sprint-4-artifacts`; see [private files](docs/BE26_PRIVATE_ARTIFACTS.md). BE-27 is next. Owner acceptance and merge remain pending.
