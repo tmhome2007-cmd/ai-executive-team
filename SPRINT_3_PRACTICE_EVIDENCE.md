@@ -1,6 +1,6 @@
 # BE-20–22: private work, evidence and feedback
 
-Status: implemented for owner review; not Done until the owner accepts the visible results. Sprint 3 keeps a €0 spending/loss limit and the existing separate action, resource and launch approvals.
+Status: owner reviewed and accepted BE-20–22; merged via PR #36 on 10 October 2026. Sprint 3 keeps a €0 spending/loss limit and the existing separate action, resource and launch approvals.
 
 ## BE-20: approved work specification
 

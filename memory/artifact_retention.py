@@ -66,7 +66,10 @@ def prune_generated_artifacts(*, now: float | None = None) -> dict:
         _init_registry(conn)
         names = {row[0] for row in conn.execute(
             'SELECT filename FROM generated_sync_exports WHERE generated_at < ?', (cutoff,))}
+    from workflows.conversation_audio import prune_audio
+    audio_deleted = prune_audio(now=current)
     return {
+        'conversation_audio': audio_deleted,
         'logs': _prune_directory(os.getenv('LOG_DIR', 'logs'), lambda name: re.fullmatch(r'app\.log\.[1-9][0-9]*', name) is not None, cutoff),
         'screenshots': _prune_directory(os.path.join(config.WORKSPACE_ROOT, 'screenshots'),
                                       lambda name: re.fullmatch(r'action_[A-Za-z0-9_-]+\.png', name) is not None, cutoff),

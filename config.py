@@ -42,6 +42,10 @@ class Config:
         default_factory=lambda: os.getenv("DATABASE_PATH", "./memory/executive_team.db").strip()
     )
 
+    CONVERSATION_AUDIO_RETENTION_DAYS: int = field(
+        default_factory=lambda: int(os.getenv("CONVERSATION_AUDIO_RETENTION_DAYS", "30"))
+    )
+
     ARTIFACT_RETENTION_DAYS: int = field(
         default_factory=lambda: int(os.getenv("ARTIFACT_RETENTION_DAYS", "30"))
     )
@@ -217,6 +221,8 @@ def validate_config() -> list[str]:
     """
     errors = []
     warnings = []
+    if config.CONVERSATION_AUDIO_RETENTION_DAYS not in {0, 7, 30}:
+        errors.append("CONVERSATION_AUDIO_RETENTION_DAYS must be 0 (disabled), 7 or 30")
     if not 1 <= config.ARTIFACT_RETENTION_DAYS <= 3650:
         errors.append("ARTIFACT_RETENTION_DAYS must be 1–3650")
 

@@ -24,3 +24,6 @@ audit-results/
 .crewai/
 .env.*
 !.env.example
+
+# Owner-only generated conversation media
+**/conversation-audio/
