@@ -60,3 +60,7 @@ A revised guide corrected the task-list error but its model-generated change lis
 
 The support sample added “of purchase” to a supplied 14-day return window whose starting event was unspecified. Reply validation now rejects common unsupported purchase/delivery/receipt/order anchors, and generation guidance preserves the supplied policy wording. This is a bounded regression check, not a universal policy verifier. Existing approved facts and history remain unchanged. The 36 business/practice tests pass, including unsupported anchors and an explicitly supplied purchase anchor.
 A disposable local Ollama support-draft run (`audit-results/sprint3-examples-20261010-181315`) preserved “within 14 days” without adding a start event and passed structural checks; no owner assessment or customer contact was recorded.
+
+## Final review audit
+
+See [SPRINT_3_FINAL_AUDIT.md](SPRINT_3_FINAL_AUDIT.md): the complete disposable audit `20261010-185731` passes all project checks on `b33dde5`, including 180 backend tests, real Docker, 150 foundation checks and eight browser flows. Known Chroma advisories remain separately visible. Owner-supplied outputs cover the three fixtures and observed corrections; final live assessment saves and merge approval are not asserted.
