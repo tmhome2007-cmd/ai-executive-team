@@ -798,6 +798,9 @@ def init_db() -> None:
     from memory.business_discovery import init_business_discovery
 
     init_business_discovery(cursor)
+    from memory.executive_skills import init_skills
+
+    init_skills(cursor)
     from memory.experiments import init_experiments
 
     init_experiments(cursor)

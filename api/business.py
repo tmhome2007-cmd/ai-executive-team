@@ -30,6 +30,9 @@ class BusinessVersion(StrictRequest):
 
 
 class BusinessPractice(BusinessVersion):
+    skill_version_id: (
+        Annotated[int, Field(strict=True, ge=1, le=9223372036854775807)] | None
+    ) = None
     service_key: Literal["documentation", "editing", "support_drafts", "legacy"] = (
         "legacy"
     )

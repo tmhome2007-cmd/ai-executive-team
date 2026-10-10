@@ -69,6 +69,8 @@ def init_business_discovery(cursor):
 
 
 def get_brief(ident, include_history=True):
+    from memory.executive_skills import skill_context
+
     with get_connection() as conn:
         conn.execute("BEGIN")
         row = conn.execute(
@@ -80,9 +82,11 @@ def get_brief(ident, include_history=True):
             research_context(conn.cursor(), ident) if include_history else []
         )
         feedback = feedback_summary(conn.cursor(), ident) if include_history else None
+        saved_skill = skill_context(conn.cursor(), ident, require_usable=False)
     if not row:
         raise LookupError("Research brief not found")
     result = dict(row)
+    result["skill_version"] = saved_skill
     result["attempts"] = attempts
     result["practice_specification"] = spec
     result["research_sources"] = frozen_sources
@@ -176,6 +180,7 @@ def select_practice(
     audience="",
     supplied_facts="",
     deliverable_kind="",
+    skill_version_id=None,
 ):
     if type(expected_version) is not int or expected_version < 1:
         raise ValueError("Invalid version")
@@ -224,6 +229,12 @@ def select_practice(
             exercise=exercise,
             checks=checks,
         )
+        if skill_version_id is not None:
+            if type(skill_version_id) is not int or skill_version_id < 1:
+                raise ValueError("Invalid skill version")
+            from memory.executive_skills import bind_skill
+
+            bind_skill(conn.cursor(), ident, skill_version_id)
         conn.commit()
     return get_brief(ident)
 
@@ -255,6 +266,9 @@ def claim_stage(ident, expected_version, stage):
             freeze_context(conn.cursor(), ident, json.loads(row[0]))
         else:
             assert_specification(conn.cursor(), ident)
+            from memory.executive_skills import skill_context
+
+            skill_context(conn.cursor(), ident)
         conn.commit()
     return get_brief(ident)
 
@@ -278,6 +292,10 @@ def finish_stage(ident, stage, output=None, claimed_version=None):
     )
     with get_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        if stage == "practice" and output:
+            from memory.executive_skills import skill_context
+
+            skill_context(conn.cursor(), ident)
         parameters = (
             (output, state, ident)
             if stage == "research"
@@ -406,6 +424,9 @@ def claim_revision(ident, expected_version):
                 "Revision requires a reviewed sample and current version; refresh"
             )
         assert_specification(conn.cursor(), ident)
+        from memory.executive_skills import skill_context
+
+        skill_context(conn.cursor(), ident)
         count = conn.execute(
             "SELECT COUNT(*) FROM business_practice_samples WHERE brief_id=?", (ident,)
         ).fetchone()[0]
@@ -424,6 +445,10 @@ def finish_revision(ident, output, claimed_version=None):
         output = _text(output, "revision output", 30000)
     with get_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        if output:
+            from memory.executive_skills import skill_context
+
+            skill_context(conn.cursor(), ident)
         row = conn.execute(
             "SELECT * FROM business_discovery WHERE id=? AND state='revision_running'",
             (ident,),

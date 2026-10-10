@@ -102,6 +102,20 @@ Character presentation, workforce and fictional simulation API routes.
 - `write_personal_event`
 - `read_office_roster`
 
+## [api/skills.py](../api/skills.py)
+
+Owner-only skill proposals and decisions; no business execution authority.
+
+- `SkillProposal`
+- `SkillDraft`
+- `SkillDecision`
+- `skill_evidence`
+- `skills_list`
+- `skill_propose`
+- `skill_draft`
+- `skill_get`
+- `skill_decide`
+
 ## [config.py](../config.py)
 
 Environment configuration and startup validation; never log credential values.
@@ -136,6 +150,10 @@ Dashboard source; component/library responsibility follows its filename.
 Dashboard source; component/library responsibility follows its filename.
 
 ## [executive-dashboard/app/components/conversation-voice.tsx](../executive-dashboard/app/components/conversation-voice.tsx)
+
+Dashboard source; component/library responsibility follows its filename.
+
+## [executive-dashboard/app/components/executive-skills.tsx](../executive-dashboard/app/components/executive-skills.tsx)
 
 Dashboard source; component/library responsibility follows its filename.
 
@@ -591,6 +609,22 @@ Dated source provenance. Registration or owner confirmation is not independent v
 - `entity_evidence`
 - `source_context`
 
+## [memory/executive_skills.py](../memory/executive_skills.py)
+
+Versioned private text procedures grounded in owner reviews, never tool authority.
+
+- `init_skills`: Add immutable definitions/bindings and append-only owner state decisions.
+- `_review`: Require the latest assessment bound to this exact structured sample.
+- `_evidence`
+- `create_skill`: Propose a new immutable version; no automatic acceptance.
+- `_get`
+- `get_skill`
+- `list_skills`
+- `decide_skill`: Record owner acceptance or irreversible revocation with stale-update checks.
+- `bind_skill`: Freeze a compatible accepted procedure into a third, distinct exercise.
+- `skill_context`: Recheck revocation/corrected evidence at claims and publication boundaries.
+- `eligible_reviews`: List recent passing bound evidence; raw samples stay in existing history.
+
 ## [memory/experiments.py](../memory/experiments.py)
 
 Owner-defined experiments and source-backed observations; no autonomous spending.
@@ -846,6 +880,12 @@ Short-report browser review on disposable records. No live model/company mutatio
 
 - `main`
 
+## [scripts/skills_smoke.py](../scripts/skills_smoke.py)
+
+Disposable SQLite/FastAPI/Chromium skill review and reuse; no live company API.
+
+- `main`
+
 ## [scripts/sprint3_practice_smoke.py](../scripts/sprint3_practice_smoke.py)
 
 Optional real local-model examples on disposable data; never owner acceptance.
@@ -1006,6 +1046,12 @@ Regression checks for encrypted backup.
 Regression checks for evidence.
 
 - `EvidenceTests`
+
+## [tests/test_executive_skills.py](../tests/test_executive_skills.py)
+
+Real SQLite proof of review-bound skill reuse and revocation boundaries.
+
+- `ExecutiveSkillsTests`
 
 ## [tests/test_experiments.py](../tests/test_experiments.py)
 
@@ -1313,6 +1359,12 @@ Tool-free planning and durable, dependency-aware recommendation dispatch.
 - `generate_plan`
 - `dispatch_planned_work`
 
+## [workflows/executive_skills.py](../workflows/executive_skills.py)
+
+Local CSO drafting of proposed procedures from exact reviewed examples.
+
+- `draft_skill`: Generate only a proposal; revalidate evidence after model completion.
+
 ## [workflows/instance_lock.py](../workflows/instance_lock.py)
 
 Keep startup reconciliation from changing another live server's claims.
@@ -1459,6 +1511,9 @@ Routes still require the application's authentication dependencies; this list gr
 | GET | `/simulation/events` | [api/people.py](../api/people.py) · `read_personal_events` |
 | GET | `/simulation/relationship` | [api/people.py](../api/people.py) · `read_relationship` |
 | GET | `/simulation/settings` | [api/people.py](../api/people.py) · `read_simulation_settings` |
+| GET | `/skills` | [api/skills.py](../api/skills.py) · `skills_list` |
+| GET | `/skills/evidence` | [api/skills.py](../api/skills.py) · `skill_evidence` |
+| GET | `/skills/{ident}` | [api/skills.py](../api/skills.py) · `skill_get` |
 | GET | `/system/health` | [main.py](../main.py) · `get_system_health` |
 | GET | `/system/sandbox-status` | [main.py](../main.py) · `get_sandbox_status` |
 | GET | `/system/stats` | [main.py](../main.py) · `get_stats` |
@@ -1522,6 +1577,9 @@ Routes still require the application's authentication dependencies; this list gr
 | POST | `/resources/{request_id}/fulfill` | [main.py](../main.py) · `fulfill_resource_request` |
 | POST | `/resources/{request_id}/reject` | [main.py](../main.py) · `reject_resource_request` |
 | POST | `/simulation/events` | [api/people.py](../api/people.py) · `write_personal_event` |
+| POST | `/skills` | [api/skills.py](../api/skills.py) · `skill_propose` |
+| POST | `/skills/draft` | [api/skills.py](../api/skills.py) · `skill_draft` |
+| POST | `/skills/{ident}/decision` | [api/skills.py](../api/skills.py) · `skill_decide` |
 | POST | `/system/sandbox-mode` | [main.py](../main.py) · `toggle_sandbox_mode` |
 | POST | `/treasury/fund` | [main.py](../main.py) · `fund_treasury` |
 | POST | `/workflows/autonomous-followup/trigger` | [main.py](../main.py) · `trigger_autonomous_followup` |
