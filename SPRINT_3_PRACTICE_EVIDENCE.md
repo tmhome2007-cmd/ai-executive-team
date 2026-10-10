@@ -43,3 +43,7 @@ The final disposable audit at `audit-results/20261010-161459` passed all project
 The optional real-model run at `audit-results/sprint3-examples-20261010-161501` passed the structured/source comparison contract and all three representative practice contracts. These are fictional examples without owner acceptance; no action or treasury entry was created. Run `.venv/bin/python scripts/sprint3_practice_smoke.py` to repeat this additional local-model check. Its raw/withheld diagnostic drafts, if any, stay outside Git.
 
 Python dependency scanning still reports the same four known Chroma advisories. They remain visible separately from project check failures; no advisory was ignored or cleared. This implementation and its passing checks do not record launch permission, verified competence or a production release decision.
+
+### Research-card review correction
+
+The prompt no longer supplies an example source URL that the model can copy. Reserved example/test domains are withheld from generated recommendations, and existing reports retain their text while the dashboard removes those source-read controls. The short review now recognizes the legacy “Practice candidate only:” field and the next research step. New reports give explicit prepared-exercise instructions. Verified with 34 business/practice tests, summary and proposal-control tests, frontend lint (one existing image warning), and a production build.

@@ -151,8 +151,12 @@ class SprintThreeTests(unittest.TestCase):
     def test_proposals_are_bounded_and_sensitive_urls_rejected(self):
         for url in ('http://127.0.0.1/private','http://localhost/x','https://site.example/x?token=abc','https://user:password@site.example/x','http://[::1]/x'):
             with self.assertRaises(ValueError): render_research(self.payload(next_sources=[dict(url=url,purpose='Buyer evidence')]),[get_source(i) for i in self.ids])
-        report=render_research(self.payload(next_sources=[dict(url='https://public.example/buyer-requests',purpose='Investigate missing demand evidence')]),[get_source(i) for i in self.ids])
+        report=render_research(self.payload(next_sources=[dict(url='https://github.com/orgs/community/discussions',purpose='Investigate missing demand evidence')]),[get_source(i) for i in self.ids])
         self.assertIn('Proposed public source (not read)',report)
+        for url in ('https://example.org/public-page','https://docs.example.com/x','https://public.example/x'):
+            report=render_research(self.payload(next_sources=[dict(url=url,purpose='Unknown contents')]),[get_source(i) for i in self.ids])
+            self.assertIn('Withheld placeholder source URL',report)
+            self.assertNotIn('Proposed public source (not read)',report)
 
     def test_local_guide_adapter_accepts_native_structured_model_result(self):
         from types import SimpleNamespace

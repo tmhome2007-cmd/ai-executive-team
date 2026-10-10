@@ -3,7 +3,7 @@ type Bucket = "findings" | "unknowns" | "next";
 const groups: Record<string, Bucket> = {
   "findings": "findings", "supported findings": "findings", "known facts": "findings", "evidence and gaps": "findings", "expected vs actual": "findings", "what worked": "findings", "observations": "findings",
   "unknowns": "unknowns", "unresolved questions": "unknowns", "what remains unknown": "unknowns", "remaining unknowns": "unknowns", "what failed / unknown": "unknowns", "evidence still required": "unknowns", "missing prerequisites": "unknowns", "prerequisites": "unknowns",
-  "next action": "next", "next step": "next", "proposed next test": "next", "revised next test": "next", "recommended next test and observable result": "next", "recommendation": "next", "recommended next steps": "next", "what to repeat / stop / change": "next", "steps": "next",
+  "practice candidate only": "next", "next research step": "next", "next action": "next", "next step": "next", "proposed next test": "next", "revised next test": "next", "recommended next test and observable result": "next", "recommendation": "next", "recommended next steps": "next", "what to repeat / stop / change": "next", "steps": "next",
 };
 export function reviewSummary(text: string): ReviewSummary {
   const result: ReviewSummary = { findings: [], unknowns: [], next: [], warnings: [] };

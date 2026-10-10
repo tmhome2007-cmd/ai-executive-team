@@ -15,9 +15,9 @@ def research_instruction():
     return ('Compare these service hypotheses only: ' + json.dumps(SERVICES) + '. They are candidate deliverables, not verified opportunities. '
         'Cloudflare and GitHub are hosting/tools; Fiverr is a marketplace, never a deliverable. Do not infer a restriction on one platform applies to others. '
         'Return JSON only: {"options":[{"key":"documentation","skills":["..."],"exercise":"...","checks":["...","..."]}, ...],'
-        '"practice_choice":"documentation", "claims":[{"source_id":1,"service":"documentation","quote":"exact supplied text","relation":"supports"}], "next_sources":[{"url":"https://example.org/public-page","purpose":"buyer evidence to investigate"}]}. '
+        '"practice_choice":"documentation", "claims":[{"source_id":1,"service":"documentation","quote":"exact supplied text","relation":"supports"}], "next_sources":[]}. '
         'Include exactly all three keys. Use 2–5 observable checks per option. Exercises must produce private text samples without new access or spending. '
-        'practice_choice selects a useful learning exercise only, never the best business or a demand finding. Claims must quote an exact substring from a supplied source and identify its source ID. A quote proves attribution only, not truth or demand. Omit unsupported claims. Propose at most five plain public HTTP(S) URLs for missing buyer evidence; never read them or claim their contents are known. The server attaches registered source excerpts separately. '
+        'practice_choice selects a useful learning exercise only, never the best business or a demand finding. Claims must quote an exact substring from a supplied source and identify its source ID. A quote proves attribution only, not truth or demand. Omit unsupported claims. Leave next_sources empty unless you know a specific relevant public URL; never invent URLs or use example domains. Propose at most five plain public HTTP(S) URLs for missing buyer evidence; never read them or claim their contents are known. The server attaches registered source excerpts separately. '
         'No claims about commercial permission, demand, prices, earnings, existing skills or achievements. Missing evidence stays unknown; no prose outside JSON.\n')
 
 
@@ -52,7 +52,7 @@ def render_research(raw, sources):
     lines = ['**Findings**', 'Three proposed services were compared as learning hypotheses. None is a verified business opportunity.',
              '**Unknowns**', 'Customer demand, market size, pricing, contingent fees, commercial eligibility and agent competence remain unknown.',
              'The supplied platform/hosting records alone do not establish buyer demand. No best business can be selected from these records alone.',
-             '**Next action**', 'Practice candidate only: ' + SERVICES[payload['practice_choice']] + '. Owner selection and sample review are still required.',
+             '**Next action**', 'Choose a prepared private exercise below, review its supplied facts and checks, set a future review date, then approve the practice plan. Suggested service: ' + SERVICES[payload['practice_choice']] + '. This does not approve a business launch.',
              '**Service comparisons — proposed practice, not demonstrated skills**']
     for option in options:
         lines.extend(['\n' + SERVICES[option['key']], 'Required skills — unproven: ' + '; '.join(option['skills']),
@@ -146,6 +146,9 @@ def evidence_comparison(claims, proposals, sources):
             address=ip_address(hostname)
         except ValueError: address=None
         if address is not None and not address.is_global: raise ValueError('Proposed source must be public')
+        if hostname.rstrip('.') in {'example.org','example.com','example.net'} or any(hostname.rstrip('.').endswith('.'+domain) for domain in ('example.org','example.com','example.net','example','invalid','test')):
+            lines.append('Withheld placeholder source URL; no real buyer source was identified. Use the next research step above; this suggestion adds no evidence.')
+            continue
         lines.append('Proposed public source (not read): '+url+' — '+_text(proposal.purpose,'research purpose',500))
     return lines
 

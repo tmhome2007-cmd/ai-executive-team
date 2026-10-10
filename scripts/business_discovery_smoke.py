@@ -24,7 +24,7 @@ def main():
         client = TestClient(app)
         assert client.get('/business-discovery').status_code == 401
         from workflows.business_research_contract import SERVICES
-        research = json.dumps({'options': [{'key': key, 'skills': ['Clear writing'], 'exercise': 'Private sample <script>alert(1)</script>', 'checks': ['Clearly labels unknown demand', 'Does not claim launch approval']} for key in SERVICES], 'practice_choice': 'documentation', 'next_sources': [{'url': 'https://public.example/buyer-evidence', 'purpose': 'Investigate missing buyer evidence; page has not been read'}]})
+        research = json.dumps({'options': [{'key': key, 'skills': ['Clear writing'], 'exercise': 'Private sample <script>alert(1)</script>', 'checks': ['Clearly labels unknown demand', 'Does not claim launch approval']} for key in SERVICES], 'practice_choice': 'documentation', 'next_sources': [{'url': 'https://github.com/orgs/community/discussions', 'purpose': 'Investigate missing buyer evidence; page has not been read'}]})
         with patch('workflows.business_discovery._reason', return_value=research) as reason, patch('tools.research_tool.PageReaderTool._run', return_value='Synthetic public source fixture. Buyer demand remains unverified.') as reader, sync_playwright() as runtime:
             browser = runtime.chromium.launch()
             page = browser.new_page(viewport={'width': 1440, 'height': 1000})
@@ -63,7 +63,7 @@ def main():
             reader.assert_not_called()
             page.get_by_role('button', name='Read proposed source 1', exact=True).click()
             page.get_by_text('4 sources selected — ready. Next: Save research brief below.', exact=True).wait_for()
-            reader.assert_called_once_with('https://public.example/buyer-evidence')
+            reader.assert_called_once_with('https://github.com/orgs/community/discussions')
             from memory.business_discovery import get_brief
             assert len(get_brief(list_briefs()[0]['id'])['source_ids']) == 3
             assert 'Selection blocked' in get_brief(list_briefs()[0]['id'])['research']
