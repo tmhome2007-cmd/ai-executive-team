@@ -445,6 +445,10 @@ async def log_requests(request: Request, call_next):
         source = "http"
     with activity_origin(actor, source):
         response = await call_next(request)
+    # Errors bypass dependency-injected Response headers; protect every API response,
+    # including authentication, validation and conflict details, from shared caches.
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
     duration_ms = round((time.time() - start_time) * 1000, 1)
     logger.info(
         f"{request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)"

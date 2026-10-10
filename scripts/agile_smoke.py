@@ -191,6 +191,9 @@ def main():
                     ).fetchone()[0]
                     == "pending"
                 )
+            page.get_by_role(
+                "button", name="Toggle company navigation", exact=True
+            ).click()
             page.get_by_role("navigation", name="Company views").get_by_role(
                 "button", name="Conversations & activity", exact=True
             ).click()

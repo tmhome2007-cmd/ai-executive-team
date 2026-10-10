@@ -27,7 +27,7 @@ def main():
     branch = subprocess.check_output(
         ["git", "branch", "--show-current"], cwd=ROOT, text=True
     ).strip()
-    if branch not in {
+    if not branch.startswith("codex/sprint-4-") and branch not in {
         "chatgpt/foundation-hardening",
         "main",
         "codex/operating-foundation-sprint",
@@ -38,6 +38,7 @@ def main():
         "codex/sprint-3-practice-evidence",
         "codex/local-executive-conversations",
         "codex/code-maintainability",
+        "codex/dashboard-redesign",
     }:
         raise SystemExit(
             "Stop: use the foundation-hardening or main development baseline for this disposable audit."
@@ -51,6 +52,8 @@ def main():
         env = dict(os.environ)
         env.update(
             {
+                "PIPAPI_PYTHON_LOCATION": sys.executable,
+                "VIRTUAL_ENV": sys.prefix,
                 "LOG_DIR": str(temp / "logs"),
                 "DATABASE_PATH": str(temp / "history.db"),
                 "WORKSPACE_ROOT": str(temp / "workspace"),
@@ -76,6 +79,7 @@ def main():
                 "ALLOW_INSECURE_REMOTE_HTTP": "false",
                 "ARTIFACT_RETENTION_DAYS": "30",
                 "RUN_DOCKER_INTEGRATION": "1",
+                "NEXT_TELEMETRY_DISABLED": "1",
                 "NEXT_PUBLIC_API_BASE": "http://127.0.0.1:8001",
             }
         )
@@ -292,6 +296,12 @@ def main():
                                 "business_discovery",
                                 "people",
                                 "conversation_audio",
+                                "skills",
+                                "artifacts",
+                                "runs",
+                                "workflow_queue",
+                                "knowledge",
+                                "dashboard_design",
                             ):
                                 run(
                                     "browser-" + feature,

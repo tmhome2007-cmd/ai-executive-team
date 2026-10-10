@@ -5,7 +5,7 @@
     "acceptance_criteria": "Version prompts, model/configuration and rubric. Run ten fixed fictional fixtures three times each locally; show failures and denominators, preserve reports, distinguish deterministic checks from unverified model judgements. Compare only matching rubrics; allow prompt rollback.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-25 · Versioned reusable executive skills",
@@ -13,7 +13,7 @@
     "acceptance_criteria": "Record procedure versions, prerequisites, permitted task types, limitations and source sample/review IDs. Owner accepts a version after two reviewed examples; test reuse on a third unfamiliar fictional example. Revocation prevents future selection. A skill never grants tools, spending or launch authority.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-26 · Private deliverable workspaces",
@@ -69,7 +69,7 @@
     "acceptance_criteria": "Audit fixable conceptual, security, privacy and bug issues across the final changes using disposable data. Test authentication, artifact boundaries, recovery, repeated generation and revoked skills; show actual output examples. Provide short ./company instructions. Fix project findings; list upstream limitations separately. Owner review precedes merge.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-33 · Sprint 4 retrospective and next-sprint planning",

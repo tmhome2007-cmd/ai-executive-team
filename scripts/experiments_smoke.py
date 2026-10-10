@@ -129,10 +129,15 @@ def main():
             page.get_by_label("Observation evidence", exact=True).fill(
                 "Synthetic counter result <script>alert(1)</script>"
             )
-            # Use a precise ISO time via the input's supported seconds precision.
+            # Preserve sub-second order after execution; HTML inputs canonicalize trailing zeros.
             import datetime
 
-            precise = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+            precise = (
+                datetime.datetime.now()
+                .isoformat(timespec="milliseconds")
+                .rstrip("0")
+                .rstrip(".")
+            )
             page.get_by_label("Observation observed_at", exact=True).fill(precise)
             page.get_by_role("button", name="Save observation", exact=True).click()
             page.get_by_text(
