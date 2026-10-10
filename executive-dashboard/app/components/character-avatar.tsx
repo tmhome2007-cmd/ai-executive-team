@@ -12,6 +12,35 @@ export default function CharacterAvatar({ presentation, name, compact = false }:
   const feminine = a.portrait_style === "feminine";
   const shoulder = b.build === "well_built" ? 65 : b.build === "athletic" ? 56 : b.build === "slender" ? 44 : 50;
   const legs = 90 + (b.height_cm - 140) * .35;
+  if (feminine) return <svg className={compact ? "office-avatar" : "w-44 h-64 mx-auto"} viewBox={compact ? "58 0 124 116" : "0 0 240 340"} role="img" aria-label={`${name} character: ${a.description}`}>
+    {!compact && <>
+      <ellipse cx="120" cy="325" rx="52" ry="7" fill="#0f172a" />
+      <path d={`M93 203L96 ${214 + legs}H114L120 222L127 ${214 + legs}H145L147 203Z`} fill="#1b2534" />
+      <path d={`M95 ${214 + legs}H114v8H88Q87 ${214 + legs} 95 ${214 + legs}M127 ${214 + legs}H145L152 ${222 + legs}H127Z`} fill="#0b101b" />
+      <g transform={`translate(120 0) scale(${shoulder / 50} 1) translate(-120 0)`}><path d="M87 119Q73 124 65 149L59 210Q62 220 72 216L85 161L91 187Q83 208 83 225Q120 235 157 225Q157 208 149 187L155 161L168 216Q178 220 181 210L175 149Q167 124 153 119Z" fill={b.outfit_color} />
+      <path d="M99 122L120 166L141 122L133 198H107Z" fill="#f0e9e2" />
+      <path d="M92 121L99 168L113 178L94 200M148 121L141 168L127 178L146 200" fill="none" stroke="#ffffff" strokeOpacity=".23" strokeWidth="2" />
+      <circle cx="120" cy="202" r="2.5" fill="#cfb689" />
+      <path d="M59 209Q57 227 65 229Q74 227 72 216M168 216Q166 227 175 229Q183 227 181 209" fill={a.skin_tone} /></g>
+    </>}
+    <path d="M107 95V125Q120 148 133 125V95" fill={a.skin_tone} />
+    <path d={(a.hair_style === "short" || a.hair_style === "bun") ? "M77 66Q71 15 120 8Q167 12 163 68L151 89H88Z" : a.hair_style === "bob" ? "M72 50Q72 5 120 6Q168 5 168 50L174 116Q151 128 143 108H97Q89 128 66 116Z" : "M71 50Q70 7 120 6Q170 8 170 50L176 155Q153 172 137 143H103Q86 172 64 155Z"} fill={a.hair_color} />
+    {a.hair_style === "bun" && <ellipse cx="142" cy="14" rx="21" ry="17" fill={a.hair_color} />}
+    <ellipse cx="84" cy="69" rx="5" ry="10" fill={a.skin_tone} /><ellipse cx="156" cy="69" rx="5" ry="10" fill={a.skin_tone} />
+    <path d="M85 45Q88 22 120 22Q152 22 155 45L152 78Q147 96 120 109Q93 96 88 78Z" fill={a.skin_tone} />
+    <path d="M78 49Q72 6 120 8Q166 6 163 52L150 35Q119 38 105 26Q97 46 78 57Z" fill={a.hair_color} />
+    {a.hair_style === "curly" && <g fill={a.hair_color}>{[0,1,2,3,4,5].map(i => <circle key={i} cx={78+i*16} cy={23+(i%2)*6} r="12" />)}</g>}
+    <path d="M95 57Q104 51 113 55M127 55Q136 51 145 57" fill="none" stroke={a.hair_color} strokeWidth="2.2" strokeLinecap="round" />
+    {[104,136].map(x => <g key={x}>
+      <path d={`M${x-10} 67Q${x} 57 ${x+10} 67Q${x} 74 ${x-10} 67`} fill="#f5f0ea" />
+      <circle cx={x} cy="65" r="4.5" fill={a.eye_tint} /><circle cx={x} cy="65" r="3" fill={a.eye_color} /><circle cx={x+1} cy="64" r="1" fill="#fff" />
+      <path d={`M${x-10} 66Q${x} 57 ${x+10} 66M${x-9} 64l-3-3M${x+9} 64l3-3`} fill="none" stroke={a.hair_color} strokeWidth="1.7" strokeLinecap="round" />
+    </g>)}
+    <path d="M120 68L117 80Q120 83 124 80" fill="none" stroke="#000" strokeOpacity=".18" strokeWidth="1.6" />
+    <path d="M107 92Q113 87 120 90Q127 87 133 92Q120 104 107 92" fill="#a95155" /><path d="M109 93Q120 95 131 93" fill="none" stroke="#67272e" strokeWidth="1" />
+    <g fill="#d4b47b"><ellipse cx="82" cy="85" rx="3" ry="5" /><ellipse cx="158" cy="85" rx="3" ry="5" /></g>
+    {a.beard && <path d="M93 85Q99 106 120 109Q141 106 147 85L136 94L120 99L104 94Z" fill={a.hair_color} />}
+  </svg>;
   return <svg className={compact ? "office-avatar" : "w-44 h-64 mx-auto"} viewBox={compact ? "60 0 120 115" : "0 0 240 340"} role="img" aria-label={`${name} character: ${a.description}`}>
     {!compact && <><ellipse cx="120" cy="323" rx="60" ry="9" fill="#0f172a" /><path d={`M92 211L92 ${215 + legs}L113 ${215 + legs}L122 220L133 ${215 + legs}L154 ${215 + legs}L150 211Z`} fill="#182432" /><path d={`M90 ${215 + legs}h25v9H83Z M133 ${215 + legs}h26v9h-26Z`} fill="#090e14" /></>}
     <path d={`M${120 - shoulder} 201Q${120 - shoulder - 12} 139 92 116L148 116Q${120 + shoulder + 12} 139 ${120 + shoulder} 201L154 222H86Z`} fill={b.outfit_color} />

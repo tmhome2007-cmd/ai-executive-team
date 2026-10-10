@@ -17,3 +17,5 @@ sync/*.jsonl
 *.server.lock
 
 audit-results/
+.voice-venv/
+.voice-assets/

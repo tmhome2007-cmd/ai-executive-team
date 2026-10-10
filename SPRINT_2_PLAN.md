@@ -29,3 +29,5 @@ See [CONCEPTUAL_SYSTEM_AUDIT.md](CONCEPTUAL_SYSTEM_AUDIT.md) for the implemented
 Owner requested completion of Sprint 2, approved the explicit character identities, and requested both local voice improvements and other-provider comparison. BE-18/19 are now in Review. See [SPRINT_2_CHARACTER_VOICE_REVIEW.md](SPRINT_2_CHARACTER_VOICE_REVIEW.md) for implementation, candidate research and owner review. Neither subjective audio/visual acceptance nor a new provider choice is recorded yet. Earlier Backlog entries are historical.
 
 Draft retrospective: [SPRINT_2_RETROSPECTIVE.md](SPRINT_2_RETROSPECTIVE.md). Final closure follows owner visual/audio acceptance; no Done checkbox is recorded for an unreviewed voice.
+
+Second review: the owner rejected initial character/voice quality. A further portrait redesign and optional local Kokoro audition pack are implemented for another review; no final appearance/audio acceptance or sprint closure is recorded. See the latest section of the character/voice review guide.

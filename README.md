@@ -296,3 +296,7 @@ stability and tool behavior must be revalidated manually.
 ## Foundation audit
 
 See [FOUNDATION_AUDIT.md](FOUNDATION_AUDIT.md) for the pre-frontend security/privacy audit, residual risks, and architecture lessons from comparable agent systems.
+
+## Character and voice review
+
+BE-18/19 remain in owner review. Feminine portraits now have a distinct illustrated face and professional silhouette; Kai’s specified appearance is retained. Local system voices can be compared, and optional Kokoro neural auditions can be prepared with `./company voices`. This creates a separate pinned `.voice-venv`, downloads digest-verified models, and generates fixed public comparison samples locally. No cloud speech text or paid provider is used. Audition/preferences do not yet voice generated conversations. See [SPRINT_2_CHARACTER_VOICE_REVIEW.md](SPRINT_2_CHARACTER_VOICE_REVIEW.md) for listening instructions, installation limits and test evidence.

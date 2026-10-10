@@ -69,3 +69,25 @@ For regression checks use `./company audit`. This does not reset the live databa
 ## Technical verification
 
 Backend suite: 157 tests passed with the real-Docker test skipped in that run; the real-Docker isolation test passed separately. Foundation regression: 150/150 passed. Character/profile tests: 16 passed, including legacy upgrade, owner-edit preservation and portrait validation. Frontend lint passed with the existing image-optimization warning; webpack production build passed. Changed backend files passed Bandit. Disposable Chromium checks passed for local voice comparison/persistence, remote exclusion, profile history, workforce, fictional-event isolation, mobile layout and API-key storage privacy. Speech in the automated browser test is synthetic/stubbed: it verifies selection, settings, persistence and remote exclusion, not subjective sound quality.
+
+## Owner rejection and second revision — 10 October 2026
+
+Owner reported that only one Kai system voice was listenable and still poor, and the women remained difficult to distinguish. BE-18/19 therefore remain open in Review; the earlier implementation was not accepted.
+
+The second revision gives feminine portraits a distinct illustrated face, eyes/lashes, lips, hairstyle framing and tailored professional silhouette. Existing colors, height/build and hair settings remain configurable; Kai's renderer and specified appearance are preserved. Legacy customized profiles missing only `portrait_style` now receive that additive field in a retained new version, preserving all previous description/body/voice edits and any already explicit portrait style.
+
+An optional **local neural audition pack** is now implemented with Kokoro ONNX, in `.voice-venv` separately from the application environment. Six fixed comparison samples are generated locally; models (~354 MB) are downloaded from a named upstream release and verified using its published SHA-256 digests. Samples/models/runtime are Git-ignored. The engine's bundled speech-data path failed at this long checkout path; generation uses a temporary short data path and deletes it afterward. ONNX runtime telemetry events are disabled by the generation script.
+
+The dashboard can fetch these fixed WAV auditions through the owner-authenticated API, compare them and save a character's neural voice preference. There is no cloud speech service, cloning or spending. **This is audition/preference selection; synthesis of generated conversations is not implemented by this pack.** Samples use the same public comparison sentence and never include company records or secrets. No perceptual quality pass is claimed before owner listening.
+
+Setup on a fresh checkout:
+
+```bash
+./company voices
+```
+
+This explicitly installs the pinned optional environment and downloads verified assets. It preserves the application's `.venv`, `.env`, database and key. At this checkout it has already been run successfully. Restart with `./company start`, then refresh Characters. Under **Local neural voices — Kokoro**, choose Michael, Fenrir or Adam for Kai, click **Load neural audition**, and press Play. Compare all three before saving a preference. Heart, Bella and Sarah are additional options; voices may be chosen for any character.
+
+Source: [Kokoro ONNX upstream](https://github.com/thewh1teagle/kokoro-onnx), [named model release](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.1). Optional code/model/runtime dependencies have their respective licenses; this source repository does not redistribute model files.
+
+Verification: all six real local samples generated; `./company voices` succeeded; isolated environment dependency audit found no known vulnerabilities. Backend suite: 162 tests passed, with the existing real-Docker test skipped in that run. New tests cover authentication, malformed/missing/oversized/linked samples and allowlisted neural preferences. Disposable Chromium verified WAV loading via authenticated fetch, local blob playback source, stop, preference persistence, portrait views, history and mobile/privacy checks. Frontend build/lint passed (existing image warning); changed backend passed the medium/high Bandit gate. These verify functionality, not subjective sound quality.

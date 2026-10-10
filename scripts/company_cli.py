@@ -132,7 +132,7 @@ def start(env):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description='One entry point for this checkout. Preserves keys/data; uses a local sandbox.')
-    parser.add_argument('command',nargs='?',default='doctor',choices=['doctor','start','audit','key','help'])
+    parser.add_argument('command',nargs='?',default='doctor',choices=['doctor','start','audit','key','voices','help'])
     args=parser.parse_args(argv)
     if args.command=='help':parser.print_help();return 0
     try:
@@ -140,6 +140,8 @@ def main(argv=None):
         if args.command=='doctor':return 0 if doctor(env) else 1
         if args.command=='key':copy_key(env);return 0
         if args.command=='start':start(env);return 0
+        if args.command=='voices':
+            return subprocess.run([sys.executable,str(ROOT/'scripts/prepare_voices.py')],cwd=ROOT,env=env).returncode
         if args.command=='audit':
             print('Audit uses disposable data and its own internal test key; your dashboard key/database remain unchanged.',flush=True)
             return subprocess.run([str(ROOT/'.venv/bin/python'),str(ROOT/'scripts/local_audit.py')],cwd=ROOT,env=env).returncode

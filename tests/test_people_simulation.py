@@ -101,7 +101,9 @@ class PeopleSimulationTests(unittest.TestCase):
         self.assertEqual(get_character('executive:cfo')['version'],2)
         self.assertEqual(len(character_history('executive:cfo')),2)
         self.assertNotIn('portrait_style',character_history('executive:cfo')[-1]['appearance'])
-        self.assertEqual(get_character('executive:cto')['version'],1)
+        self.assertEqual(get_character('executive:cto')['version'],2)
+        self.assertEqual(get_character('executive:cto')['appearance']['portrait_style'],'feminine')
+        self.assertEqual(get_character('executive:cto')['voice'],default_presentation('cto',list(EXECUTIVE_NAMES).index('cto'),legacy=True)['voice'])
         self.assertEqual(get_character('executive:cto')['appearance']['description'],'Owner chosen appearance')
         init_db();self.assertEqual(len(character_history('executive:cfo')),2)
 

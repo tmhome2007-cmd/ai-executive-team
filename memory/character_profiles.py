@@ -58,6 +58,10 @@ def init_characters(cursor):
         if row and row[0] == 1 and all(json.loads(row[index]) == legacy[field] for index,field in enumerate(('appearance','body','voice'),1)):
             updated = default_presentation(key,index)
             cursor.execute('INSERT INTO character_profiles(character_key,version,appearance,body,voice,created_at) VALUES(?,2,?,?,?,?)', (f'executive:{key}',json.dumps(updated['appearance']),json.dumps(updated['body']),json.dumps(updated['voice']),datetime.datetime.now(datetime.timezone.utc).isoformat()))
+        elif row and 'portrait_style' not in json.loads(row[1]):
+            appearance=json.loads(row[1])
+            appearance['portrait_style']=EXECUTIVE_PRESENTATIONS[key]
+            cursor.execute('INSERT INTO character_profiles(character_key,version,appearance,body,voice,created_at) VALUES(?,?,?,?,?,?)', (f'executive:{key}',row[0]+1,json.dumps(appearance),row[2],row[3],datetime.datetime.now(datetime.timezone.utc).isoformat()))
     for operation in ('UPDATE','DELETE'):
         cursor.execute(f"CREATE TRIGGER IF NOT EXISTS character_no_{operation.lower()} BEFORE {operation} ON character_profiles BEGIN SELECT RAISE(ABORT,'Character versions are retained'); END")  # nosec B608 # Literal operations.
 
@@ -98,12 +102,15 @@ def validate_presentation(appearance, body, voice):
     if not isinstance(appearance['hair_style'],str) or appearance['hair_style'] not in STYLES or type(appearance['beard']) is not bool: raise ValueError('Invalid hair style or beard setting')
     height=_number(body['height_cm'],'height')
     if not 140<=height<=220 or not isinstance(body['build'],str) or body['build'] not in BUILDS or body['asset_ref']!='builtin:character-v1': raise ValueError('Invalid body or unsupported asset reference')
-    if voice['provider']!='browser_local' or not isinstance(voice['language'],str) or not re.fullmatch(r'[a-z]{2,3}-[A-Z]{2}',voice['language']): raise ValueError('Only local browser voices and supported locale syntax are allowed')
+    if voice['provider'] not in {'browser_local','kokoro_local'} or not isinstance(voice['language'],str) or not re.fullmatch(r'[a-z]{2,3}-[A-Z]{2}',voice['language']): raise ValueError('Only local voice providers and supported locale syntax are allowed')
     voice['voice_name']=_text(voice['voice_name'],'voice name',120,required=False)
     voice['style']=_text(voice['style'],'voice style',400)
     for field in ('pitch','rate'):
         voice[field]=_number(voice[field],field)
         if not .5<=voice[field]<=1.5: raise ValueError('Voice pitch/rate must be between 0.5 and 1.5')
+    if voice['provider']=='kokoro_local':
+        from workflows.local_voice_samples import VOICES
+        if voice['voice_name'] not in VOICES or voice['language']!='en-US' or voice['pitch']!=1 or voice['rate']!=1: raise ValueError('Choose a supported neural audition at natural pitch and pace')
     return appearance,body,voice
 
 

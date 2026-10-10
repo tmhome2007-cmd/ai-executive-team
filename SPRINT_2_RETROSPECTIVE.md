@@ -27,3 +27,7 @@
 5. Select the next scope from the conceptual audit; do not imply paid delivery follows from a practice pass.
 
 No velocity, hours saved, revenue or user satisfaction scores are invented. Owner feedback on BE-18/19 should be added before sprint closure.
+
+## Additional owner feedback — 10 October 2026
+
+The owner rejected the first appearance/voice revision: women were not visually distinct enough, and the best exposed Kai voice still sounded poor. Automated tests verified controls but could not establish visual/audio satisfaction. The second revision now supplies a distinct feminine portrait design and locally generated neural auditions. The next working agreement is to show representative visible/audible samples earlier and keep subjective acceptance separate from passing code tests. BE-18/19 remain in Review.
