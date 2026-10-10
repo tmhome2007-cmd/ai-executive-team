@@ -314,10 +314,13 @@ def main(argv=None):
             "voices",
             "format",
             "check-code",
+            "quality",
             "help",
         ],
     )
-    args = parser.parse_args(argv)
+    args, extra = parser.parse_known_args(argv)
+    if extra and args.command != "quality":
+        parser.error("Unexpected arguments")
     if args.command == "help":
         parser.print_help()
         return 0
@@ -332,6 +335,16 @@ def main(argv=None):
                 cwd=ROOT,
             ).returncode
         env = environment()
+        if args.command == "quality":
+            return subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts/quality_benchmark.py"),
+                    *(extra or ["run"]),
+                ],
+                cwd=ROOT,
+                env=env,
+            ).returncode
         if args.command == "doctor":
             return 0 if doctor(env) else 1
         if args.command == "key":

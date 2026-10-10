@@ -43,3 +43,7 @@ git pull --ff-only origin codex/sprint-2-local-review
 For initial environment installation or a broken dependency environment, follow the repository installation instructions. The launcher diagnoses setup; it does not upgrade Python, replace `.venv`, reinstall Docker or rewrite credentials. `curl` calls individual HTTP endpoints but is no longer necessary merely to start and review the dashboard.
 
 Audit results live under `audit-results/`. `PROJECT CHECKS: PASS` applies to the automated checks; separate upstream advisories remain visible. It does not certify every AI answer or production deployment.
+
+## Fictional AI quality measurement
+
+With Ollama open: `./company quality`, then `./company quality summary`. See [BE24_QUALITY_BENCHMARKS.md](docs/BE24_QUALITY_BENCHMARKS.md) for limitations, prompt replay and comparisons. This uses fictional data and preserves your existing key and company records.

@@ -1,0 +1,29 @@
+{
+  "dataset_hash": "72c0a869416206751c1e4990c39e2507ceb9e7a4bd064167bc0b677865aee6cc",
+  "checker_hash": "5d3360ce26f9e52d8da1b24c87c1efdecc22c963f65717ffb3d6fa3d5a17e426",
+  "rubric_version": "fictional-json-contract-v1",
+  "prompt_hash": "e06630a8f1267767021d59a0b053c1564661807e9f93a38beee8333000cf8165",
+  "model": {
+    "name": "llama3.1:latest",
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e"
+  },
+  "unconstrained": {
+    "passed": 0,
+    "failed": 30,
+    "errors": 0,
+    "incomplete": 0,
+    "denominator": 30
+  },
+  "json_mode": {
+    "passed": 24,
+    "failed": 6,
+    "errors": 0,
+    "incomplete": 0,
+    "denominator": 30
+  },
+  "scope": "Fictional raw-generation profile only; token coverage is not semantic verification. No owner approval or production prompt change.",
+  "raw_run_ids": [
+    "b16c7015c1c24a24a757373993fd184d",
+    "0fe17de9c00842c4afc7912a23cf3528"
+  ]
+}

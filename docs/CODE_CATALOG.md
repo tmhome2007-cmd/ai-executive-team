@@ -830,6 +830,16 @@ Explicit local voice installation; never sends company text or changes core depe
 
 - `main`
 
+## [scripts/quality_benchmark.py](../scripts/quality_benchmark.py)
+
+Run/replay benchmark prompt versions using synthetic data and local Ollama.
+
+- `private_directory`: Reject symlinks before writing private benchmark snapshots.
+- `save`: Create an immutable owner-only snapshot; never overwrite an earlier run.
+- `run`: Persist progress after each attempt; missing attempts remain incomplete.
+- `recheck`: Reassess preserved raw answers under today's checker without new inference.
+- `main`
+
 ## [scripts/review_smoke.py](../scripts/review_smoke.py)
 
 Short-report browser review on disposable records. No live model/company mutations.
@@ -1051,6 +1061,12 @@ Fictional adult presentation/workforce/social tests; no external services or bus
 Regression checks for planning.
 
 - `PlanningTests`
+
+## [tests/test_quality_benchmark.py](../tests/test_quality_benchmark.py)
+
+Regression coverage for benchmark comparability, failures and private snapshots.
+
+- `QualityBenchmarkTests`
 
 ## [tests/test_research_encoding.py](../tests/test_research_encoding.py)
 
@@ -1346,6 +1362,17 @@ Shared, bounded checks on published AI text. These checks do not certify truth.
 Small representative contract checks, not a universal AI truth evaluator.
 
 - `validate_deliverable`
+
+## [workflows/quality_benchmark.py](../workflows/quality_benchmark.py)
+
+Fictional local-model contract measurements, never approval or truth certification.
+
+- `digest`: Hash a canonical snapshot, including checker code when supplied as text.
+- `NoRedirect`: Local inference must never follow a redirect to an external service.
+- `local_request`: Call only loopback Ollama without environment proxy forwarding.
+- `assess`: Check narrow structure/fact coverage; matching tokens cannot prove truth.
+- `checker_identity`: Bind actual check functions, excluding prompt text and transport code.
+- `comparable`: Reject changed datasets/checkers; do not silently compare different rubrics.
 
 ## [workflows/step_checkpoints.py](../workflows/step_checkpoints.py)
 

@@ -1,0 +1,88 @@
+[
+  {
+    "id": "task-results",
+    "facts": "Five checks expected; four passed; reminder did not appear. Cause unknown.",
+    "required": [
+      "four passed",
+      "reminder"
+    ],
+    "unknown": "cause"
+  },
+  {
+    "id": "task-guide",
+    "facts": "Fictional task supports create, edit, complete. Interface unknown.",
+    "required": [
+      "create",
+      "edit",
+      "complete"
+    ],
+    "unknown": "interface"
+  },
+  {
+    "id": "support-draft",
+    "facts": "Fictional policy allows requests within 14 days. Eligibility unknown.",
+    "required": [
+      "14 days"
+    ],
+    "unknown": "eligibility"
+  },
+  {
+    "id": "evidence-summary",
+    "facts": "Record A reports two observations. No customer demand measurement.",
+    "required": [
+      "two observations"
+    ],
+    "unknown": "demand"
+  },
+  {
+    "id": "budget",
+    "facts": "Research budget is zero euros. No spending approved.",
+    "required": [
+      "zero"
+    ],
+    "unknown": "income"
+  },
+  {
+    "id": "approval",
+    "facts": "Owner has not approved the plan. Review is pending.",
+    "required": [
+      "pending"
+    ],
+    "unknown": "approval"
+  },
+  {
+    "id": "source-conflict",
+    "facts": "Source A says 3 trials; Source B says 4 trials. No reconciliation.",
+    "required": [
+      "3",
+      "4"
+    ],
+    "unknown": "conflict"
+  },
+  {
+    "id": "reminder-details",
+    "facts": "Reminder due time: 09:00. Build: fictional-v1. Observation channel: test log. Cause unknown.",
+    "required": [
+      "09:00",
+      "fictional-v1",
+      "test log"
+    ],
+    "unknown": "cause"
+  },
+  {
+    "id": "practice-review",
+    "facts": "One sample passed its rubric. No evidence of repeat performance.",
+    "required": [
+      "one sample"
+    ],
+    "unknown": "competence"
+  },
+  {
+    "id": "private-draft",
+    "facts": "A reply draft exists. Nothing was sent or published.",
+    "required": [
+      "draft"
+    ],
+    "unknown": "response"
+  }
+]
