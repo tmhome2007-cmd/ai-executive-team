@@ -37,7 +37,7 @@
     "acceptance_criteria": "Provide one evidence-to-private-practice template with explicit inputs, outputs and gates. Queue proposed sources separately from fetched records; distinguish buyer evidence from platform documentation. Validate dependencies, reject cycles and unsupported capabilities; retries preserve approvals. No paid search, publishing or customer contact.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-29 · Evidence-linked company knowledge view",

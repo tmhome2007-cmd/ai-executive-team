@@ -137,6 +137,23 @@ Owner-only skill proposals and decisions; no business execution authority.
 - `skill_get`
 - `skill_decide`
 
+## [api/workflow_templates.py](../api/workflow_templates.py)
+
+Strict owner review of workflow patterns and explicit proposed-source reads.
+
+- `WorkflowStep`
+- `WorkflowCreate`
+- `Version`
+- `WorkflowReview`
+- `SourceProposal`
+- `workflows_list`
+- `workflow_get`
+- `workflow_create`
+- `workflow_review`
+- `queue_list`
+- `queue_propose`
+- `queue_read`
+
 ## [config.py](../config.py)
 
 Environment configuration and startup validation; never log credential values.
@@ -203,6 +220,10 @@ Dashboard source; component/library responsibility follows its filename.
 Dashboard source; component/library responsibility follows its filename.
 
 ## [executive-dashboard/app/components/practice-artifacts.tsx](../executive-dashboard/app/components/practice-artifacts.tsx)
+
+Dashboard source; component/library responsibility follows its filename.
+
+## [executive-dashboard/app/components/research-workflow.tsx](../executive-dashboard/app/components/research-workflow.tsx)
 
 Dashboard source; component/library responsibility follows its filename.
 
@@ -783,6 +804,21 @@ Immutable approved specifications and assessment bindings; no competence authori
 - `practice_evidence`
 - `assert_specification`: A changed mutable row cannot reinterpret the approved rubric.
 
+## [memory/research_queue.py](../memory/research_queue.py)
+
+Proposed public URLs stay separate from fetched evidence and owner classifications.
+
+- `public_url`: Static URL checks never fetch or resolve a proposal; reader rechecks DNS.
+- `init_queue`
+- `_now`
+- `_get`
+- `get_proposal`
+- `list_proposals`
+- `propose_source`
+- `claim_read`
+- `finish_read`
+- `recover_queue`
+
 ## [memory/run_inspector.py](../memory/run_inspector.py)
 
 Safe run summaries and cooperative cancellation; existing ledgers own results.
@@ -803,6 +839,21 @@ Safe run summaries and cooperative cancellation; existing ledgers own results.
 - `claim_continuation`: Atomically claim a fresh private attempt, retaining the same approved rubric.
 - `cached_result`: Reuse a durably completed result only if current inputs and code still match.
 - `complete_publication`: Acknowledge the authoritative sample write in its transaction.
+
+## [memory/workflow_templates.py](../memory/workflow_templates.py)
+
+Reviewed immutable workflow patterns; existing practice gates retain authority.
+
+- `validate_steps`: Reject cycles, missing typed producers and any executable/unsupported node.
+- `init_templates`
+- `_insert`
+- `_get`
+- `get_template`
+- `list_templates`
+- `create_template`
+- `review_template`
+- `bind_template`
+- `template_context`
 
 ## [notifications/telegram_bot.py](../notifications/telegram_bot.py)
 
@@ -975,6 +1026,12 @@ Optional real local-model examples on disposable data; never owner acceptance.
 Bounded isolated local speech worker. Private input via stdin; WAV via stdout.
 
 - `deny`
+
+## [scripts/workflow_queue_smoke.py](../scripts/workflow_queue_smoke.py)
+
+Real Chromium owner controls against disposable SQLite; public reader is mocked.
+
+- `main`
 
 ## [system_checks.py](../system_checks.py)
 
@@ -1235,6 +1292,12 @@ Privacy defaults must override saved tracing consent and interactive prompts.
 
 - `TracePrivacyTests`
 
+## [tests/test_workflow_queue.py](../tests/test_workflow_queue.py)
+
+Workflow review gates and source retries on disposable SQLite.
+
+- `WorkflowQueueTests`
+
 ## [tests/test_workflow_recovery.py](../tests/test_workflow_recovery.py)
 
 Real SQLite and CrewAI pipeline tests with an in-process synthetic LLM.
@@ -1343,8 +1406,9 @@ Explicit owner-run local inference, without tools, browsing or task execution.
 - `_local_agent`
 - `_reason`
 - `run_stage`
-- `read_public_source`: Owner-selected public URL only; never send a private brief to the site.
+- `fetch_public_source`: Owner-selected public URL only; never send a private brief to the site.
 - `continue_private_run`: Explicit owner continuation, limited to the same private approved exercise.
+- `read_public_source`: Compatibility public-read endpoint; queue reads register atomically elsewhere.
 
 ## [workflows/business_research_contract.py](../workflows/business_research_contract.py)
 
@@ -1517,6 +1581,12 @@ Fictional local-model contract measurements, never approval or truth certificati
 - `checker_identity`: Bind actual check functions, excluding prompt text and transport code.
 - `comparable`: Reject changed datasets/checkers; do not silently compare different rubrics.
 
+## [workflows/research_queue.py](../workflows/research_queue.py)
+
+Explicit owner public reads with durable payload recovery and atomic evidence linking.
+
+- `read_proposal`
+
 ## [workflows/step_checkpoints.py](../workflows/step_checkpoints.py)
 
 Crash-safe step claim ledger.
@@ -1599,6 +1669,7 @@ Routes still require the application's authentication dependencies; this list gr
 | GET | `/practice-artifacts` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_list` |
 | GET | `/practice-artifacts/compare` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_compare` |
 | GET | `/practice-artifacts/{ident}/download` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_download` |
+| GET | `/research-queue` | [api/workflow_templates.py](../api/workflow_templates.py) · `queue_list` |
 | GET | `/resources/history` | [main.py](../main.py) · `read_resource_request_history` |
 | GET | `/resources/pending` | [main.py](../main.py) · `read_pending_resource_requests` |
 | GET | `/runs` | [api/run_inspector.py](../api/run_inspector.py) · `runs_list` |
@@ -1616,6 +1687,8 @@ Routes still require the application's authentication dependencies; this list gr
 | GET | `/treasury/actions/{action_id}/reservation` | [main.py](../main.py) · `read_action_treasury_reservation` |
 | GET | `/treasury/history` | [main.py](../main.py) · `read_treasury_history` |
 | GET | `/treasury/summary` | [main.py](../main.py) · `read_treasury_summary` |
+| GET | `/workflow-templates` | [api/workflow_templates.py](../api/workflow_templates.py) · `workflows_list` |
+| GET | `/workflow-templates/{ident}` | [api/workflow_templates.py](../api/workflow_templates.py) · `workflow_get` |
 | GET | `/workflows/autonomous-followup/status` | [main.py](../main.py) · `get_autonomous_followup_status` |
 | GET | `/workflows/daily-research/status` | [main.py](../main.py) · `get_daily_research_status` |
 | PATCH | `/actions/{action_id}/outcome` | [main.py](../main.py) · `patch_action_outcome` |
@@ -1670,6 +1743,8 @@ Routes still require the application's authentication dependencies; this list gr
 | POST | `/plans/generate` | [foundation_api.py](../foundation_api.py) · `plan_generate` |
 | POST | `/plans/{plan_id}/review` | [foundation_api.py](../foundation_api.py) · `plan_review` |
 | POST | `/practice-artifacts` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_export` |
+| POST | `/research-queue` | [api/workflow_templates.py](../api/workflow_templates.py) · `queue_propose` |
+| POST | `/research-queue/{ident}/read` | [api/workflow_templates.py](../api/workflow_templates.py) · `queue_read` |
 | POST | `/resources/{request_id}/approve` | [main.py](../main.py) · `approve_resource_request` |
 | POST | `/resources/{request_id}/fulfill` | [main.py](../main.py) · `fulfill_resource_request` |
 | POST | `/resources/{request_id}/reject` | [main.py](../main.py) · `reject_resource_request` |
@@ -1681,6 +1756,8 @@ Routes still require the application's authentication dependencies; this list gr
 | POST | `/skills/{ident}/decision` | [api/skills.py](../api/skills.py) · `skill_decide` |
 | POST | `/system/sandbox-mode` | [main.py](../main.py) · `toggle_sandbox_mode` |
 | POST | `/treasury/fund` | [main.py](../main.py) · `fund_treasury` |
+| POST | `/workflow-templates` | [api/workflow_templates.py](../api/workflow_templates.py) · `workflow_create` |
+| POST | `/workflow-templates/{ident}/review` | [api/workflow_templates.py](../api/workflow_templates.py) · `workflow_review` |
 | POST | `/workflows/autonomous-followup/trigger` | [main.py](../main.py) · `trigger_autonomous_followup` |
 | POST | `/workflows/daily-research/trigger` | [main.py](../main.py) · `trigger_daily_research` |
 | PUT | `/characters/{key}` | [api/people.py](../api/people.py) · `write_character` |

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { businessProposals } from "../lib/business-proposals";
 import AiReport from "./ai-report";
+import ResearchWorkflow, { WorkflowTemplate } from "./research-workflow";
 import PracticeArtifacts from "./practice-artifacts";
 import BusinessSourceContext from "./business-source-context";
 const API = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(
@@ -54,6 +55,13 @@ interface PracticeEvidence {
   scope: string;
 }
 interface Brief {
+  workflow_template?: {
+    id: number;
+    name: string;
+    version: number;
+    usable: boolean;
+    state: string;
+  } | null;
   skill_version?: {
     id: number;
     name: string;
@@ -111,6 +119,9 @@ export default function BusinessDiscovery({
     [constraints, setConstraints] = useState(
       "The agents should do the work; I review and approve. No assumed owner professional skills. Research and private practice only. No spending, paid services, publishing or customer contact.",
     );
+  const [workflowTemplates, setWorkflowTemplates] = useState<WorkflowTemplate[]>([]);
+  const [workflowId, setWorkflowId] = useState("");
+  const [queueRevision, setQueueRevision] = useState(0);
   const [url, setUrl] = useState("");
   const [skillId, setSkillId] = useState("");
   const [skillOffset, setSkillOffset] = useState(0);
@@ -166,6 +177,9 @@ export default function BusinessDiscovery({
     },
     [apiKey, onAuthFailure],
   );
+  const refreshEvidence = useCallback(async () => {
+    setSources(await request("/evidence?limit=100"));
+  }, [request]);
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
@@ -253,6 +267,12 @@ export default function BusinessDiscovery({
           the record; do not start duplicate work.
         </p>
       )}
+      <ResearchWorkflow
+        request={request}
+        onTemplates={setWorkflowTemplates}
+        onEvidenceChanged={refreshEvidence}
+        refreshToken={queueRevision}
+      />
       <fieldset disabled={busy} className="command-card space-y-3">
         <legend>1. Research sources and brief</legend>
         <p className="text-sm text-gray-400">
@@ -354,12 +374,30 @@ export default function BusinessDiscovery({
                   title,
                   constraints,
                   source_ids: chosen,
+                  workflow_template_id: workflowId ? Number(workflowId) : null,
                 }),
               ),
             );
           }}
           className="space-y-3"
         >
+          <label className="block">
+            Reviewed workflow template (optional)
+            <select
+              className="command-input"
+              value={workflowId}
+              onChange={(e) => setWorkflowId(e.target.value)}
+            >
+              <option value="">No template binding</option>
+              {workflowTemplates
+                .filter((t) => t.usable)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} · version {t.version}
+                  </option>
+                ))}
+            </select>
+          </label>
           <label className="block">
             Research title
             <input
@@ -487,25 +525,34 @@ export default function BusinessDiscovery({
                     className="office-filter"
                     onClick={() =>
                       act(async () => {
-                        const source = await request(
-                          "/business-discovery/public-source",
-                          "POST",
-                          { url: proposal.url },
-                        );
-                        setSources((old) => [source, ...old]);
-                        setChosen((old) => Array.from(new Set([...old, source.id])));
+                        await request("/research-queue", "POST", {
+                          url: proposal.url,
+                          purpose: proposal.purpose,
+                          origin_brief_id: selected.id,
+                          proposed_category: "unknown",
+                        });
+                        setQueueRevision((old) => old + 1);
                       })
                     }
                   >
-                    Read proposed source {index + 1}
+                    Queue proposed source {index + 1}
                   </button>
                   <p>
-                    Create a new brief with the new record to use it. This report stays
-                    unchanged.
+                    Read the proposal in the queue above, then select the fetched record
+                    for a new brief. This report stays unchanged.
                   </p>
                 </div>
               ))}
             </>
+          )}
+          {selected.workflow_template && (
+            <p>
+              Workflow: {selected.workflow_template.name} · version{" "}
+              {selected.workflow_template.version} · {selected.workflow_template.state}.{" "}
+              {selected.workflow_template.usable
+                ? "Existing practice approval gates apply."
+                : "Withdrawn: generation is blocked; earlier records remain."}
+            </p>
           )}
           {selected.state === "research_ready" &&
             [2, 3].includes(selected.research_contract_version) && (
@@ -1029,6 +1076,7 @@ export default function BusinessDiscovery({
                       title: selected.title,
                       constraints: selected.constraints,
                       source_ids: selected.source_ids,
+                      workflow_template_id: selected.workflow_template?.id ?? null,
                     }),
                   ),
                 )

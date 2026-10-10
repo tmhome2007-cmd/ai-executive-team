@@ -293,6 +293,11 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
 
                 def generate():
                     inspector.assert_running(run_ident)
+                    from memory.workflow_templates import template_context
+                    from memory.database import get_connection
+
+                    with get_connection() as conn:
+                        template_context(conn.cursor(), ident)
                     inspector.phase(run_ident, "generating")
                     if cached is not None:
                         return cached
@@ -364,6 +369,8 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
                         # One bounded local repair; no tool/action replay.
                         inspector.assert_running(run_ident)
                         inspector.phase(run_ident, "repairing")
+                        with get_connection() as conn:
+                            template_context(conn.cursor(), ident)
                         if stage in {"practice", "revision"}:
                             with get_connection() as conn:
                                 conn.execute("BEGIN")
@@ -427,13 +434,12 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
         executor.shutdown(wait=False)
 
 
-def read_public_source(url):
+def fetch_public_source(url):
     """Owner-selected public URL only; never send a private brief to the site."""
     import datetime
     import uuid
     from urllib.parse import urlsplit
     from memory.experiments import _text
-    from memory.evidence import create_source
     from tools.research_tool import PageReaderTool
 
     url = _text(url, "public research URL", 1000)
@@ -454,7 +460,7 @@ def read_public_source(url):
     if text.startswith("Error"):
         raise ValueError("Public source unavailable or blocked; choose another source")
     captured_at = datetime.datetime.now(datetime.timezone.utc)
-    return create_source(
+    return dict(
         source_key="business-public:" + uuid.uuid4().hex,
         title=parsed.hostname + parsed.path[:120],
         reference=url,
@@ -482,3 +488,10 @@ def continue_private_run(
         _continuation=(run_ident, expected_control),
         _wait_seconds=wait_seconds,
     )
+
+
+def read_public_source(url):
+    """Compatibility public-read endpoint; queue reads register atomically elsewhere."""
+    from memory.evidence import create_source
+
+    return create_source(**fetch_public_source(url))

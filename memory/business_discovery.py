@@ -70,6 +70,7 @@ def init_business_discovery(cursor):
 
 def get_brief(ident, include_history=True):
     from memory.executive_skills import skill_context
+    from memory.workflow_templates import template_context
 
     with get_connection() as conn:
         conn.execute("BEGIN")
@@ -83,10 +84,12 @@ def get_brief(ident, include_history=True):
         )
         feedback = feedback_summary(conn.cursor(), ident) if include_history else None
         saved_skill = skill_context(conn.cursor(), ident, require_usable=False)
+        workflow = template_context(conn.cursor(), ident, require_reviewed=False)
     if not row:
         raise LookupError("Research brief not found")
     result = dict(row)
     result["skill_version"] = saved_skill
+    result["workflow_template"] = workflow
     result["attempts"] = attempts
     result["practice_specification"] = spec
     result["research_sources"] = frozen_sources
@@ -146,7 +149,7 @@ def list_briefs(limit=50, offset=0):
     return [get_brief(i, include_history=False) for i in ids]
 
 
-def create_brief(title, constraints, source_ids):
+def create_brief(title, constraints, source_ids, workflow_template_id=None):
     from memory.evidence import source_context
 
     title = _text(title, "title", 200)
@@ -155,6 +158,7 @@ def create_brief(title, constraints, source_ids):
     if len(source_ids) < 3:
         raise ValueError("Register at least three dated research sources first")
     with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         cursor = conn.execute(
             """INSERT INTO business_discovery(title,constraints,source_ids_json,created_at)
             VALUES (?,?,?,?)""",
@@ -165,8 +169,13 @@ def create_brief(title, constraints, source_ids):
                 datetime.datetime.now(datetime.timezone.utc).isoformat(),
             ),
         )
+        ident = cursor.lastrowid
+        if workflow_template_id is not None:
+            from memory.workflow_templates import bind_template
+
+            bind_template(conn.cursor(), ident, workflow_template_id)
         conn.commit()
-    return get_brief(cursor.lastrowid)
+    return get_brief(ident)
 
 
 def select_practice(
@@ -202,6 +211,9 @@ def select_practice(
         raise ValueError("Choose a future observation date")
     with get_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        from memory.workflow_templates import template_context
+
+        template_context(conn.cursor(), ident)
         cursor = conn.execute(
             """UPDATE business_discovery SET selected_option=?,exercise=?,checks_json=?,
             observation_due_at=?,state='practice_ready',version=version+1
@@ -252,6 +264,9 @@ def claim_stage(ident, expected_version, stage):
         raise ValueError("Invalid discovery stage")
     with get_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        from memory.workflow_templates import template_context
+
+        template_context(conn.cursor(), ident)
         cursor = conn.execute(
             """UPDATE business_discovery SET state=?,version=version+1
             WHERE id=? AND version=? AND state=?""",
@@ -294,6 +309,10 @@ def finish_stage(
     )
     with get_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        if output:
+            from memory.workflow_templates import template_context
+
+            template_context(conn.cursor(), ident)
         if stage == "practice" and output:
             from memory.executive_skills import skill_context
 
@@ -418,6 +437,9 @@ def review_practice(
 def claim_revision(ident, expected_version):
     with get_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        from memory.workflow_templates import template_context
+
+        template_context(conn.cursor(), ident)
         row = conn.execute(
             "SELECT * FROM business_discovery WHERE id=?", (ident,)
         ).fetchone()
@@ -453,6 +475,10 @@ def finish_revision(ident, output, claimed_version=None, inspection_run_id=None)
         output = _text(output, "revision output", 30000)
     with get_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        if output:
+            from memory.workflow_templates import template_context
+
+            template_context(conn.cursor(), ident)
         if output:
             from memory.executive_skills import skill_context
 
