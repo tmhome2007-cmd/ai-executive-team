@@ -27,7 +27,7 @@
     "fast-glob": "file:vendor/native-directory-glob",
     "prettier": "3.6.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "overrides": {
     "fast-glob": "$fast-glob"
