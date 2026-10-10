@@ -243,6 +243,9 @@ async def _lifespan_unlocked(app: FastAPI):
 
     reconcile_work()
     uncertain_steps = reconcile_interrupted_steps()
+    from memory.run_inspector import recover_inspector
+
+    recover_inspector()
     if uncertain_steps:
         logger.warning(
             "Recovered %s interrupted workflow step(s) as inconclusive; manual review required.",

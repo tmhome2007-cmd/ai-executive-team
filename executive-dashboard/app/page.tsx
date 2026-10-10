@@ -5,6 +5,7 @@ import AiReport from "./components/ai-report";
 import VirtualOffice from "./components/virtual-office";
 import AgileBoard from "./components/agile-board";
 import BusinessDiscovery from "./components/business-discovery";
+import RunInspector from "./components/run-inspector";
 import ExecutiveSkills from "./components/executive-skills";
 import Experiments from "./components/experiments";
 import OrganizationalWork from "./components/organizational-work";
@@ -2078,6 +2079,7 @@ export default function DashboardPage() {
         )}
         {view === "business" && apiKey && (
           <>
+            <RunInspector apiKey={apiKey} onAuthFailure={handleAuthFailure} />
             <BusinessDiscovery apiKey={apiKey} onAuthFailure={handleAuthFailure} />
             <ExecutiveSkills apiKey={apiKey} onAuthFailure={handleAuthFailure} />
           </>

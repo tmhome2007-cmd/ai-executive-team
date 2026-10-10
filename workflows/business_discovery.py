@@ -7,6 +7,8 @@ from memory.business_discovery import claim_stage, finish_stage, get_brief
 from memory.evidence import source_context, get_source
 from workflows.execution_lock import EXECUTION_LOCK
 from workflows.step_checkpoints import run_json_step
+from memory import run_inspector as inspector
+from pathlib import Path
 
 
 def _local_agent():
@@ -92,7 +94,7 @@ def _reason(prompt, structured=False):
     return result
 
 
-def run_stage(ident, expected_version, stage):
+def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_seconds=600):
     brief = get_brief(ident)
     evidence = source_context(brief["source_ids"])
     if any(
@@ -102,7 +104,15 @@ def run_stage(ident, expected_version, stage):
         raise ValueError("Resolve disputed/stale sources before generating work")
     # Configuration failures leave the brief editable, without claiming a step.
     _local_agent()
-    brief = claim_stage(ident, expected_version, stage)
+    previous = None
+    if _continuation is None:
+        brief = claim_stage(ident, expected_version, stage)
+    else:
+        previous, brief = inspector.claim_continuation(
+            _continuation[0], _continuation[1], expected_version
+        )
+        if previous["brief_id"] != ident or previous["stage"] != stage:
+            raise RuntimeError("Continuation context changed")
     prompt = (
         "AI-operated company: owner oversight, no assumed owner professional skills. €0 spend and €0 loss. "
         "No tools, external commitments, customer contact, publishing or launch permission. "
@@ -218,13 +228,74 @@ def run_stage(ident, expected_version, stage):
                 ensure_ascii=False,
             )
         )
-    digest = hashlib.sha256(prompt.encode()).hexdigest()
+    from workflows.output_quality import QUALITY_POLICY
+
+    agent = _local_agent()
+    digest = hashlib.sha256(
+        (
+            QUALITY_POLICY
+            + "\nRole: "
+            + agent.role
+            + "\nPersona: "
+            + agent.backstory[:4000]
+            + "\n"
+            + prompt
+        ).encode()
+    ).hexdigest()
+    contract_files = (
+        "business_research_contract.py",
+        "business_revision_contract.py",
+        "task_guide_contract.py",
+        "practice_deliverables.py",
+        "output_quality.py",
+    )
+    prompt_version = hashlib.sha256(
+        Path(__file__).read_bytes()
+        + QUALITY_POLICY.encode()
+        + b"".join(
+            (Path(__file__).parent / filename).read_bytes()
+            for filename in contract_files
+        )
+    ).hexdigest()
+    model_version = str(_local_agent().llm.model)
+    import re
+
+    if not re.fullmatch(r"[a-zA-Z0-9_.:/-]{1,120}", model_version):
+        model_version = "unavailable"
+    try:
+        if previous and previous["model_version"] != model_version:
+            raise RuntimeError(
+                "Configured model changed; create a new owner-reviewed exercise"
+            )
+        cached = (
+            inspector.cached_result(previous, digest, prompt_version)
+            if previous
+            else None
+        )
+        run_ident, run_key, step_key = inspector.register_run(
+            ident,
+            stage,
+            brief["version"],
+            digest,
+            prompt_version,
+            model_version,
+            previous["id"] if previous else None,
+        )
+    except BaseException:
+        finish_stage(ident, stage, claimed_version=brief["version"])
+        raise
+    inspector.live(run_ident, True)
 
     def worker():
         try:
             with EXECUTION_LOCK:
+                inspector.assert_running(run_ident)
 
                 def generate():
+                    inspector.assert_running(run_ident)
+                    inspector.phase(run_ident, "generating")
+                    if cached is not None:
+                        return cached
                     if stage in {"practice", "revision"}:
                         from memory.database import get_connection
                         from memory.executive_skills import skill_context
@@ -291,6 +362,8 @@ def run_stage(ident, expected_version, stage):
                         return render(draft)
                     except ValueError as error:
                         # One bounded local repair; no tool/action replay.
+                        inspector.assert_running(run_ident)
+                        inspector.phase(run_ident, "repairing")
                         if stage in {"practice", "revision"}:
                             with get_connection() as conn:
                                 conn.execute("BEGIN")
@@ -305,19 +378,48 @@ def run_stage(ident, expected_version, stage):
                         )
                         return render(repaired)
 
-                step = f"revision:{brief['version']}" if stage == "revision" else stage
-                output = run_json_step(f"business:{ident}", step, digest, generate)
+                output = run_json_step(run_key, step_key, digest, generate)
+                inspector.assert_running(run_ident)
             from workflows.output_quality import assess_output, review_notice
 
             output = review_notice(output, assess_output(output, evidence))
-            return finish_stage(ident, stage, output, claimed_version=brief["version"])
-        except BaseException:
-            finish_stage(ident, stage, claimed_version=brief["version"])
+            inspector.phase(run_ident, "publishing")
+            inspector.assert_running(run_ident)
+            result = finish_stage(
+                ident,
+                stage,
+                output,
+                claimed_version=brief["version"],
+                inspection_run_id=run_ident,
+            )
+            if inspector.get_run(run_ident)["phase"] != "completed":
+                raise RuntimeError("Private publication was stopped or superseded")
+            return result
+        except BaseException as error:
+            try:
+                finish_stage(ident, stage, claimed_version=brief["version"])
+            finally:
+                current = inspector.get_run(run_ident)
+                if current["stop_requested"]:
+                    inspector.phase(run_ident, "stopped", "owner_stop")
+                else:
+                    category = (
+                        "publication_error"
+                        if current["checkpoint_status"] == "succeeded"
+                        else (
+                            "invalid_output"
+                            if isinstance(error, ValueError)
+                            else "generation_error"
+                        )
+                    )
+                    inspector.phase(run_ident, "failed", category)
             raise
+        finally:
+            inspector.live(run_ident, False)
 
     executor = ThreadPoolExecutor(max_workers=1)
     try:
-        return executor.submit(worker).result(timeout=600)
+        return executor.submit(worker).result(timeout=_wait_seconds)
     except TimeoutError:
         # Worker retains lock and ownership; a timeout never starts another generation.
         return get_brief(ident)
@@ -360,4 +462,23 @@ def read_public_source(url):
         observed_at=captured_at.isoformat(),
         expires_at=(captured_at + datetime.timedelta(days=30)).isoformat(),
         source_kind="external_reference",
+    )
+
+
+def continue_private_run(
+    run_ident, expected_control, expected_brief, *, wait_seconds=600
+):
+    """Explicit owner continuation, limited to the same private approved exercise."""
+    from memory.database import get_connection
+
+    with get_connection() as conn:
+        row = inspector._row(conn, run_ident)
+    if row["stage"] not in {"practice", "revision"}:
+        raise ValueError("Only private practice and revision can continue")
+    return run_stage(
+        row["brief_id"],
+        expected_brief,
+        row["stage"],
+        _continuation=(run_ident, expected_control),
+        _wait_seconds=wait_seconds,
     )

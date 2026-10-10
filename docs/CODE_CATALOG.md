@@ -112,6 +112,17 @@ Owner-authenticated inert exports and bounded comparisons of saved samples.
 - `artifact_compare`
 - `artifact_download`
 
+## [api/run_inspector.py](../api/run_inspector.py)
+
+Owner-only metadata inspection and cooperative private generation controls.
+
+- `RunControl`
+- `RunContinuation`
+- `runs_list`
+- `run_get`
+- `run_stop`
+- `run_continue`
+
 ## [api/skills.py](../api/skills.py)
 
 Owner-only skill proposals and decisions; no business execution authority.
@@ -192,6 +203,10 @@ Dashboard source; component/library responsibility follows its filename.
 Dashboard source; component/library responsibility follows its filename.
 
 ## [executive-dashboard/app/components/practice-artifacts.tsx](../executive-dashboard/app/components/practice-artifacts.tsx)
+
+Dashboard source; component/library responsibility follows its filename.
+
+## [executive-dashboard/app/components/run-inspector.tsx](../executive-dashboard/app/components/run-inspector.tsx)
 
 Dashboard source; component/library responsibility follows its filename.
 
@@ -768,6 +783,27 @@ Immutable approved specifications and assessment bindings; no competence authori
 - `practice_evidence`
 - `assert_specification`: A changed mutable row cannot reinterpret the approved rubric.
 
+## [memory/run_inspector.py](../memory/run_inspector.py)
+
+Safe run summaries and cooperative cancellation; existing ledgers own results.
+
+- `init_inspector`
+- `_now`
+- `register_run`
+- `live`
+- `assert_running`
+- `phase`
+- `recover_inspector`: Startup never schedules another run; claims remain inconclusive.
+- `_row`
+- `_elapsed`
+- `_summary`
+- `get_run`
+- `list_runs`
+- `stop_run`
+- `claim_continuation`: Atomically claim a fresh private attempt, retaining the same approved rubric.
+- `cached_result`: Reuse a durably completed result only if current inputs and code still match.
+- `complete_publication`: Acknowledge the authoritative sample write in its transaction.
+
 ## [notifications/telegram_bot.py](../notifications/telegram_bot.py)
 
 Outbound Telegram notifications with bounded, redacted content.
@@ -913,6 +949,12 @@ Run/replay benchmark prompt versions using synthetic data and local Ollama.
 ## [scripts/review_smoke.py](../scripts/review_smoke.py)
 
 Short-report browser review on disposable records. No live model/company mutations.
+
+- `main`
+
+## [scripts/runs_smoke.py](../scripts/runs_smoke.py)
+
+Chromium stop/continue against disposable SQLite and a controlled local worker.
 
 - `main`
 
@@ -1163,6 +1205,12 @@ Real byte decoding with mocked transport; no external requests.
 - `Response`
 - `ResearchEncodingTests`
 
+## [tests/test_run_inspector.py](../tests/test_run_inspector.py)
+
+Private stop/continue fencing, cached recovery and metadata privacy.
+
+- `InspectorTests`
+
 ## [tests/test_sprint3_practice_evidence.py](../tests/test_sprint3_practice_evidence.py)
 
 Fixed rubrics, exact source attribution and representative useful deliverables.
@@ -1296,6 +1344,7 @@ Explicit owner-run local inference, without tools, browsing or task execution.
 - `_reason`
 - `run_stage`
 - `read_public_source`: Owner-selected public URL only; never send a private brief to the site.
+- `continue_private_run`: Explicit owner continuation, limited to the same private approved exercise.
 
 ## [workflows/business_research_contract.py](../workflows/business_research_contract.py)
 
@@ -1552,6 +1601,8 @@ Routes still require the application's authentication dependencies; this list gr
 | GET | `/practice-artifacts/{ident}/download` | [api/practice_artifacts.py](../api/practice_artifacts.py) · `artifact_download` |
 | GET | `/resources/history` | [main.py](../main.py) · `read_resource_request_history` |
 | GET | `/resources/pending` | [main.py](../main.py) · `read_pending_resource_requests` |
+| GET | `/runs` | [api/run_inspector.py](../api/run_inspector.py) · `runs_list` |
+| GET | `/runs/{ident}` | [api/run_inspector.py](../api/run_inspector.py) · `run_get` |
 | GET | `/screenshots/{filename}` | [main.py](../main.py) · `get_screenshot` |
 | GET | `/simulation/events` | [api/people.py](../api/people.py) · `read_personal_events` |
 | GET | `/simulation/relationship` | [api/people.py](../api/people.py) · `read_relationship` |
@@ -1622,6 +1673,8 @@ Routes still require the application's authentication dependencies; this list gr
 | POST | `/resources/{request_id}/approve` | [main.py](../main.py) · `approve_resource_request` |
 | POST | `/resources/{request_id}/fulfill` | [main.py](../main.py) · `fulfill_resource_request` |
 | POST | `/resources/{request_id}/reject` | [main.py](../main.py) · `reject_resource_request` |
+| POST | `/runs/{ident}/continue` | [api/run_inspector.py](../api/run_inspector.py) · `run_continue` |
+| POST | `/runs/{ident}/stop` | [api/run_inspector.py](../api/run_inspector.py) · `run_stop` |
 | POST | `/simulation/events` | [api/people.py](../api/people.py) · `write_personal_event` |
 | POST | `/skills` | [api/skills.py](../api/skills.py) · `skill_propose` |
 | POST | `/skills/draft` | [api/skills.py](../api/skills.py) · `skill_draft` |

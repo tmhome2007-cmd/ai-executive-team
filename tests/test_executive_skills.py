@@ -3,6 +3,7 @@
 import json
 import sqlite3
 from unittest.mock import patch
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 import unittest
 from tests import test_sprint3_practice_evidence as practice_fixtures
@@ -263,7 +264,14 @@ class ExecutiveSkillsTests(unittest.TestCase):
             return "The fictional third case says a reminder is unknown. No cause or interface details are established. Request supplied evidence before choosing a further private test. Owner review is pending."
 
         with (
-            patch("workflows.business_discovery._local_agent"),
+            patch(
+                "workflows.business_discovery._local_agent",
+                return_value=SimpleNamespace(
+                    role="Fictional CSO",
+                    backstory="Private test profile",
+                    llm=SimpleNamespace(model="ollama/fictional"),
+                ),
+            ),
             patch(
                 "workflows.business_discovery._reason", side_effect=reason
             ) as inference,
@@ -290,7 +298,14 @@ class ExecutiveSkillsTests(unittest.TestCase):
             return "Invalid short draft"
 
         with (
-            patch("workflows.business_discovery._local_agent"),
+            patch(
+                "workflows.business_discovery._local_agent",
+                return_value=SimpleNamespace(
+                    role="Fictional CSO",
+                    backstory="Private test profile",
+                    llm=SimpleNamespace(model="ollama/fictional"),
+                ),
+            ),
             patch(
                 "workflows.business_discovery._reason",
                 side_effect=revoked_during_inference,

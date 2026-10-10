@@ -273,9 +273,11 @@ def claim_stage(ident, expected_version, stage):
     return get_brief(ident)
 
 
-def finish_stage(ident, stage, output=None, claimed_version=None):
+def finish_stage(
+    ident, stage, output=None, claimed_version=None, inspection_run_id=None
+):
     if stage == "revision":
-        return finish_revision(ident, output, claimed_version)
+        return finish_revision(ident, output, claimed_version, inspection_run_id)
     if stage not in {"research", "practice"}:
         raise ValueError("Invalid discovery stage")
     if output is not None:
@@ -322,6 +324,12 @@ def finish_stage(ident, stage, output=None, claimed_version=None):
                 (ident, output, parameters[2]),
             )
             bind_sample(conn.cursor(), ident, saved.lastrowid)
+        if output and cursor.rowcount == 1 and inspection_run_id is not None:
+            from memory.run_inspector import complete_publication
+
+            complete_publication(
+                conn.cursor(), inspection_run_id, ident, claimed_version
+            )
         conn.commit()
     return get_brief(ident)
 
@@ -440,7 +448,7 @@ def claim_revision(ident, expected_version):
     return get_brief(ident)
 
 
-def finish_revision(ident, output, claimed_version=None):
+def finish_revision(ident, output, claimed_version=None, inspection_run_id=None):
     if output is not None:
         output = _text(output, "revision output", 30000)
     with get_connection() as conn:
@@ -488,6 +496,12 @@ def finish_revision(ident, output, claimed_version=None):
                 conn.execute(
                     "UPDATE business_discovery SET state='needs_review',version=version+1 WHERE id=?",
                     (ident,),
+                )
+            if output and inspection_run_id is not None:
+                from memory.run_inspector import complete_publication
+
+                complete_publication(
+                    conn.cursor(), inspection_run_id, ident, claimed_version
                 )
         conn.commit()
     return get_brief(ident)

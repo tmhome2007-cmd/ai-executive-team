@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 from unittest.mock import patch
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -173,7 +174,14 @@ def main():
                     ).wait_for()
                     sample = "The fictional third case records one observation. Reminder details remain unknown. No cause is established, no messages were sent and no business action happened. Owner assessment of this private sample remains pending."
                     with (
-                        patch("workflows.business_discovery._local_agent"),
+                        patch(
+                            "workflows.business_discovery._local_agent",
+                            return_value=SimpleNamespace(
+                                role="Fictional CSO",
+                                backstory="Private test profile",
+                                llm=SimpleNamespace(model="ollama/fictional"),
+                            ),
+                        ),
                         patch(
                             "workflows.business_discovery._reason", return_value=sample
                         ),
