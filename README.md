@@ -333,3 +333,5 @@ BE-27 adds the [Run inspector](docs/BE27_RUN_INSPECTOR.md) under Business resear
 Reviewed workflow patterns and explicit source proposals: [BE-28 review and recovery](docs/BE28_WORKFLOW_QUEUE.md). Templates retain the existing practice approval gates; queued URLs do not count as evidence.
 
 Company knowledge links existing goals, decisions, actions, outcomes, lessons and review-backed skills. It explains why corrected or stale memories are withheld from current agent context: [BE-29 review and retrieval limits](docs/BE29_COMPANY_KNOWLEDGE.md).
+
+Dashboard redesign: see [the layout and verification notes](docs/DASHBOARD_REDESIGN.md). Navigation is grouped in the sidebar; Business research has separate practice, run inspector and skill tabs.

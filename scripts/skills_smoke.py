@@ -102,6 +102,9 @@ def main():
                     page.get_by_role("navigation", name="Company views").get_by_role(
                         "button", name="Business research", exact=True
                     ).click()
+                    page.get_by_role(
+                        "navigation", name="Business research sections"
+                    ).get_by_role("button", name="Executive skills", exact=True).click()
                     library = page.get_by_role("region", name="Executive skill library")
                     library.get_by_label("Skill key", exact=True).fill(
                         "private-summary"
@@ -137,6 +140,11 @@ def main():
                         "accepted · available for compatible private exercises",
                         exact=True,
                     ).wait_for()
+                    page.get_by_role(
+                        "navigation", name="Business research sections"
+                    ).get_by_role(
+                        "button", name="Research & practice", exact=True
+                    ).click()
                     page.get_by_role(
                         "button",
                         name=f"#{fresh['id']} Third fictional exercise · research ready",
@@ -197,6 +205,9 @@ def main():
                         ).wait_for()
                     assert get_brief(fresh["id"])["skill_version"]["id"] == 1
                     assert get_skill(1)["uses"][0]["owner_assessment"] == "not_assessed"
+                    page.get_by_role(
+                        "navigation", name="Business research sections"
+                    ).get_by_role("button", name="Executive skills", exact=True).click()
                     library.get_by_role(
                         "button", name="Revoke version", exact=True
                     ).click()

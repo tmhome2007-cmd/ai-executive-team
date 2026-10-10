@@ -100,6 +100,9 @@ def main():
                     page.get_by_role("navigation", name="Company views").get_by_role(
                         "button", name="Business research", exact=True
                     ).click()
+                    page.get_by_role(
+                        "navigation", name="Business research sections"
+                    ).get_by_role("button", name="Run inspector", exact=True).click()
                     panel = page.get_by_role("region", name="Run inspector")
                     panel.get_by_role(
                         "button", name=f"Stop private run #{ident}", exact=True

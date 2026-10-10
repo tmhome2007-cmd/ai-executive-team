@@ -78,5 +78,13 @@
     "assignee": "owner",
     "priority": "medium",
     "status": "backlog"
+  },
+  {
+    "title": "UX-01 · Dashboard clarity and visual redesign",
+    "description": "Owner-requested Sprint 4 addition before BE-30. Grouped navigation, calmer overview and responsive layout. See docs/DASHBOARD_REDESIGN.md.",
+    "acceptance_criteria": "All existing destinations remain reachable; overview uses loaded records; business tabs preserve drafts; mobile navigation supports Escape; API key and live-mode approval controls remain intact.",
+    "assignee": "owner",
+    "priority": "high",
+    "status": "review"
   }
 ]
