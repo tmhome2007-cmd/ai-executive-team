@@ -31,3 +31,8 @@ Owner requested completion of Sprint 2, approved the explicit character identiti
 Draft retrospective: [SPRINT_2_RETROSPECTIVE.md](SPRINT_2_RETROSPECTIVE.md). Final closure follows owner visual/audio acceptance; no Done checkbox is recorded for an unreviewed voice.
 
 Second review: the owner rejected initial character/voice quality. A further portrait redesign and optional local Kokoro audition pack are implemented for another review; no final appearance/audio acceptance or sprint closure is recorded. See the latest section of the character/voice review guide.
+
+
+## Owner acceptance — 10 October 2026
+
+The owner confirmed the corrected neural auditions play, completed review and authorized merge. BE-18 and BE-19 are Done for the implemented character presentation, local voice comparison and neural audition/preference scope. Earlier pending/rejected review entries remain historical. Sprint 2 review is complete. Generated-conversation neural synthesis, 3D animation and paid/cloud voices remain future work.

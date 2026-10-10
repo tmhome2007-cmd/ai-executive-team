@@ -31,3 +31,8 @@ No velocity, hours saved, revenue or user satisfaction scores are invented. Owne
 ## Additional owner feedback — 10 October 2026
 
 The owner rejected the first appearance/voice revision: women were not visually distinct enough, and the best exposed Kai voice still sounded poor. Automated tests verified controls but could not establish visual/audio satisfaction. The second revision now supplies a distinct feminine portrait design and locally generated neural auditions. The next working agreement is to show representative visible/audible samples earlier and keep subjective acceptance separate from passing code tests. BE-18/19 remain in Review.
+
+
+## Owner acceptance — 10 October 2026
+
+The owner confirmed the corrected neural auditions play, completed review and authorized merge. BE-18 and BE-19 are Done for the implemented character presentation, local voice comparison and neural audition/preference scope. Earlier pending/rejected review entries remain historical. Sprint 2 review is complete. Generated-conversation neural synthesis, 3D animation and paid/cloud voices remain future work.

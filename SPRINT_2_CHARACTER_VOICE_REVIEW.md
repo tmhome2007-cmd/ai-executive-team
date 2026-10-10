@@ -97,3 +97,8 @@ Verification: all six real local samples generated; `./company voices` succeeded
 Owner found the neural players stayed at 00:00. The WAV files were valid, but the production dashboard CSP omitted `media-src`, so `default-src 'self'` blocked their authenticated-fetch blob URLs. The policy now explicitly permits only same-origin and blob media. The player preloads metadata and reports loading errors.
 
 The strengthened disposable Chromium test failed on the old build while waiting for audio metadata, then passed on the corrected production build: finite duration, decoded audio readiness, advancing playback time and pause after Stop. A separate assertion verifies remote audio is blocked before any request. Frontend lint/build passed with the existing image warning. This corrects the earlier test's gap: checking player visibility and a blob source did not establish playback. Owner listening is still needed to assess voice quality.
+
+
+## Owner acceptance — 10 October 2026
+
+The owner confirmed the corrected neural auditions play, completed review and authorized merge. BE-18 and BE-19 are Done for the implemented character presentation, local voice comparison and neural audition/preference scope. Earlier pending/rejected review entries remain historical. Sprint 2 review is complete. Generated-conversation neural synthesis, 3D animation and paid/cloud voices remain future work.
