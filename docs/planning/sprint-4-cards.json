@@ -29,7 +29,7 @@
     "acceptance_criteria": "Show step status, duration, error category, pending input and prompt/model version without exposing secrets or raw private prompts by default. Stop and resume disposable local generation without duplicate results. Unknown external outcomes require reconciliation, never automatic replay. Explain laptop sleep and interrupted runs.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-28 · Reviewed workflow templates and research queue",

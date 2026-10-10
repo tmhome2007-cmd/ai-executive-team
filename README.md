@@ -327,3 +327,5 @@ Sprint 4 first review increment: [shared contracts](docs/SPRINT_4_CONTRACTS.md) 
 BE-25 adds an [Executive skill library](docs/BE25_EXECUTIVE_SKILLS.md) under Business research: review-bound immutable procedures, separate owner acceptance, compatible new-exercise reuse and revocation. Procedure use grants no tools, spending or launch permission.
 
 BE-26 adds [private practice files](docs/BE26_PRIVATE_ARTIFACTS.md): exact TXT/Markdown exports, immutable provenance, authenticated downloads and revision comparisons. Exported bytes expire after 30 days; saved sample text and review records remain.
+
+BE-27 adds the [Run inspector](docs/BE27_RUN_INSPECTOR.md) under Business research: private progress metadata, cooperative stop and explicit guarded continuation. Uncertain external actions are never replayed by this feature.

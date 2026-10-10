@@ -804,6 +804,9 @@ def init_db() -> None:
     from memory.practice_artifacts import init_artifacts
 
     init_artifacts(cursor)
+    from memory.run_inspector import init_inspector
+
+    init_inspector(cursor)
     from memory.experiments import init_experiments
 
     init_experiments(cursor)

@@ -433,3 +433,7 @@ router.include_router(skills_router)
 from api.practice_artifacts import router as artifacts_router
 
 router.include_router(artifacts_router)
+
+from api.run_inspector import router as run_inspector_router
+
+router.include_router(run_inspector_router)
