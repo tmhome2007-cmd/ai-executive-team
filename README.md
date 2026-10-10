@@ -305,3 +305,5 @@ BE-18/19 were reviewed and accepted by the owner on 10 October 2026. Feminine po
 ## Before Sprint 3
 
 See [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) for the current conceptual, security, privacy and bug review. `./company audit` now includes eight application browser suites, actual audition playback, Docker isolation and local Ollama inference using disposable data and logs. Passing project checks does not establish business demand, earned profit or production readiness; the dependency findings remain visible.
+
+Sprint 3 proposed scope and acceptance examples: [SPRINT_3_PLAN.md](SPRINT_3_PLAN.md). The proposal prioritizes useful AI deliverables, business evidence and feedback within €0/no-launch constraints; implementation awaits scope selection.
