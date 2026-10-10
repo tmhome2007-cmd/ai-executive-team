@@ -5,6 +5,7 @@ import AiReport from "./components/ai-report";
 import VirtualOffice from "./components/virtual-office";
 import AgileBoard from "./components/agile-board";
 import BusinessDiscovery from "./components/business-discovery";
+import ExecutiveSkills from "./components/executive-skills";
 import Experiments from "./components/experiments";
 import OrganizationalWork from "./components/organizational-work";
 import CompanyRecords, { type ExecutiveProfile } from "./components/company-records";
@@ -2076,7 +2077,10 @@ export default function DashboardPage() {
           />
         )}
         {view === "business" && apiKey && (
-          <BusinessDiscovery apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+          <>
+            <BusinessDiscovery apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+            <ExecutiveSkills apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+          </>
         )}
         {view === "experiments" && apiKey && (
           <Experiments

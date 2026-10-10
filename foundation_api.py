@@ -425,3 +425,7 @@ from api.business import BusinessBriefRequest, BusinessReview
 router.include_router(people_router)
 router.include_router(business_router)
 router.include_router(conversation_audio_router)
+
+from api.skills import router as skills_router
+
+router.include_router(skills_router)

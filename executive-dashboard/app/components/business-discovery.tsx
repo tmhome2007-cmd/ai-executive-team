@@ -53,6 +53,13 @@ interface PracticeEvidence {
   scope: string;
 }
 interface Brief {
+  skill_version?: {
+    id: number;
+    name: string;
+    version: number;
+    usable: boolean;
+    unavailable_reason: string;
+  } | null;
   practice_specification?: {
     structured: boolean;
     rubric_digest: string;
@@ -104,6 +111,20 @@ export default function BusinessDiscovery({
       "The agents should do the work; I review and approve. No assumed owner professional skills. Research and private practice only. No spending, paid services, publishing or customer contact.",
     );
   const [url, setUrl] = useState("");
+  const [skillId, setSkillId] = useState("");
+  const [skillOffset, setSkillOffset] = useState(0);
+  const [moreSkills, setMoreSkills] = useState(false);
+  const [acceptedSkills, setAcceptedSkills] = useState<
+    {
+      id: number;
+      name: string;
+      version: number;
+      service_key: string;
+      deliverable_kind: string;
+      checks: string[];
+      usable: boolean;
+    }[]
+  >([]);
   const [option, setOption] = useState(""),
     [exercise, setExercise] = useState(""),
     [checks, setChecks] = useState(""),
@@ -498,6 +519,7 @@ export default function BusinessDiscovery({
                         "POST",
                         {
                           expected_version: selected.version,
+                          skill_version_id: skillId ? Number(skillId) : null,
                           selected_option: option,
                           service_key: service,
                           audience,
@@ -517,6 +539,72 @@ export default function BusinessDiscovery({
               >
                 <fieldset disabled={busy} className="space-y-3">
                   <legend>3. Choose a private practice exercise</legend>
+                  <label className="block">
+                    Reusable private procedure (optional)
+                    <select
+                      aria-label="Reusable private procedure (optional)"
+                      className="agile-input w-full"
+                      value={skillId}
+                      onChange={(e) => {
+                        setSkillId(e.target.value);
+                        const skill = acceptedSkills.find(
+                          (item) => String(item.id) === e.target.value,
+                        );
+                        if (skill) {
+                          setService(skill.service_key);
+                          setKind(skill.deliverable_kind);
+                          setChecks(skill.checks.join("\n"));
+                        }
+                      }}
+                    >
+                      <option value="">No reusable procedure</option>
+                      {acceptedSkills
+                        .filter((skill) => skill.usable)
+                        .map((skill) => (
+                          <option key={skill.id} value={skill.id}>
+                            {skill.name} · v{skill.version} · #{skill.id}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      act(async () => {
+                        setAcceptedSkills(await request("/skills?limit=100"));
+                      })
+                    }
+                  >
+                    Refresh accepted procedures
+                  </button>
+                  {moreSkills && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        act(async () => {
+                          const page = await request(
+                            `/skills?limit=100&offset=${skillOffset}`,
+                          );
+                          setAcceptedSkills((old) => [
+                            ...old,
+                            ...page.filter(
+                              (skill: { id: number }) =>
+                                !old.some((item) => item.id === skill.id),
+                            ),
+                          ]);
+                          setSkillOffset(skillOffset + 100);
+                          setMoreSkills(page.length === 100);
+                        })
+                      }
+                    >
+                      Load older procedure versions
+                    </button>
+                  )}
+                  <p className="text-sm">
+                    Selecting a procedure fills its service, format and checks. Keep
+                    these unchanged and use with different supplied facts. See Executive
+                    skill library below.
+                  </p>
                   <p className="text-sm">
                     Choose a prepared exercise or supply a brief. Approval freezes its
                     facts and checks; later revisions use the same rubric.
@@ -653,6 +741,14 @@ export default function BusinessDiscovery({
                 </fieldset>
               </form>
             )}
+          {selected.skill_version && (
+            <p>
+              Procedure: {selected.skill_version.name} · version{" "}
+              {selected.skill_version.version} · #{selected.skill_version.id}
+              {!selected.skill_version.usable &&
+                " · " + selected.skill_version.unavailable_reason}
+            </p>
+          )}
           {selected.practice_specification?.structured && (
             <details>
               <summary>Approved facts and rubric</summary>
