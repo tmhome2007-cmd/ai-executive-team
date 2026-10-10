@@ -288,7 +288,9 @@ def main():
                 True,
             ]
             page.get_by_text("Sample & review history (2 samples)", exact=True).click()
-            page.get_by_text("Sample 1", exact=False).first.wait_for()
+            page.get_by_text("Sample 1", exact=False).filter(
+                visible=True
+            ).first.wait_for()
             assert list_briefs()[0]["state"] == "reviewed"
             with get_connection() as conn:
                 assert (

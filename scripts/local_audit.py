@@ -79,6 +79,7 @@ def main():
                 "ALLOW_INSECURE_REMOTE_HTTP": "false",
                 "ARTIFACT_RETENTION_DAYS": "30",
                 "RUN_DOCKER_INTEGRATION": "1",
+                "NEXT_TELEMETRY_DISABLED": "1",
                 "NEXT_PUBLIC_API_BASE": "http://127.0.0.1:8001",
             }
         )
