@@ -339,3 +339,5 @@ Dashboard redesign: see [the layout and verification notes](docs/DASHBOARD_REDES
 Virtual office now includes the [BE-30 executive floor prototype](docs/BE30_OFFICE_FLOOR.md), with local camera controls, opt-in decorative movement and the existing 2D directory.
 
 Sprint 4 integration audit: [BE-32 findings, boundaries and short review commands](docs/BE32_SPRINT4_AUDIT.md). Use `./company audit` for disposable checks; your existing key and company database are preserved.
+
+Sprint 4 retrospective: [BE-33 evidence, lessons and proposed next-sprint actions](SPRINT_4_RETROSPECTIVE.md). Next-sprint priorities and pending merges require owner agreement.
