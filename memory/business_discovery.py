@@ -4,6 +4,8 @@ import json
 from memory.database import get_connection
 from memory.experiments import _text, _date
 from memory.business_practice_history import init_history, history
+from memory.practice_quality import init_quality, save_specification, specification, bind_sample, bind_review, feedback_summary, assert_specification
+from memory.business_evidence import init_business_evidence, freeze_context, research_context
 
 def instruction_check(value):
     return value.strip().lower().rstrip(':').strip() in {'one per line', 'one check per line', 'checks one per line'}
@@ -32,6 +34,8 @@ def init_business_discovery(cursor):
     if 'sample_created_at' not in columns:
         cursor.execute('ALTER TABLE business_discovery ADD COLUMN sample_created_at TEXT')
     init_history(cursor)
+    init_quality(cursor)
+    init_business_evidence(cursor)
 
 
 def get_brief(ident, include_history=True):
@@ -39,10 +43,16 @@ def get_brief(ident, include_history=True):
         conn.execute('BEGIN')
         row = conn.execute('SELECT * FROM business_discovery WHERE id = ?', (ident,)).fetchone()
         attempts = history(conn.cursor(), ident) if include_history else []
+        spec = specification(conn.cursor(), ident)
+        frozen_sources = research_context(conn.cursor(), ident) if include_history else []
+        feedback = feedback_summary(conn.cursor(), ident) if include_history else None
     if not row:
         raise LookupError('Research brief not found')
     result = dict(row)
     result['attempts'] = attempts
+    result['practice_specification'] = spec
+    result['research_sources'] = frozen_sources
+    result['feedback_summary'] = feedback
     for field in ('source_ids', 'checks', 'review'):
         result[field] = json.loads(result.pop(field + '_json') or 'null')
     from workflows.business_revision_contract import clean_deliverable
@@ -77,7 +87,7 @@ def create_brief(title, constraints, source_ids):
     return get_brief(cursor.lastrowid)
 
 
-def select_practice(ident, expected_version, selected_option, exercise, checks, observation_due_at):
+def select_practice(ident, expected_version, selected_option, exercise, checks, observation_due_at, service_key="legacy", audience="", supplied_facts="", deliverable_kind=""):
     if type(expected_version) is not int or expected_version < 1:
         raise ValueError('Invalid version')
     selected_option = _text(selected_option, 'selected option', 1000)
@@ -96,10 +106,11 @@ def select_practice(ident, expected_version, selected_option, exercise, checks, 
         conn.execute('BEGIN IMMEDIATE')
         cursor = conn.execute('''UPDATE business_discovery SET selected_option=?,exercise=?,checks_json=?,
             observation_due_at=?,state='practice_ready',version=version+1
-            WHERE id=? AND version=? AND state='research_ready' AND research_contract_version=2 ''',
+            WHERE id=? AND version=? AND state='research_ready' AND research_contract_version IN (2,3) ''',
             (selected_option, exercise, json.dumps(checks), observation_due_at, ident, expected_version))
         if cursor.rowcount != 1:
             raise RuntimeError('Refresh; practice requires current validated research. Create a new attempt for older reports.')
+        save_specification(conn.cursor(), ident, service_key=service_key, audience=audience, supplied_facts=supplied_facts, deliverable_kind=deliverable_kind, exercise=exercise, checks=checks)
         conn.commit()
     return get_brief(ident)
 
@@ -118,6 +129,11 @@ def claim_stage(ident, expected_version, stage):
             WHERE id=? AND version=? AND state=?''', (states[stage][1], ident, expected_version, states[stage][0]))
         if cursor.rowcount != 1:
             raise RuntimeError('Stage already started or brief changed; refresh')
+        if stage == 'research':
+            row=conn.execute('SELECT source_ids_json FROM business_discovery WHERE id=?',(ident,)).fetchone()
+            freeze_context(conn.cursor(),ident,json.loads(row[0]))
+        else:
+            assert_specification(conn.cursor(),ident)
         conn.commit()
     return get_brief(ident)
 
@@ -130,7 +146,7 @@ def finish_stage(ident, stage, output=None, claimed_version=None):
     if output is not None:
         output = _text(output, 'AI output', 30000)
     # Fixed queries only; no model-controlled SQL identifiers.
-    query = {'research': "UPDATE business_discovery SET research=?,state=?,research_contract_version=2,version=version+1 WHERE id=? AND state='research_running'",
+    query = {'research': "UPDATE business_discovery SET research=?,state=?,research_contract_version=3,version=version+1 WHERE id=? AND state='research_running'",
              'practice': "UPDATE business_discovery SET sample=?,state=?,sample_created_at=?,version=version+1 WHERE id=? AND state='practice_running'"}[stage]
     state = ('research_ready' if stage == 'research' else 'sample_ready') if output else 'needs_review'
     with get_connection() as conn:
@@ -143,7 +159,8 @@ def finish_stage(ident, stage, output=None, claimed_version=None):
             parameters += (claimed_version,)
         cursor = conn.execute(query, parameters)
         if stage == 'practice' and output and cursor.rowcount == 1:
-            conn.execute('INSERT INTO business_practice_samples(brief_id,attempt,sample,created_at) VALUES (?,1,?,?)', (ident, output, parameters[2]))
+            saved = conn.execute('INSERT INTO business_practice_samples(brief_id,attempt,sample,created_at) VALUES (?,1,?,?)', (ident, output, parameters[2]))
+            bind_sample(conn.cursor(), ident, saved.lastrowid)
         conn.commit()
     return get_brief(ident)
 
@@ -171,6 +188,7 @@ def review_practice(ident, expected_version, results, evidence, observed_at, cor
                   scope='Owner assessment of this sample only; not independent skill verification, demand evidence or launch approval')
     with get_connection() as conn:
         conn.execute('BEGIN IMMEDIATE')
+        assert_specification(conn.cursor(), ident)
         required_state = 'reviewed' if correction else 'sample_ready'
         cursor = conn.execute('''UPDATE business_discovery SET review_json=?,state='reviewed',version=version+1
             WHERE id=? AND version=? AND state=? ''', (json.dumps(review), ident, expected_version, required_state))
@@ -182,8 +200,9 @@ def review_practice(ident, expected_version, results, evidence, observed_at, cor
         reviews = conn.execute('SELECT id FROM business_practice_reviews WHERE sample_id=? ORDER BY id', (sample['id'],)).fetchall()
         if len(reviews) >= 20:
             raise ValueError('Assessment history limit reached for this sample')
-        conn.execute('INSERT INTO business_practice_reviews(sample_id,review_json,supersedes_review_id) VALUES (?,?,?)',
+        saved = conn.execute('INSERT INTO business_practice_reviews(sample_id,review_json,supersedes_review_id) VALUES (?,?,?)',
                      (sample['id'], json.dumps(review), reviews[-1]['id'] if correction and reviews else None))
+        bind_review(conn.cursor(), sample['id'], saved.lastrowid)
         conn.commit()
     return get_brief(ident)
 
@@ -194,6 +213,7 @@ def claim_revision(ident, expected_version):
         row = conn.execute('SELECT * FROM business_discovery WHERE id=?', (ident,)).fetchone()
         if not row or row['version'] != expected_version or row['state'] not in {'reviewed', 'needs_review'} or not row['sample'] or not row['review_json']:
             raise RuntimeError('Revision requires a reviewed sample and current version; refresh')
+        assert_specification(conn.cursor(), ident)
         count = conn.execute('SELECT COUNT(*) FROM business_practice_samples WHERE brief_id=?', (ident,)).fetchone()[0]
         if not 1 <= count < 10:
             raise ValueError('Practice history supports at most ten samples per brief')
@@ -215,8 +235,9 @@ def finish_revision(ident, output, claimed_version=None):
                 previous = conn.execute('SELECT * FROM business_practice_samples WHERE brief_id=? ORDER BY attempt DESC LIMIT 1', (ident,)).fetchone()
                 review = conn.execute('SELECT id FROM business_practice_reviews WHERE sample_id=? ORDER BY id DESC LIMIT 1', (previous['id'],)).fetchone()
                 now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                conn.execute('''INSERT INTO business_practice_samples(brief_id,attempt,sample,created_at,parent_sample_id,feedback_review_id,changes)
+                saved = conn.execute('''INSERT INTO business_practice_samples(brief_id,attempt,sample,created_at,parent_sample_id,feedback_review_id,changes)
                     VALUES (?,?,?,?,?,?,?)''', (ident, previous['attempt']+1, output, now, previous['id'], review['id'], 'See revision report; AI-described changes remain unverified'))
+                bind_sample(conn.cursor(), ident, saved.lastrowid)
                 conn.execute("UPDATE business_discovery SET sample=?,sample_created_at=?,review_json=NULL,state='sample_ready',version=version+1 WHERE id=?", (output, now, ident))
             else:
                 conn.execute("UPDATE business_discovery SET state='needs_review',version=version+1 WHERE id=?", (ident,))

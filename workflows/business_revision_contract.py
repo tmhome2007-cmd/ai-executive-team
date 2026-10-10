@@ -91,7 +91,7 @@ def validate_sample(raw, exercise, preserve_unknowns=False):
                     raise ValueError('Revision still invents an interface detail absent from the exercise: ' + detail)
     if re.search(r'\b(?:meets all|passes all|all checks (?:pass|passed)|owner (?:approved|accepted))\b', sample, re.I):
         raise ValueError('AI revision cannot establish passing checks or owner approval')
-    if re.search(r'reminder.*unknown', exercise, re.I):
+    if re.search(r'reminders?\s+(?:(?:functionality|behavior|support|feature)\s+)?(?:is\s+|are\s+)?(?:unknown|unspecified)', exercise, re.I):
         for line in sample.splitlines():
             action = re.search(r'\b(?:set|enable|configure|add)\b[^\n.]{0,80}\breminders?\b', line, re.I)
             negative = re.search(r'\b(?:do not|cannot|can.not)\s+(?:set|enable|configure|add)\b', line, re.I)
@@ -99,6 +99,6 @@ def validate_sample(raw, exercise, preserve_unknowns=False):
             observation = re.search(r'\b(?:ability|whether|unknown|unspecified)\b', line, re.I) and not re.match(r'\s*(?:\d+[.)]\s+|[-*]\s+|A:\s*)?(?:set|enable|configure|add|you)\b', line, re.I)
             if action and not (negative or question or observation):
                 raise ValueError('Unknown reminder functionality cannot be an instruction to set a reminder')
-    if re.search(r'reminder.*unknown', exercise, re.I) and not re.search(r'reminder.*unknown', sample, re.I):
+    if re.search(r'reminders?\s+(?:(?:functionality|behavior|support|feature)\s+)?(?:is\s+|are\s+)?(?:unknown|unspecified)', exercise, re.I) and not re.search(r'reminder.*unknown', sample, re.I):
         sample += '\n\nReminder functionality is unknown, as specified in the exercise.'
     return sample

@@ -2,7 +2,7 @@
 
 10 October 2026. Baseline: merged pre-Sprint 3 audit PR #34, main `505eac5639b4d17783a0071be509828acb7be83f`.
 
-Status: proposed scope, awaiting owner selection. No feature implementation has started. [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) identifies the evidence and design gaps. BE-15–19 are completed Sprint 2 history.
+Status: owner selected BE-20–22. Implementation is in review; BE-23 is deferred. See [SPRINT_3_PRACTICE_EVIDENCE.md](SPRINT_3_PRACTICE_EVIDENCE.md) for the implementation and owner checks. [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) identifies the evidence and design gaps. BE-15–19 are completed Sprint 2 history.
 
 ## Sprint goal
 
@@ -17,7 +17,7 @@ The agents produce useful private work, explain which business options the evide
 | BE-22 | High | Measure improvement from recorded feedback | Link each revision to the exact sample/review/rubric version. Display before/after owner assessments and unresolved failures; changed rubrics cannot silently count as improvement. Preserve failed samples and corrected assessments. At least two separate assessed examples are needed before displaying repeated practice evidence; no aggregate evidence grants launch, execution authority or verified professional competence. | BE-20; existing retained practice history |
 | BE-23 | Optional | Actual local voiced executive conversations | Owner explicitly requests synthesis of a selected published contribution with a saved available local neural voice. Playback loads duration, plays and stops; failures/reload are clear. Bound text/work/time/cache use, protect media with owner auth, keep keys out of URLs and exclude company text from cloud services. Cache/history are linked to contribution/profile versions. Agree generated-audio retention before implementation. Auditions remain distinct. | Existing BE-19 auditions/preferences; separate scope choice |
 
-Recommended commitment: BE-20–22. BE-23 is optional; full 3D offices, autonomous employee tools, cloud voices, model training and commercial delivery remain future work. These IDs are planning records, not evidence that live dashboard cards were created or approved.
+Selected commitment: BE-20–22. BE-23 is optional; full 3D offices, autonomous employee tools, cloud voices, model training and commercial delivery remain future work. These IDs are planning records, not evidence that live dashboard cards were created or approved.
 
 ## Conceptual design before coding
 
