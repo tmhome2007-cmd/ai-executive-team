@@ -217,7 +217,7 @@ def main():
         nav.get_by_role("button", name="Overview", exact=True).click()
         nav.get_by_role("button", name="Virtual office", exact=True).click()
         page.get_by_role("heading", name="Virtual office", exact=True).last.wait_for()
-        assert page.get_by_role("button", name="Inspect ", exact=False).count() == 11
+        assert page.locator(".office-desk").count() == 11
         page.get_by_role("button", name="Inspect CTO", exact=True).click()
         inspector = page.get_by_role("complementary", name="Executive inspector")
         assert inspector.get_by_text(

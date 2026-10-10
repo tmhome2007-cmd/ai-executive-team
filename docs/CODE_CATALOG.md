@@ -519,6 +519,7 @@ Owner classifications and frozen research contexts. Neither verifies demand.
 
 - `init_business_evidence`
 - `annotation`
+- `publication_age`: Age of a date-only publication, allowing today's calendar date worldwide.
 - `classify_source`
 - `business_sources`
 - `freeze_context`

@@ -196,18 +196,10 @@ def evidence_comparison(claims, proposals, sources):
             and context.get("category") in {"demand", "buyer"}
         )
         if date:
-            try:
-                eligible = (
-                    eligible
-                    and 0
-                    <= (
-                        datetime.datetime.now(datetime.timezone.utc).date()
-                        - datetime.date.fromisoformat(date)
-                    ).days
-                    <= 365
-                )
-            except ValueError:
-                eligible = False
+            from memory.business_evidence import publication_age
+
+            age = publication_age(date)
+            eligible = eligible and age is not None and age <= 365
         publisher = urlsplit(source["reference"]).hostname
         if (
             claim["relation"] == "contradicts"

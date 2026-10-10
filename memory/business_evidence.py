@@ -44,6 +44,25 @@ def annotation(cursor, source_id):
     return value
 
 
+def publication_age(value, now=None):
+    """Age of a date-only publication, allowing today's calendar date worldwide.
+
+    A publication date has no time or timezone. UTC+14 can already be tomorrow;
+    accepting that date avoids rejecting genuine local-day records around midnight.
+    This is a calendar bound, never independent verification of the source.
+    """
+    try:
+        date = datetime.date.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    now = now.astimezone(datetime.timezone.utc)
+    latest_calendar_date = (now + datetime.timedelta(hours=14)).date()
+    if date > latest_calendar_date:
+        return None
+    return max(0, (now.date() - date).days)
+
+
 def classify_source(
     source_id, expected_version, category, services, publication_date=None, note=""
 ):
@@ -65,7 +84,7 @@ def classify_source(
             date = datetime.date.fromisoformat(publication_date)
         except (ValueError, TypeError):
             raise ValueError("Publication date must be YYYY-MM-DD") from None
-        if date > datetime.datetime.now(datetime.timezone.utc).date():
+        if publication_age(date.isoformat()) is None:
             raise ValueError("Publication date cannot be in the future")
         publication_date = date.isoformat()
     note = _text(note, "classification note", 1000, False)

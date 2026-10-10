@@ -1,6 +1,7 @@
 """Combined Sprint 4 privacy and recovery checks using disposable company data."""
 
 import unittest
+import datetime
 from pathlib import Path
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -165,3 +166,37 @@ class SprintFourIntegrationTests(unittest.TestCase):
             claim_continuation(
                 run["id"], run["control_version"], get_brief(brief["id"])["version"]
             )
+
+    def test_publication_date_uses_calendar_days_at_local_midnight(self):
+        from memory.business_evidence import classify_source, publication_age
+
+        instant = datetime.datetime(2026, 10, 10, 22, tzinfo=datetime.timezone.utc)
+
+        class Clock(datetime.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+        self.assertEqual(publication_age("2026-10-11", instant), 0)
+        self.assertIsNone(publication_age("2026-10-12", instant))
+        self.assertIsNone(publication_age("invalid", instant))
+        self.assertEqual(publication_age("2026-10-09", instant), 1)
+        with patch("memory.business_evidence.datetime.datetime", Clock):
+            saved = classify_source(
+                self.ids[0],
+                0,
+                "buyer",
+                ["documentation"],
+                "2026-10-11",
+                "Synthetic date-only publication",
+            )
+            self.assertEqual(saved["publication_date"], "2026-10-11")
+            with self.assertRaisesRegex(ValueError, "future"):
+                classify_source(
+                    self.ids[1],
+                    0,
+                    "buyer",
+                    ["documentation"],
+                    "2026-10-12",
+                    "Synthetic future date",
+                )
