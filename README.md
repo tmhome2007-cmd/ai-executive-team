@@ -306,7 +306,7 @@ BE-18/19 were reviewed and accepted by the owner on 10 October 2026. Feminine po
 
 See [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) for the current conceptual, security, privacy and bug review. `./company audit` now includes eight application browser suites, actual audition playback, Docker isolation and local Ollama inference using disposable data and logs. Passing project checks does not establish business demand, earned profit or production readiness; the dependency findings remain visible.
 
-Sprint 3 selected scope and acceptance examples: [SPRINT_3_PLAN.md](SPRINT_3_PLAN.md). BE-20–22 add structured private exercises, frozen business evidence comparisons and assessment-based feedback tracking within €0/no-launch constraints. Implementation and review steps: [SPRINT_3_PRACTICE_EVIDENCE.md](SPRINT_3_PRACTICE_EVIDENCE.md). Owner acceptance remains pending; BE-23 is deferred.
+Sprint 3 selected scope and acceptance examples: [SPRINT_3_PLAN.md](SPRINT_3_PLAN.md). BE-20–22 add structured private exercises, frozen business evidence comparisons and assessment-based feedback tracking within €0/no-launch constraints. Implementation and review steps: [SPRINT_3_PRACTICE_EVIDENCE.md](SPRINT_3_PRACTICE_EVIDENCE.md). BE-20–22 are accepted and merged in PR #36. BE-23 local spoken contributions are implemented in draft PR #37, awaiting owner listening review.
 
 ### Local spoken contributions (BE-23)
 
