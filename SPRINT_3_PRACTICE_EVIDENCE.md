@@ -55,3 +55,8 @@ Owner review exposed an unsupported task-list interface in a FAQ. Unknown-interf
 ### Revision attribution correction
 
 A revised guide corrected the task-list error but its model-generated change list claimed removal of controls absent from the parent. Revision rendering now discards those semantic change claims and reports literal non-empty-line changes against the saved parent; counts grant no quality verdict. Prompt guidance no longer supplies a removal list for the model to echo. Historical reports remain intact, while sample display omits their unverified change section. Verified with 35 business/practice tests, including the observed invented-removal regression and historical display handling, and the disposable browser revision/review flow.
+
+### Return-policy duration correction
+
+The support sample added “of purchase” to a supplied 14-day return window whose starting event was unspecified. Reply validation now rejects common unsupported purchase/delivery/receipt/order anchors, and generation guidance preserves the supplied policy wording. This is a bounded regression check, not a universal policy verifier. Existing approved facts and history remain unchanged. The 36 business/practice tests pass, including unsupported anchors and an explicitly supplied purchase anchor.
+A disposable local Ollama support-draft run (`audit-results/sprint3-examples-20261010-181315`) preserved “within 14 days” without adding a start event and passed structural checks; no owner assessment or customer contact was recorded.

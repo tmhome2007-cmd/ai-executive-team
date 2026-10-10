@@ -115,6 +115,8 @@ def run_stage(ident, expected_version, stage):
                    'Use the approved audience and supplied facts. Make instructions useful with a clearly fictional example when requested; do not merely repeat function names. '
                    'For a task guide with unspecified controls, describe the supplied task text moving through create, edit and complete; do not ask for separate names, descriptions, priorities or dates. '
                    'Do not mention an interface detail absent from the specification except to state it is unknown. Questions and FAQ answers must follow the same rule.')
+    if stage in {'practice', 'revision'}:
+        prompt += '\nFor policy replies, preserve the supplied policy wording. A 14-day duration alone does not say it starts at purchase, delivery or receipt; keep that start event unknown unless explicitly supplied. Do not add unrequested self-evaluation notes.\n'
     digest = hashlib.sha256(prompt.encode()).hexdigest()
     def worker():
         try:

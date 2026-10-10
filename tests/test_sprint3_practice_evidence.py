@@ -197,6 +197,16 @@ class SprintThreeTests(unittest.TestCase):
         historical = revised + '\n\n**Changes described by AI — verify against the previous sample**\n- Removed unsupported pencil icons\n\n**Remaining unknowns**\n- Cause unknown'
         self.assertNotIn('pencil icons',clean_deliverable(historical))
 
+    def test_return_reply_does_not_invent_policy_period_start(self):
+        spec=dict(structured=True,specification=dict(TEMPLATES[2]))
+        sample='Thank you for your enquiry. Unused items may be reviewed for return within 14 days. Please provide the purchase date and item condition for review. No refund has been approved or issued.'
+        self.assertTrue(validate_deliverable(sample,spec))
+        for anchor in ('of purchase','after delivery','from receipt'):
+            with self.assertRaisesRegex(ValueError,'Do not invent when'):
+                validate_deliverable(sample.replace('within 14 days.',f'within 14 days {anchor}.'),spec)
+        spec['specification']['supplied_facts']+=' The 14 days start at purchase: within 14 days of purchase.'
+        self.assertTrue(validate_deliverable(sample.replace('within 14 days.','within 14 days of purchase.'),spec))
+
     def test_three_representative_deliverables_and_observed_failure(self):
         samples=[
             '**Task guide**\n1. Create a task for the fictional example “Read chapter one” using the create function; exact controls are unknown.\n2. Edit that same task to “Read chapter two” using the edit function; keep the revised text with that task.\n3. Complete that task using the complete function after the fictional reading activity; check its recorded completion.\n**FAQ**\nQ: How do I start?\nA: Choose a short task description and use the create function.\nQ: How do I change it?\nA: Update the chosen task using the edit function.\nQ: How do I finish it?\nA: Use the complete function for the task you finished.\nInterface controls and reminder functionality are unknown.',

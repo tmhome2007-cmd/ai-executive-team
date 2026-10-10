@@ -47,6 +47,12 @@ def validate_deliverable(raw, specification):
     elif kind=='reply':
         if '14 days' in scope.lower() and not re.search(r'\b14(?:[- ]day| days)\b',lower):
             raise ValueError('Preserve the supplied 14-day policy')
+        # A duration alone does not establish whether purchase, delivery or receipt starts it.
+        period_anchor = r'\b14(?:[- ]day| days)\s+(?:of|after|from|following|since)\s+(?:the\s+|your\s+)?(purchase|delivery|receipt|order)\b'
+        supplied_anchors = set(re.findall(period_anchor, scope, re.I))
+        for anchor in re.findall(period_anchor, sample, re.I):
+            if anchor.casefold() not in {value.casefold() for value in supplied_anchors}:
+                raise ValueError('Do not invent when the supplied 14-day return period starts; preserve its wording and label the start event unknown')
         if 'unused' in scope.lower() and 'unused' not in lower:
             raise ValueError('Preserve the unused-item policy condition')
         if not ('purchase date' in lower and ('condition' in lower or 'unused' in lower)):
