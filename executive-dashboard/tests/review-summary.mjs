@@ -39,3 +39,6 @@ const suggestions = businessProposals(urls.map(url => 'Proposed public source (n
 assert.equal(suggestions.withheld, 3);
 assert.equal(suggestions.sources.length, 1);
 console.log('PASS: historical next actions and placeholder source controls');
+
+assert.deepEqual(reviewSummary('**Next research step**\nFind recent buyer requests.\nProposed public source (not read): https://example.org/public-page — buyer evidence to investigate').next, ['Find recent buyer requests.']);
+console.log('PASS: source proposal text stays outside action excerpts');

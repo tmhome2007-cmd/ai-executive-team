@@ -96,7 +96,7 @@ def run_stage(ident, expected_version, stage):
                    'Copy the two example task texts exactly from the approved supplied facts. Do not put instructions into these two values. '
                    'No click, tap, press, button, icon, field, tab or completion indicator is supplied. Do not invent them and label them unknown afterwards. '
                    'FAQ answers explain choosing the same task by its recorded text, updating it with the edit function and recording completion with the complete function. These functions are supplied facts, never missing or unknown. '
-                   'Only the interface controls and reminder functionality remain unknown. The server renders the three function steps and FAQ labels.\n')
+                   'Identify the same task by its recorded text without assuming a list of tasks, menu, screen or selection control. Only the interface controls and reminder functionality remain unknown. The server renders the three function steps and FAQ labels.\n')
     if stage == 'revision':
         prompt += ('\nFINAL OUTPUT REQUIREMENTS: Write the actual complete sample in revised_sample. '
                    'The revised_sample value must be ONE TEXT STRING with paragraphs and line breaks, never a nested JSON object. '

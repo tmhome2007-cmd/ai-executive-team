@@ -7,7 +7,7 @@ from memory.experiments import _text
 class GuideFAQ(BaseModel):
     model_config=ConfigDict(extra='forbid')
     question: str
-    answer: str = Field(description='Explain the supplied create, edit or complete function. Only its UI controls are unknown; do not call the supplied function unavailable or unspecified.')
+    answer: str = Field(description='Explain the supplied create, edit or complete function. Only its UI controls are unknown; do not call the supplied function unavailable or unspecified. Identify the same task by its recorded text; never assume a task list, menu, screen or selection control exists.')
 
 
 class TaskGuideDraft(BaseModel):

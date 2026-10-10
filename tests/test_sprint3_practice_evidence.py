@@ -179,7 +179,7 @@ class SprintThreeTests(unittest.TestCase):
         rendered=render_task_guide(json.dumps(draft))
         self.assertNotIn('A: A:',rendered)
         self.assertTrue(validate_deliverable(rendered,dict(structured=True,specification=TEMPLATES[0])))
-        for invalid in ('Click the Create Task button for the fictional example (interface control unknown).', 'Create the fictional task by entering its text into the task text field.'):
+        for invalid in ('Click the Create Task button for the fictional example (interface control unknown).', 'Create the fictional task by entering its text into the task text field.', "You can choose a task by its recorded text. For example, select it from the list of tasks.", 'Choose the task from the task list; interface controls are unknown.'):
             draft['faqs'][0]['answer']=invalid
             with self.assertRaises(ValueError): validate_deliverable(render_task_guide(json.dumps(draft)),dict(structured=True,specification=TEMPLATES[0]))
 

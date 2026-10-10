@@ -25,9 +25,14 @@ def validate_deliverable(raw, specification):
             raise ValueError('Use a clearly fictional task example to make the sequence understandable')
         if re.search(r'interface.*(?:unknown|unspecified)',scope,re.I):
             for line in sample.splitlines():
-                action = re.search(r'\b(?:click|tap|press)\b',line,re.I) or (re.search(r'\b(?:button|icon|tab|field)\b',line,re.I) and (re.match(r'\s*\d+[.)]',line) or re.search(r'\b(?:use|enter\w*|fill\w*|type|select)\b',line,re.I)))
+                click = re.search(r'\b(?:click|tap|press)\b',line,re.I)
+                invented_view = (re.search(r'\b(?:task list|list of tasks|task menu|task screen|task page|dashboard)\b',line,re.I)
+                                 and re.search(r'\b(?:select|choose|find|open|view|navigate|display|shown|appears)\b',line,re.I))
+                invented_field = (re.search(r'\b(?:button|icon|tab|field)\b',line,re.I)
+                                  and (re.match(r'\s*\d+[.)]',line) or re.search(r'\b(?:use|enter\w*|fill\w*|type|select)\b',line,re.I)))
+                action = click or invented_view or invented_field
                 if action and not re.search(r'\b(?:do not|cannot|never)\b',line,re.I):
-                    raise ValueError('Unknown interface controls cannot become instructions to click controls or fill invented fields')
+                    raise ValueError('Unknown interface controls cannot become instructions using invented controls, task views or fields')
         if re.search(r'interface.*(?:unknown|unspecified)',scope,re.I) and not re.search(r'(?:interface|controls|buttons).*?(?:unknown|unspecified|not specified)',sample,re.I):
             raise ValueError('Guide must label unknown interface controls explicitly')
     elif kind=='evidence_summary':

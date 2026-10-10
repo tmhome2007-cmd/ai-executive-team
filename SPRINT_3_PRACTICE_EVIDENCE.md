@@ -47,3 +47,7 @@ Python dependency scanning still reports the same four known Chroma advisories. 
 ### Research-card review correction
 
 The prompt no longer supplies an example source URL that the model can copy. Reserved example/test domains are withheld from generated recommendations, and existing reports retain their text while the dashboard removes those source-read controls. The short review now recognizes the legacy “Practice candidate only:” field and the next research step. New reports give explicit prepared-exercise instructions. Verified with 34 business/practice tests, summary and proposal-control tests, frontend lint (one existing image warning), and a production build.
+
+### Task-guide FAQ review correction
+
+Owner review exposed an unsupported task-list interface in a FAQ. Unknown-interface checks now also reject instructions using invented task views, and generation/schema guidance explicitly prohibits assuming a task list or selection control. Source-proposal lines are excluded from action excerpts, including historical placeholder proposals; original reports remain intact. The 34 business/practice tests, summary tests, lint and production build pass. A disposable real local Ollama task-guide run (`audit-results/sprint3-examples-20261010-172953`) produced FAQs without the invented task list and passed structural checks. Usefulness remains an owner assessment.
