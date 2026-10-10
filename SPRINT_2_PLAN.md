@@ -1,6 +1,6 @@
 # Sprint 2 planning proposal — 9 October 2026
 
-Owner-selected scope: BE-15 and BE-16. Both are Done: the owner tested startup and the report view, accepted the result and authorized merge on 9 October 2026. BE-17–19 remain Backlog.
+Owner-selected scope: BE-15 and BE-16. Both are Done: the owner tested startup and the report view, accepted the result and authorized merge on 9 October 2026. BE-17 is also Done after owner acceptance and PR #31 merge on 10 October 2026. BE-18/19 remain Backlog.
 
 Sprint goal: make the company easier to run locally and its recommendations easier to review. The owner chooses the final sprint scope; these items begin in Backlog, not as a commitment to deliver all five.
 
@@ -18,4 +18,21 @@ Work one coherent story at a time. Review acceptance examples before coding, ver
 
 Implementation and acceptance steps: [SPRINT_2_LOCAL_REVIEW.md](SPRINT_2_LOCAL_REVIEW.md).
 
-BE-17 discovery is now in progress at the owner's request. Its clarified scope is AI-operated research with €0 spending and €0 permitted loss; the owner's personal professional skills are not a prerequisite. See [BE17_DISCOVERY.md](BE17_DISCOVERY.md) for the existing capability map and proposed acceptance example. The owner approved implementation. The guided workflow is now in Review; owner acceptance and option selection remain pending. See [BE17_LOCAL_REVIEW.md](BE17_LOCAL_REVIEW.md).
+BE-17 discovery is now in progress at the owner's request. Its clarified scope is AI-operated research with €0 spending and €0 permitted loss; the owner's personal professional skills are not a prerequisite. See [BE17_DISCOVERY.md](BE17_DISCOVERY.md) for the existing capability map and proposed acceptance example. The owner approved implementation. The bounded €0 research/private-practice workflow is Done: the owner accepted the local review and authorized PR #31 merge on 10 October 2026. This acceptance does not establish a best business, competence or launch authority. See [BE17_LOCAL_REVIEW.md](BE17_LOCAL_REVIEW.md).
+
+## Conceptual review — 10 October 2026
+
+See [CONCEPTUAL_SYSTEM_AUDIT.md](CONCEPTUAL_SYSTEM_AUDIT.md) for the implemented system map and proposed next stories. BE-18 and BE-19 remain the existing appearance/voice backlog; the audit proposals need separate scope selection. Earlier scope suggestions above are historical.
+
+## Remaining Sprint 2 implementation — 10 October 2026
+
+Owner requested completion of Sprint 2, approved the explicit character identities, and requested both local voice improvements and other-provider comparison. BE-18/19 are now in Review. See [SPRINT_2_CHARACTER_VOICE_REVIEW.md](SPRINT_2_CHARACTER_VOICE_REVIEW.md) for implementation, candidate research and owner review. Neither subjective audio/visual acceptance nor a new provider choice is recorded yet. Earlier Backlog entries are historical.
+
+Draft retrospective: [SPRINT_2_RETROSPECTIVE.md](SPRINT_2_RETROSPECTIVE.md). Final closure follows owner visual/audio acceptance; no Done checkbox is recorded for an unreviewed voice.
+
+Second review: the owner rejected initial character/voice quality. A further portrait redesign and optional local Kokoro audition pack are implemented for another review; no final appearance/audio acceptance or sprint closure is recorded. See the latest section of the character/voice review guide.
+
+
+## Owner acceptance — 10 October 2026
+
+The owner confirmed the corrected neural auditions play, completed review and authorized merge. BE-18 and BE-19 are Done for the implemented character presentation, local voice comparison and neural audition/preference scope. Earlier pending/rejected review entries remain historical. Sprint 2 review is complete. Generated-conversation neural synthesis, 3D animation and paid/cloud voices remain future work.

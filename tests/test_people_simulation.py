@@ -69,6 +69,44 @@ class PeopleSimulationTests(unittest.TestCase):
         changed=copy.deepcopy(original);changed['voice']['provider']='remote_clone'
         with self.assertRaises(ValueError): validate_presentation(changed['appearance'],changed['body'],changed['voice'])
 
+    def test_owner_selected_portrait_defaults_and_natural_voice_pitch(self):
+        for key in ('cfo','general_counsel','cmo','board_director','cto'):
+            profile=get_character(f'executive:{key}')
+            self.assertEqual(profile['appearance']['portrait_style'],'feminine')
+            self.assertIn('woman',profile['appearance']['description'])
+            self.assertFalse(profile['appearance']['beard'])
+            self.assertEqual(profile['voice']['pitch'],1.0)
+        self.assertEqual(get_character('executive:chro')['appearance']['portrait_style'],'androgynous')
+        profile=get_character('executive:ceo')
+        changed=copy.deepcopy(profile);changed['appearance']['portrait_style']='invalid'
+        with self.assertRaises(ValueError): validate_presentation(changed['appearance'],changed['body'],changed['voice'])
+        del changed['appearance']['portrait_style']
+        appearance,_,_=validate_presentation(changed['appearance'],changed['body'],changed['voice'])
+        self.assertEqual(appearance['portrait_style'],'androgynous')
+
+    def test_legacy_default_upgrade_retains_history_and_skips_owner_edits(self):
+        import json
+        from memory.character_profiles import default_presentation
+        from agents.identities import EXECUTIVE_NAMES
+        from memory.database import init_db
+        for key in ('cfo','cto'):
+            old=default_presentation(key,list(EXECUTIVE_NAMES).index(key),legacy=True)
+            if key=='cto': old['appearance']['description']='Owner chosen appearance'
+            with get_connection() as conn:
+                # Disposable fixture only: emulate a pre-upgrade database.
+                conn.execute('DROP TRIGGER character_no_update')
+                conn.execute('UPDATE character_profiles SET appearance=?,body=?,voice=? WHERE character_key=?',(json.dumps(old['appearance']),json.dumps(old['body']),json.dumps(old['voice']),f'executive:{key}'))
+                conn.commit()
+            init_db()
+        self.assertEqual(get_character('executive:cfo')['version'],2)
+        self.assertEqual(len(character_history('executive:cfo')),2)
+        self.assertNotIn('portrait_style',character_history('executive:cfo')[-1]['appearance'])
+        self.assertEqual(get_character('executive:cto')['version'],2)
+        self.assertEqual(get_character('executive:cto')['appearance']['portrait_style'],'feminine')
+        self.assertEqual(get_character('executive:cto')['voice'],default_presentation('cto',list(EXECUTIVE_NAMES).index('cto'),legacy=True)['voice'])
+        self.assertEqual(get_character('executive:cto')['appearance']['description'],'Owner chosen appearance')
+        init_db();self.assertEqual(len(character_history('executive:cfo')),2)
+
     def test_employee_creation_idempotence_and_no_executive_authority(self):
         ident=create_employee(creation_key='same',name='Fictional employee',job_title='Test assistant',department_id=1,capacity_hours=8)
         self.assertEqual(create_employee(creation_key='same',name='Fictional employee',job_title='Test assistant',department_id=1,capacity_hours=8),ident)

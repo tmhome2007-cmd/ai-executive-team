@@ -176,3 +176,12 @@ research brief, local tool-free comparisons, owner-selected text practice and
 observed pass/fail review. Records grant no action or launch authority. See
 [BE17_LOCAL_REVIEW.md](BE17_LOCAL_REVIEW.md) for verification and explicit limits.
 Owner acceptance is pending; this item is not Done.
+
+## BE-17 acceptance — 10 October 2026
+
+Owner accepted the bounded research/private-practice workflow and authorized PR #31 merge. BE-17 is Done; earlier Backlog/Review entries are historical. BE-18/19 remain Backlog. This is not commercial launch acceptance. See [CONCEPTUAL_SYSTEM_AUDIT.md](CONCEPTUAL_SYSTEM_AUDIT.md) for current boundaries and proposed follow-ups.
+
+
+## Owner acceptance — 10 October 2026
+
+The owner confirmed the corrected neural auditions play, completed review and authorized merge. BE-18 and BE-19 are Done for the implemented character presentation, local voice comparison and neural audition/preference scope. Earlier pending/rejected review entries remain historical. Sprint 2 review is complete. Generated-conversation neural synthesis, 3D animation and paid/cloud voices remain future work.

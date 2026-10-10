@@ -25,6 +25,7 @@ const securityHeaders = [
       "frame-ancestors 'none'",
       "object-src 'none'",
       "img-src 'self' blob: data:",
+      "media-src 'self' blob:",
       "font-src 'self' data:",
       "style-src 'self' 'unsafe-inline'",
       scriptSrc,

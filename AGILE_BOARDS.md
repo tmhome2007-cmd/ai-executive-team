@@ -12,7 +12,7 @@ records acceptance criteria, and edits task state. Six columns are available: Ba
 Ready, In progress, Review, Done and Blocked. Criteria are required before starting work,
 blockers require reasons, and Done requires a completion note. Existing execution and
 approval controls remain authoritative. This first version supports manual planning;
-executives do not automatically pick up cards or execute tasks yet.
+executives do not automatically execute arbitrary cards. Separately approved executive plans can dispatch dependency-aware, tool-free recommendations; resulting decisions and actions retain their own owner gates.
 
 ## Development roadmap
 
@@ -74,3 +74,5 @@ Run `.venv/bin/python scripts/agile_smoke.py` while the dashboard built for port
 running on localhost:3000. API requests go to a disposable in-process test backend, never
 the user's running company backend. Scheduler lifespan is not started; no business
 execution, funding, resource fulfillment or notification is performed.
+
+The initial roadmap-board template covers BE-01–14. Later sprint scope and dated acceptance are recorded in [SPRINT_2_PLAN.md](SPRINT_2_PLAN.md) and [BACKEND_AGILE_ROADMAP.md](BACKEND_AGILE_ROADMAP.md); the template is not a complete current backlog. See [CONCEPTUAL_SYSTEM_AUDIT.md](CONCEPTUAL_SYSTEM_AUDIT.md) for the distinction between development tracking and company authority.

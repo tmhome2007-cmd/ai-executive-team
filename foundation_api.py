@@ -365,6 +365,7 @@ from memory.personal_simulation import settings,set_enabled,relationship,record_
 
 
 class AppearanceRequest(StrictRequest):
+    portrait_style: Literal['masculine','feminine','androgynous'] = 'androgynous'
     description: str = Field(min_length=1,max_length=1000)
     skin_tone: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
     hair_color: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
@@ -382,7 +383,7 @@ class BodyRequest(StrictRequest):
 
 
 class VoiceRequest(StrictRequest):
-    provider: Literal['browser_local']
+    provider: Literal['browser_local','kokoro_local']
     language: str = Field(pattern=r'^[a-z]{2,3}-[A-Z]{2}$')
     voice_name: str = Field(max_length=120)
     pitch: float = Field(ge=.5,le=1.5,strict=True)
@@ -395,6 +396,19 @@ class CharacterRequest(StrictRequest):
     appearance: AppearanceRequest
     body: BodyRequest
     voice: VoiceRequest
+
+
+@router.get('/characters/voice-samples')
+def neural_sample_catalog():
+    from workflows.local_voice_samples import sample_catalog
+    return sample_catalog()
+
+
+@router.get('/characters/voice-samples/{voice}')
+def neural_sample(voice: str):
+    from fastapi.responses import Response
+    from workflows.local_voice_samples import sample_audio
+    return Response(content=invoke(sample_audio,voice),media_type='audio/wav',headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 
 
 @router.get('/characters/{key}')

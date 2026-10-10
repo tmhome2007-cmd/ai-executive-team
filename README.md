@@ -1,13 +1,51 @@
 # AI Executive Team
 
-A local-first multi-agent system where AI "executives" (CEO, CFO, COO, CSO, CMO,
-CTO, CHRO, General Counsel, CPO, Board Director, CCO) research real information,
-hold structured meetings, and — with human approval — take real actions on your
-machine: running commands, editing files, and navigating web pages.
+A local-first, owner-controlled AI company command center. Eleven executives research, discuss, plan and propose work; the owner reviews direction and consequential actions. Goals, evidence, treasury, resources, experiments, memory, boards and activity records provide organizational history.
 
-This repo only contains source code. `venv/`, `node_modules/`, and `.env` are
-intentionally excluded (see `.gitignore`) — follow the steps below to rebuild
-them on any machine.
+The current business workflow is **€0 research and private text practice**. The agents draft; the owner approves the exercise and assesses the sample. Passing a practice check does not establish customer demand, professional competence, profit or launch permission.
+
+## Conceptual foundation
+
+```mermaid
+flowchart LR
+  Goal --> Decision --> DirectionApproval[Owner direction approval]
+  DirectionApproval --> Preparation --> Proposal[Action / resource proposal]
+  Proposal --> ActionApproval[Separate owner approval]
+  ActionApproval --> Execution --> Outcome --> Observation --> Feedback
+  Feedback --> Decision
+```
+
+Decision approval, action approval, resource provision and budget/capability checks are separate controls. Execution success and business outcome success are different records. A board card or an AI statement cannot grant approval.
+
+The second path is `sources → research brief → comparison → approved private exercise → sample → owner review → revision`. Samples and reviews preserve history. Practice uses the existing model; it does not train a new one.
+
+| Current capability | Owner use |
+|---|---|
+| Goals, meetings and recorded discussion rounds | Set direction and inspect proposals, critique, revisions and synthesis |
+| Preparation, action provenance and resource requests | Follow decisions into separately reviewed work and access needs |
+| Treasury and operating policies | Track funding/spend/refund, reservations and owner limits; funding is not revenue |
+| Experiments, observations and follow-ups | Record expectations and dated results; unknown outcomes remain unknown |
+| Executive memory and activity timeline | Review previous work, assumptions and recorded events |
+| Development and Company boards, approved planning | Track product work separately from company work; dispatch reviewed planning recommendations |
+| Business research and private practice | Review evidence, generated samples, checks and corrections under the €0 boundary |
+| Departments, employees and character profiles | Organize assignments and presentation; fictional social records remain separate |
+
+The current MVP is local and single-owner. Reliable useful delivery, demand validation and commercial accounting need further work before a money-making workflow. 3D offices, animated lives and improved faces/voices are future presentation work; personalities and avatars do not grant tools or authority.
+
+See [the complete conceptual audit](CONCEPTUAL_SYSTEM_AUDIT.md) for the domain model, actors, use cases, story map, MVP boundaries and proposed backlog. [SPRINT_2_PLAN.md](SPRINT_2_PLAN.md) records current sprint status.
+
+## Local startup for an existing installation
+
+From this checkout:
+
+```bash
+./company doctor
+./company start
+```
+
+Open `http://127.0.0.1:3000`. In another terminal in the same checkout, `./company key` copies the **existing** API key for dashboard login. `./company audit` runs checks with disposable data. The launcher preserves the database and `.env`, uses backend port 8001, starts in sandbox with Telegram and remote LLM disabled, and stops if ports are occupied. Existing eligible scheduled work may run while the application is awake.
+
+Dependencies, `.venv/`, `node_modules/` and `.env` are excluded from Git. For a fresh installation use the manual setup below; do not replace an existing `.env` with the example.
 
 ## Prerequisites
 
@@ -24,7 +62,7 @@ them on any machine.
   ```bash
   playwright install chromium
   ```
-- A **Telegram bot token** and your **chat ID** (see "Getting a Telegram bot"
+- Optional: a **Telegram bot token** and your **chat ID** (see "Getting a Telegram bot"
   below if starting fresh)
 
 ## Backend setup
@@ -34,8 +72,8 @@ git clone <your-repo-url>
 cd "AI Executive Team"
 
 # Create and activate a Python 3.12 virtual environment
-/opt/homebrew/bin/python3.12 -m venv venv
-source venv/bin/activate
+/opt/homebrew/bin/python3.12 -m venv .venv
+source .venv/bin/activate
 
 # Install dependencies
 pip install --upgrade pip
@@ -94,13 +132,13 @@ Runs on `http://localhost:8000`. On startup it:
 - Checks whether daily research has already run today and catches up if not
   (no exact wake time needed — works across machines, whichever one is open
   first after 9 AM runs it)
-- Starts the interactive Telegram listener (see below)
+- Starts the Telegram listener only when configured and enabled (see below)
 
 ## Frontend setup
 
 ```bash
 cd executive-dashboard
-npm install
+npm ci
 npm run dev
 ```
 
@@ -109,9 +147,7 @@ from your `.env`. The dashboard keeps it in browser memory only; refreshing
 the page intentionally requires re-entry so a future XSS cannot recover a
 persisted control-plane credential.
 
-The dashboard shows: daily research status, a live Sandbox/Live mode toggle,
-pending actions (approve/reject/execute), full action history, an ad-hoc
-decision form (pick any subset of the 11 agents), and decision history.
+The dashboard provides the command-center capabilities listed above. Use the launcher for the paired local backend/dashboard ports.
 
 ## Getting a Telegram bot (first-time only)
 
@@ -120,14 +156,14 @@ decision form (pick any subset of the 11 agents), and decision history.
 3. Visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser —
    your chat ID appears in the JSON response.
 
-Once running, action proposals arrive as interactive Telegram messages with
+When remote control is explicitly enabled, action proposals can arrive as interactive Telegram messages with
 real **Approve / Reject / Execute** buttons — no need to open the dashboard
 for routine approvals.
 
 ## What the executive team can actually do
 
 Beyond discussing and deciding, agents can **propose real actions**, which
-require your explicit approval before anything happens:
+require explicit action approval before execution:
 
 | Capability | Tool | Who has it | What it does |
 |---|---|---|---|
@@ -135,16 +171,16 @@ require your explicit approval before anything happens:
 | File read/write/append | `propose_file_operation` | COO, CFO, CTO, General Counsel | Structured file I/O — no shell involved, safer than a raw command |
 | Browser navigate + click | `propose_browser_action` | COO | Navigates to a URL and optionally clicks one element, screenshots the result |
 
-Every proposal is logged to the database and sent via Telegram (with
-buttons) regardless of mode. **Nothing executes until a human approves it.**
+Proposals are persisted. Telegram delivery depends on configuration and opt-in.
+Action execution requires owner approval; public source reads, record writes and eligible scheduled reasoning have their own workflow boundaries.
 
 ## Safety architecture
 
 This is the part worth understanding before flipping to Live mode:
 
 - **Sandbox mode (default)**: approving and "executing" an action never
-  touches your real filesystem, shell, or browser — it logs what *would*
-  happen and notifies you. Toggle to Live mode from the dashboard banner
+  performs the proposed live operation — it records a simulated result. The
+  application still writes its database, logs and backups and can read public sources. Toggle to Live mode from the dashboard banner
   (requires confirmation) when you're ready for real execution.
 - **Danger-pattern blocklist**: known catastrophic commands (`rm -rf /`,
   fork bombs, `curl | bash`, `sudo`, etc.) are blocked outright, in both
@@ -240,21 +276,12 @@ executive-dashboard/             — Next.js dashboard (separate npm project)
 - Browser actions support navigate + click only — no form-filling. Typing
   into a field (e.g. a login form) is a meaningfully bigger trust question
   than clicking a public button, and was deliberately left out of scope.
-- Fine-tuning (originally planned) requires an NVIDIA GPU and hasn't been
-  pursued given Apple Silicon hardware — current quality relies on
-  prompt/backstory engineering and `max_iter` tuning instead.
-- Shell execution remains default-off; when enabled, it uses Docker rather than the host process.
-  default. The intended long-term execution boundary is a disposable local
-  container/VM sandbox for side-effecting activities, while the executive
-  control plane remains on the host.
-- SQLite state, backups and sync exports are owner-permission protected and
-  sync exports are integrity-authenticated, but they are not application-level
-  encrypted at rest. Use full-disk encryption now; add authenticated encrypted
-  exports/backups later rather than inventing custom crypto.
-- Durable business state is persisted, but long multi-step executive workflows
-  are not yet checkpointed at every step. The next foundation milestone should
-  add explicit run/step checkpoints plus idempotency keys so a crash/resume
-  never repeats a completed side effect.
+- Practice and memory do not train model weights or establish professional competence.
+- Live shell is default-off and uses a constrained Docker worker when enabled.
+- SQLite is not application-encrypted. Owner permissions and full-disk encryption protect local storage; optional authenticated encrypted backups are implemented in `memory/encrypted_backup.py`. Backup key recovery remains an operational responsibility.
+- Durable run/step checkpoints and transactional claims support recovery. Ambiguous external effects still need reconciliation; arbitrary providers do not offer universal exactly-once execution.
+- Generated logs, screenshots and registered sync exports use the owner's 30-day retention policy while the application runs. Approval/execution and domain histories are retained. Signed JSONL sync covers selected records and is not a complete database backup.
+- Known dependency advisories and deployment requirements remain tracked in [SECURITY_RELEASE_GATE.md](SECURITY_RELEASE_GATE.md). Merged features do not clear that gate.
 
 ## Automated security checks
 
@@ -269,3 +296,7 @@ stability and tool behavior must be revalidated manually.
 ## Foundation audit
 
 See [FOUNDATION_AUDIT.md](FOUNDATION_AUDIT.md) for the pre-frontend security/privacy audit, residual risks, and architecture lessons from comparable agent systems.
+
+## Character and voice review
+
+BE-18/19 were reviewed and accepted by the owner on 10 October 2026. Feminine portraits now have a distinct illustrated face and professional silhouette; Kai’s specified appearance is retained. Local system voices can be compared, and optional Kokoro neural auditions can be prepared with `./company voices`. This creates a separate pinned `.voice-venv`, downloads digest-verified models, and generates fixed public comparison samples locally. No cloud speech text or paid provider is used. Audition/preferences do not yet voice generated conversations. See [SPRINT_2_CHARACTER_VOICE_REVIEW.md](SPRINT_2_CHARACTER_VOICE_REVIEW.md) for listening instructions, installation limits and test evidence.
