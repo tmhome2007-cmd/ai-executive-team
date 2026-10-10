@@ -106,3 +106,7 @@ UX-01 is ready for review: grouped sidebar navigation, a calmer overview, consis
 BE-30 is implemented for review on `codex/sprint-4-office`: [first floor scope and review](docs/BE30_OFFICE_FLOOR.md). It is a CSS perspective room with the existing illustrated Kai; fully modelled bodies and the full office remain future work. UX-01 was accepted by the owner; merge remains pending.
 
 BE-32 integration audit fixes are on `codex/sprint-4-audit`: [findings and verification](docs/BE32_SPRINT4_AUDIT.md). BE-30 was accepted by the owner in chat; PR #46 awaits merge. BE-33 remains the next retrospective after audit review.
+
+## Retrospective — 11 October 2026
+
+BE-33 is ready for review: [Sprint 4 retrospective](SPRINT_4_RETROSPECTIVE.md). It records the complete local audit, the remaining AI quality gap, integration failures and proposed next-sprint actions. Owner acceptance of UX-01 and the bounded BE-30 prototype is recorded; pending PR merges are not Done. Next-sprint priorities remain proposals until agreed.

@@ -61,7 +61,7 @@
     "acceptance_criteria": "Map new entities and use cases to existing approvals, memory and checkpoints; avoid duplicate authority ledgers. Define artifact retention and recovery, skill revocation and evaluation comparability. Before copying code/assets or adding dependencies record source commit, license, attribution and vulnerability review. Keep €0 budget and local processing; obtain explicit approval for any cloud or paid change.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-32 · Sprint integration audit and simple owner review",
@@ -77,7 +77,7 @@
     "acceptance_criteria": "Record intended versus delivered scope, actual test evidence, confusing owner steps, quality failures and improvements. Agree concrete next-sprint actions; never label backlog or prototypes fully complete. Update README and board statuses with review/merge evidence.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "UX-01 · Dashboard clarity and visual redesign",
