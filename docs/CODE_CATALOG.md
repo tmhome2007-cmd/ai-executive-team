@@ -202,6 +202,10 @@ Dashboard source; component/library responsibility follows its filename.
 
 Dashboard source; component/library responsibility follows its filename.
 
+## [executive-dashboard/app/components/dashboard-shell.tsx](../executive-dashboard/app/components/dashboard-shell.tsx)
+
+Dashboard source; component/library responsibility follows its filename.
+
 ## [executive-dashboard/app/components/executive-skills.tsx](../executive-dashboard/app/components/executive-skills.tsx)
 
 Dashboard source; component/library responsibility follows its filename.
@@ -958,6 +962,12 @@ Local owner launcher. Never creates keys, resets data, switches branches or kill
 ## [scripts/conversation_audio_smoke.py](../scripts/conversation_audio_smoke.py)
 
 Temporary owner playback test with synthetic WAV, no model/cloud calls.
+
+- `main`
+
+## [scripts/dashboard_design_smoke.py](../scripts/dashboard_design_smoke.py)
+
+Visual and navigation regression check with disposable company records.
 
 - `main`
 

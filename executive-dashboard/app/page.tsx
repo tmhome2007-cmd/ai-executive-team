@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import AiReport from "./components/ai-report";
 import VirtualOffice from "./components/virtual-office";
 import AgileBoard from "./components/agile-board";
+import DashboardShell from "./components/dashboard-shell";
 import BusinessDiscovery from "./components/business-discovery";
 import RunInspector from "./components/run-inspector";
 import ExecutiveSkills from "./components/executive-skills";
@@ -673,6 +674,7 @@ function renderActionDetail(actionType: string | undefined, actionDetail: string
 
 export default function DashboardPage() {
   const [view, setView] = useState<DashboardView>("overview");
+  const [businessView, setBusinessView] = useState("practice");
   const [profiles, setProfiles] = useState<Record<string, ExecutiveProfile>>({});
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
@@ -1745,9 +1747,16 @@ export default function DashboardPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
         <form
           onSubmit={handleKeySubmit}
-          className="bg-gray-900 p-8 rounded-lg shadow space-y-4 w-full max-w-sm"
+          className="access-card space-y-5 w-full max-w-sm"
         >
-          <h1 className="text-xl font-semibold text-white">Access Required</h1>
+          <div className="access-brand">
+            AE<span>·</span>
+          </div>
+          <p className="workspace-eyebrow">AI EXECUTIVE TEAM</p>
+          <h1 className="text-2xl font-semibold text-white">Your company awaits.</h1>
+          <p className="text-sm text-gray-400">
+            Enter your owner API key to open the workspace.
+          </p>
           <input
             type="password"
             value={keyInput}
@@ -1769,74 +1778,19 @@ export default function DashboardPage() {
 
   // --- Main dashboard ---
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      {/* Persistent Banner top of page — now an interactive toggle */}
-      {sandboxMode !== null && (
-        <div
-          className={`w-full border-b shadow-sm ${
-            sandboxMode ? "bg-blue-950/80 border-blue-800" : "bg-red-900 border-red-700"
-          }`}
-        >
-          <button
-            onClick={handleToggleSandboxMode}
-            disabled={togglingSandbox}
-            className={`w-full py-2.5 px-4 text-center font-medium text-sm transition-colors ${
-              sandboxMode
-                ? "text-blue-200 hover:bg-blue-900/60"
-                : "text-white font-bold hover:bg-red-950"
-            } disabled:opacity-60 disabled:cursor-wait`}
-            title="Click to switch modes"
-          >
-            {togglingSandbox
-              ? "Switching mode..."
-              : sandboxMode
-                ? "🧪 SANDBOX MODE — executions are simulated, nothing real happens. (Click to switch to Live)"
-                : "🔴 LIVE MODE — approved actions WILL run for real on this machine. (Click to switch to Sandbox)"}
-          </button>
-          {sandboxToggleError && (
-            <p className="text-center text-xs text-red-300 pb-2">
-              {sandboxToggleError}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs tracking-widest uppercase text-teal-300 mb-2">
-              AI Executive Team · Company dashboard v2
-            </p>
-            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-              Company command center
-            </h1>
-            <p className="text-gray-400 mt-2">
-              Set direction. Review proposals. Measure what happened.
-            </p>
-          </div>
-          <button
-            onClick={refreshAll}
-            disabled={refreshing}
-            className="border border-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-800 disabled:opacity-50"
-          >
-            {refreshing ? "Refreshing…" : "Refresh company data"}
-          </button>
-        </header>
-        <nav
-          aria-label="Company views"
-          className="flex flex-wrap gap-2 border-b border-gray-800 pb-4"
-        >
-          {VIEWS.map(([key, label]) => (
-            <button
-              key={key}
-              aria-current={view === key ? "page" : undefined}
-              onClick={() => setView(key)}
-              className={`rounded-lg px-3 py-2 text-sm transition-colors ${view === key ? "bg-teal-300 text-gray-950 font-semibold" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+    <DashboardShell
+      view={view}
+      views={VIEWS}
+      onNavigate={(key) => setView(key as DashboardView)}
+      onRefresh={refreshAll}
+      refreshing={refreshing}
+      health={healthError ? "Health unavailable" : health?.status || "Checking health…"}
+      sandboxMode={sandboxMode}
+      onToggleMode={handleToggleSandboxMode}
+      togglingMode={togglingSandbox}
+      modeError={sandboxToggleError}
+    >
+      <div className="workspace-body">
         {Object.entries(sectionErrors)
           .filter(([, error]) => error)
           .map(([key, error]) => (
@@ -1854,6 +1808,44 @@ export default function DashboardPage() {
           aria-label="Company overview"
           className="space-y-6"
         >
+          <div className="overview-hero">
+            <div>
+              <span className="hero-kicker">THE BIG PICTURE</span>
+              <h2>
+                A company with
+                <br />
+                <em>direction.</em>
+              </h2>
+              <p>
+                Bring your ideas into focus. Let your team explore them.
+                <br />
+                Keep every decision grounded in evidence.
+              </p>
+              <button className="hero-action" onClick={() => setView("goals")}>
+                Set the direction <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+            <div className="hero-workspace">
+              <span className="hero-orbit" aria-hidden="true">
+                AE
+              </span>
+              <div>
+                <span className="hero-kicker">YOUR NEXT MOVE</span>
+                <p>
+                  Review what needs you.
+                  <br />
+                  Then let the team take the next step.
+                </p>
+                <button onClick={() => setView("decisions")}>
+                  Open decisions <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="overview-section-heading">
+            <h2>Company pulse</h2>
+            <span>From your loaded company records</span>
+          </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {(
               [
@@ -1894,7 +1886,7 @@ export default function DashboardPage() {
               <button
                 key={label}
                 onClick={() => setView(target)}
-                className="text-left bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-teal-600"
+                className="pulse-card"
               >
                 <span className="text-sm text-gray-400">{label}</span>
                 <strong className="block text-3xl my-3">{value}</strong>
@@ -1902,7 +1894,7 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="overview-panels grid lg:grid-cols-2 gap-5">
             <article className="command-card">
               <h2>Treasury available</h2>
               <p className="text-sm text-gray-400 mb-4">
@@ -2081,9 +2073,30 @@ export default function DashboardPage() {
         )}
         {view === "business" && apiKey && (
           <>
-            <RunInspector apiKey={apiKey} onAuthFailure={handleAuthFailure} />
-            <BusinessDiscovery apiKey={apiKey} onAuthFailure={handleAuthFailure} />
-            <ExecutiveSkills apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+            <nav aria-label="Business research sections" className="workspace-tabs">
+              {[
+                ["practice", "Research & practice"],
+                ["runs", "Run inspector"],
+                ["skills", "Executive skills"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  aria-current={businessView === key ? "page" : undefined}
+                  onClick={() => setBusinessView(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <div hidden={businessView !== "runs"}>
+              <RunInspector apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+            </div>
+            <div hidden={businessView !== "practice"}>
+              <BusinessDiscovery apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+            </div>
+            <div hidden={businessView !== "skills"}>
+              <ExecutiveSkills apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+            </div>
           </>
         )}
         {view === "experiments" && apiKey && (
@@ -3547,6 +3560,6 @@ export default function DashboardPage() {
           </div>
         </section>
       </div>
-    </div>
+    </DashboardShell>
   );
 }
