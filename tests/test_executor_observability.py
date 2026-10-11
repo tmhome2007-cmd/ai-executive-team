@@ -195,7 +195,7 @@ class ExecutorObservabilityTests(unittest.TestCase):
         for action_type, detail, event in examples:
             with self.subTest(action_type=action_type):
                 self.action = propose_action(
-                    "CTO", "Fictional dry-run proposal", json.dumps(detail), action_type
+                    "COO", "Fictional dry-run proposal", json.dumps(detail), action_type
                 )
                 transition_action_status(self.action, "approved", ("pending",))
                 with (
