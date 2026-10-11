@@ -525,6 +525,12 @@ Owner classifications and frozen research contexts. Neither verifies demand.
 - `freeze_context`
 - `research_context`
 
+## [memory/business_guidance.py](../memory/business_guidance.py)
+
+Deterministic owner next steps; UI guidance never grants execution authority.
+
+- `guidance`: Read current bindings/source status in the brief's existing read transaction.
+
 ## [memory/business_practice_history.py](../memory/business_practice_history.py)
 
 Append-only practice samples and owner assessments, including legacy imports.
@@ -1020,6 +1026,12 @@ Disposable local verification. Upstream findings remain visible, never ignored.
 
 - `main`
 
+## [scripts/local_model_smoke.py](../scripts/local_model_smoke.py)
+
+One bounded local greeting; native generate never installs a missing model.
+
+- `greeting`
+
 ## [scripts/maintain_code.py](../scripts/maintain_code.py)
 
 Format/check repository code and keep its source catalog synchronized.
@@ -1059,6 +1071,16 @@ Run/replay benchmark prompt versions using synthetic data and local Ollama.
 - `run`: Persist progress after each attempt; missing attempts remain incomplete.
 - `recheck`: Reassess preserved raw answers under today's checker without new inference.
 - `main`
+
+## [scripts/review_demo.py](../scripts/review_demo.py)
+
+Disposable owner review of the current dashboard; no scheduler/model/network work.
+
+- `backend`
+- `launcher`
+- `launch_servers`
+- `serve`
+- `retain_failure`
 
 ## [scripts/review_smoke.py](../scripts/review_smoke.py)
 
@@ -1179,6 +1201,12 @@ Disposable owner-controlled discovery; no inference/network or real execution.
 
 - `DiscoveryTests`
 
+## [tests/test_business_guidance.py](../tests/test_business_guidance.py)
+
+Owner next steps reflect current source, assessment and permission gates.
+
+- `GuidanceTests`
+
 ## [tests/test_capabilities.py](../tests/test_capabilities.py)
 
 Synthetic provider probes and real SQLite approval/claim scope gates.
@@ -1277,6 +1305,12 @@ Deterministic identity checks; all daemon responses and inference are synthetic.
 - `ResolutionTests`
 - `PrivateIdentityTests`
 
+## [tests/test_local_model_smoke.py](../tests/test_local_model_smoke.py)
+
+The final audit cannot implicitly pull a missing model or follow redirects.
+
+- `LocalModelSmokeTests`
+
 ## [tests/test_local_voice_samples.py](../tests/test_local_voice_samples.py)
 
 Neural audition boundaries; tiny synthetic WAV fixtures, no model inference/network.
@@ -1361,6 +1395,12 @@ Fixed rubrics, exact source attribution and representative useful deliverables.
 Combined Sprint 4 privacy and recovery checks using disposable company data.
 
 - `SprintFourIntegrationTests`
+
+## [tests/test_sprint5_acceptance.py](../tests/test_sprint5_acceptance.py)
+
+Full fictional private-work chain; synthetic assessments never imply owner consent.
+
+- `PrivateAcceptanceTests`
 
 ## [tests/test_sprint5_private_examples.py](../tests/test_sprint5_private_examples.py)
 

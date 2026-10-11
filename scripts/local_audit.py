@@ -118,6 +118,7 @@ def main():
             return ok
 
         run("python-compatibility", [sys.executable, "-m", "pip", "check"])
+        run("code-maintenance", [sys.executable, "scripts/maintain_code.py", "check"])
         docker_ready = run("docker-ready", ["docker", "info"], timeout=30)
         if docker_ready:
             run(
@@ -319,10 +320,8 @@ def main():
         run(
             "ollama-local-inference",
             [
-                "ollama",
-                "run",
-                "llama3.1",
-                "Synthetic test only. Reply with one short greeting.",
+                sys.executable,
+                str(ROOT / "scripts/local_model_smoke.py"),
             ],
             timeout=180,
         )
