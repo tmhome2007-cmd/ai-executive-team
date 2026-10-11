@@ -658,6 +658,45 @@ class DiscoveryTests(unittest.TestCase):
         self.assertNotIn('"+"', result["sample"])
         self.assertEqual(len(result["attempts"]), 1)
 
+    def test_evidence_prompt_excludes_reply_policy_and_requires_explicit_unknowns(self):
+        from memory.practice_quality import TEMPLATES
+
+        template = TEMPLATES[1]
+        brief = self.generate()
+        brief = select_practice(
+            brief["id"],
+            brief["version"],
+            template["service_key"],
+            template["exercise"],
+            template["checks"],
+            (
+                datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(days=1)
+            ).isoformat(),
+            **{
+                key: template[key]
+                for key in (
+                    "service_key",
+                    "audience",
+                    "supplied_facts",
+                    "deliverable_kind",
+                )
+            },
+        )
+        sample = (
+            "Findings: Five checks expected; four passed; the reminder did not appear.\n"
+            "Unknowns: The cause is unknown; the due time and original reproduction steps are unknown.\n"
+            "Next Action: Request the missing reproduction steps and due time before another test."
+        )
+        with patch(
+            "workflows.business_discovery._reason", return_value=sample
+        ) as reason:
+            result = run_stage(brief["id"], brief["version"], "practice")
+        prompt = reason.call_args.args[0]
+        self.assertNotIn("14-day duration", prompt)
+        self.assertIn("FINAL EVIDENCE SUMMARY CONTRACT", prompt)
+        self.assertEqual(result["state"], "sample_ready")
+
     def test_initial_generation_failure_preserves_no_invalid_sample(self):
         brief = self.plan()
         with patch(

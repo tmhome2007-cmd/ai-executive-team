@@ -21,5 +21,16 @@
       "Requests purchase date and item condition.",
       "Does not promise or claim approval, refund or customer contact."
     ]
+  },
+  {
+    "id": "greenhouse-transfer",
+    "audience": "An owner deciding what to investigate after a fictional greenhouse-controller inspection",
+    "facts": "Fictional greenhouse-controller inspection GH-001: five checks expected; four passed; the scheduled inspection reminder did not appear. Cause, due time and original reproduction steps are unknown. Crop condition, watering results and sensor accuracy are not supplied. No greenhouse control action is authorized.",
+    "request": "Write a concise evidence summary with Findings, Unknowns and Next Action. Preserve the fictional test counts and reminder failure; request missing reproduction details before another test. Do not invent a cause or infer crop condition, watering performance or sensor accuracy from these checks. Recommend only a private evidence review, not a greenhouse control action.",
+    "checks": [
+      "Preserves five expected, four passed and one reminder failure.",
+      "Separates the observed failure from its unknown cause.",
+      "Requests missing reproduction details instead of inventing test conditions."
+    ]
   }
 ]

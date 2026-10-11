@@ -27,6 +27,29 @@ NOW = lambda: datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 class SprintThreeTests(unittest.TestCase):
+    def test_sprint5_transfer_examples_preserve_existing_exact_rubrics(self):
+        fixtures = json.loads(
+            (
+                Path(__file__).resolve().parents[1] / "docs/planning/be35-examples.json"
+            ).read_text()
+        )
+        templates = {item["key"]: item for item in TEMPLATES}
+        for ident, key in (
+            ("task-guide", "task_guide"),
+            ("return-policy-transfer", "support_draft"),
+            ("greenhouse-transfer", "evidence_summary"),
+        ):
+            fixture = next(item for item in fixtures if item["id"] == ident)
+            self.assertEqual(fixture["checks"], templates[key]["checks"])
+        greenhouse = next(
+            item for item in fixtures if item["id"] == "greenhouse-transfer"
+        )
+        self.assertIn(
+            "Crop condition, watering results and sensor accuracy are not supplied",
+            greenhouse["facts"],
+        )
+        self.assertIn("No greenhouse control action is authorized", greenhouse["facts"])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.db = patch.object(
@@ -616,4 +639,17 @@ class SprintThreeTests(unittest.TestCase):
                 sample
                 + " Your purchase date will help us assess whether the period has started.",
                 spec,
+            )
+
+    def test_evidence_summary_rejects_observed_reply_policy_contamination(self):
+        spec = dict(structured=True, specification=dict(TEMPLATES[1]))
+        sample = (
+            "Findings: Five checks expected; four passed; the reminder did not appear.\n"
+            "Unknowns: Cause unknown.\n"
+            "Next Action: Request missing reproduction steps and due time before another test."
+        )
+        self.assertTrue(validate_deliverable(sample, spec))
+        with self.assertRaisesRegex(ValueError, "unrelated 14-day"):
+            validate_deliverable(
+                sample + "\nStart event for the 14-day duration is unknown.", spec
             )

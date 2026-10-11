@@ -211,7 +211,13 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
             "For a task guide with unspecified controls, describe the supplied task text moving through create, edit and complete; do not ask for separate names, descriptions, priorities or dates. "
             "Do not mention an interface detail absent from the specification except to state it is unknown. Questions and FAQ answers must follow the same rule."
         )
-    if stage in {"practice", "revision"}:
+    policy_reply = stage in {"practice", "revision"} and (
+        (brief.get("practice_specification") or {})
+        .get("specification", {})
+        .get("deliverable_kind")
+        == "reply"
+    )
+    if policy_reply:
         prompt += "\nFor policy replies, preserve the supplied policy wording. A 14-day duration alone does not say it starts at purchase, delivery or receipt; keep that start event unknown unless explicitly supplied. Do not add unrequested self-evaluation notes.\n"
     if stage in {"practice", "revision"} and brief.get("skill_version"):
         skill = brief["skill_version"]
@@ -228,12 +234,7 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
                 ensure_ascii=False,
             )
         )
-    if stage in {"practice", "revision"} and (
-        (brief.get("practice_specification") or {})
-        .get("specification", {})
-        .get("deliverable_kind")
-        == "reply"
-    ):
+    if policy_reply:
         prompt += (
             "\nFINAL PRIVATE REPLY CONTRACT: Draft the actual short reply, not a policy analysis. "
             "State the supplied rule and ask the specific missing-information questions. "
@@ -243,6 +244,21 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
             "Omit a signature when no signing identity is supplied. Never write [Your Name], [Customer Name], "
             "[Company Name] or any unfinished identity placeholder. Do not add a self-review or unknowns report. "
             "These instructions are constraints, not customer facts.\n"
+        )
+    if stage in {"practice", "revision"} and (
+        (brief.get("practice_specification") or {})
+        .get("specification", {})
+        .get("deliverable_kind")
+        == "evidence_summary"
+    ):
+        prompt += (
+            "\nFINAL EVIDENCE SUMMARY CONTRACT: Write only Findings, Unknowns and Next Action. "
+            "Findings report the supplied observations and counts. Unknowns must use explicit full statements, "
+            "for example 'The cause is unknown' when the supplied facts say that the cause is unknown. "
+            "A bare bullet naming the cause is insufficient. Preserve the supplied missing due time and "
+            "reproduction steps as unknown when they are missing. Next Action asks for those specific "
+            "missing details for private review before another test. Do not add Essential Unknowns, "
+            "self-evaluation notes, unrelated policy durations or unprovided domain conclusions.\n"
         )
     from workflows.output_quality import QUALITY_POLICY
 

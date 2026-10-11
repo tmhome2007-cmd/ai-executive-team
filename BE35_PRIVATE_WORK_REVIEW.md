@@ -120,7 +120,41 @@ The supported task guide and final reply are available for owner usefulness
 review. The final reply still uses an unrequested report heading and groups the
 known no-refund status under remaining unknowns; assess that presentation honestly.
 Contract success does not mean every wording choice is useful or establish broad
-transfer competence. A more unfamiliar domain example remains future evidence.
+transfer competence.
+
+## Unfamiliar scenario probe: fictional greenhouse inspection
+
+The additional greenhouse-controller exercise uses a different scenario and the
+exact existing evidence-summary rubric. Its frozen facts include five expected
+checks, four passes, a missing inspection reminder and unknown cause, due time
+and reproduction steps. Crop condition, watering results and sensor accuracy
+are not supplied; no controller action is authorized. This is one bounded
+scenario transfer, not certification of greenhouse expertise.
+
+The first run (`20261011-132918`) passed its narrow checks but echoed an unrelated
+14-day policy from a return-specific instruction included in every practice
+prompt. That output is retained as a review failure. The instruction is now
+limited to replies. A regression rejects this observed policy contamination in
+evidence summaries unless that duration is actually supplied.
+
+The next run (`20261011-133036`) failed the unchanged explicit-cause-unknown check
+after one repair: it listed the cause beneath Unknowns without an explicit
+unknown statement. Both raw failures remain saved. Evidence-summary prompting
+now requests explicit statements for unknowns without weakening that check.
+
+Final local run `audit-results/sprint3-examples-20261011-133147` passed on its first
+draft. It preserves counts and the missing reminder, explicitly labels the cause,
+due time and reproduction steps unknown, and requests those details for private
+review before another test. It adds no controller action or crop/sensor finding.
+Its specification and raw response are retained privately. No action or treasury
+entry was created. A self-evaluation note remains a presentation issue for owner
+review; it is not evidence of correctness.
+
+Final focused verification: 48 tests passed. This includes a generation-path
+regression asserting that evidence prompts exclude the reply-period instruction,
+preserve the summary contract and still produce a reviewable sample. Targeted
+Bandit medium/high findings: none. Final repository Black/Prettier formatting,
+generated-code catalog and whitespace checks passed after the final prompt additions.
 
 ## Review boundary
 
@@ -130,9 +164,10 @@ the return rule, asks for the missing facts and avoids an invented period start 
 approval. Assess every original rubric check separately; contract success does not
 record usefulness acceptance.
 
-BE-35 remains In Progress until owner assessment and the unfamiliar-transfer
-requirement satisfy the story. The ceramic-bowl probe transfers within the same
-support domain; it must not be counted as an unfamiliar-domain success.
+BE-35's examples are prepared for owner review; the story is not Done. The
+ceramic-bowl probe transfers within support; the separate greenhouse scenario is
+the unfamiliar-scenario example. Owner assessment determines usefulness under
+the preserved exact rubrics; neither scenario establishes general competence.
 No spending, publishing, customer contact, model training, execution of
 generated code or new company authority was added. Generated evidence remains
 private and follows the existing 30-day retention boundary; raw outputs are not

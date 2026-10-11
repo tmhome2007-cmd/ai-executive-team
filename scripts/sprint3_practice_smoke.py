@@ -28,11 +28,16 @@ def main():
     parser.add_argument(
         "--sprint5-transfer",
         action="store_true",
-        help="Use the frozen BE-35 ceramic-bowl scenario with the existing support rubric",
+        help="Use the frozen BE-35 support or greenhouse scenario with its existing rubric",
     )
     args = parser.parse_args()
-    if args.sprint5_transfer and args.fixture != "support_draft":
-        parser.error("--sprint5-transfer requires --fixture support_draft")
+    if args.sprint5_transfer and args.fixture not in {
+        "support_draft",
+        "evidence_summary",
+    }:
+        parser.error(
+            "--sprint5-transfer requires --fixture support_draft or evidence_summary"
+        )
     with tempfile.TemporaryDirectory(prefix="sprint3-local-examples-") as raw:
         temp = Path(raw)
         os.environ.update(
@@ -140,7 +145,11 @@ def main():
                         for item in json.loads(
                             (ROOT / "docs/planning/be35-examples.json").read_text()
                         )
-                        if item["id"] == "return-policy-transfer"
+                        if item["id"]
+                        == {
+                            "support_draft": "return-policy-transfer",
+                            "evidence_summary": "greenhouse-transfer",
+                        }[template["key"]]
                     )
                     if example["checks"] != template["checks"]:
                         raise ValueError(

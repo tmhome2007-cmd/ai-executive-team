@@ -72,6 +72,12 @@ def validate_deliverable(raw, specification):
         ):
             raise ValueError("Guide must label unknown interface controls explicitly")
     elif kind == "evidence_summary":
+        if re.search(r"\b14(?:[- ]day| days)\b", sample, re.I) and not re.search(
+            r"\b14(?:[- ]day| days)\b", spec["supplied_facts"], re.I
+        ):
+            raise ValueError(
+                "Do not import an unrelated 14-day policy into the supplied evidence summary"
+            )
         if any(
             heading not in lower for heading in ("findings", "unknowns", "next action")
         ):
