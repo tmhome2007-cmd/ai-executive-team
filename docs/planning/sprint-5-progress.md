@@ -64,3 +64,15 @@ winner. Actual checks: 25 targeted backend tests and 4/4 production stages
 
 Next independent implementation: BE-39 local model identity. Useful-work owner
 acceptance, implementation PRs, merges and the full audit remain pending.
+
+BE-39: Implemented for review, not Done or merged. New supported private runs
+record the local Ollama digest and allowlisted inference configuration. Continuation
+and cached reuse reject changed/unresolved identities; legacy rows remain unknown.
+Metadata lookups are bounded loopback GETs, without redirects, proxies, downloads
+or cloud fallback. Actual checks: 63 backend tests and 3/3 production stages
+(build, runs, business discovery). A real metadata-only local lookup succeeded.
+Failed SDK endpoint/fixture evidence is retained. See
+[BE-39 identity evidence](../../BE39_LOCAL_MODEL_IDENTITY.md).
+
+Next planned implementation: BE-36 concise owner review before BE-40. Useful-work
+owner acceptance, implementation PRs, merges and the full audit remain pending.
