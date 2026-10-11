@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-11",
+  "baseline_run": "3740c7d768bb47e3ab44125213251b04",
+  "candidate_run": "a6a8f2ff8dd84d5a842b949f7f6dd0d0",
+  "comparison": {
+    "left": {
+      "passed": 24,
+      "failed": 6,
+      "errors": 0,
+      "incomplete": 0,
+      "denominator": 30
+    },
+    "right": {
+      "passed": 30,
+      "failed": 0,
+      "errors": 0,
+      "incomplete": 0,
+      "denominator": 30
+    },
+    "prompt_changed": true,
+    "model_changed": false,
+    "configuration_changed": false,
+    "limit": "Automated contract measurements only; no competence or business claim"
+  },
+  "dataset_hash": "72c0a869416206751c1e4990c39e2507ceb9e7a4bd064167bc0b677865aee6cc",
+  "checker_hash": "5d3360ce26f9e52d8da1b24c87c1efdecc22c963f65717ffb3d6fa3d5a17e426",
+  "rubric_version": "fictional-json-contract-v1",
+  "model": {
+    "name": "llama3.1:latest",
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e"
+  },
+  "options": {
+    "temperature": 0,
+    "num_predict": 400,
+    "num_ctx": 4096,
+    "response_format": "json"
+  },
+  "candidate_prompt_hash": "d483386ba2309fe4095e0ea25862947756b84e8b98e794bcf4c8282a7719d54f",
+  "baseline_prompt_hash": "e06630a8f1267767021d59a0b053c1564661807e9f93a38beee8333000cf8165",
+  "checks_changed": false,
+  "owner_usefulness_assessment": "pending",
+  "scope": "Single paired local fictional JSON-contract experiment; not production workflow acceptance or general competence.",
+  "private_examples_run": "58b1562dccc345cb9d969b6033f3a381"
+}

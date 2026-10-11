@@ -25,7 +25,14 @@ def main():
         action="store_true",
         help="Use a validated fictional comparison to isolate practice output",
     )
+    parser.add_argument(
+        "--sprint5-transfer",
+        action="store_true",
+        help="Use the frozen BE-35 ceramic-bowl scenario with the existing support rubric",
+    )
     args = parser.parse_args()
+    if args.sprint5_transfer and args.fixture != "support_draft":
+        parser.error("--sprint5-transfer requires --fixture support_draft")
     with tempfile.TemporaryDirectory(prefix="sprint3-local-examples-") as raw:
         temp = Path(raw)
         os.environ.update(
@@ -127,6 +134,20 @@ def main():
             for template in TEMPLATES:
                 if args.fixture and template["key"] != args.fixture:
                     continue
+                if args.sprint5_transfer:
+                    example = next(
+                        item for item in json.loads(
+                            (ROOT / "docs/planning/be35-examples.json").read_text()
+                        ) if item["id"] == "return-policy-transfer"
+                    )
+                    if example["checks"] != template["checks"]:
+                        raise ValueError("Transfer must preserve the exact support rubric")
+                    template = dict(
+                        template,
+                        audience=example["audience"],
+                        supplied_facts=example["facts"],
+                        exercise=example["request"],
+                    )
                 b = create_brief(
                     "Fictional " + template["key"],
                     "Private local sample only; no owner professional skills assumed.",

@@ -1,6 +1,6 @@
 # BE-34 — retained quality baseline and failure analysis
 
-11 October 2026. Prepared for owner review; not Done or merged.
+11 October 2026. Analysis and fresh baseline prepared for owner review; not Done or merged.
 
 The retained JSON-mode baseline has 24 passed, 6 failed, 0 transport errors and
 0 incomplete attempts out of 30. All six failures were inspected. Three are
@@ -57,9 +57,16 @@ Fresh rechecks on 11 October retained the same results:
 
 The two new derived runs share dataset, checker and rubric identities. Prompt
 and model are unchanged; response-format configuration differs, as intended.
-This is a comparable **reassessment of retained answers**, not a new inference
-baseline. Loopback Ollama was unavailable (`URLError`), so no fresh generation
-or current installed-model verification was performed. No model was downloaded.
+These derived runs are comparable **reassessments of retained answers**. Initial
+sandbox access to loopback Ollama failed; approved local-network access resolved
+that limitation. No model was downloaded.
+
+A fresh real local JSON-mode run `3740c7d768bb47e3ab44125213251b04` reproduced
+24 passed, 6 failed, 0 errors and 0 incomplete out of 30. Comparison with the
+retained JSON-mode recheck confirms identical dataset, checker, rubric, prompt,
+installed model digest and generation configuration. The saved raw outputs still
+show the same two repeated failure patterns. This supplies the new comparable
+generation baseline, separately from the earlier rechecks.
 
 The frozen rubric is `fictional-json-contract-v1`. Model identity is the recorded
 `llama3.1:latest` digest
@@ -77,8 +84,7 @@ Six existing benchmark regression tests passed. These cover comparability,
 local-only transport, immutable private snapshots, interruption and prompt replay.
 No production prompt or executable company workflow changed.
 
-This analysis is available for review; BE-34 remains In Progress. A fresh baseline
-remains pending local Ollama availability. BE-35 can use the retained comparator
-with that limitation explicit, but must obtain real local outputs before claiming
-prompt improvement. Owner usefulness assessment, acceptance and authorized merge
+BE-34's analysis and fresh baseline are available for review. BE-35 uses this fresh
+comparator and must obtain real local outputs before claiming prompt improvement.
+Owner usefulness assessment, acceptance and authorized merge
 remain required. Budget and permitted loss stay €0.

@@ -115,6 +115,29 @@
       "classification": "policy_echo_displaces_supplied_fact"
     }
   ],
-  "fresh_generation": "not run: loopback Ollama unavailable (URLError)",
+  "fresh_generation": {
+    "run_id": "3740c7d768bb47e3ab44125213251b04",
+    "report_sha256": "58476b29c83d8d4bdef754609e19ff188fc1456099148d3297db7f5c6d1c91ab",
+    "comparison": {
+      "left": {
+        "passed": 24,
+        "failed": 6,
+        "errors": 0,
+        "incomplete": 0,
+        "denominator": 30
+      },
+      "right": {
+        "passed": 24,
+        "failed": 6,
+        "errors": 0,
+        "incomplete": 0,
+        "denominator": 30
+      },
+      "prompt_changed": false,
+      "model_changed": false,
+      "configuration_changed": false,
+      "limit": "Automated contract measurements only; no competence or business claim"
+    }
+  },
   "limit": "Reassessment of retained raw outputs, not independent generation or semantic acceptance. Original checker unchanged."
 }
