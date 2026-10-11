@@ -1,15 +1,15 @@
 # BE-41 — final Sprint 5 integration, security and privacy audit
 
 11 October 2026. Tested implementation commit:
-`d4dbd89169892ca36d73ffb1e5543d25e528b185`, branch `codex/sprint-5-completion`.
+`3d924cddfc15bd31a5b4c6d07a918d0aa8db9d97`, branch `codex/sprint-5-completion`.
 Later closure changes are documentation only. The checked-in
 [verification manifest](docs/planning/be41-verification.json) records the checks,
-source hashes and private-log hashes. Reports: `audit-results/20261011-182520`.
+source hashes and private-log hashes. Reports: `audit-results/20261011-183332`.
 
 **33 stages passed; zero project-check failures; one dependency stage remains
 UPSTREAM. This is not a clean security release gate.**
 
-- 287 backend tests passed, zero skips, including real Docker integration.
+- 289 backend tests passed, zero skips, including real Docker integration.
 - 150/150 foundation checks passed.
 - 15/15 production browser feature checks passed, plus browser startup/runtime.
 - Python dependency compatibility, pinned Docker image and code maintenance passed.
@@ -55,8 +55,12 @@ tests do not remove these dependency findings or authorize production deployment
 
 A collapsed feedback-panel browser failure was corrected by opening the panel in
 the scenario before asserting visible comparison text. The failed report remains
-at `audit-results/be37-a31328eda0704dc9a16d1970f7ce4bfa`. Earlier Sprint 5 model and
-workflow failures remain in their documented private reports. No check or rubric
+at `audit-results/be37-a31328eda0704dc9a16d1970f7ce4bfa`. A real demo shutdown check also caught a duplicate termination attempt that left
+stale runtime metadata after its servers stopped. Commit 3d924cd removes the
+duplicate and reaps only owned children; two focused tests and real startup/shutdown
+verification passed. The first complete audit and observed cleanup failure remain
+at `audit-results/20261011-182520`; the final complete audit was rerun on the fix.
+Earlier Sprint 5 model and workflow failures remain in their documented private reports. No check or rubric
 was weakened to obtain passing results.
 
 Most generation-path tests use synthetic inference. BE-35 real examples expose

@@ -10,7 +10,7 @@ list, [audit results](BE41_SPRINT5_AUDIT.md) for actual verification and finding
 and [the review guide](COMPANY_REVIEW_GUIDE.md) for exactly where to go and what to
 enter. `./company review --check` runs the complete fictional scenario safely.
 
-Final code audit: **287 backend tests, 150 foundation checks, all 15 browser
+Final code audit: **289 backend tests, 150 foundation checks, all 15 browser
 features passed.** There are 33 passing audit stages, no project-check failures
 and one UPSTREAM dependency stage. Four unpatched Chroma advisories remain, so
 there is no clean security release gate. The narrow AI benchmark improved from

@@ -16,7 +16,7 @@ merge evidence. No velocity, deadline, earnings or professional competence is in
 | BE-38 | Sanitized interruption/permission recovery; guarded claims/publication | BE38_RECOVERY_GUIDANCE.md |
 | BE-39 | Resolved local digest/configuration, repeat identity checks, legacy-unknown handling | BE39_LOCAL_MODEL_IDENTITY.md; implemented rather than deferred |
 | BE-40 | Complete fictional draft → failed review → revision → files → accepted-procedure reuse scenario; exact review guide/demo | BE40_PRIVATE_WORK_SCENARIO.md |
-| BE-41 | Final integrated audit: 287 tests, 150 foundation checks, 15 browser features; 33 passing stages, one UPSTREAM stage | BE41_SPRINT5_AUDIT.md; dependency release gate remains open |
+| BE-41 | Final integrated audit: 289 tests, 150 foundation checks, 15 browser features; 33 passing stages, one UPSTREAM stage | BE41_SPRINT5_AUDIT.md; dependency release gate remains open |
 | BE-42 | Actual delivery comparison, defects, owner feedback and future priorities recorded | This retrospective; owner acceptance and merge evidence pending |
 
 ## What we learned
@@ -34,7 +34,11 @@ Early browser checks caught integration issues before the final audit. Shared
 navigation helpers made desktop/mobile destinations and hidden-tab behavior
 consistent. The newly collapsed feedback panel required an explicit open action in
 its browser test. Fractional timestamp ordering was fixed while preserving legacy
-bytes and execution-order validation. Local identity resolution required handling
+bytes and execution-order validation. A final real demo shutdown check exposed
+duplicate termination that left stale runtime metadata. The launcher now terminates
+only live owned children once, waits for them, and removes only its own metadata;
+regression tests and a real shutdown passed before the complete audit was rerun.
+Local identity resolution required handling
 the SDK's native/root and /v1 endpoint forms, and never inventing legacy digests.
 
 The owner asked for much more concrete navigation, commands and example inputs.

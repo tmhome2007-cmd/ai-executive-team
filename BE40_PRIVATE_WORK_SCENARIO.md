@@ -36,3 +36,8 @@ only allowed mutations are the four example continuation controls. Ctrl+C stops
 its owned process groups and cleans temporary files; live company apps and data
 are untouched. Failed startup logs are private under audit-results. The guide and
 demo are review aids, not usefulness acceptance, permission renewal or a merge.
+
+Final shutdown follow-up: two regression tests cover interrupted/failed startup,
+one termination per live owned child and preservation of another demo metadata
+record. Actual startup/SIGTERM shutdown passed on 3d924cd, with temporary directory
+and runtime metadata removed. The final integrated suite passed all 289 tests.
