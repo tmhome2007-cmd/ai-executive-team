@@ -23,11 +23,11 @@ Start BE-43 and BE-44. Freeze the independent evaluation protocol before adaptin
 | BE-49 | high | Use structured output in one meeting path | backlog | BE-43, BE-47, BE-48 |
 | BE-50 | medium | Preserve disagreement in the decision brief | backlog | BE-49 |
 | BE-51 | medium | Simplify documentation and the code catalog | backlog | BE-44, BE-45 |
-| BE-52 | high | Evaluate one real project decision | blocked | BE-47, BE-48, BE-49, BE-50 |
+| BE-52 | high | Evaluate one real project decision | backlog | BE-47, BE-48, BE-49, BE-50 |
 | BE-53 | high | Complete integration, privacy and security audit | backlog | BE-43, BE-44, BE-45, BE-46, BE-47, BE-48, BE-49, BE-50, BE-51, BE-52 |
 | BE-54 | medium | Owner review, retrospective and Sprint 6 closure | backlog | BE-53 |
 
-BE-52 is blocked on real project facts, not on permission to organize the code. The other maintenance items can progress independently according to their dependencies. BE-53 assesses selected scope; a blocked real-job item may be explicitly deferred before closure, but cannot be marked Done. No fixed delivery date or velocity has been agreed.
+The owner supplied BE-52 inputs and a follow-up on 11 October. They are retained in ignored private storage; evaluation awaits BE-47–50. Historical facts and remaining unknowns must stay explicit. The other maintenance items can progress independently according to their dependencies. BE-53 assesses selected scope; a blocked real-job item may be explicitly deferred before closure, but cannot be marked Done. No fixed delivery date or velocity has been agreed.
 
 ## Acceptance criteria
 
@@ -69,7 +69,7 @@ Archive closed sprint narratives with a closure index and working links. Keep ac
 
 ### BE-52 · Evaluate one real project decision
 
-Freeze an owner-supplied brief, permitted facts, intended reader, exact unknowns and decision rubric before running the team. Reinstatly free-versus-paid is a candidate, not an assumed dataset. Record whether output changes the owner’s decision and why. Add a controlled same-input comparison when a suitable second local model is already available; keep prompt/rubric/settings fixed where possible and disclose unavoidable differences. If no second model is available, record the comparison as deferred rather than inventing results. No automatic downloads, cloud transmission or spending.
+Freeze an owner-supplied brief, permitted facts, intended reader, exact unknowns and decision rubric before running the team. Use the supplied primary decision; any separate later question stays deferred. Private business inputs stay outside Git and remote transmission. Record whether output changes the owner’s decision and why. Add a controlled same-input comparison when a suitable second local model is already available; keep prompt/rubric/settings fixed where possible and disclose unavoidable differences. If no second model is available, record the comparison as deferred rather than inventing results. No automatic downloads, cloud transmission or spending.
 
 ### BE-53 · Complete integration, privacy and security audit
 

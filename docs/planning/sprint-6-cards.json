@@ -78,11 +78,10 @@
   {
     "title": "BE-52 · Evaluate one real project decision",
     "description": "Sprint 6 maintenance and evaluation. Dependencies: BE-47, BE-48, BE-49, BE-50. See SPRINT_6_PLAN.md. Owner assignment is accountability; the implementer does the technical work. Planning only; no execution authority.",
-    "acceptance_criteria": "Freeze an owner-supplied brief, permitted facts, intended reader, exact unknowns and decision rubric before running the team. Reinstatly free-versus-paid is a candidate, not an assumed dataset. Record whether output changes the owner’s decision and why. Add a controlled same-input comparison when a suitable second local model is already available; keep prompt/rubric/settings fixed where possible and disclose unavoidable differences. If no second model is available, record the comparison as deferred rather than inventing results. No automatic downloads, cloud transmission or spending.",
+    "acceptance_criteria": "Freeze an owner-supplied brief, permitted facts, intended reader, exact unknowns and decision rubric before running the team. Use the supplied primary decision; any separate later question stays deferred. Private business inputs stay outside Git and remote transmission. Record whether output changes the owner’s decision and why. Add a controlled same-input comparison when a suitable second local model is already available; keep prompt/rubric/settings fixed where possible and disclose unavoidable differences. If no second model is available, record the comparison as deferred rather than inventing results. No automatic downloads, cloud transmission or spending.",
     "assignee": "owner",
     "priority": "high",
-    "status": "blocked",
-    "blocked_reason": "Requires an owner-supplied real project brief and permitted facts; no live company database or Reinstatly facts are assumed."
+    "status": "backlog"
   },
   {
     "title": "BE-53 · Complete integration, privacy and security audit",
