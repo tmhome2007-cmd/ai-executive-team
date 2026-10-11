@@ -23,6 +23,19 @@ from workflows.business_discovery import run_stage, read_public_source
 
 class DiscoveryTests(unittest.TestCase):
     def setUp(self):
+        identity_patch = patch(
+            "workflows.local_model_identity.resolve_model",
+            return_value={
+                "digest": "a" * 64,
+                "configuration": {
+                    "provider": "ollama",
+                    "tag": "synthetic",
+                    "temperature": 0.0,
+                },
+            },
+        )
+        identity_patch.start()
+        self.addCleanup(identity_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.database = patch.object(
             config, "DATABASE_PATH", str(Path(self.temp.name) / "test.db")

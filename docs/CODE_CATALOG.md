@@ -1270,6 +1270,13 @@ Disposable experiments: evidence, risk enforcement, approval binding and honest 
 - `now`
 - `ExperimentTests`
 
+## [tests/test_local_model_identity.py](../tests/test_local_model_identity.py)
+
+Deterministic identity checks; all daemon responses and inference are synthetic.
+
+- `ResolutionTests`
+- `PrivateIdentityTests`
+
 ## [tests/test_local_voice_samples.py](../tests/test_local_voice_samples.py)
 
 Neural audition boundaries; tiny synthetic WAV fixtures, no model inference/network.
@@ -1627,6 +1634,14 @@ Local CSO drafting of proposed procedures from exact reviewed examples.
 Keep startup reconciliation from changing another live server's claims.
 
 - `database_instance_lock`
+
+## [workflows/local_model_identity.py](../workflows/local_model_identity.py)
+
+Read-only, bounded local Ollama identity resolution; no pull or fallback.
+
+- `NoRedirect`
+- `resolve_model`: Resolve the configured tag using Ollama GET /api/tags only.
+- `assert_identity`: Legacy rows cannot acquire identity retroactively or reuse saved output.
 
 ## [workflows/local_voice_samples.py](../workflows/local_voice_samples.py)
 

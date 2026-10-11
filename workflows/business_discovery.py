@@ -104,10 +104,30 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
         raise ValueError("Resolve disputed/stale sources before generating work")
     # Configuration failures leave the brief editable, without claiming a step.
     _local_agent()
+    from workflows.local_model_identity import resolve_model, assert_identity
+
+    specification = (brief.get("practice_specification") or {}).get("specification", {})
+    identity_mode = (
+        "revision"
+        if stage == "revision"
+        else (
+            "task_guide"
+            if stage == "practice"
+            and specification.get("deliverable_kind") == "guide"
+            and "task" in (brief["exercise"] or "").lower()
+            else stage == "research"
+        )
+    )
+    identity = resolve_model(_local_agent().llm, identity_mode)
     previous = None
     if _continuation is None:
         brief = claim_stage(ident, expected_version, stage)
     else:
+        from memory.database import get_connection
+
+        with get_connection() as conn:
+            previous = inspector._row(conn, _continuation[0])
+        assert_identity(previous, identity)
         previous, brief = inspector.claim_continuation(
             _continuation[0], _continuation[1], expected_version
         )
@@ -312,11 +332,21 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
             prompt_version,
             model_version,
             previous["id"] if previous else None,
+            model_identity=identity,
         )
     except BaseException:
         finish_stage(ident, stage, claimed_version=brief["version"])
         raise
     inspector.live(run_ident, True)
+
+    def verify_model():
+        assert_identity(
+            {
+                "model_digest": identity["digest"],
+                "model_config_json": json.dumps(identity["configuration"]),
+            },
+            resolve_model(_local_agent().llm, identity_mode),
+        )
 
     def worker():
         try:
@@ -330,6 +360,7 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
 
                     with get_connection() as conn:
                         template_context(conn.cursor(), ident)
+                    verify_model()
                     inspector.phase(run_ident, "generating")
                     if cached is not None:
                         return cached
@@ -407,6 +438,7 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
                             with get_connection() as conn:
                                 conn.execute("BEGIN")
                                 skill_context(conn.cursor(), ident)
+                        verify_model()
                         repaired = _reason(
                             prompt
                             + "\nPREVIOUS FAILED DRAFT (not evidence):\n"
@@ -420,6 +452,7 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
                         return render(repaired)
 
                 output = run_json_step(run_key, step_key, digest, generate)
+                verify_model()
                 inspector.assert_running(run_ident)
             from workflows.output_quality import assess_output, review_notice
 

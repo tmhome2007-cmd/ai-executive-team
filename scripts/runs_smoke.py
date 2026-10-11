@@ -106,6 +106,11 @@ def main():
                     open_view(page, "Business research")
                     open_business_section(page, "Run inspector")
                     panel = page.get_by_role("region", name="Run inspector")
+                    panel.get_by_text("Prompt and model versions", exact=True).click()
+                    panel.get_by_text(
+                        "Model digest: " + "a" * 64, exact=True
+                    ).wait_for()
+                    panel.get_by_text("Inference settings:", exact=False).wait_for()
                     panel.get_by_role(
                         "button", name=f"Stop private run #{ident}", exact=True
                     ).click()

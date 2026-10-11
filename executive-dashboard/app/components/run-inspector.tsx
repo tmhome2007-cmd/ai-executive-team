@@ -18,6 +18,8 @@ interface Run {
   prompt_version: string;
   prompt_digest: string;
   model_version: string;
+  model_digest: string | null;
+  model_configuration: Record<string, string | number | null> | null;
   model_note: string;
   control_version: number;
   can_stop: boolean;
@@ -172,6 +174,14 @@ export default function RunInspector({
             <p>
               Configured model: {r.model_version}. {r.model_note}
             </p>
+            {r.model_digest && (
+              <p className="break-all">Model digest: {r.model_digest}</p>
+            )}
+            {r.model_configuration && (
+              <p className="break-all">
+                Inference settings: {JSON.stringify(r.model_configuration)}
+              </p>
+            )}
             <p className="break-all">Prompt implementation: {r.prompt_version}</p>
             <p className="break-all">Input digest: {r.prompt_digest}</p>
           </details>

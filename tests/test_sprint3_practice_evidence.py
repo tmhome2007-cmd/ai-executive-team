@@ -51,6 +51,19 @@ class SprintThreeTests(unittest.TestCase):
         self.assertIn("No greenhouse control action is authorized", greenhouse["facts"])
 
     def setUp(self):
+        identity_patch = patch(
+            "workflows.local_model_identity.resolve_model",
+            return_value={
+                "digest": "a" * 64,
+                "configuration": {
+                    "provider": "ollama",
+                    "tag": "synthetic",
+                    "temperature": 0.0,
+                },
+            },
+        )
+        identity_patch.start()
+        self.addCleanup(identity_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.db = patch.object(
             config, "DATABASE_PATH", str(Path(self.temp.name) / "test.db")

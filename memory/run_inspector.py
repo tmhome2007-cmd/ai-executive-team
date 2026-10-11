@@ -20,6 +20,15 @@ def init_inspector(cursor):
         continued_from INTEGER, continued_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
         UNIQUE(run_id,step_id))""")
 
+    columns = {
+        row[1] for row in cursor.execute("PRAGMA table_info(workflow_run_inspection)")
+    }
+    for name in ("model_digest", "model_config_json"):
+        if name not in columns:
+            cursor.execute(
+                f"ALTER TABLE workflow_run_inspection ADD COLUMN {name} TEXT"
+            )  # nosec B608 # Fixed identifiers only.
+
 
 def _now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -33,6 +42,8 @@ def register_run(
     prompt_version,
     model_version,
     continued_from=None,
+    *,
+    model_identity=None,
 ):
     from workflows.step_checkpoints import init_step_checkpoints
 
@@ -61,6 +72,17 @@ def register_run(
             ),
         )
         ident = row.lastrowid
+        if model_identity is not None:
+            conn.execute(
+                "UPDATE workflow_run_inspection SET model_digest=?,model_config_json=? WHERE id=?",
+                (
+                    model_identity["digest"],
+                    json.dumps(
+                        model_identity["configuration"], sort_keys=True, allow_nan=False
+                    ),
+                    ident,
+                ),
+            )
         if continued_from is not None:
             cursor = conn.execute(
                 """UPDATE workflow_run_inspection SET continued_by=?,control_version=control_version+1,updated_at=?
@@ -234,6 +256,11 @@ def _summary(conn, row, checkpoint=None):
         "refresh",
         "Refresh runs to check the current brief and controls.",
     )
+    if can_continue and not (row.get("model_digest") and row.get("model_config_json")):
+        can_continue = False
+        continuation_blocked_reason = "Earlier model identity is unknown."
+        recovery_code = "model_identity_unknown"
+        recovery_action = "Create a new owner-reviewed exercise; this legacy run cannot be reused. Existing output stays in history."
     if can_continue:
         # The same eligibility check is used inside the transactional claim.
         recovery_code, continuation_blocked_reason, recovery_action = _binding_guidance(
@@ -244,6 +271,8 @@ def _summary(conn, row, checkpoint=None):
         else:
             recovery_code = "continue_private"
             recovery_action = "Continue this private exercise explicitly; the resulting sample still needs owner review."
+    elif continuation_blocked_reason:
+        pass
     elif active and row["stop_requested"]:
         recovery_code = "wait_for_worker"
         recovery_action = "Wait for the current local model call to finish; its output will be discarded. Then refresh runs."
@@ -304,8 +333,17 @@ def _summary(conn, row, checkpoint=None):
         prompt_digest=row["prompt_digest"],
         prompt_version=row["prompt_version"],
         model_version=row["model_version"],
-        model_digest=None,
-        model_note="Configured local model tag; immutable model digest not captured.",
+        model_digest=row.get("model_digest"),
+        model_configuration=(
+            json.loads(row["model_config_json"])
+            if row.get("model_config_json")
+            else None
+        ),
+        model_note=(
+            "Resolved local Ollama digest and recorded inference settings."
+            if row.get("model_digest")
+            else "Unknown: legacy configured tag only; no digest was captured."
+        ),
         control_version=row["control_version"],
         can_stop=bool(
             b
@@ -453,6 +491,10 @@ def claim_continuation(ident, expected_control, expected_brief):
 
 def cached_result(previous, prompt_digest, prompt_version):
     """Reuse a durably completed result only if current inputs and code still match."""
+    if not previous.get("model_digest") or not previous.get("model_config_json"):
+        raise RuntimeError(
+            "Earlier model identity is unknown; create a new owner-reviewed exercise"
+        )
     if (
         previous["prompt_digest"] != prompt_digest
         or previous["prompt_version"] != prompt_version

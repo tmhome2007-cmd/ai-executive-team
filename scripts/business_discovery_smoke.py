@@ -67,6 +67,17 @@ def main():
         )
         with (
             patch(
+                "workflows.local_model_identity.resolve_model",
+                return_value={
+                    "digest": "a" * 64,
+                    "configuration": {
+                        "provider": "ollama",
+                        "tag": "synthetic",
+                        "temperature": 0.0,
+                    },
+                },
+            ),
+            patch(
                 "workflows.business_discovery._reason", return_value=research
             ) as reason,
             patch(
