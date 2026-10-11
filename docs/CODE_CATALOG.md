@@ -1378,6 +1378,12 @@ Real byte decoding with mocked transport; no external requests.
 - `Response`
 - `ResearchEncodingTests`
 
+## [tests/test_review_demo.py](../tests/test_review_demo.py)
+
+Demo shutdown reaps only its children and clears only its own runtime record.
+
+- `ReviewDemoTests`
+
 ## [tests/test_run_inspector.py](../tests/test_run_inspector.py)
 
 Private stop/continue fencing, cached recovery and metadata privacy.

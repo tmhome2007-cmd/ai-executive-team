@@ -142,10 +142,11 @@ def launch_servers(root):
         for reservation in reservations:
             reservation.close()
         for child in children:
-            try:
-                os.killpg(child.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            if child.poll() is None:
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
             try:
                 child.wait(timeout=10)
             except subprocess.TimeoutExpired:
@@ -266,11 +267,6 @@ def serve(root, children, reservations):
         )
 
         def stop(*args):
-            for child in children:
-                try:
-                    os.killpg(child.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
             raise SystemExit()
 
         signal.signal(signal.SIGINT, stop)
