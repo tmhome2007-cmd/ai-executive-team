@@ -163,6 +163,42 @@ def _elapsed(start, end):
         return None
 
 
+def _binding_guidance(cursor, brief_id):
+    """Fixed owner-facing messages; never expose approval notes or exception text."""
+    from memory.workflow_templates import template_context
+    from memory.practice_quality import assert_specification
+    from memory.executive_skills import skill_context
+
+    try:
+        template = template_context(cursor, brief_id, require_reviewed=False)
+        if template and not template["usable"]:
+            return (
+                "template_withdrawn",
+                "Bound workflow version was withdrawn.",
+                "Review a new workflow version and create a new brief; earlier artifacts remain available under their retention policy.",
+            )
+        assert_specification(cursor, brief_id)
+        skill = skill_context(cursor, brief_id, require_usable=False)
+        if skill and not skill["usable"]:
+            revoked = skill["state"] == "revoked"
+            return (
+                "skill_revoked" if revoked else "assessments_corrected",
+                (
+                    "Skill version revoked."
+                    if revoked
+                    else "Source assessments changed or skill acceptance is missing."
+                ),
+                "Propose and review a new skill version using current assessments, then create a new private exercise. Earlier samples stay in history.",
+            )
+    except (ValueError, RuntimeError, LookupError):
+        return (
+            "exercise_changed",
+            "The approved exercise or its bindings cannot be validated.",
+            "Refresh and review the exercise; create a new owner-reviewed brief if its approved inputs changed.",
+        )
+    return "", "", ""
+
+
 def _summary(conn, row, checkpoint=None):
     with _ACTIVE_LOCK:
         active = row["id"] in _ACTIVE
@@ -194,20 +230,34 @@ def _summary(conn, row, checkpoint=None):
         if not (b["sample"] and b["review_json"] and 1 <= count < 10):
             can_continue = False
     continuation_blocked_reason = ""
+    recovery_code, recovery_action = (
+        "refresh",
+        "Refresh runs to check the current brief and controls.",
+    )
     if can_continue:
-        # A visible continuation button must honor the current approval bindings,
-        # not just the brief/run versions. Claiming rechecks them transactionally.
-        from memory.workflow_templates import template_context
-        from memory.practice_quality import assert_specification
-        from memory.executive_skills import skill_context
-
-        try:
-            template_context(conn.cursor(), row["brief_id"])
-            assert_specification(conn.cursor(), row["brief_id"])
-            skill_context(conn.cursor(), row["brief_id"])
-        except (ValueError, RuntimeError) as error:
+        # The same eligibility check is used inside the transactional claim.
+        recovery_code, continuation_blocked_reason, recovery_action = _binding_guidance(
+            conn.cursor(), row["brief_id"]
+        )
+        if continuation_blocked_reason:
             can_continue = False
-            continuation_blocked_reason = str(error)
+        else:
+            recovery_code = "continue_private"
+            recovery_action = "Continue this private exercise explicitly; the resulting sample still needs owner review."
+    elif active and row["stop_requested"]:
+        recovery_code = "wait_for_worker"
+        recovery_action = "Wait for the current local model call to finish; its output will be discarded. Then refresh runs."
+    elif row["continued_by"] is not None or latest != row["id"]:
+        recovery_code = "superseded"
+        recovery_action = "Inspect the latest run for this brief; this earlier attempt cannot continue."
+    elif row["phase"] == "completed":
+        recovery_code = "review_sample"
+        recovery_action = "Review the saved research or sample in Research & practice."
+    elif row["stage"] == "research" and not active:
+        recovery_code = "new_research"
+        recovery_action = (
+            "Create a new research brief; existing evidence snapshots stay unchanged."
+        )
     terminal = row["phase"] in {"completed", "failed", "stopped", "interrupted"}
     return dict(
         id=row["id"],
@@ -226,6 +276,8 @@ def _summary(conn, row, checkpoint=None):
             else ""
         ),
         continuation_blocked_reason=continuation_blocked_reason,
+        recovery_code=recovery_code,
+        recovery_action=recovery_action,
         pending_input=(
             continuation_blocked_reason
             if continuation_blocked_reason

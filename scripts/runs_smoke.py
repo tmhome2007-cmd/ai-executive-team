@@ -110,7 +110,8 @@ def main():
                         "button", name=f"Stop private run #{ident}", exact=True
                     ).click()
                     panel.get_by_text(
-                        "Wait for the current local model call to finish;", exact=False
+                        "Wait for the current local model call to finish; its output will be discarded.",
+                        exact=True,
                     ).wait_for()
                     assert not panel.get_by_role(
                         "button", name=f"Continue private run #{ident}", exact=True
@@ -155,6 +156,33 @@ def main():
                         page.clock.fast_forward(16000)
                     # Re-entry loads current metadata without starting another generation.
                     assert len(get_brief(b["id"])["attempts"]) == 1
+                    # Corrected source reviews invalidate a bound skill after interruption.
+                    from tests.test_sprint5_recovery import RecoveryTests
+
+                    recovery = RecoveryTests()
+                    recovery.ids = (
+                        fixture.ids
+                    )  # Share this smoke's disposable database.
+                    blocked_brief, _, _ = recovery.bound()
+                    blocked = recovery.interrupted(blocked_brief)
+                    recovery.assess(
+                        recovery.examples[0], [False, True], correction=True
+                    )
+                    panel.get_by_role("button", name="Refresh runs", exact=True).click()
+                    panel.get_by_text(
+                        "Source assessments changed or skill acceptance is missing.",
+                        exact=True,
+                    ).wait_for()
+                    panel.get_by_text(
+                        "Next step: Propose and review a new skill version", exact=False
+                    ).wait_for()
+                    assert not panel.get_by_role(
+                        "button",
+                        name=f"Continue private run #{blocked['id']}",
+                        exact=True,
+                    ).count()
+                    assert not get_brief(blocked_brief["id"])["attempts"]
+                    assert len(calls) == 2
                     page.set_viewport_size({"width": 390, "height": 844})
                     assert page.evaluate(
                         "document.documentElement.scrollWidth <= window.innerWidth"

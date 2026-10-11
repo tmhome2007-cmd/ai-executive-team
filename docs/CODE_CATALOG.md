@@ -869,6 +869,7 @@ Safe run summaries and cooperative cancellation; existing ledgers own results.
 - `recover_inspector`: Startup never schedules another run; claims remain inconclusive.
 - `_row`
 - `_elapsed`
+- `_binding_guidance`: Fixed owner-facing messages; never expose approval notes or exception text.
 - `_summary`
 - `get_run`
 - `list_runs`
@@ -1359,6 +1360,12 @@ Combined Sprint 4 privacy and recovery checks using disposable company data.
 Private example runs preserve unsuccessful raw drafts and sanitize errors.
 
 - `PrivateExamplesTests`
+
+## [tests/test_sprint5_recovery.py](../tests/test_sprint5_recovery.py)
+
+Combined permission changes, concurrent claims and private recovery guidance.
+
+- `RecoveryTests`
 
 ## [tests/test_sprint5_time_regressions.py](../tests/test_sprint5_time_regressions.py)
 

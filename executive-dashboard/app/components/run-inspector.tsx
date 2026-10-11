@@ -14,6 +14,7 @@ interface Run {
   duration_seconds: number | null;
   error_category: string;
   pending_input: string;
+  recovery_action: string;
   prompt_version: string;
   prompt_digest: string;
   model_version: string;
@@ -112,6 +113,8 @@ export default function RunInspector({
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      // A rejected stale control must refresh eligibility before another click.
+      await refresh().catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -163,6 +166,7 @@ export default function RunInspector({
           </p>
           {r.error_category && <p>Error category: {r.error_category}</p>}
           {r.pending_input && <p>{r.pending_input}</p>}
+          {r.recovery_action && <p>Next step: {r.recovery_action}</p>}
           <details>
             <summary>Prompt and model versions</summary>
             <p>
