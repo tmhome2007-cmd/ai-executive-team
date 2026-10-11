@@ -72,6 +72,14 @@ Owner-requested local conversation audio API routes.
 - `get_conversation_audio`
 - `delete_conversation_audio`
 
+## [api/decisions.py](../api/decisions.py)
+
+Thin owner-authenticated HTTP boundary for approved decision preparation.
+
+- `PreparationRequest`
+- `PreparationResponse`
+- `build_decision_preparation_router`: Bind application callbacks without importing the application or starting services.
+
 ## [api/people.py](../api/people.py)
 
 Character presentation, workforce and fictional simulation API routes.
@@ -369,10 +377,8 @@ FastAPI entry point: startup, owner authentication, scheduling and core company 
 - `GoalUpdateRequest`
 - `GoalStatusRequest`
 - `ExecutiveMemoryStatusRequest`
-- `PreparationRequest`
 - `ResourceFulfillmentRequest`
 - `TreasuryFundingRequest`
-- `PreparationResponse`
 - `verify_api_key`: Controleert of de ontvangen X-API-Key header overeenkomt met de geconfigureerde API_SECRET_KEY.
 - `_require_linked_goal_active`: Fail closed when a decision/action/resource belongs to a goal that is no
 - `read_root`
@@ -394,7 +400,7 @@ FastAPI entry point: startup, owner authentication, scheduling and core company 
 - `trigger_ad_hoc_decision`: Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op.
 - `approve_decision`: Human approval gate voor de strategische richting van een beslissing.
 - `reject_decision`: Reject een beslissing voordat preparation is gestart/voltooid.
-- `prepare_approved_decision`: Phase 2: laat tool-capable executives een GOEDGEKEURDE strategische
+- `_preparation_dependencies`: Resolve callbacks per request, preserving owner controls and test patch seams.
 - `read_pending_resource_requests`
 - `read_resource_request_history`
 - `approve_resource_request`
@@ -1532,6 +1538,7 @@ Agent tool to record missing resources without granting access.
 
 Foundation regression checks; run through the disposable local audit.
 
+- `preparation_contract_sources`: Read the router and owning workflow where preparation contracts now live.
 - `suppress_executor_notifications`: Dynamic executor smoke tests must never contact the user's real Telegram
 - `log_pass`
 - `log_fail`
@@ -1655,6 +1662,14 @@ Scheduled executive research with persisted attempts and recovery.
 
 - `_run_research_crew_once`: Runs the CSO research crew once (async) and returns the raw result text.
 - `run_daily_research`: Voert de volledige dagelijkse workflow uit:
+
+## [workflows/decision_preparation.py](../workflows/decision_preparation.py)
+
+Approved decision preparation: claims, bounded proposals, provenance and private recovery.
+
+- `PreparationError`: A safe owner-facing domain error with an HTTP status for boundary translation.
+- `PreparationDependencies`: Explicit application seams; callbacks retain transactional ownership in storage.
+- `DecisionPreparation`: One preparation attempt; instance state cannot be shared between requests.
 
 ## [workflows/discussion_contracts.py](../workflows/discussion_contracts.py)
 
@@ -1906,7 +1921,6 @@ Routes still require the application's authentication dependencies; this list gr
 | POST | `/conversation-audio` | [api/conversation_audio.py](../api/conversation_audio.py) · `generate_conversation_audio` |
 | POST | `/decisions/trigger` | [main.py](../main.py) · `trigger_ad_hoc_decision` |
 | POST | `/decisions/{decision_id}/approve` | [main.py](../main.py) · `approve_decision` |
-| POST | `/decisions/{decision_id}/prepare` | [main.py](../main.py) · `prepare_approved_decision` |
 | POST | `/decisions/{decision_id}/reject` | [main.py](../main.py) · `reject_decision` |
 | POST | `/discussions` | [foundation_api.py](../foundation_api.py) · `discussion_create` |
 | POST | `/evidence` | [foundation_api.py](../foundation_api.py) · `source_create` |

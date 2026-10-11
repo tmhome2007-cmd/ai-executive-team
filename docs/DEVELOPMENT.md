@@ -21,6 +21,8 @@ flowchart TD
 | `main.py` | Application lifecycle, auth, scheduler and core company API | Startup, owner login or core decisions/actions/goals change |
 | `foundation_api.py` | Planning/operating routes and feature-router assembly | Planning, capability inventory, observation jobs or activity streams change |
 | `api/common.py` | Strict request base, API error mapping and private response headers | Shared request/response behavior changes |
+| `api/decisions.py` | Approved-decision preparation HTTP schemas and error mapping | Preparation request or response contracts change |
+| `workflows/decision_preparation.py` | Preparation claims, bounded proposals, provenance and recovery | Approved direction becomes pending proposals |
 | `api/business.py` | Business research/practice HTTP contracts | Business form fields or endpoints change |
 | `api/people.py` | Characters, departments, employees and fictional simulation HTTP contracts | People/organization endpoints change |
 | `api/conversation_audio.py` | Published contribution speech HTTP contracts | Audio load/read/cancel/delete endpoints change |
@@ -118,3 +120,5 @@ Full disposable audit `audit-results/20261010-195208`: 188 backend tests, 150 fo
 Use `./company test` for backend regressions. It discovers only tests/, overrides company paths and credentials with temporary values before imports, disables Telegram/cloud/raw shell, and cleans temporary records after exit. `./company test --list` discovers without running cases; `./company test --pattern test_decision_preparation.py` narrows the filename pattern. `./company test --docker` explicitly includes the real Docker boundary check using the existing pinned image; it never pulls an image. Skips remain visible.
 
 `verify_system.py` remains the separate foundation checker and `./company audit` remains the complete integration/security/browser check. Frontend `npm test` and vendor self-tests stay in their package directories. Opt-in examples now live under scripts/manual_checks/; see its README. They are not automatically run.
+
+Decision preparation now follows dashboard → api/decisions.py → workflows/decision_preparation.py → memory/database.py. main.py binds explicit callbacks per request, so owner auth and existing patch seams remain stable. The workflow has no application import and grants no execution/access authority.

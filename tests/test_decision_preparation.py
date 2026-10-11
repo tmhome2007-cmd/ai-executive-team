@@ -24,6 +24,7 @@ from memory.database import (
     init_db,
     log_decision,
     propose_action,
+    propose_resource_request,
     transition_decision_approval,
     transition_company_goal_status,
 )
@@ -235,3 +236,33 @@ class DecisionPreparationTests(unittest.TestCase):
         self.assertNotIn("PRIVATE-NOTIFICATION-PAYLOAD-SENTINEL", str(captured.output))
         self.assertIn("preparation_notification_failed", str(captured.output))
         self.assertEqual(get_decision_by_id(ident)["preparation_status"], "completed")
+
+    def test_missing_decision_and_invalid_request_do_not_claim_or_generate(self):
+        self.assertEqual(self.prepare(999999).status_code, 404)
+        ident = self.decision()
+        response = self.client.post(
+            f"/decisions/{ident}/prepare",
+            json={"agent_keys": []},
+            headers={"X-API-Key": self.key},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.meeting.assert_not_called()
+        self.assertEqual(get_decision_by_id(ident)["preparation_status"], "not_started")
+
+    def test_missing_and_orphaned_resources_fail_without_granting_access(self):
+        orphan = propose_resource_request(
+            "COO", "data", "Fictional product facts", "Needed for the draft"
+        )
+        for resource in [orphan, 999999]:
+            with self.subTest(resource=resource):
+                ident = self.decision()
+                self.meeting.return_value = {
+                    **self.result,
+                    "proposed_resource_request_ids": [resource],
+                }
+                self.assertEqual(self.prepare(ident).status_code, 502)
+                self.assertEqual(
+                    get_decision_by_id(ident)["preparation_status"], "failed"
+                )
+        self.assertEqual(get_resource_request_by_id(orphan)["status"], "pending")

@@ -11,7 +11,6 @@ logger = get_logger(__name__)
 
 import asyncio
 import datetime
-import hashlib
 from contextlib import asynccontextmanager
 from typing import Optional, Literal
 from fastapi import FastAPI, HTTPException, Query, Depends, Header, Request
@@ -21,14 +20,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 import os
 import re
-import json
-import ast
 from pydantic import BaseModel, Field, ConfigDict
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from agents.executive_agents import get_executive_profiles
 from memory.activity import activity_origin
+from api.decisions import (
+    PreparationRequest,
+    PreparationResponse,
+    build_decision_preparation_router,
+)
+from workflows.decision_preparation import PreparationDependencies
 
 from memory.database import (
     init_db,
@@ -522,14 +525,6 @@ class ExecutiveMemoryStatusRequest(BaseModel):
     active: bool
 
 
-class PreparationRequest(BaseModel):
-    agent_keys: list[str] = Field(
-        default_factory=lambda: ["coo", "cto", "ceo"],
-        min_length=1,
-        max_length=11,
-    )
-
-
 class ResourceFulfillmentRequest(BaseModel):
     fulfillment_note: str = Field(
         min_length=1,
@@ -545,14 +540,6 @@ class TreasuryFundingRequest(BaseModel):
     amount: float = Field(gt=0)
     currency: str = Field(min_length=3, max_length=3)
     note: Optional[str] = Field(default=None, max_length=500)
-
-
-class PreparationResponse(BaseModel):
-    source_decision_id: int
-    final_plan: str
-    participants: list[str]
-    individual_outputs: dict[str, str]
-    quality_warnings: dict = Field(default_factory=dict)
 
 
 # --- API Key Beveiliging ---
@@ -1152,557 +1139,28 @@ def reject_decision(decision_id: int):
     return {"decision_id": decision_id, "approval_status": "rejected"}
 
 
-@app.post(
-    "/decisions/{decision_id}/prepare",
-    response_model=PreparationResponse,
-    summary="Prepare an Approved Decision for Execution",
-    dependencies=[Depends(verify_api_key)],
+def _preparation_dependencies() -> PreparationDependencies:
+    """Resolve callbacks per request, preserving owner controls and test patch seams."""
+    return PreparationDependencies(
+        get_decision_by_id=get_decision_by_id,
+        get_company_goal=get_company_goal,
+        claim_decision_for_preparation=claim_decision_for_preparation,
+        run_executive_meeting=run_executive_meeting,
+        agents=EXECUTIVE_AGENTS,
+        get_action_by_id=get_action_by_id,
+        get_resource_request_by_id=get_resource_request_by_id,
+        propose_resource_request=propose_resource_request,
+        action_provenance_scope=action_provenance_scope,
+        finish_decision_preparation=finish_decision_preparation,
+        get_executive_profiles=get_executive_profiles,
+        send_notification=send_notification,
+        logger=logger,
+    )
+
+
+app.include_router(
+    build_decision_preparation_router(verify_api_key, _preparation_dependencies)
 )
-def prepare_approved_decision(decision_id: int, request: PreparationRequest):
-    """
-    Phase 2: laat tool-capable executives een GOEDGEKEURDE strategische
-    beslissing vertalen naar concrete voorbereiding/action proposals en
-    structured resource requests. Niets wordt direct uitgevoerd of verleend.
-    """
-    decision = get_decision_by_id(decision_id)
-    if decision is None:
-        raise HTTPException(status_code=404, detail="Decision not found.")
-    if decision["approval_status"] != "approved":
-        raise HTTPException(
-            status_code=409,
-            detail=f"Decision must be approved before preparation (currently '{decision['approval_status']}').",
-        )
-
-    if decision.get("goal_id") is not None:
-        goal = get_company_goal(decision["goal_id"])
-        if goal is None:
-            raise HTTPException(
-                status_code=409,
-                detail="Decision references a goal that no longer exists.",
-            )
-        if goal["status"] != "active":
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Linked company goal must remain active before preparation "
-                    f"(currently '{goal['status']}')."
-                ),
-            )
-    else:
-        goal = None
-
-    if not claim_decision_for_preparation(decision_id):
-        current = get_decision_by_id(decision_id)
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Decision preparation could not be claimed "
-                f"(current preparation status: '{current.get('preparation_status') if current else 'unknown'}')."
-            ),
-        )
-
-    trusted_browser_context = "\n".join(
-        part
-        for part in (
-            decision.get("task_description"),
-            decision.get("decision_outcome"),
-            goal.get("description") if goal else None,
-            goal.get("success_criteria") if goal else None,
-        )
-        if part
-    )
-    allowed_browser_urls = set(
-        re.findall(r'https?://[^\s<>"\')\]}]+', trusted_browser_context)
-    )
-
-    preparation_prompt = (
-        f"PHASE 2 — PREPARATION FOR APPROVED DECISION #{decision_id}\n\n"
-        f"Original topic: {decision['topic']}\n\n"
-        f"Original evidence/task:\n{decision['task_description']}\n\n"
-        f"Human-approved strategic direction:\n{decision['decision_outcome']}\n\n"
-        + (
-            f"Linked company goal: {goal['title']}\n"
-            f"Goal success criteria: {goal['success_criteria']}\n"
-            f"Goal priority: {goal['priority']}\n"
-            f"Goal target date: {goal.get('target_date') or 'none'}\n\n"
-            if goal
-            else ""
-        )
-        + "Your job is NOT to re-decide whether the direction should happen. "
-        "Translate the approved direction into a concrete, safe preparation plan. "
-        "Identify required resources, access, credentials, plugins, data, files, "
-        "browser steps, or commands. If a concrete action is genuinely needed and "
-        "your role has an appropriate propose_* tool, you MAY propose it for human "
-        "review. IMPORTANT: if you decide a proposal is needed, CALL the actual tool. "
-        "Do not print, imitate, or describe a JSON/function-call payload in your answer. "
-        "A textual pseudo-call is invalid and will fail preparation verification. "
-        "Never claim a proposed action has executed. For every action you actually "
-        "propose, include an expected_outcome and expected_impact so we can measure "
-        "whether it worked later. Include expected_cost_amount + currency ONLY when "
-        "the supplied evidence supports a real cost; otherwise leave cost unknown. "
-        "Never invent access or credentials we do not have. Never invent a domain or URL. "
-        "A browser action may only target an exact URL already present in the trusted "
-        "task/evidence, approved decision, or linked goal context; otherwise request the "
-        "missing exact URL/resource from the owner. For every missing resource "
-        "or capability that genuinely blocks the approved plan, CALL "
-        "propose_resource_request so the owner receives a structured request. For a "
-        "non-budget request, OMIT amount and currency. For a budget request whose amount "
-        "is unknown, OMIT amount and currency — NEVER send strings such as 'Unknown — "
-        "evidence required' into numeric/currency fields. Do not put passwords, API keys, "
-        "tokens, or secret values in any tool field. Merely listing a missing capability "
-        "in prose or printing a JSON object is not a structured request. Minimize actions: "
-        "do not propose anything that is not necessary to prepare the approved direction."
-    )
-
-    def _run_preparation_meeting(task_text: str):
-        return run_executive_meeting(
-            workflow_run_id="prepare:"
-            + decision["sync_uuid"]
-            + ":"
-            + hashlib.sha256(task_text.encode()).hexdigest()[:24],
-            topic=f"Preparation for Decision #{decision_id}",
-            task_description=task_text,
-            agent_keys=request.agent_keys,
-            agents_source=EXECUTIVE_AGENTS,
-            # Only the ORIGINAL task/evidence is evidence for quantitative
-            # validation. The approved recommendation is direction, not proof.
-            evidence_text=decision["task_description"],
-            provenance_context={
-                "decision_id": decision_id,
-                "decision_sync_uuid": decision["sync_uuid"],
-                "phase": "preparation",
-                "allowed_browser_urls": sorted(allowed_browser_urls),
-            },
-            memory_context={
-                "enabled": True,
-                "goal_id": decision.get("goal_id"),
-                "limit": 5,
-            },
-            meeting_type="planning",
-        )
-
-    def _load_created_items(meeting_result: dict):
-        action_ids = meeting_result.get("proposed_action_ids", [])
-        resource_ids = meeting_result.get("proposed_resource_request_ids", [])
-        actions = [
-            action
-            for action_id in action_ids
-            if (action := get_action_by_id(action_id)) is not None
-        ]
-        resources = [
-            resource
-            for request_id in resource_ids
-            if (resource := get_resource_request_by_id(request_id)) is not None
-        ]
-        return action_ids, resource_ids, actions, resources
-
-    def _provenance_mismatches(action_ids, resource_ids, actions, resources):
-        provenance_mismatches = [
-            action
-            for action in actions
-            if (
-                action.get("source_decision_id") != decision_id
-                or action.get("source_decision_sync_uuid") != decision["sync_uuid"]
-                or action.get("source_phase") != "preparation"
-            )
-        ]
-        if len(actions) != len(action_ids):
-            provenance_mismatches.append(
-                {"error": "Created action ID missing from database"}
-            )
-
-        resource_provenance_mismatches = [
-            resource
-            for resource in resources
-            if (
-                resource.get("source_decision_id") != decision_id
-                or resource.get("source_decision_sync_uuid") != decision["sync_uuid"]
-                or resource.get("source_phase") != "preparation"
-            )
-        ]
-        if len(resources) != len(resource_ids):
-            resource_provenance_mismatches.append(
-                {"error": "Created resource request ID missing from database"}
-            )
-
-        return provenance_mismatches, resource_provenance_mismatches
-
-    def _extract_resource_request_payloads(text: str) -> list[dict]:
-        """
-        Strictly extracts ONLY printed propose_resource_request dictionaries.
-        This fallback exists for models that expose valid tools but print a
-        function payload instead of invoking it. Executable action tools are
-        deliberately unsupported here.
-        """
-        allowed_top = {"name", "parameters"}
-        allowed_params = {
-            "resource_type",
-            "resource_name",
-            "reason",
-            "required_for",
-            "amount",
-            "currency",
-        }
-        parsed_payloads: list[dict] = []
-        seen: set[tuple] = set()
-
-        for start_index, char in enumerate(text):
-            if char != "{":
-                continue
-
-            depth = 0
-            in_string = False
-            escaped = False
-            end_index = None
-
-            for idx in range(start_index, len(text)):
-                current = text[idx]
-                if in_string:
-                    if escaped:
-                        escaped = False
-                    elif current == "\\":
-                        escaped = True
-                    elif current == '"':
-                        in_string = False
-                    continue
-
-                if current == '"':
-                    in_string = True
-                elif current == "{":
-                    depth += 1
-                elif current == "}":
-                    depth -= 1
-                    if depth == 0:
-                        end_index = idx + 1
-                        break
-
-            if end_index is None:
-                continue
-
-            candidate = text[start_index:end_index]
-            try:
-                value = json.loads(candidate)
-            except Exception:
-                try:
-                    value = ast.literal_eval(candidate)
-                except Exception:
-                    continue
-
-            if (
-                not isinstance(value, dict)
-                or value.get("name") != "propose_resource_request"
-                or set(value.keys()) - allowed_top
-            ):
-                continue
-
-            params = value.get("parameters")
-            if not isinstance(params, dict) or set(params.keys()) - allowed_params:
-                continue
-            if not {"resource_type", "resource_name", "reason"}.issubset(params):
-                continue
-
-            resource_type = params.get("resource_type")
-            resource_name = params.get("resource_name")
-            reason = params.get("reason")
-            required_for = params.get("required_for")
-            amount = params.get("amount")
-            currency = params.get("currency")
-
-            if not all(
-                isinstance(v, str) and v.strip()
-                for v in (resource_type, resource_name, reason)
-            ):
-                continue
-            if required_for is not None and not isinstance(required_for, str):
-                continue
-            if amount is not None and not isinstance(amount, (int, float)):
-                continue
-            if currency is not None and not isinstance(currency, str):
-                continue
-
-            normalized = {
-                "resource_type": resource_type.strip(),
-                "resource_name": resource_name.strip(),
-                "reason": reason.strip(),
-                "required_for": (
-                    required_for.strip() if isinstance(required_for, str) else None
-                ),
-                "amount": amount,
-                "currency": currency.strip() if isinstance(currency, str) else None,
-            }
-            dedupe_key = (
-                normalized["resource_type"],
-                normalized["resource_name"].lower(),
-                normalized["reason"].lower(),
-                normalized["required_for"],
-                normalized["amount"],
-                normalized["currency"],
-            )
-            if dedupe_key not in seen:
-                seen.add(dedupe_key)
-                parsed_payloads.append(normalized)
-
-        return parsed_payloads
-
-    def _materialize_resource_requests_from_text(text: str) -> list[int]:
-        payloads = _extract_resource_request_payloads(text)
-        if not payloads:
-            return []
-
-        created_ids: list[int] = []
-        requested_by = (
-            request.agent_keys[0].upper()
-            if len(request.agent_keys) == 1
-            else "PREPARATION"
-        )
-
-        # Re-enter the same trusted provenance scope only while writing these
-        # NON-EXECUTING, owner-gated requests. Existing DB validation still
-        # rejects secret-like values, invalid resource types, and malformed money.
-        with action_provenance_scope(
-            decision_id,
-            decision["sync_uuid"],
-            "preparation",
-        ):
-            for payload in payloads:
-                created_ids.append(
-                    propose_resource_request(
-                        requested_by=requested_by,
-                        resource_type=payload["resource_type"],
-                        resource_name=payload["resource_name"],
-                        reason=payload["reason"],
-                        required_for=payload["required_for"],
-                        amount=payload["amount"],
-                        currency=payload["currency"],
-                    )
-                )
-
-        return created_ids
-
-    try:
-        meeting_result = _run_preparation_meeting(preparation_prompt)
-        participants = meeting_result.get("participants", [])
-        final_plan = meeting_result.get("final_decision", "")
-        (
-            proposed_action_ids,
-            proposed_resource_request_ids,
-            new_actions,
-            new_resource_requests,
-        ) = _load_created_items(meeting_result)
-
-        provenance_mismatches, resource_provenance_mismatches = _provenance_mismatches(
-            proposed_action_ids,
-            proposed_resource_request_ids,
-            new_actions,
-            new_resource_requests,
-        )
-        if provenance_mismatches:
-            finish_decision_preparation(
-                decision_id,
-                False,
-                "Preparation failed provenance verification; orphan/mismatched action detected.",
-            )
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "Preparation created an action without the expected decision provenance. "
-                    "Preparation was marked failed; do not approve the orphan action."
-                ),
-            )
-        if resource_provenance_mismatches:
-            finish_decision_preparation(
-                decision_id,
-                False,
-                "Preparation failed provenance verification; orphan/mismatched resource request detected.",
-            )
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "Preparation created a resource request without the expected decision provenance. "
-                    "Preparation was marked failed; do not fulfill the orphan request."
-                ),
-            )
-
-        pseudo_resource_call = bool(
-            re.search(
-                r'(?is)(?:"name"\s*:\s*"propose_resource_request"|'
-                r"\bpropose_resource_request\s*\()",
-                final_plan,
-            )
-        )
-        pseudo_action_call = bool(
-            re.search(
-                r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action)"|'
-                r"\bpropose_(?:action|file_operation|browser_action)\s*\()",
-                final_plan,
-            )
-        )
-        # Compatibility alias retained for the original Phase 2 regression guard.
-        pseudo_tool_call = bool(pseudo_action_call or pseudo_resource_call)
-
-        # One narrow compatibility retry for NON-EXECUTING resource requests.
-        # Prefer a real tool invocation. A later strict compatibility fallback may
-        # materialize only pending, non-executing resource requests.
-        if pseudo_resource_call and not (new_actions or new_resource_requests):
-            retry_prompt = (
-                preparation_prompt
-                + "\n\nCOMPATIBILITY RETRY — YOUR PREVIOUS RESPONSE WAS INVALID. "
-                "You printed propose_resource_request JSON instead of invoking the tool. "
-                "Do not print any function-call JSON. Invoke propose_resource_request NOW "
-                "for each genuinely blocking resource. For access/credential/plugin/data/"
-                "service/hardware/other requests, omit amount and currency entirely. "
-                "For an unknown budget amount, also omit amount and currency. After the "
-                "real tool call succeeds, summarize the created request IDs in prose."
-            )
-            meeting_result = _run_preparation_meeting(retry_prompt)
-            participants = meeting_result.get("participants", [])
-            final_plan = meeting_result.get("final_decision", "")
-            (
-                proposed_action_ids,
-                proposed_resource_request_ids,
-                new_actions,
-                new_resource_requests,
-            ) = _load_created_items(meeting_result)
-
-            retry_action_mismatch, retry_resource_mismatch = _provenance_mismatches(
-                proposed_action_ids,
-                proposed_resource_request_ids,
-                new_actions,
-                new_resource_requests,
-            )
-            if retry_action_mismatch or retry_resource_mismatch:
-                finish_decision_preparation(
-                    decision_id,
-                    False,
-                    "Resource compatibility retry failed provenance verification.",
-                )
-                raise HTTPException(
-                    status_code=502,
-                    detail="Resource compatibility retry created mismatched provenance.",
-                )
-
-            pseudo_resource_call = bool(
-                re.search(
-                    r'(?is)(?:"name"\s*:\s*"propose_resource_request"|'
-                    r"\bpropose_resource_request\s*\()",
-                    final_plan,
-                )
-            )
-            pseudo_action_call = bool(
-                re.search(
-                    r'(?is)(?:"name"\s*:\s*"propose_(?:action|file_operation|browser_action)"|'
-                    r"\bpropose_(?:action|file_operation|browser_action)\s*\()",
-                    final_plan,
-                )
-            )
-            pseudo_tool_call = bool(pseudo_action_call or pseudo_resource_call)
-
-        if pseudo_resource_call and not new_resource_requests:
-            materialized_resource_ids = _materialize_resource_requests_from_text(
-                final_plan
-            )
-            if materialized_resource_ids:
-                proposed_resource_request_ids = materialized_resource_ids
-                new_resource_requests = [
-                    resource_request
-                    for request_id in materialized_resource_ids
-                    if (resource_request := get_resource_request_by_id(request_id))
-                    is not None
-                ]
-                _, resource_provenance_mismatches = _provenance_mismatches(
-                    [],
-                    proposed_resource_request_ids,
-                    [],
-                    new_resource_requests,
-                )
-                if resource_provenance_mismatches:
-                    finish_decision_preparation(
-                        decision_id,
-                        False,
-                        "Materialized resource request failed provenance verification.",
-                    )
-                    raise HTTPException(
-                        status_code=502,
-                        detail=(
-                            "Materialized resource request had invalid decision provenance. "
-                            "Preparation was marked failed."
-                        ),
-                    )
-                pseudo_resource_call = False
-
-        if (pseudo_action_call and not new_actions) or (
-            pseudo_resource_call and not new_resource_requests
-        ):
-            finish_decision_preparation(
-                decision_id,
-                False,
-                (
-                    "Preparation failed verification: an executive printed a "
-                    "tool-call imitation but no matching real proposal/request was created."
-                ),
-            )
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "Preparation agent described/printed a propose_* tool call without "
-                    "actually invoking the tool. No matching proposal/request was created, "
-                    "so preparation was marked failed and is safe to retry."
-                ),
-            )
-
-        finish_decision_preparation(
-            decision_id,
-            True,
-            final_plan,
-            individual_outputs=meeting_result.get("individual_outputs", {}),
-            executive_profiles=get_executive_profiles(),
-        )
-    except HTTPException:
-        raise
-    except ValueError as e:
-        finish_decision_preparation(decision_id, False, None)
-        logger.warning(
-            "preparation_invalid decision_id=%s error_type=%s",
-            decision_id,
-            type(e).__name__,
-        )
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid preparation request; review the selected agents and supplied inputs.",
-        ) from None
-    except Exception as e:
-        finish_decision_preparation(decision_id, False, None)
-        logger.warning(
-            "preparation_failed decision_id=%s error_type=%s",
-            decision_id,
-            type(e).__name__,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Preparation meeting failed; no execution authority was granted. Review local provider availability before retrying.",
-        ) from None
-
-    try:
-        send_notification(
-            f"🧭 <b>PREPARATION COMPLETE</b>\n\n"
-            f"<b>Source decision:</b> #{decision_id}\n\n"
-            "Any concrete actions and resource requests proposed by executives are "
-            "still waiting for separate owner review."
-        )
-    except Exception as notify_err:
-        logger.warning(
-            "preparation_notification_failed decision_id=%s error_type=%s",
-            decision_id,
-            type(notify_err).__name__,
-        )
-
-    return PreparationResponse(
-        source_decision_id=decision_id,
-        final_plan=final_plan,
-        participants=participants,
-        individual_outputs=meeting_result.get("individual_outputs", {}),
-        quality_warnings=meeting_result.get("quality_warnings", {}),
-    )
 
 
 @app.get(
