@@ -1002,6 +1002,14 @@ Dashboard navigation/privacy smoke test with synthetic API responses only.
 
 - `main`
 
+## [scripts/evaluation_protocol.py](../scripts/evaluation_protocol.py)
+
+Verify the frozen Sprint 6 evaluation inputs offline; never run inference.
+
+- `validate`: Reject altered inputs, unsafe paths, overlapping splits and bad schedules.
+- `model_input`: Exclude assessment obligations from the generation input.
+- `main`
+
 ## [scripts/experiments_smoke.py](../scripts/experiments_smoke.py)
 
 Real experiment forms/API/storage checks; no running company API is contacted.
@@ -1301,6 +1309,12 @@ Regression checks for discussions.
 Regression checks for encrypted backup.
 
 - `EncryptedBackupTests`
+
+## [tests/test_evaluation_protocol.py](../tests/test_evaluation_protocol.py)
+
+Freeze integrity and assessment-input isolation, without model calls.
+
+- `EvaluationProtocolTests`
 
 ## [tests/test_evidence.py](../tests/test_evidence.py)
 

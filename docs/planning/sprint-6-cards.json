@@ -41,7 +41,7 @@
     "acceptance_criteria": "Separate development cases from new held-out scenarios. Freeze case/rubric hashes, model digest, effective settings, prompt version and assessment protocol before generation or tuning. Cover missing facts, conflicting evidence, unsupported consent/numbers, unknown controls and cross-domain tasks. Distinguish schema validity, grounding, unsupported claims and human usefulness; retain failures, errors and denominators. A case used for repair becomes development data and cannot remain an untouched test.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-48 · Generalize evidence quality checks",
