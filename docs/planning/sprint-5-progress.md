@@ -19,6 +19,14 @@ task guide passed its contract; the new ceramic-bowl support probe failed and
 remains withheld. All outputs and feedback are retained privately. Twenty-one
 focused tests passed. See [review evidence](../../BE35_PRIVATE_WORK_REVIEW.md).
 
-Next: correct the unfinished and unsupported return-draft behavior while
-preserving the exact rubric, then obtain owner usefulness assessments. BE-37
-remains the independent foundation task. No production prompt change was made.
+Return-draft follow-up: private-reply prompt and bounded-repair instructions now
+preserve missing facts and omit signing placeholders. Deliverable checks catch
+the observed placeholder, unspecified-start inference and omitted negative-refund
+fact. The same ceramic-bowl scenario passed its final contract after one repair;
+both raw drafts and the frozen specification are retained. Latest focused suite:
+45 passing tests; repository formatting/catalog checks passed. Neither the exact
+owner rubric nor the benchmark checker changed.
+
+Next: owner usefulness review and a genuinely unfamiliar-domain transfer probe.
+The ceramic-bowl scenario is within the existing support domain and does not
+satisfy that stronger requirement. BE-37 remains the independent foundation task.

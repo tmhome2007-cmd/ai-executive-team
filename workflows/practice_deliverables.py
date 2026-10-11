@@ -94,6 +94,14 @@ def validate_deliverable(raw, specification):
         ):
             raise ValueError("Request missing reproduction evidence before a new test")
     elif kind == "reply":
+        if re.search(
+            r"\[\s*(?:your name|customer name|company name|signature)\s*\]",
+            sample,
+            re.I,
+        ):
+            raise ValueError(
+                "Return a complete private reply without signing or identity placeholders"
+            )
         if "14 days" in scope.lower() and not re.search(
             r"\b14(?:[- ]day| days)\b", lower
         ):
@@ -108,12 +116,46 @@ def validate_deliverable(raw, specification):
                 raise ValueError(
                     "Do not invent when the supplied 14-day return period starts; preserve its wording and label the start event unknown"
                 )
+        start_unspecified = re.search(
+            r"event starting the 14.day period is (?:unspecified|unknown)",
+            spec["supplied_facts"],
+            re.I,
+        )
+        if start_unspecified:
+            if not re.search(
+                r"(?:start(?:ing)? (?:event|point|date)|(?:event|point|date) (?:that )?starts|when .{0,30}(?:period|days) (?:starts|begins))"
+                r".{0,100}(?:unknown|unspecified|not specified|not known)",
+                sample,
+                re.I,
+            ):
+                raise ValueError(
+                    "Explicitly state that the event starting the 14-day period is unspecified"
+                )
+            if re.search(
+                r"(?:purchase date|delivery date|receipt).{0,160}(?:period has started|period starts|period begins)",
+                sample,
+                re.I,
+            ):
+                raise ValueError(
+                    "A purchase or delivery date cannot establish an unspecified period start"
+                )
         if "unused" in scope.lower() and "unused" not in lower:
             raise ValueError("Preserve the unused-item policy condition")
         if not (
             "purchase date" in lower and ("condition" in lower or "unused" in lower)
         ):
             raise ValueError("Ask for the missing purchase date and item condition")
+        if re.search(
+            r"no refund has been approved or issued", spec["supplied_facts"], re.I
+        ) and not re.search(
+            r"\bno refund\b.{0,50}\bapproved\b.{0,25}\bissued\b"
+            r"|\brefund\b.{0,30}\bnot\b.{0,30}\bapproved\b.{0,25}\bissued\b",
+            sample,
+            re.I,
+        ):
+            raise ValueError(
+                "Preserve the supplied fact: no refund has been approved or issued"
+            )
         for line in re.split(r"[.!?\n]", sample):
             if re.search(
                 r"\b(?:refund|return)\b.{0,40}\b(?:approved|issued|processed|guaranteed)\b|\b(?:will|shall)\b.{0,40}\brefund\b",

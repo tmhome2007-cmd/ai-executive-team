@@ -22,7 +22,8 @@ The candidate is a benchmark-only snapshot in
 [be35-benchmark-prompt.txt](docs/planning/be35-benchmark-prompt.txt).
 Comparison identities and settings are in
 [be35-comparison.json](docs/planning/be35-comparison.json).
-Production prompts are unchanged.
+The benchmark prompt remains separate from production. Subsequent reply-workflow
+changes are described below; the benchmark dataset and checker are unchanged.
 
 ## Real deliverable failures remain visible
 
@@ -82,6 +83,45 @@ outside the workspace; rerunning with explicit temporary storage passed. Both
 real workflow probes separately verified zero action and treasury records. No
 full Sprint 5 audit or production release clearance is claimed.
 
+## Return-draft correction and final local evidence
+
+The private reply prompt now asks for the actual reply, preserves an unspecified
+period start and supplied negative approval facts, and omits unsupplied signing
+identities. A bounded repair receives the failed draft before the final error and
+correction instruction, so the old draft is explicitly treated as unsuccessful
+material rather than evidence. The existing one-repair limit remains.
+
+Reply validation rejects signing placeholders, an omitted explicitly unspecified
+period start, a claim that purchase/delivery date can determine that start, and
+omission of the supplied no-refund-approved-or-issued fact. These are additional
+deliverable checks; the frozen owner rubric and benchmark checker were not
+changed. Existing positive approval/refund statements still fail closed.
+
+The first corrected run passed its then-current checks but omitted the supplied
+no-refund fact. Its output is retained at
+`audit-results/sprint3-examples-20261011-132510`. A new regression check caught
+that omission. Final local run
+`audit-results/sprint3-examples-20261011-132728` passed after one repair and
+preserves the no-refund fact, policy, requested date/condition and unknown start
+event without a signing placeholder. Its specification and both raw drafts were
+retained with owner-only permissions. It created no action or treasury entry.
+
+The supported workflow's model record remains tag-based; the digest identity in
+the benchmark comparison does not retroactively certify workflow continuation.
+BE-39 covers that separate limitation.
+
+Latest verification: 45 focused practice, business-discovery, example-runner and
+benchmark tests passed. Repository Black/Prettier formatting and generated-code
+catalog checks passed. The new clone used the existing installed maintenance
+tools without copying credentials or company data. No frontend feature changed;
+the complete integration audit remains BE-41.
+
+The supported task guide and final reply are available for owner usefulness
+review. The final reply still uses an unrequested report heading and groups the
+known no-refund status under remaining unknowns; assess that presentation honestly.
+Contract success does not mean every wording choice is useful or establish broad
+transfer competence. A more unfamiliar domain example remains future evidence.
+
 ## Review boundary
 
 Review whether the guide helps a beginner perform the three known operations
@@ -90,8 +130,10 @@ the return rule, asks for the missing facts and avoids an invented period start 
 approval. Assess every original rubric check separately; contract success does not
 record usefulness acceptance.
 
-BE-35 remains In Progress until useful examples and owner assessment satisfy the
-story. No spending, publishing, customer contact, model training, execution of
+BE-35 remains In Progress until owner assessment and the unfamiliar-transfer
+requirement satisfy the story. The ceramic-bowl probe transfers within the same
+support domain; it must not be counted as an unfamiliar-domain success.
+No spending, publishing, customer contact, model training, execution of
 generated code or new company authority was added. Generated evidence remains
 private and follows the existing 30-day retention boundary; raw outputs are not
 committed. Durable hashes and review findings are separate from those bytes.

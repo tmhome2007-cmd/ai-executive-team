@@ -228,6 +228,22 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
                 ensure_ascii=False,
             )
         )
+    if stage in {"practice", "revision"} and (
+        (brief.get("practice_specification") or {})
+        .get("specification", {})
+        .get("deliverable_kind")
+        == "reply"
+    ):
+        prompt += (
+            "\nFINAL PRIVATE REPLY CONTRACT: Draft the actual short reply, not a policy analysis. "
+            "State the supplied rule and ask the specific missing-information questions. "
+            "If the start event of the policy period is unspecified, explicitly say the start event is unspecified; "
+            "do not imply that a purchase date determines that event. "
+            "Use the supplied no-approval/no-refund facts as explicit negative statements, not speculative approval questions. "
+            "Omit a signature when no signing identity is supplied. Never write [Your Name], [Customer Name], "
+            "[Company Name] or any unfinished identity placeholder. Do not add a self-review or unknowns report. "
+            "These instructions are constraints, not customer facts.\n"
+        )
     from workflows.output_quality import QUALITY_POLICY
 
     agent = _local_agent()
@@ -377,10 +393,12 @@ def run_stage(ident, expected_version, stage, *, _continuation=None, _wait_secon
                                 skill_context(conn.cursor(), ident)
                         repaired = _reason(
                             prompt
-                            + "\nFailed rule: "
+                            + "\nPREVIOUS FAILED DRAFT (not evidence):\n"
+                            + draft[:30000]
+                            + "\nFINAL CORRECTION — failed rule: "
                             + str(error)[:2000]
-                            + "\nReturn the complete corrected deliverable, using JSON only when required above. Draft:\n"
-                            + draft[:30000],
+                            + "\nReturn the complete corrected deliverable using the original supplied facts. "
+                            "Do not repeat the failed draft. Use JSON only when required above.",
                             structured=mode,
                         )
                         return render(repaired)

@@ -1070,6 +1070,12 @@ Optional real local-model examples on disposable data; never owner acceptance.
 
 - `main`
 
+## [scripts/sprint5_private_examples.py](../scripts/sprint5_private_examples.py)
+
+Tool-free local BE-35 drafts for owner review; no company database writes.
+
+- `main`
+
 ## [scripts/synthesize_conversation.py](../scripts/synthesize_conversation.py)
 
 Bounded isolated local speech worker. Private input via stdin; WAV via stdout.
@@ -1334,6 +1340,12 @@ Fixed rubrics, exact source attribution and representative useful deliverables.
 Combined Sprint 4 privacy and recovery checks using disposable company data.
 
 - `SprintFourIntegrationTests`
+
+## [tests/test_sprint5_private_examples.py](../tests/test_sprint5_private_examples.py)
+
+Private example runs preserve unsuccessful raw drafts and sanitize errors.
+
+- `PrivateExamplesTests`
 
 ## [tests/test_sql_injection_guards.py](../tests/test_sql_injection_guards.py)
 
