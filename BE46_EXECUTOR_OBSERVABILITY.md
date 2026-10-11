@@ -1,6 +1,6 @@
 # BE-46 — executor failure observability
 
-11 October 2026. Implementation verified with targeted faults; full integration rerun pending.
+11 October 2026. Ready for review; owner acceptance and merge pending.
 
 ## Handler review
 
@@ -27,3 +27,9 @@ A persistent storage failure still propagates rather than claiming a recorded ou
 An initial fixture tried to grant a CTO browser capability and was correctly rejected. The fixture now uses the existing authorized COO role; the role policy was preserved. Initial failed evidence remains alongside passing verification.
 
 Owner acceptance, merge and final Sprint 6 closure remain pending.
+
+## Complete local verification
+
+Audited implementation c98c3697abad13a324f278ed3a3380955a9ad1b7 passed 33 project stages: 312 backend tests including real Docker with zero skips, 150 foundation checks, 15 production browser feature checks, formatting/catalog, Bandit, frontend build and a real tool-free local model greeting. Report: audit-results/20261011-202326. The four known Chroma advisories remain an UPSTREAM release finding; dependency scan is not clean. This is an integration check of the selected changes, not final Sprint 6 completion or proof of model usefulness.
+
+The earlier complete audit at 25e3014 retained 32 PASS, one FAIL and one UPSTREAM finding. Three foundation assertions still read preparation contracts from main.py; updated them to follow the actual router/workflow paths. The 305 backend tests and browser checks had passed in that run. No failed evidence was removed.

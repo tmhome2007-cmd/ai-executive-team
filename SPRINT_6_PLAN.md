@@ -1,6 +1,6 @@
 # Sprint 6 — maintenance and honest evaluation
 
-Planned 11 October 2026 at the owner’s request. This creates the backlog; implementation has not started. The same working folder was renamed to **AI Executive Team V2CHAT**. The older AI Executive Team folder remains separate.
+Planned 11 October 2026 at the owner’s request. The owner subsequently authorized implementation. BE-43–46 are now ready for review; see [current progress](docs/planning/sprint-6-progress.md). The same working folder was renamed to **AI Executive Team V2CHAT**. The older AI Executive Team folder remains separate.
 
 ## Goal
 
@@ -14,10 +14,10 @@ Start BE-43 and BE-44. Freeze the independent evaluation protocol before adaptin
 
 | ID | Priority | Item | State | Dependencies |
 |---|---|---|---|---|
-| BE-43 | high | Protect behavior before refactoring | ready | None |
-| BE-44 | high | Organize tests and safe test commands | ready | None |
-| BE-45 | high | Extract decision preparation and thin API routes | backlog | BE-43, BE-44 |
-| BE-46 | high | Make executor failures observable | backlog | BE-43 |
+| BE-43 | high | Protect behavior before refactoring | review | None |
+| BE-44 | high | Organize tests and safe test commands | review | None |
+| BE-45 | high | Extract decision preparation and thin API routes | review | BE-43, BE-44 |
+| BE-46 | high | Make executor failures observable | review | BE-43 |
 | BE-47 | high | Freeze independent evaluation cases and protocol | backlog | BE-44 |
 | BE-48 | high | Generalize evidence quality checks | backlog | BE-43, BE-47 |
 | BE-49 | high | Use structured output in one meeting path | backlog | BE-43, BE-47, BE-48 |

@@ -23,7 +23,8 @@
     "acceptance_criteria": "Extract the 524-line prepare_approved_decision orchestration into an owning service/workflow, then mount thin routes for that domain. Preserve endpoint URLs, request/response contracts, authentication, transactions, private headers, approval boundaries and recovery. Keep test patch seams deliberate; affected characterization tests pass. Do not merely relocate the long function or rewrite all routers at once.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review",
+    "review_note": "Implemented and locally audited; owner acceptance and merge pending. See BE45_DECISION_PREPARATION.md"
   },
   {
     "title": "BE-46 · Make executor failures observable",
@@ -31,7 +32,8 @@
     "acceptance_criteria": "Classify all 24 broad exception handlers by expected rejection, cleanup/rethrow, persisted uncertainty, notification fallback or swallowed failure. Remove unused helpers only after checking references. Add sanitized event codes, IDs and error types for reachable gaps; never log secrets, raw prompts, command payloads or credential-bearing URLs. Inject notification, checkpoint and persistence failures; uncertain outcomes still require reconciliation and cannot replay automatically.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review",
+    "review_note": "Implemented and locally audited; owner acceptance and merge pending. See BE46_EXECUTOR_OBSERVABILITY.md"
   },
   {
     "title": "BE-47 · Freeze independent evaluation cases and protocol",

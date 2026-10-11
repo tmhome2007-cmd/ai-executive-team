@@ -1,0 +1,52 @@
+{
+  "scope": [
+    "BE-45",
+    "BE-46"
+  ],
+  "status": "review",
+  "implementation_commit": "c98c3697abad13a324f278ed3a3380955a9ad1b7",
+  "complete_audit": {
+    "path": "audit-results/20261011-202326",
+    "summary_sha256": "6316b4d15f7d57ed590e7d1054d9dd975625544fe4031f92b93fa8a157abc5ed",
+    "pass": 33,
+    "fail": 0,
+    "upstream": 1
+  },
+  "backend": {
+    "tests": 312,
+    "skips": 0,
+    "real_docker": true
+  },
+  "foundation": {
+    "passed": 150,
+    "total": 150
+  },
+  "production_browser_features": 15,
+  "preparation_characterization_tests": 11,
+  "executor_fault_tests": 7,
+  "schema_and_original_prompt_ast_preserved": true,
+  "failed_audit": {
+    "path": "audit-results/20261011-201537",
+    "commit": "25e301426f5436b9e348ed01303e56f2ed14f18a",
+    "reason": "Three static foundation checks read preparation code from its old location",
+    "retained": true
+  },
+  "fault_fixture_failures_retained": true,
+  "owner_accepted": false,
+  "merged": false,
+  "remote_ci_run": null,
+  "known_upstream_findings": [
+    "PYSEC-2026-311",
+    "PYSEC-2026-3813",
+    "PYSEC-2026-3814",
+    "PYSEC-2026-3815"
+  ],
+  "source_sha256": {
+    "main.py": "d02da8e368144d62c423c220ad33c0f32b37187e1c3136a2d1edde5b91a86b48",
+    "api/decisions.py": "4c40a599eec7205cd9939d866119407c6c86f640bc465ae0997f64770fa8bbcc",
+    "workflows/decision_preparation.py": "22e1030dd3ce657949ec8e1f19caf95931ba44a6aa103a3b8c584074d47f10af",
+    "workflows/action_executor.py": "61de693989a0c1da81980a94cb9289a2a7135010a73bbeb369dea97f80ee369a",
+    "scripts/run_tests.py": "c43ca19e6fe59cd1ac0f539fe9faa857600dae1f4dcce5cde71aa27f39d96c33",
+    "verify_system.py": "42211bd1277740125d36ebcaa95e5b4bac14e19decf22cf958a1d6b3a7c8d292"
+  }
+}
