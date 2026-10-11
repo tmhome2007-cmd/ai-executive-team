@@ -19,3 +19,10 @@ there is no clean security release gate. The narrow AI benchmark improved from
 Claude's feedback can be applied in this folder when available. Record verified
 findings and rerun affected checks before consolidation. No feedback is assumed. GitHub main contains Sprint 5; original-folder
 consolidation remains separate.
+
+## Subsequent feedback — 11 October 2026
+
+Claude's partial review has now been received. Its confirmed findings, corrections
+and proposed maintenance/evaluation order are recorded in
+[the feedback review](CLAUDE_FEEDBACK_REVIEW.md). This is subsequent work on
+`codex/claude-feedback-review`; Sprint 5 acceptance and merge evidence remain intact.

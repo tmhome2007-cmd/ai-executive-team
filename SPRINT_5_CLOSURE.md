@@ -42,3 +42,11 @@ The working folder stays **AI Executive Team Sprint 5**, now synced with main.
 The original folder and its credentials/data/archive are preserved. Claude feedback
 has not yet been provided; verified findings can be applied here as subsequent
 work before any separately agreed original-folder consolidation.
+
+## Subsequent review received — 11 October 2026
+
+Claude's feedback has now arrived. [The feedback review](CLAUDE_FEEDBACK_REVIEW.md)
+checks its claims against the current code and proposes scoped maintenance and
+held-out evaluation. The earlier not-yet-provided statement records the situation
+at merge time; it is superseded by this entry. Subsequent changes require their
+own verification/review rather than being labelled original Sprint 5 work.
