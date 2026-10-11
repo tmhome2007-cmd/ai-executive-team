@@ -112,3 +112,9 @@ The current GitHub credential cannot push workflow changes. Local maintenance ch
 ## Cleanup verification (10 October 2026)
 
 Full disposable audit `audit-results/20261010-195208`: 188 backend tests, 150 foundation checks, all nine browser flows, Docker isolation, Bandit, frontend lint/build/audit, voice dependencies and local Ollama inference passed. Maintenance formatting and catalog checks passed. Syntax comparison confirmed unchanged executable code in 111 formatted Python files and every extracted API function/request model; launcher/audit wiring changes were reviewed separately. Existing four Chroma advisories remain reported, with no additional Python dependency findings. These checks establish regression coverage, not proof that all future faults are impossible.
+
+## Backend test entry point
+
+Use `./company test` for backend regressions. It discovers only tests/, overrides company paths and credentials with temporary values before imports, disables Telegram/cloud/raw shell, and cleans temporary records after exit. `./company test --list` discovers without running cases; `./company test --pattern test_decision_preparation.py` narrows the filename pattern. `./company test --docker` explicitly includes the real Docker boundary check using the existing pinned image; it never pulls an image. Skips remain visible.
+
+`verify_system.py` remains the separate foundation checker and `./company audit` remains the complete integration/security/browser check. Frontend `npm test` and vendor self-tests stay in their package directories. Opt-in examples now live under scripts/manual_checks/; see its README. They are not automatically run.

@@ -1541,7 +1541,8 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         pseudo_tool_call = bool(pseudo_action_call or pseudo_resource_call)
 
         # One narrow compatibility retry for NON-EXECUTING resource requests.
-        # Printed JSON is never parsed into a request; a real tool invocation is required.
+        # Prefer a real tool invocation. A later strict compatibility fallback may
+        # materialize only pending, non-executing resource requests.
         if pseudo_resource_call and not (new_actions or new_resource_requests):
             retry_prompt = (
                 preparation_prompt
@@ -1660,10 +1661,26 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
         raise
     except ValueError as e:
         finish_decision_preparation(decision_id, False, None)
-        raise HTTPException(status_code=400, detail=f"Invalid preparation request: {e}")
+        logger.warning(
+            "preparation_invalid decision_id=%s error_type=%s",
+            decision_id,
+            type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid preparation request; review the selected agents and supplied inputs.",
+        ) from None
     except Exception as e:
         finish_decision_preparation(decision_id, False, None)
-        raise HTTPException(status_code=502, detail=f"Preparation meeting failed: {e}")
+        logger.warning(
+            "preparation_failed decision_id=%s error_type=%s",
+            decision_id,
+            type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Preparation meeting failed; no execution authority was granted. Review local provider availability before retrying.",
+        ) from None
 
     try:
         send_notification(
@@ -1673,7 +1690,11 @@ def prepare_approved_decision(decision_id: int, request: PreparationRequest):
             "still waiting for separate owner review."
         )
     except Exception as notify_err:
-        logger.warning(f"Preparation completion notification failed: {notify_err}")
+        logger.warning(
+            "preparation_notification_failed decision_id=%s error_type=%s",
+            decision_id,
+            type(notify_err).__name__,
+        )
 
     return PreparationResponse(
         source_decision_id=decision_id,

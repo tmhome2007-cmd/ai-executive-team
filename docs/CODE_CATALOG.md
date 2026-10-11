@@ -1038,6 +1038,27 @@ Format/check repository code and keep its source catalog synchronized.
 
 - `main`
 
+## [scripts/manual_checks/test_config.py](../scripts/manual_checks/test_config.py)
+
+Inspect configuration without printing credential values. Importing this manual check never initializes the app.
+
+- `run_check`
+- `main`
+
+## [scripts/manual_checks/test_crew.py](../scripts/manual_checks/test_crew.py)
+
+Run a local CEO/CFO demo against disposable records, with notifications disabled. Importing this manual check never initializes the app.
+
+- `run_check`
+- `main`
+
+## [scripts/manual_checks/test_cso_tool.py](../scripts/manual_checks/test_cso_tool.py)
+
+Run a local CSO demo that reads the fixed public Wikipedia page. Requires explicit web opt-in. Importing this manual check never initializes the app.
+
+- `run_check`
+- `main`
+
 ## [scripts/operating_smoke.py](../scripts/operating_smoke.py)
 
 Operations dashboard -> owner API -> disposable SQLite, with browser privacy checks.
@@ -1088,6 +1109,14 @@ Short-report browser review on disposable records. No live model/company mutatio
 
 - `main`
 
+## [scripts/run_tests.py](../scripts/run_tests.py)
+
+Run backend regressions with disposable paths and no inherited company credentials.
+
+- `disposable_environment`: Apply test settings before application imports; restore the calling environment.
+- `iter_cases`: Flatten discovered cases without executing them.
+- `main`
+
 ## [scripts/runs_smoke.py](../scripts/runs_smoke.py)
 
 Chromium stop/continue against disposable SQLite and a controlled local worker.
@@ -1134,24 +1163,6 @@ Runtime readiness checks for local model, storage, browser and notifications.
 - `check_telegram_configured`: Controleert alleen of de benodigde waarden aanwezig ZIJN — verstuurt geen testbericht (kost geen API-call).
 - `check_playwright_browser_installed`: Lanceert daadwerkelijk een echte Chromium-instantie en sluit hem meteen
 - `run_startup_checks`: Wordt één keer aangeroepen bij het opstarten (main.py lifespan). Logt
-
-## [test_config.py](../test_config.py)
-
-Regression checks for config.
-
-Module constants/imports only.
-
-## [test_crew.py](../test_crew.py)
-
-test_crew.py
-
-Module constants/imports only.
-
-## [test_cso_tool.py](../test_cso_tool.py)
-
-Regression checks for cso tool.
-
-Module constants/imports only.
 
 ## [tests/test_action_checkpoints.py](../tests/test_action_checkpoints.py)
 
@@ -1249,6 +1260,12 @@ Private speech on disposable SQLite and synthetic audio; no company data or down
 
 - `wav`
 - `ConversationAudioTests`
+
+## [tests/test_decision_preparation.py](../tests/test_decision_preparation.py)
+
+Real SQLite/API characterization of decision preparation without live agents.
+
+- `DecisionPreparationTests`
 
 ## [tests/test_discussion_contracts.py](../tests/test_discussion_contracts.py)
 
@@ -1440,6 +1457,12 @@ Adversarial SQL-identifier/status input tests against real SQLite.
 Transactional checkpoint and no-replay behavior using real SQLite.
 
 - `DurableStepCheckpointTests`
+
+## [tests/test_test_entrypoints.py](../tests/test_test_entrypoints.py)
+
+Test discovery and opt-in demos must not inherit company authority or initialize agents.
+
+- `TestEntrypointTests`
 
 ## [tests/test_trace_privacy.py](../tests/test_trace_privacy.py)
 

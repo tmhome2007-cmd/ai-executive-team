@@ -117,7 +117,8 @@ Edit `.env` and set:
 ### Verify the setup
 
 ```bash
-python test_config.py
+python scripts/manual_checks/test_config.py
+./company test
 python verify_system.py
 ```
 

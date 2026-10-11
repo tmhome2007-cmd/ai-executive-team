@@ -314,6 +314,7 @@ def main(argv=None):
             "voices",
             "format",
             "check-code",
+            "test",
             "check-ui",
             "quality",
             "review",
@@ -321,7 +322,7 @@ def main(argv=None):
         ],
     )
     args, extra = parser.parse_known_args(argv)
-    if extra and args.command not in {"quality", "check-ui", "review"}:
+    if extra and args.command not in {"quality", "check-ui", "review", "test"}:
         parser.error("Unexpected arguments")
     if args.command == "help":
         parser.print_help()
@@ -357,6 +358,10 @@ def main(argv=None):
                 )
             print((ROOT / "COMPANY_REVIEW_GUIDE.md").read_text())
             return 0
+        if args.command == "test":
+            return subprocess.run(
+                [sys.executable, str(ROOT / "scripts/run_tests.py"), *extra], cwd=ROOT
+            ).returncode
         if args.command == "check-ui":
             return subprocess.run(
                 [sys.executable, str(ROOT / "scripts/feature_smoke.py"), *extra],

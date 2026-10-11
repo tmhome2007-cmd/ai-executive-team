@@ -66,3 +66,9 @@ work/feedback/files/procedure-reuse chain with disposable data and synthetic
 inference. `./company review --demo` launches the four fictional recovery cases,
 prints its own URL/demo key, and cleans its owned temporary apps on Ctrl+C.
 Your existing configured company still uses `./company start` and its existing key.
+
+## Backend test entry point
+
+Use `./company test` for backend regressions. It discovers only tests/, overrides company paths and credentials with temporary values before imports, disables Telegram/cloud/raw shell, and cleans temporary records after exit. `./company test --list` discovers without running cases; `./company test --pattern test_decision_preparation.py` narrows the filename pattern. `./company test --docker` explicitly includes the real Docker boundary check using the existing pinned image; it never pulls an image. Skips remain visible.
+
+`verify_system.py` remains the separate foundation checker and `./company audit` remains the complete integration/security/browser check. Frontend `npm test` and vendor self-tests stay in their package directories. Opt-in examples now live under scripts/manual_checks/; see its README. They are not automatically run.

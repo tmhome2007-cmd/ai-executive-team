@@ -5,7 +5,8 @@
     "acceptance_criteria": "Review the database, dashboard and logging paths omitted from Claude’s ZIP. Map decision preparation and recovery; add meaningful characterization tests for separate approvals, stale versions, source provenance, private headers, atomic claims and uncertain outcomes. Use disposable records and report remaining review gaps.",
     "assignee": "owner",
     "priority": "high",
-    "status": "ready"
+    "status": "review",
+    "review_note": "Implemented and locally verified; owner acceptance and merge pending. See BE43_BEHAVIOR_REVIEW.md"
   },
   {
     "title": "BE-44 · Organize tests and safe test commands",
@@ -13,7 +14,8 @@
     "acceptance_criteria": "Consolidate backend regression tests under tests/ and document one supported command. Move side-effecting root demos to explicit opt-in scripts/manual_checks with guarded entry points; automatic discovery must not invoke real models, web, Telegram or company mutations. Preserve JavaScript/vendor tests and update packaging, test counts and CI paths deliberately. Demonstrate discovery and clean-copy checks.",
     "assignee": "owner",
     "priority": "high",
-    "status": "ready"
+    "status": "review",
+    "review_note": "Implemented and locally verified; owner acceptance and merge pending. See BE44_TEST_ORGANIZATION.md"
   },
   {
     "title": "BE-45 · Extract decision preparation and thin API routes",

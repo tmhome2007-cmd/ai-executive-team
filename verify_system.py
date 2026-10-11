@@ -1425,7 +1425,7 @@ except Exception as e:
 # CHECK 48: STATIC CHECK — config test never prints Telegram token characters
 # -------------------------------------------------------------------
 try:
-    with open("test_config.py", "r", encoding="utf-8") as f:
+    with open("scripts/manual_checks/test_config.py", "r", encoding="utf-8") as f:
         test_config_content_48 = f.read()
     if "TELEGRAM_BOT_TOKEN[:10]" not in test_config_content_48:
         log_pass("test_config.py does not print any Telegram token prefix")
