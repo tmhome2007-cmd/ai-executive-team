@@ -139,6 +139,9 @@ def main():
             ).click()
             page.get_by_text("Saved classification version: 1", exact=True).wait_for()
             page.get_by_role("button", name="Save research brief", exact=True).click()
+            page.get_by_role("region", name="Your next step").get_by_text(
+                "Next: Compare options with local AI", exact=True
+            ).wait_for()
             reason.side_effect = ValueError("Synthetic generation failure")
             page.get_by_role(
                 "button", name="Compare options with local AI", exact=True
@@ -211,6 +214,9 @@ def main():
             page.get_by_role(
                 "button", name="Approve this practice plan only", exact=True
             ).click()
+            page.get_by_role("region", name="Your next step").get_by_text(
+                "Next: Generate private practice sample", exact=True
+            ).wait_for()
             reason.return_value = "This is a fictional private sample only. Demand is unknown and no launch approval is granted. No external action has happened. <script>alert(1)</script>"
             page.get_by_role(
                 "button", name="Generate private practice sample", exact=True
@@ -218,6 +224,15 @@ def main():
             page.get_by_text(
                 "Practice sample — AI self-checks are unverified", exact=True
             ).wait_for()
+            next_step = page.get_by_role("region", name="Your next step")
+            next_step.get_by_text("Next: Review this sample", exact=True).wait_for()
+            next_step.get_by_role("button", name="Go to next step", exact=True).click()
+            assert (
+                page.get_by_text("Full sample", exact=True)
+                .locator("..")
+                .get_attribute("open")
+                is not None
+            )
             assert page.get_by_role(
                 "button", name="Record practice review", exact=True
             ).is_disabled()
@@ -248,6 +263,9 @@ def main():
             page.get_by_role(
                 "button", name="Record review correction", exact=True
             ).click()
+            next_step.get_by_text(
+                "Next: Revise using the recorded feedback", exact=True
+            ).wait_for()
             reason.return_value = json.dumps(
                 {
                     "revised_sample": "Demand remains unknown. This private sample has no launch approval and does not establish any completed real action. <script>alert(1)</script>",
@@ -275,12 +293,16 @@ def main():
 
             record = get_brief(list_briefs()[0]["id"])
             assert record["practice_specification"]["structured"]
+            next_step.get_by_text(
+                "Next: Read the sample for usefulness", exact=True
+            ).wait_for()
             comparison = record["feedback_summary"]["comparisons"][0]
             assert comparison["comparable"] and len(comparison["improved_checks"]) == 1
             assert (
                 comparison["before_review_id"]
                 == record["attempts"][0]["reviews"][1]["id"]
             )
+            page.get_by_text("Feedback improvement", exact=True).click()
             page.get_by_text(
                 "1 improved · 0 regressed · 0 still failed", exact=True
             ).wait_for()

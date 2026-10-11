@@ -85,9 +85,15 @@ def get_brief(ident, include_history=True):
         feedback = feedback_summary(conn.cursor(), ident) if include_history else None
         saved_skill = skill_context(conn.cursor(), ident, require_usable=False)
         workflow = template_context(conn.cursor(), ident, require_reviewed=False)
+        from memory.business_guidance import guidance
+
+        next_step = (
+            guidance(conn.cursor(), dict(row), saved_skill, workflow) if row else None
+        )
     if not row:
         raise LookupError("Research brief not found")
     result = dict(row)
+    result["guidance"] = next_step
     result["skill_version"] = saved_skill
     result["workflow_template"] = workflow
     result["attempts"] = attempts

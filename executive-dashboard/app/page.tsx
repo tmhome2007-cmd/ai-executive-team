@@ -2096,7 +2096,11 @@ export default function DashboardPage() {
               />
             </div>
             <div hidden={businessView !== "practice"}>
-              <BusinessDiscovery apiKey={apiKey} onAuthFailure={handleAuthFailure} />
+              <BusinessDiscovery
+                apiKey={apiKey}
+                onAuthFailure={handleAuthFailure}
+                onInspectRuns={() => setBusinessView("runs")}
+              />
             </div>
             <div hidden={businessView !== "skills"}>
               <ExecutiveSkills apiKey={apiKey} onAuthFailure={handleAuthFailure} />
