@@ -41,3 +41,15 @@ Next: owner usefulness review of the guide and unfamiliar greenhouse example,
 with the return-draft comparison available as additional evidence. No Done or
 merge claim. BE-37 remains the independent foundation task. See
 [short review page](../../SPRINT_5_REVIEW.md).
+
+BE-37: Implemented for review, not Done or merged. Shared mobile-aware navigation
+helpers cover all 15 browser features. New `./company check-ui` runs affected
+production checks earlier; the full audit retains every feature. A demonstrated
+fractional timestamp ordering bug is fixed without rewriting legacy observations
+or weakening execution-order validation. Fixed UTC/local calendar cases and hidden
+panel/document polling checks passed. Final results: 39 targeted backend tests;
+17/17 early stages (production build plus 16 browser cases). Failed evidence and
+navigation mutation proof are retained. See [BE-37 evidence](../../BE37_EARLY_CHECKS.md).
+
+Next independent implementation: BE-38 interruption/permission-change guidance.
+Owner usefulness reviews and merges remain pending; none are inferred from “next”.
