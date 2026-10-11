@@ -1,0 +1,28 @@
+{
+  "protocol_hash": "76fa4d899057396f6fb57411ab3a91bd024d78fb9db7fd2ffae440ea49cd5d10",
+  "candidate_hash": "d24794aa908108f96b07ad233269a9340e4b01d2d69eb4fb6e7c095800a20144",
+  "run_manifest_sha256": "f68d8f0abb04df0cb944a261772511319f76725cbeb3ac266c9fa140801963e4",
+  "source_commit": "74d0a5eff835fa3241da23835950e6128ea57dbe",
+  "scheduled": 48,
+  "completed": 48,
+  "repair_attempts": 0,
+  "variant_counts": {
+    "baseline": {
+      "denominator": 24,
+      "schema_pass": 24,
+      "validated_response_contract": 24,
+      "errors": 0,
+      "incomplete": 0
+    },
+    "candidate": {
+      "denominator": 24,
+      "schema_pass": 24,
+      "validated_response_contract": 24,
+      "errors": 0,
+      "incomplete": 0
+    }
+  },
+  "limits": "Separate schema parsing using the already frozen schema; not a new rubric or changed judgement. Candidate validated contract also checks quotations and detected warnings. No human semantic or owner score is inferred from structural validity.",
+  "private_report_path": "audit-results/sprint6-evaluation/held_out-5fbd75ca58424f4aa9dee9be89d857b4/axes-report.json",
+  "private_report_sha256": "1fa4ab909aa729011b7fe9bffc7c97d1b2c1258461aa700f8075596294309a47"
+}

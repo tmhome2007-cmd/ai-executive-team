@@ -1,0 +1,46 @@
+{
+  "item": "BE-53",
+  "audited_commit": "2d17f7292d01c6ad5b6c552c48241cf32fc32e84",
+  "report_path": "audit-results/20261011-215918",
+  "summary_sha256": "3515fea96c28d980339d68a79c93abdb732277f608535408920f839c7ca05078",
+  "checks": {
+    "PASS": 33,
+    "FAIL": 0,
+    "UPSTREAM": 1
+  },
+  "backend_tests": 337,
+  "docker_skips": 0,
+  "foundation_checks": 150,
+  "production_browser_features": 15,
+  "known_upstream_findings": [
+    "PYSEC-2026-311",
+    "PYSEC-2026-3813",
+    "PYSEC-2026-3814",
+    "PYSEC-2026-3815"
+  ],
+  "ci_status": "Active workflow unchanged. Applying reviewed API/safe-runner coverage proposal awaits explicit approval and workflow-authorized credential; automatic approval review rejected active workflow mutation.",
+  "remote_main_verified": "822712a671095803ed6fa46fd8e832811d2dbc60",
+  "new_remote_ci": false,
+  "owner_accepted": false,
+  "merged": false,
+  "production_cleared": false,
+  "earlier_audit": "audit-results/20261011-212655",
+  "earlier_failures": "audit-results/sprint6-maintenance-failures/initial-test-failures.json",
+  "source_hashes": {
+    "main.py": "8caecd9ec55edcb9fbe032451a5cc0f80cc70867459c7da647d6a00d9fa9be4c",
+    "api/decisions.py": "4c40a599eec7205cd9939d866119407c6c86f640bc465ae0997f64770fa8bbcc",
+    "workflows/decision_preparation.py": "22e1030dd3ce657949ec8e1f19caf95931ba44a6aa103a3b8c584074d47f10af",
+    "workflows/structured_decision.py": "d2770fdba45fe8524edd3287324d2f9a9624c6a05ebebdf1f38951031b26d37f",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "scripts/sprint6_evaluation.py": "ef8db09cef7bbab6cdbb3238613a6784134489a60443a163e03a7920cfbe7d35",
+    "memory/artifact_retention.py": "a03d7b3e56b5e0c66a785c0311433f94a1fa48bbe6c70f77fa7b627b3fcd5153",
+    "scripts/run_tests.py": "c43ca19e6fe59cd1ac0f539fe9faa857600dae1f4dcce5cde71aa27f39d96c33",
+    "scripts/code_catalog.py": "fb789d26fec196a162daf37384aabc14f030f56a4cf6b16eaa2fb167e5e66e6c"
+  },
+  "ci_proposal_sha256": "670624d4c56b6c04c5ccef9f0a168d2f756f37504e34388c880dbaf219a89662",
+  "active_workflow_sha256": "1d8ecb94c17b72121cdb753fcb8c5af082e367ac164449bb34c740fbfb945597",
+  "earlier_audits": [
+    "audit-results/20261011-212655",
+    "audit-results/20261011-213310"
+  ]
+}

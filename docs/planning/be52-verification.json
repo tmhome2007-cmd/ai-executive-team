@@ -1,0 +1,52 @@
+{
+  "item": "BE-52",
+  "private_input_path": "audit-results/sprint6-reinstatly/evaluation-brief.json",
+  "private_exercise_freeze_path": "audit-results/sprint6-reinstatly/exercise-freeze.json",
+  "private_review_path": "audit-results/sprint6-reinstatly/owner-review.md",
+  "private_comparison_path": "audit-results/sprint6-reinstatly/comparison.json",
+  "input_hash": "76ad3002f00c569d17329bd6f1d1e3e7a89124bffcc6e8870bae1756e240fc22",
+  "exercise_freeze_hash": "03de47f7fc3774271db3711d76fe5f59544dfc8a5c97c370b320506dde826929",
+  "review_hash": "74fc2ee585d5c72310a71371dafb6b0b0c3cac832d960c09d5769c79c5baf396",
+  "models": {
+    "llama3.1:latest": {
+      "status": "valid_schema_private_draft",
+      "identity": {
+        "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+        "configuration": {
+          "temperature": 0,
+          "max_tokens": 1200,
+          "timeout": 120,
+          "provider": "ollama",
+          "tag": "llama3.1:latest",
+          "resolved_tag": "llama3.1:latest",
+          "endpoint": "http://localhost:11434",
+          "response_mode": "False",
+          "other_options": "SDK and Ollama defaults; not a deterministic generation guarantee"
+        }
+      }
+    },
+    "llama3:latest": {
+      "status": "valid_schema_private_draft",
+      "identity": {
+        "digest": "365c0bd3c000a25d28ddbf732fe1c6add414de7275464c4e4d1c3b5fcb5d8ad1",
+        "configuration": {
+          "temperature": 0,
+          "max_tokens": 1200,
+          "timeout": 120,
+          "provider": "ollama",
+          "tag": "llama3:latest",
+          "resolved_tag": "llama3:latest",
+          "endpoint": "http://localhost:11434",
+          "response_mode": "False",
+          "other_options": "SDK and Ollama defaults; not a deterministic generation guarantee"
+        }
+      }
+    }
+  },
+  "owner_usefulness": "pending",
+  "task_rubric_analyst_review": "Both original model drafts have substantive rubric gaps; separate corrected analyst draft supplied, not relabelled as model output.",
+  "generated_under_commit": "74d0a5eff835fa3241da23835950e6128ea57dbe",
+  "final_guard_revalidation": "All six role contributions valid; semantic judgement remains separate.",
+  "no_publishing_contact_launch_product_code_or_spending": true,
+  "public_business_facts": false
+}

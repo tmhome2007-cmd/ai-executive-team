@@ -1,6 +1,6 @@
 # Sprint 6 — maintenance and honest evaluation
 
-Planned 11 October 2026 at the owner’s request. The owner subsequently authorized implementation. BE-43–51 implementations are ready for review; BE-49 evaluation and the final audit are still in progress; see [current progress](docs/planning/sprint-6-progress.md). The same working folder was renamed to **AI Executive Team V2CHAT**. The older AI Executive Team folder remains separate.
+Planned 11 October 2026 at the owner’s request. The owner subsequently authorized implementation. BE-43–52 work is ready for review; the final local audit passed, with CI approval, owner usefulness/acceptance and merge still pending; see [current progress](docs/planning/sprint-6-progress.md). The same working folder was renamed to **AI Executive Team V2CHAT**. The older AI Executive Team folder remains separate.
 
 ## Goal
 
@@ -23,9 +23,9 @@ Start BE-43 and BE-44. Freeze the independent evaluation protocol before adaptin
 | BE-49 | high | Use structured output in one meeting path | review | BE-43, BE-47, BE-48 |
 | BE-50 | medium | Preserve disagreement in the decision brief | review | BE-49 |
 | BE-51 | medium | Simplify documentation and the code catalog | review | BE-44, BE-45 |
-| BE-52 | high | Evaluate one real project decision | backlog | BE-47, BE-48, BE-49, BE-50 |
-| BE-53 | high | Complete integration, privacy and security audit | backlog | BE-43, BE-44, BE-45, BE-46, BE-47, BE-48, BE-49, BE-50, BE-51, BE-52 |
-| BE-54 | medium | Owner review, retrospective and Sprint 6 closure | backlog | BE-53 |
+| BE-52 | high | Evaluate one real project decision | review | BE-47, BE-48, BE-49, BE-50 |
+| BE-53 | high | Complete integration, privacy and security audit | blocked | BE-43, BE-44, BE-45, BE-46, BE-47, BE-48, BE-49, BE-50, BE-51, BE-52 |
+| BE-54 | medium | Owner review, retrospective and Sprint 6 closure | review | BE-53 |
 
 The owner supplied BE-52 inputs and a follow-up on 11 October. They are retained in ignored private storage; evaluation awaits BE-47–50. Historical facts and remaining unknowns must stay explicit. The other maintenance items can progress independently according to their dependencies. BE-53 assesses selected scope; a blocked real-job item may be explicitly deferred before closure, but cannot be marked Done. No fixed delivery date or velocity has been agreed.
 

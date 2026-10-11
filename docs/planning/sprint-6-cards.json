@@ -81,7 +81,7 @@
     "acceptance_criteria": "Freeze an owner-supplied brief, permitted facts, intended reader, exact unknowns and decision rubric before running the team. Use the supplied primary decision; any separate later question stays deferred. Private business inputs stay outside Git and remote transmission. Record whether output changes the owner’s decision and why. Add a controlled same-input comparison when a suitable second local model is already available; keep prompt/rubric/settings fixed where possible and disclose unavoidable differences. If no second model is available, record the comparison as deferred rather than inventing results. No automatic downloads, cloud transmission or spending.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-53 · Complete integration, privacy and security audit",
@@ -89,7 +89,8 @@
     "acceptance_criteria": "Audit the final selected implementation with disposable backend/database, real Docker, foundation, frontend/browser, recovery, privacy and retention checks. Ensure extracted API/service modules are included in local and CI scans; repository workflow permissions are a dependency for remote workflow edits. Fix actionable project regressions, retain failed evidence and report exact commits/counts/skips. Recheck dependency advisories without promising an upstream fix. An unresolved release gate remains explicitly failed; no production clearance.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "blocked",
+    "blocked_reason": "Local final audit passed on 2d17f72. Automatic approval review rejected active GitHub workflow mutation; applying the reviewed API/safe-runner CI proposal requires explicit owner approval and workflow-authorized credentials. Known Chroma release findings remain open."
   },
   {
     "title": "BE-54 · Owner review, retrospective and Sprint 6 closure",
@@ -97,6 +98,6 @@
     "acceptance_criteria": "Present representative outputs and concise navigation instructions with supplied test data. Record actual scope, usefulness feedback, failures, deferred work and improvement priorities. Mark implementation Done only after documented owner acceptance and authorized actual merge. Keep blocked or deferred items visible and distinguish maintenance success, model quality and security release readiness. No invented velocity, dates, earnings or general competence.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "backlog"
+    "status": "review"
   }
 ]
