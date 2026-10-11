@@ -217,3 +217,7 @@ scope. [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50) mer
 closed as superseded; its plan is included in PR #50. Runtime company/board data
 was preserved. Four known unpatched Chroma advisories and the production release
 gate remain open. Claude feedback is subsequent work when provided.
+
+## Sprint 6 — planned maintenance and evaluation
+
+Owner requested planning on 11 October 2026. See [Sprint 6 plan](SPRINT_6_PLAN.md) and [matching cards](docs/planning/sprint-6-cards.json): BE-43–54 cover review gaps, safe test organization, decision preparation extraction, observable failures, independent evaluation, general evidence checks, structured meetings, retained disagreement, documentation, one real job, final audit and closure. Implementation has not started; BE-52 requires supplied facts. Cloud routing and portfolio work remain deferred.

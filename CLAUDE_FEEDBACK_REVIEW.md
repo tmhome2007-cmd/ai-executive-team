@@ -88,3 +88,7 @@ The four known unpatched Chroma advisories remain a separate release finding.
 Claude explicitly did not review memory/, the dashboard or logs. This feedback is
 therefore a partial code review, not a security clearance or a reason to weaken the
 existing privacy, approval, sandbox or audit boundaries.
+
+## Subsequent planning update
+
+The owner requested Sprint 6 planning and renamed this same checkout to AI Executive Team V2CHAT. See [SPRINT_6_PLAN.md](SPRINT_6_PLAN.md) and the matching backlog. Planning is on codex/sprint-6-plan; the earlier path/branch statement above records the review’s original context. Implementation has not started.
