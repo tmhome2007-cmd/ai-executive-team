@@ -1,5 +1,7 @@
 """Disposable SQLite/FastAPI/Chromium skill review and reuse; no live company API."""
 
+from browser_navigation import open_business_section, open_view
+
 import datetime
 import json
 import os
@@ -99,12 +101,8 @@ def main():
                     page.goto(dashboard)
                     page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
                     page.get_by_role("button", name="Confirm", exact=True).click()
-                    page.get_by_role("navigation", name="Company views").get_by_role(
-                        "button", name="Business research", exact=True
-                    ).click()
-                    page.get_by_role(
-                        "navigation", name="Business research sections"
-                    ).get_by_role("button", name="Executive skills", exact=True).click()
+                    open_view(page, "Business research")
+                    open_business_section(page, "Executive skills")
                     library = page.get_by_role("region", name="Executive skill library")
                     library.get_by_label("Skill key", exact=True).fill(
                         "private-summary"
@@ -140,11 +138,7 @@ def main():
                         "accepted · available for compatible private exercises",
                         exact=True,
                     ).wait_for()
-                    page.get_by_role(
-                        "navigation", name="Business research sections"
-                    ).get_by_role(
-                        "button", name="Research & practice", exact=True
-                    ).click()
+                    open_business_section(page, "Research & practice")
                     page.get_by_role(
                         "button",
                         name=f"#{fresh['id']} Third fictional exercise · research ready",
@@ -205,9 +199,7 @@ def main():
                         ).wait_for()
                     assert get_brief(fresh["id"])["skill_version"]["id"] == 1
                     assert get_skill(1)["uses"][0]["owner_assessment"] == "not_assessed"
-                    page.get_by_role(
-                        "navigation", name="Business research sections"
-                    ).get_by_role("button", name="Executive skills", exact=True).click()
+                    open_business_section(page, "Executive skills")
                     library.get_by_role(
                         "button", name="Revoke version", exact=True
                     ).click()

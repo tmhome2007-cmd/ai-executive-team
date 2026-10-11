@@ -935,6 +935,13 @@ Real Chromium downloads and revision diff against a disposable owner API.
 
 - `main`
 
+## [scripts/browser_navigation.py](../scripts/browser_navigation.py)
+
+Shared navigation for production Chromium smokes, including collapsed mobile menus.
+
+- `open_view`: Open a named workspace destination and wait for its actual page heading.
+- `open_business_section`: Select one business section without broad text matching or draft resets.
+
 ## [scripts/business_discovery_smoke.py](../scripts/business_discovery_smoke.py)
 
 Full owner research/practice UI on disposable records and a supplied dashboard URL.
@@ -985,6 +992,12 @@ Dashboard navigation/privacy smoke test with synthetic API responses only.
 ## [scripts/experiments_smoke.py](../scripts/experiments_smoke.py)
 
 Real experiment forms/API/storage checks; no running company API is contacted.
+
+- `main`
+
+## [scripts/feature_smoke.py](../scripts/feature_smoke.py)
+
+Early production-browser checks with isolated data; no live backend or model calls.
 
 - `main`
 
@@ -1346,6 +1359,15 @@ Combined Sprint 4 privacy and recovery checks using disposable company data.
 Private example runs preserve unsuccessful raw drafts and sanitize errors.
 
 - `PrivateExamplesTests`
+
+## [tests/test_sprint5_time_regressions.py](../tests/test_sprint5_time_regressions.py)
+
+Fixed-clock calendar and microsecond observation regressions on disposable data.
+
+- `record`
+- `Clock`
+- `CalendarTests`
+- `ObservationTimeTests`
 
 ## [tests/test_sql_injection_guards.py](../tests/test_sql_injection_guards.py)
 

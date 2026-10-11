@@ -2,6 +2,8 @@
 Start the production dashboard on localhost:3000 before running this script.
 """
 
+from browser_navigation import open_view
+
 import os
 import json
 from urllib.parse import urlsplit
@@ -195,11 +197,11 @@ def main():
             ("Executive activity", "Executive Memory"),
             ("System health", "System health"),
         ]:
-            nav.get_by_role("button", name=name, exact=True).click()
+            open_view(page, name)
             assert page.get_by_role(
                 "heading", name=heading, exact=True
             ).last.is_visible()
-        nav.get_by_role("button", name="Decisions", exact=True).click()
+        open_view(page, "Decisions")
         assert (
             page.get_by_text("<script>alert(1)</script>", exact=True)
             .filter(visible=True)
@@ -214,8 +216,8 @@ def main():
         report.get_by_text("Full report and evidence details", exact=True).click()
         assert report.get_by_text(decision["decision_outcome"], exact=True).is_visible()
         assert report.locator("script").count() == 0
-        nav.get_by_role("button", name="Overview", exact=True).click()
-        nav.get_by_role("button", name="Virtual office", exact=True).click()
+        open_view(page, "Overview")
+        open_view(page, "Virtual office")
         page.get_by_role("heading", name="Virtual office", exact=True).last.wait_for()
         assert page.locator(".office-desk").count() == 11
         page.get_by_role("button", name="Inspect CTO", exact=True).click()
@@ -242,14 +244,14 @@ def main():
             page.get_by_role("combobox").filter(visible=True).first.input_value()
             == "cfo"
         )
-        nav.get_by_role("button", name="Virtual office", exact=True).click()
+        open_view(page, "Virtual office")
         page.screenshot(path="/private/tmp/virtual-office-desktop.png", full_page=True)
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         page.screenshot(path="/private/tmp/virtual-office-mobile.png", full_page=True)
         page.set_viewport_size({"width": 1440, "height": 1000})
-        nav.get_by_role("button", name="Overview", exact=True).click()
-        nav.get_by_role("button", name="Conversations & activity", exact=True).click()
+        open_view(page, "Overview")
+        open_view(page, "Conversations & activity")
         page.get_by_text("Outcome measured: partial", exact=True).wait_for()
         page.get_by_role("combobox", name="Meeting for contributions").select_option(
             "105"
@@ -279,7 +281,7 @@ def main():
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         page.set_viewport_size({"width": 1440, "height": 1000})
-        nav.get_by_role("button", name="Overview", exact=True).click()
+        open_view(page, "Overview")
         treasury_down[0] = True
         page.get_by_role("button", name="Refresh company data").click()
         page.get_by_role("alert").filter(has_text="Could not fetch treasury").wait_for()

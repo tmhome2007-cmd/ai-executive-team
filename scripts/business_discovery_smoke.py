@@ -1,5 +1,7 @@
 """Full owner research/practice UI on disposable records and a supplied dashboard URL."""
 
+from browser_navigation import open_view
+
 import json
 import datetime
 import os
@@ -105,9 +107,7 @@ def main():
             page.goto(os.environ.get("DASHBOARD_SMOKE_URL", "http://127.0.0.1:3001"))
             page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
             page.get_by_role("button", name="Confirm", exact=True).click()
-            page.get_by_role("navigation", name="Company views").get_by_role(
-                "button", name="Business research", exact=True
-            ).click()
+            open_view(page, "Business research")
             page.get_by_text("Available evidence records (3)", exact=True).click()
             for checkbox in page.locator("input[type=checkbox]:visible").all():
                 checkbox.check()

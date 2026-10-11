@@ -9,6 +9,18 @@ from scripts import company_cli as cli
 
 
 class CompanyCliTests(unittest.TestCase):
+    def test_early_browser_dispatch_never_loads_company_environment(self):
+        with (
+            patch.object(cli, "environment") as environment,
+            patch.object(cli.subprocess, "run", return_value=Mock(returncode=0)) as run,
+        ):
+            self.assertEqual(cli.main(["check-ui", "runs", "experiments"]), 0)
+        environment.assert_not_called()
+        self.assertEqual(run.call_args.args[0][-2:], ["runs", "experiments"])
+        self.assertEqual(
+            run.call_args.args[0][1], str(cli.ROOT / "scripts/feature_smoke.py")
+        )
+
     def test_environment_preserves_existing_values_and_enforces_local_sandbox(self):
         with patch.dict(
             "os.environ",

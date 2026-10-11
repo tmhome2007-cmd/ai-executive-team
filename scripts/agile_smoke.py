@@ -4,6 +4,8 @@ API requests are intercepted and sent to an in-process test backend, never the
 user's running backend. Scheduler lifespan and external actions are not started.
 """
 
+from browser_navigation import open_view
+
 import os
 import tempfile
 from pathlib import Path
@@ -102,9 +104,7 @@ def main():
             page.goto(os.environ.get("DASHBOARD_SMOKE_URL", "http://127.0.0.1:3000/"))
             page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
             page.get_by_role("button", name="Confirm", exact=True).click()
-            page.get_by_role("navigation", name="Company views").get_by_role(
-                "button", name="Agile boards", exact=True
-            ).click()
+            open_view(page, "Agile boards")
             page.get_by_role(
                 "button", name="Create development roadmap", exact=True
             ).click()
@@ -194,9 +194,7 @@ def main():
             page.get_by_role(
                 "button", name="Toggle company navigation", exact=True
             ).click()
-            page.get_by_role("navigation", name="Company views").get_by_role(
-                "button", name="Conversations & activity", exact=True
-            ).click()
+            open_view(page, "Conversations & activity")
             timeline = page.locator(".company-timeline")
             timeline.get_by_text("Initiator: owner", exact=False).first.wait_for()
             assert (

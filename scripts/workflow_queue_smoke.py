@@ -1,5 +1,7 @@
 """Real Chromium owner controls against disposable SQLite; public reader is mocked."""
 
+from browser_navigation import open_view
+
 import os
 import sys
 import tempfile
@@ -77,9 +79,7 @@ def main():
                     page.goto(dashboard)
                     page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
                     page.get_by_role("button", name="Confirm", exact=True).click()
-                    page.get_by_role("navigation", name="Company views").get_by_role(
-                        "button", name="Business research", exact=True
-                    ).click()
+                    open_view(page, "Business research")
                     panel = page.get_by_role(
                         "region", name="Workflow templates and research queue"
                     )

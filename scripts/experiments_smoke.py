@@ -1,6 +1,10 @@
 """Real experiment forms/API/storage checks; no running company API is contacted."""
 
+from browser_navigation import open_view
+
 import os
+import datetime
+from zoneinfo import ZoneInfo
 import sys
 import tempfile
 from pathlib import Path
@@ -43,7 +47,12 @@ def main():
         client = TestClient(app)
         with sync_playwright() as runtime:
             browser = runtime.chromium.launch()
-            page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            zone = ZoneInfo(
+                os.environ.get("DASHBOARD_SMOKE_TIMEZONE", "Europe/Brussels")
+            )
+            page = browser.new_page(
+                viewport={"width": 1440, "height": 1000}, timezone_id=str(zone)
+            )
             page.set_default_timeout(10000)
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
@@ -79,9 +88,7 @@ def main():
             page.goto(os.environ.get("DASHBOARD_SMOKE_URL", "http://127.0.0.1:3000/"))
             page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
             page.get_by_role("button", name="Confirm", exact=True).click()
-            page.get_by_role("navigation", name="Company views").get_by_role(
-                "button", name="Experiments", exact=True
-            ).click()
+            open_view(page, "Experiments")
             page.get_by_text("No experiments recorded yet.", exact=True).wait_for()
             page.get_by_role("button", name="New experiment", exact=True).click()
             for field, value in {
@@ -103,6 +110,13 @@ def main():
             page.get_by_role("button", name="Save experiment", exact=True).click()
             page.get_by_text("Assessment: not live executed", exact=True).wait_for()
             plan = list_experiments()[0]
+            expected_due = (
+                datetime.datetime(2030, 1, 1, 12, tzinfo=zone)
+                .astimezone(datetime.timezone.utc)
+                .isoformat(timespec="microseconds")
+                .replace("+00:00", "Z")
+            )
+            assert plan["observation_due_at"] == expected_due
             assert get_action_by_id(action)["status"] == "pending"
             with get_connection() as conn:
                 assert (
@@ -123,6 +137,19 @@ def main():
             approve_action_with_treasury(action)
             assert claim_action_for_execution(action)
             update_action_status(action, "executed_dry_run")
+            observed = datetime.datetime(2026, 10, 10, 12, 0, 0, 100000, tzinfo=zone)
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE action_queue SET reviewed_at=? WHERE id=?",
+                    (
+                        (
+                            observed.astimezone(datetime.timezone.utc)
+                            - datetime.timedelta(microseconds=1)
+                        ).isoformat(),
+                        action,
+                    ),
+                )
+                conn.commit()
             page.get_by_role("button", name="Refresh experiments", exact=True).click()
             page.get_by_text("Assessment: simulation only", exact=True).wait_for()
             page.get_by_label("Observation value", exact=True).fill("25")
@@ -130,10 +157,8 @@ def main():
                 "Synthetic counter result <script>alert(1)</script>"
             )
             # Preserve sub-second order after execution; HTML inputs canonicalize trailing zeros.
-            import datetime
-
             precise = (
-                datetime.datetime.now()
+                observed.replace(tzinfo=None)
                 .isoformat(timespec="milliseconds")
                 .rstrip("0")
                 .rstrip(".")
@@ -145,6 +170,13 @@ def main():
                 exact=True,
             ).wait_for()
             assert len(list_observations(plan["id"])) == 1
+            assert list_observations(plan["id"])[0][
+                "observed_at"
+            ] == observed.astimezone(datetime.timezone.utc).isoformat(
+                timespec="microseconds"
+            ).replace(
+                "+00:00", "Z"
+            )
             assert page.get_by_text(
                 "Assessment: simulation only", exact=True
             ).is_visible()
@@ -162,7 +194,7 @@ def main():
             assert not errors, errors
             browser.close()
             print(
-                "PASS: experiment creation, stale-plan conflict, evidence-safe observation, simulation labelling, unknown costs, mobile width and no business execution/spending."
+                f"PASS ({zone}): fixed local/UTC calendar conversion, fractional observation ordering, experiment creation, stale-plan conflict, evidence-safe observation, simulation labelling, mobile width and no business execution/spending."
             )
 
 

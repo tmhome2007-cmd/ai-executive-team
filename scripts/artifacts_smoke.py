@@ -1,5 +1,7 @@
 """Real Chromium downloads and revision diff against a disposable owner API."""
 
+from browser_navigation import open_view
+
 import os
 from pathlib import Path
 import sys
@@ -86,9 +88,7 @@ def main():
                     page.goto(dashboard)
                     page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
                     page.get_by_role("button", name="Confirm", exact=True).click()
-                    page.get_by_role("navigation", name="Company views").get_by_role(
-                        "button", name="Business research", exact=True
-                    ).click()
+                    open_view(page, "Business research")
                     page.get_by_role(
                         "button",
                         name=f"#{b['id']} Private research · sample ready",

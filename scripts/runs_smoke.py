@@ -1,5 +1,7 @@
 """Chromium stop/continue against disposable SQLite and a controlled local worker."""
 
+from browser_navigation import open_business_section, open_view
+
 import concurrent.futures
 import os
 from pathlib import Path
@@ -63,6 +65,7 @@ def main():
                 browser = runtime.chromium.launch()
                 try:
                     page = browser.new_page(viewport={"width": 1440, "height": 1000})
+                    page.clock.install()
                     page.set_default_timeout(30000)
                     errors = []
                     run_reads = []
@@ -100,12 +103,8 @@ def main():
                     page.goto(dashboard)
                     page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
                     page.get_by_role("button", name="Confirm", exact=True).click()
-                    page.get_by_role("navigation", name="Company views").get_by_role(
-                        "button", name="Business research", exact=True
-                    ).click()
-                    page.get_by_role(
-                        "navigation", name="Business research sections"
-                    ).get_by_role("button", name="Run inspector", exact=True).click()
+                    open_view(page, "Business research")
+                    open_business_section(page, "Run inspector")
                     panel = page.get_by_role("region", name="Run inspector")
                     panel.get_by_role(
                         "button", name=f"Stop private run #{ident}", exact=True
@@ -131,20 +130,29 @@ def main():
                     panel.get_by_text("Phase: completed", exact=False).wait_for()
                     assert len(get_brief(b["id"])["attempts"]) == 1
                     assert len(calls) == 2
-                    page.get_by_role(
-                        "navigation", name="Business research sections"
-                    ).get_by_role(
-                        "button", name="Research & practice", exact=True
-                    ).click()
+                    open_business_section(page, "Research & practice")
                     reads_when_hidden = len(run_reads)
-                    page.wait_for_timeout(16000)
+                    page.clock.fast_forward(16000)
+                    page.wait_for_timeout(250)
                     assert (
                         len(run_reads) == reads_when_hidden
                     ), "Hidden run inspector kept polling"
-                    page.get_by_role(
-                        "navigation", name="Business research sections"
-                    ).get_by_role("button", name="Run inspector", exact=True).click()
+                    open_business_section(page, "Run inspector")
                     panel.get_by_text("Phase: completed", exact=False).wait_for()
+                    page.evaluate(
+                        "Object.defineProperty(document, 'hidden', {configurable:true, value:true}); document.dispatchEvent(new Event('visibilitychange'))"
+                    )
+                    reads_when_document_hidden = len(run_reads)
+                    page.clock.fast_forward(16000)
+                    page.wait_for_timeout(250)
+                    assert (
+                        len(run_reads) == reads_when_document_hidden
+                    ), "Hidden browser document kept polling"
+                    page.evaluate(
+                        "Object.defineProperty(document, 'hidden', {configurable:true, value:false}); document.dispatchEvent(new Event('visibilitychange'))"
+                    )
+                    with page.expect_request("**/runs?*"):
+                        page.clock.fast_forward(16000)
                     # Re-entry loads current metadata without starting another generation.
                     assert len(get_brief(b["id"])["attempts"]) == 1
                     page.set_viewport_size({"width": 390, "height": 844})

@@ -1,5 +1,7 @@
 """Temporary owner playback test with synthetic WAV, no model/cloud calls."""
 
+from browser_navigation import open_view
+
 import os
 from pathlib import Path
 import sys
@@ -87,9 +89,7 @@ def main():
             page.goto(os.environ.get("DASHBOARD_SMOKE_URL", "http://127.0.0.1:3001"))
             page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
             page.get_by_role("button", name="Confirm", exact=True).click()
-            page.get_by_role("navigation", name="Company views").get_by_role(
-                "button", name="Conversations & activity", exact=True
-            ).click()
+            open_view(page, "Conversations & activity")
             page.get_by_label("Meeting for contributions", exact=True).select_option(
                 str(decision)
             )

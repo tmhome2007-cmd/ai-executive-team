@@ -314,17 +314,23 @@ def main(argv=None):
             "voices",
             "format",
             "check-code",
+            "check-ui",
             "quality",
             "help",
         ],
     )
     args, extra = parser.parse_known_args(argv)
-    if extra and args.command != "quality":
+    if extra and args.command not in {"quality", "check-ui"}:
         parser.error("Unexpected arguments")
     if args.command == "help":
         parser.print_help()
         return 0
     try:
+        if args.command == "check-ui":
+            return subprocess.run(
+                [sys.executable, str(ROOT / "scripts/feature_smoke.py"), *extra],
+                cwd=ROOT,
+            ).returncode
         if args.command in {"format", "check-code"}:
             return subprocess.run(
                 [
