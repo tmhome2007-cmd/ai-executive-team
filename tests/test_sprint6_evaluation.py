@@ -10,6 +10,81 @@ from scripts import sprint6_evaluation as evaluation
 
 
 class Sprint6EvaluationTests(unittest.TestCase):
+    def test_expired_evaluation_keeps_hashes_input_summary_and_unrelated_files(self):
+        import os
+        from config import config
+        from memory.artifact_retention import prune_evaluation_samples
+
+        with (
+            tempfile.TemporaryDirectory(
+                dir=Path(tempfile.gettempdir()).resolve()
+            ) as tmp,
+            patch.object(config, "WORKSPACE_ROOT", str(Path(tmp) / "workspace")),
+        ):
+            run = (
+                Path(tmp)
+                / "audit-results/sprint6-evaluation"
+                / ("held_out-" + "a" * 32)
+            )
+            run.mkdir(parents=True, mode=0o700)
+            for name in (
+                "slot-00.json",
+                "manifest.json",
+                "summary.json",
+                "owner-file.txt",
+            ):
+                path = run / name
+                path.write_text(
+                    json.dumps(
+                        {"status": "error", "attempts": [{"raw": "PRIVATE SAMPLE"}]}
+                    )
+                )
+                os.utime(path, (10, 10))
+            self.assertEqual(prune_evaluation_samples(20), 1)
+            receipt = json.loads((run / "slot-00.json.provenance.json").read_text())
+            self.assertEqual(receipt["status"], "error")
+            self.assertNotIn("PRIVATE SAMPLE", json.dumps(receipt))
+            for name in ("manifest.json", "summary.json", "owner-file.txt"):
+                self.assertTrue((run / name).exists())
+            self.assertEqual(prune_evaluation_samples(20), 0)
+
+    def test_held_out_errors_get_no_repair_or_replacement(self):
+        with tempfile.TemporaryDirectory(
+            dir=Path(tempfile.gettempdir()).resolve()
+        ) as tmp:
+            root = Path(tmp)
+            candidate = root / "candidate.json"
+            candidate.write_text("{}")
+            snapshot = {
+                "identity": {"digest": "synthetic"},
+                "protocol_hash": "synthetic",
+                "persona": "canonical",
+            }
+            calls = []
+
+            def fail_then_interrupt(*args):
+                calls.append(args)
+                if len(calls) == 1:
+                    raise OSError("private provider detail")
+                raise KeyboardInterrupt
+
+            with (
+                patch.object(evaluation, "ROOT", root),
+                patch.object(evaluation, "STORE", root / "results"),
+                patch.object(evaluation, "validate_candidate", return_value=snapshot),
+                patch.object(
+                    evaluation, "local_request", side_effect=fail_then_interrupt
+                ),
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    evaluation.run(candidate, "held_out")
+                slot = json.loads(
+                    next((root / "results").glob("held_out-*/slot-00.json")).read_text()
+                )
+                self.assertEqual(len(slot["attempts"]), 1)
+                self.assertEqual(slot["status"], "error")
+                self.assertNotIn("Repair:", calls[1][2]["prompt"])
+
     def test_interruption_retains_manifest_and_blocks_fresh_held_out_claim(self):
         with tempfile.TemporaryDirectory(
             dir=Path(tempfile.gettempdir()).resolve()

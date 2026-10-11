@@ -92,6 +92,7 @@ def freeze():
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
             ).strip(),
             "repair_attempts": 1,
+            "held_out_repair_attempts": 0,
             "source_hashes": {
                 name: sha(ROOT / name)
                 for name in (
@@ -124,6 +125,7 @@ def validate_candidate(path):
         or snapshot["persona"] != persona()
         or snapshot["identity"] != identity()
         or snapshot["repair_attempts"] != 1
+        or snapshot.get("held_out_repair_attempts") != 0
     ):
         raise ValueError("Candidate configuration or model identity changed")
     return snapshot
@@ -247,7 +249,7 @@ def run(candidate_path, split):
                     snapshot["persona"],
                 )
             attempts = []
-            for attempt in (1, 2):
+            for attempt in ((1,) if split == "held_out" else (1, 2)):
                 raw = None
                 try:
                     reply = local_request(
