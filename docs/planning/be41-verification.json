@@ -1,0 +1,410 @@
+{
+  "implementation_commit": "d4dbd89169892ca36d73ffb1e5543d25e528b185",
+  "branch": "codex/sprint-5-completion",
+  "backend_tests": 287,
+  "backend_skips": 0,
+  "foundation_checks": {
+    "passed": 150,
+    "total": 150
+  },
+  "browser_features": {
+    "passed": 15,
+    "total": 15
+  },
+  "stage_counts": {
+    "PASS": 33,
+    "FAIL": 0,
+    "UPSTREAM": 1
+  },
+  "checks": [
+    {
+      "check": "python-compatibility",
+      "status": "PASS"
+    },
+    {
+      "check": "code-maintenance",
+      "status": "PASS"
+    },
+    {
+      "check": "docker-ready",
+      "status": "PASS"
+    },
+    {
+      "check": "docker-pinned-image",
+      "status": "PASS"
+    },
+    {
+      "check": "security-tests",
+      "status": "PASS"
+    },
+    {
+      "check": "foundation-150",
+      "status": "PASS"
+    },
+    {
+      "check": "bandit",
+      "status": "PASS"
+    },
+    {
+      "check": "voice-dependencies",
+      "status": "PASS"
+    },
+    {
+      "check": "python-dependencies",
+      "status": "UPSTREAM",
+      "advisories": [
+        "PYSEC-2026-311",
+        "PYSEC-2026-3813",
+        "PYSEC-2026-3814",
+        "PYSEC-2026-3815"
+      ]
+    },
+    {
+      "check": "frontend-clean-install",
+      "status": "PASS"
+    },
+    {
+      "check": "frontend-review-summary",
+      "status": "PASS"
+    },
+    {
+      "check": "frontend-glob",
+      "status": "PASS"
+    },
+    {
+      "check": "frontend-lint",
+      "status": "PASS"
+    },
+    {
+      "check": "frontend-build",
+      "status": "PASS"
+    },
+    {
+      "check": "frontend-api-policy",
+      "status": "PASS"
+    },
+    {
+      "check": "frontend-dependencies",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-dashboard-ready",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-dashboard",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-agile",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-experiments",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-organizational",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-operating",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-review",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-business_discovery",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-people",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-conversation_audio",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-skills",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-artifacts",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-runs",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-workflow_queue",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-knowledge",
+      "status": "PASS"
+    },
+    {
+      "check": "browser-dashboard_design",
+      "status": "PASS"
+    },
+    {
+      "check": "chromium-runtime",
+      "status": "PASS"
+    },
+    {
+      "check": "ollama-local-inference",
+      "status": "PASS"
+    }
+  ],
+  "private_report": "audit-results/20261011-182520",
+  "evidence_sha256": {
+    "bandit.log": "81d8737160c6c3d7e2206e75e632e9fb1e96dca8c94bed7028feb12097c9fc39",
+    "browser-agile.log": "10c66a6700d91774a87f1a02a0066bdd6c2f48c8b595f1b44e8b231f146546e9",
+    "browser-artifacts.log": "f989eaa17a6cb3e75471ed64cf7e043dfce9cd99bbf1e7f3f65684f18cf372ac",
+    "browser-business_discovery.log": "153288826bf198e5c4a1dd0a5480308a0e8f441057f2680681d08e1ea97642ff",
+    "browser-conversation_audio.log": "6316de904a3083d827c9852a0133f221f130c51913086c136a36239769203ed6",
+    "browser-dashboard.log": "a8f2ee33a7fba18924c2a2590e8fbdf63a605badf337e86ecdb15daaa5524b07",
+    "browser-dashboard_design.log": "53ebf5f6c1833b5109e3f181589d641fae384f0580552e5733d7096408d25f72",
+    "browser-experiments.log": "6a2dc2f7a3aca6e1ee4d8f6ad21d95f025cb5670629366aeaf9c47ef315ee40e",
+    "browser-knowledge.log": "060b515f44b37a70290aeb9e56e3821a6bd4d15394d7bf24d9185b52d14e588f",
+    "browser-operating.log": "b5e0ef3b327870c2f422658887827d4e4cd34461a22d5c01771fd38120380866",
+    "browser-organizational.log": "1b6136ae0de7ba02564734f667aad869b0b6c7149e5a95c0ec461e1b0fdd7844",
+    "browser-people.log": "c3869b78a5773ff2308c5d50fcd12e5b6dd09b20fad823806035a6ffa584a595",
+    "browser-review.log": "b6f56f6e4e6408c444c1f95ed89749a62be024002f7c773f274d4617f773c5a1",
+    "browser-runs.log": "be3be52c1e7a1139ad6d9b14d57d79cc39759626b17ab05bfcfa6d1d541ae710",
+    "browser-skills.log": "d3780403679563a897cfb61e627b8b3c5813bfb85a8cf0d274117b2cc8c53154",
+    "browser-workflow_queue.log": "2b1237ebb7365131d96cf2d8f2b6a861a9c482e1b4d7a1643654c5ce162d23d6",
+    "chromium-runtime.log": "a512907d2a1b601ad56c6eddd9cc7a0185fad3b2aae419fc769eeb6116e78eaf",
+    "code-maintenance.log": "94cd14e7e81fe75e8ccf3059001b2a93e0efab39d474651e929e108d51076628",
+    "dashboard-server.log": "e2259e7e26924c29247089e5645a8bba956dcfa23c71ad062719fa432fd80ed5",
+    "docker-pinned-image.log": "f0ddc5b2e5c24acc9e73b3fa88a45716be25a12a98411ef2a78b5457123ac4ac",
+    "docker-ready.log": "96fa42fccf6811df1a1f80e921f3283541333e4bc6f4b3f7211230d2f44547f9",
+    "foundation-150.log": "fddaa36243276c5693b883405e3c564fcecb0d1136fc48828f9d61a6cd68c988",
+    "frontend-build.log": "ae70b7319e495ac8fd4364e7cecbbd9acfbeedd6d0de832e973609b7627d2537",
+    "frontend-clean-install.log": "af120a99feb5b9c1b2ffc9d6d20f62be2afa1db4df7850e325386fd1c69afadf",
+    "frontend-dependencies.log": "6d8c5c8f3d7684adb070417bd608d01ae90aa3dc26a65af03ffda4955f38d9a3",
+    "frontend-glob.log": "3cd29d1240b1e6d9f1b8559aff92f4416889fc9b1f1ddda17979fe04faccf690",
+    "frontend-lint.log": "ecfeb4718cdc47e85de3f9c21b6072b36d5693a7b13ff1b6f8187de935d279eb",
+    "frontend-review-summary.log": "3bcf432e9effc0c22e5f0259bb0d01dfdae50556df2d1079a309dbd5acf5db4c",
+    "ollama-local-inference.log": "9ab5b4d3d46760bfcbd5e8aade2b9049b72437937491472560c9601c05576568",
+    "python-compatibility.log": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09",
+    "python-dependencies.json": "d06ab9ec9d2aec0af1e4866efa1e89a14f0cd2ba7f00c631ce6f40ca734c2558",
+    "python-dependencies.log": "bd604e8e7fb56d781f40d9a3541c4038f0a2d34aadb74e0c35bdeb414f5b00d9",
+    "security-tests.log": "5172f13583c738cc1c936ef095737731333dfdf2c5013291d0f85cbefd719d1e",
+    "summary.json": "031b945a87394ff3dba4e9b6716fbcaa69091aaf24da25c4ab7445531c45f163",
+    "voice-dependencies.log": "79d30422388543b2563e1dde76bb7e7857d7ef0c6fdf05c8c71598633ca07e1e"
+  },
+  "source_sha256": {
+    "agents/executive_agents.py": "247b4b3bbab45e044989c0b24f462ccdbf957d9d1710038f13380de3b80acbe6",
+    "agents/identities.py": "f5a4fb2749c5020f8ede0b4e77120e0701b3c80a943645515528cfd3a97ce19f",
+    "api/__init__.py": "b2fa71a619dae46295394f7a8da98f2a79d93ee07e04c2243dfc3c7aa0a565ac",
+    "api/business.py": "356539587004ba87e45c2d38be2ecc41cec8982f78066c9edb367528dae36073",
+    "api/common.py": "a954cf5c4cdfaeaf217164c3b4695b15bd1a07c9d74c7b8da205362368b62893",
+    "api/company_knowledge.py": "c909c6dfba9358fcec50c7af835e68cd70107931c7e73bc18807616000bf0da1",
+    "api/conversation_audio.py": "1dd19fe1da3803fb9aeede274f444e3f1f233b6603e38c17728d40f4785c7879",
+    "api/people.py": "2ef3faa8e6955fef1c02fdd42d96b482b6b659093e2c466a84d71505590b873d",
+    "api/practice_artifacts.py": "5c78668371fb8d9bde70a3984169ce1e18070196034e569e58d65f80484e34aa",
+    "api/run_inspector.py": "1f37fee480322c35c5ee4262448926b1918427c1eadd62e53394e57e562fcce9",
+    "api/skills.py": "ed96cca76e9be75119315904713b4208df1f684eceaeabc565f182900c6a13b0",
+    "api/workflow_templates.py": "d2ac442e38053da326891af2bc9d01e5d7e4777fd386bc31a0baf830ed231ce0",
+    "config.py": "640620f7331c5a9740e8c27f6c05e33488e0ae8c677d58963c1fdbdd3bce66b5",
+    "executive-dashboard/app/components/agile-board.tsx": "35b521c2b3be485f99d1b987fc3c19a2490d2f3b3f0076fdf40f275297d9c1da",
+    "executive-dashboard/app/components/ai-report.tsx": "d24b0358d88e5c6607d102ca66bba6849451d54c844a3e991cc6ac6a8fa51ef9",
+    "executive-dashboard/app/components/business-discovery.tsx": "5903ea7f980c87044879fd6bda133b51ae02172f878bfc385537f57c58c2a966",
+    "executive-dashboard/app/components/business-source-context.tsx": "235f0d61e60d181d579a082437102215f4c8c7e234dcd05b048a19bc1b323288",
+    "executive-dashboard/app/components/character-avatar.tsx": "155823c4d035fb295628b30ac3c802039fc9e0c27da7744e07137bf06e2c6030",
+    "executive-dashboard/app/components/company-knowledge.tsx": "1039a7afa86446331e28ec11b0569fa26d7c42abfa163a3374753c07d1f4c8a5",
+    "executive-dashboard/app/components/company-records.tsx": "f15e8f548fec7745f741416bf59b9f15d633088b2f468f2b70159b55ddaf5816",
+    "executive-dashboard/app/components/conversation-voice.tsx": "99a3e66c52945529f026afc52b7fc2d4992e997f3cbefbb889712b3458adac0b",
+    "executive-dashboard/app/components/dashboard-shell.tsx": "44edb772ff0c221898b5593230e4af3f1a034a9703c4d7f1e6833de5aaef50f8",
+    "executive-dashboard/app/components/executive-skills.tsx": "e1eca729552aba5af40bf2ad60f75f0ccc10966d5538f014d227b35de553c8e1",
+    "executive-dashboard/app/components/experiments.tsx": "1bc2ef88717750b666f26f6657bcc66d4fc7cd1f5c4ae080c8dab5de81dfad24",
+    "executive-dashboard/app/components/neural-voice-audition.tsx": "668b405ed675e48aa9cb4deee9ad380d11d828942171f071c5465218e3d33703",
+    "executive-dashboard/app/components/office-floor-3d.tsx": "2957788f817a1ba3e8f277656b14f589b59cbc3d64c3adf65434b8332846a6d1",
+    "executive-dashboard/app/components/office-workforce.tsx": "725855002cfcb960a82ed39015e6d76aafed0a51e775a3d721941ec1f4b0a938",
+    "executive-dashboard/app/components/operating-foundation.tsx": "f5d1ffd87833d7e975d4b0c31d0ea970d4c0f4f98004421b31ad83dfe6eba257",
+    "executive-dashboard/app/components/organizational-work.tsx": "f378bbd417bf18a69e32e73512d9a3dce9fa9531fb67c18639afbd751df812bd",
+    "executive-dashboard/app/components/people-simulation.tsx": "c324942c7323cd692c0a08645cc406bb7162d532d6ef2ef97700ec4ee8013ba9",
+    "executive-dashboard/app/components/practice-artifacts.tsx": "8f514c653e004f0186358cf4365f3c7078bca2b0dc14c40f18b934143f91e4b8",
+    "executive-dashboard/app/components/research-workflow.tsx": "dee01fe540298c83a2abc9b54a12777d6bd23dc2fbc64f92516a50209e40673a",
+    "executive-dashboard/app/components/run-inspector.tsx": "e6008172547fa779103499a6128e3d016b0d3884d381d9b809a828c70c842181",
+    "executive-dashboard/app/components/virtual-office.tsx": "45efbae3b4e3f5f9a4f33fea93040a97c8009a9c5ba8d4a53acd337b2937dce3",
+    "executive-dashboard/app/globals.css": "b27d5741954660160a6f7a06b9945b436794581aacf89f95ccb76a72972a52ac",
+    "executive-dashboard/app/layout.tsx": "b860b8b64f6f03c06ffa9892343f8b0da63c8719c94ad0d0a7944d3db1705d39",
+    "executive-dashboard/app/lib/business-proposals.ts": "839788b4ad7033b90d2444edc42cdd56c30f09d9f2369fdd2aea1d8010e481f3",
+    "executive-dashboard/app/lib/review-summary.ts": "9c111b5493e457bdf9aae75e4d0d0aff3d1242b7c0b28ce99beb1d107d0464f4",
+    "executive-dashboard/app/page.tsx": "fd4326161b616617366d4460af3b5cacb2c0a2b5a9838a8f499d5370832740b8",
+    "executive-dashboard/eslint.config.mjs": "02aacf16679bd95350d5edebc7d546adee75ec03b6690c160b2429ea9b8bfcdb",
+    "executive-dashboard/next.config.ts": "4f1b2e581f2f09ab0e681234da13e962d4e0b5420376806caf5a258a209c903c",
+    "executive-dashboard/postcss.config.mjs": "dfac7ac2d86d326a0e5adb024e7943c181393ed17a5fcb8f0315b24c7da6ddde",
+    "executive-dashboard/tests/review-summary.mjs": "05e1f28816970339a0a79b9a2cd64c1a0d696a4784876d70c1eab7bf7d596fc4",
+    "executive-dashboard/vendor/native-directory-glob/index.cjs": "c37d92f439a0449ba433cb0bd0f08fb22e5f05f7d1fae8b25444b337f948098f",
+    "executive-dashboard/vendor/native-directory-glob/test.cjs": "9de09a0075b82c9ab234cc7c0b602fcadba7359788f1946481195933b1335167",
+    "foundation_api.py": "7fb228e9fdf912656a363908c07a208de8a1c6047000e506b831a7c8fbfc839d",
+    "logging_config.py": "0a6fb1f6a549ba68a3363bf189b1a6142ce96f39e0035cd4b2df4a63d7193eaa",
+    "main.py": "a9bb808ed083499e08d3ec8a6b2326c662f060c179384ba2913bacf3f32c315e",
+    "memory/activity.py": "4a670f61fe5568a45f70b6d8e106b673506602327f9c52fc1f8a156fb6bbcbe1",
+    "memory/agent_activity_stream.py": "475120b59f46ce451014029c5cfe41e67eaf474c7e0b9e4de8ab0c20334e7a82",
+    "memory/agent_runtime.py": "cde703538f6340c5eddac8e9052ac00b0e750a0a298f8d49a6d5a81475f238a2",
+    "memory/agile.py": "15ee934affb1fe5b8458799a2adc0fb05d701a6e88cdf002a85470644bea1fff",
+    "memory/artifact_retention.py": "1a36248d4b80b3f62ba1dabe7d055d024f16bed6b27c6a800a92934112437df2",
+    "memory/business_discovery.py": "23e6896d20f84ff9f9fc7137e61b559519c0a6bf49172905129961fd728ff619",
+    "memory/business_evidence.py": "b7c0c3de8ffec073b86f0da36edb4f700924582dde4acd50d9377cdf6ac27348",
+    "memory/business_guidance.py": "f53d838cc89b5e03165a347d78c0c39bee50368e11c83dd43c50df88441c8b47",
+    "memory/business_practice_history.py": "cbba084a11815fa85b9e383171537c786da1509c39d96968d188a33f313399d5",
+    "memory/capabilities.py": "572e5e6bc8d9d30192d7483fc37562cab926a2673059068c7dc6d3b950843e03",
+    "memory/character_profiles.py": "83575fbd2db4caa6a35ce3ff90a1eaef2c3544abb12198355fdfc2d3a7560acb",
+    "memory/company_knowledge.py": "e66bbac23338753dfd9e7b3367911fe412720d457b3ac382524ddcd9227cabaf",
+    "memory/context_policy.py": "64ca40ec10c5d6fb7f08ee4f13f33ac9a9ac3521fb4f89f0307b9bac6f3ff8bc",
+    "memory/database.py": "caecc54bcbd1a33922712897c63533e05f5c07ea2abf77701b4e8faecc70a55c",
+    "memory/discussions.py": "da8f8fc08105724a0a0d61b3baabacfbba7324888481d265a4c18f53789ea7c9",
+    "memory/encrypted_backup.py": "9b7f2f86c51af0e2b114c56f59695a371ced59e589011cbaea0bb9b219d18ff6",
+    "memory/evidence.py": "7fee63800d6260fd9d286128d8a2d05fd4153cd04b660d53cfada4bedd63d777",
+    "memory/executive_skills.py": "03decfd224672a6b88ae628f48dac6c1924844c0f701c0834d4978e9e6e8cd24",
+    "memory/experiments.py": "268f861f013bb9dcc966f9fae8c07186bf5a9539f9ac58a674e2fb6b38e05aee",
+    "memory/memory_reconciliation.py": "606e9ee14c0ee952ce8e653141b0da8258cae661e4cab6c944e6f01c1418bc75",
+    "memory/observation_jobs.py": "26d51288eddb61787a640442230fbbcc043d366bca94fb0ce14982ba2d620bdd",
+    "memory/operating_policies.py": "490639cf7c5f69f2dc9dff014f448ce8aada9a1ff37cab5487d49163e06fe13b",
+    "memory/organization.py": "9cf73ba90a0675350a60fca91bbf9a3c58b002908fc160eaa8ab2132340a661f",
+    "memory/personal_simulation.py": "e23f94e6b7afeaf45f3398476f9912f7453fc14009bb1f7a7bc5374fed8faec2",
+    "memory/planning.py": "99fcb66e9e30ba0b4e03b2e2824196b3ff9f18d390d8383d04b58c1d6f1ecb82",
+    "memory/practice_artifacts.py": "5f2315d028310ac33050e87533d589f164f404d01490cef9d06133d8709edf85",
+    "memory/practice_quality.py": "2969725487f7523fb483281fcd1e50035efbd815853a2e11894ec826656cae2a",
+    "memory/research_queue.py": "f188eee0f81cdf2eae11f25df25d4bab9495ce45665f38ff148a3b9c19c6f374",
+    "memory/run_inspector.py": "5bf31b62141f1811a5cf868bdb62974884c83f995f910136e82437a39a743e06",
+    "memory/workflow_templates.py": "1a7637815352e73c3dd4279f595c12647a62f1ecea0ef5ad3af6d9b3bd2d6867",
+    "notifications/telegram_bot.py": "caa424047e7d814fdb34c1dfef82e86b24ca0dcbfb86176d0a01fb2ce1c43f95",
+    "notifications/telegram_interactive.py": "32a560c6a9e7f52d79cd23ea25b71948507c5fe1f20852f6d034b0af7cc9161b",
+    "privacy_bootstrap.py": "872ead62ec33925a0725247a03cc1c76af3d5730217131f16fc376a9292a6532",
+    "scripts/agile_smoke.py": "f0cf6f9d5f438bf3982af7ce0e8e5d70c135ac9558b289725fa17a516c0fca96",
+    "scripts/artifacts_smoke.py": "de105770d01d2453c24ba1938a05d903da1265820bfdaa04151b85eb89ee43bd",
+    "scripts/browser_navigation.py": "d11b6a7481b672417c3ffe3e726c9d0be684c1805cda92a40710b9bd3ba81ced",
+    "scripts/business_discovery_smoke.py": "244467e2f750ef2c86ef79624f2391f3f88be8396482ca8bdc065ecb3d98d657",
+    "scripts/code_catalog.py": "1c9d7a253ccb02d2275adf75e76f95dab4aaef4107e0c4006c6dfcdb57983f41",
+    "scripts/company_cli.py": "62dcb396737566267de60f70574f4d1243700dfeb7c4566ee3a785e57adc247f",
+    "scripts/conversation_audio_smoke.py": "ddeca8e6efd760f04064dac8f661b85583a51eee84e9c007fd6292ff544aa97f",
+    "scripts/dashboard_design_smoke.py": "a4ee1dd4604a8c3a6e2f0df7e5bf84130ee4c4e989845f3546a28bd7d25bacd4",
+    "scripts/dashboard_smoke.py": "dcfa7a596fb2dc9d56a36b4199bf1ae44fae596f5b9c47f04da1df4c11e98fdb",
+    "scripts/experiments_smoke.py": "342108b7c89d396769608e9d2ab32a2e8e606031fcc662dc4eaeaeea743d842f",
+    "scripts/feature_smoke.py": "4b025e98f99d478eaa82f3bcb1b3e45dbd77a9134c4ef3917000e9200442c1e1",
+    "scripts/generate_voice_samples.py": "db5c0015d6c5489a3935af0abc12e5c9bb5534bf89731e40128fa6e24a37e6c5",
+    "scripts/knowledge_smoke.py": "48eb39a2e4dc060b652aeae38ad8b841c6571cbc109df18556592c29079b3f15",
+    "scripts/local_audit.py": "3608f06c535e860cd9e514fbdf45cb132578b4e26f4faacd674c78682a6ae038",
+    "scripts/local_model_smoke.py": "27d2b7aa4e310020a16f5fd3d3859ab35ec1a36cae1b275ac1ba8fb8c2062486",
+    "scripts/maintain_code.py": "8cfe9f064cd018b91ae2caabd8786b71e9a75d642a1642fd0aa22c7515759430",
+    "scripts/operating_smoke.py": "91dbb0e8e94aa7e28a1832c36fa4da778f1ed6152a3fdc2111b474b64f65ae3c",
+    "scripts/organizational_smoke.py": "41c0d6342a133330c90fdc49f51f368d6aceb8a5629850e11aa219fb658174a6",
+    "scripts/people_smoke.py": "0eb0bfb5429da4460b4509c1b1e1820721dc1ed9f7d32b0968b245864db72dab",
+    "scripts/prepare_voices.py": "ec473743e6a913f426fc24ae32b947412cf176411704998a0d87d14eba8daad0",
+    "scripts/quality_benchmark.py": "f6421f49a6709f27099cdd02d30b0a78b96ea672ea348862cd7368ec9def0101",
+    "scripts/review_demo.py": "aedc212199562128e743b39e11f431ff6f5a27bf11cad139ff91bdb62b79c67a",
+    "scripts/review_smoke.py": "1c4c94e0e6e5770cfb9d31b4424330405d27c7901d589d379e0728dfb6964803",
+    "scripts/runs_smoke.py": "457de90136cf1b75ec8ad314758105355eebe91d39cd6c385ebeca298909b17c",
+    "scripts/skills_smoke.py": "9a6eedcad1ca3140728fb8a4bd01f7047eace87287f6e6e5207a2ec036fbb15e",
+    "scripts/sprint3_practice_smoke.py": "0fac027c912ad66b5de85c5d4ffde7202e84bcc7ebacc86f1a8fb23e3572ecb3",
+    "scripts/sprint5_private_examples.py": "73ad381b45d3dede107a68819306fb82346adc9cf2ea663afa346255feb722f4",
+    "scripts/synthesize_conversation.py": "c35306d065a460a256f9186573e237c50d2962146794f185b210ed997745fc62",
+    "scripts/workflow_queue_smoke.py": "f07d74b5e755f87925f039dcbb81bae2a9b7742e203d0182391c9670bbdfe79a",
+    "system_checks.py": "28815a3c19e0ce490f48fb8e982110e2c2f31b10b4f051c5d0b3b515b41bbafa",
+    "test_config.py": "d64494207c989f5d488d8d295bf780df230da7befa29d2c98acf07ac51562b07",
+    "test_crew.py": "e6bd032f00b712062237a72cd25051404a46c65a2c77a633b3c0d0b8b5df7b81",
+    "test_cso_tool.py": "ddfa6a54f84cc4849fca425f7596e1273c9687116bdba0d73a3199fdba895101",
+    "tests/test_action_checkpoints.py": "719a68c0dc47799ae96d8483e6fc04f843842c9fb09de20459a83da7e47aae4e",
+    "tests/test_activity_ledger.py": "512a88975b3526b9c3f3560549aa65825103100cbce8dc837e03fd52bfac6729",
+    "tests/test_agile_boards.py": "f8940f291fe15876ae80dd91a789a0b946a609e4a66834a39436848cad0bf616",
+    "tests/test_api_auth_boundaries.py": "3f00082b40ba008174ae64e6276aa338db939697e9d97fb25aa4e89d13a4ec21",
+    "tests/test_artifact_retention.py": "14f5ba174939241cd92b0688c6cb6cfc721201b0baa84cff79297a9b5dcef646",
+    "tests/test_atomic_action_claim.py": "424365cfa8ff99e9a62da0cc83e01ec777259f41a79695147db4b3a5cced2193",
+    "tests/test_backup_recovery.py": "024234700684b29612dcd5d5b9840d520a7b8de6c6cbaf038e19f2d790f73143",
+    "tests/test_business_discovery.py": "fd37d7ced310761e0c164c272b10188873e99da73c1b17c93e866b5f4225ae6d",
+    "tests/test_business_guidance.py": "88b02b525ec39af292688a0635d7f86afbdf28832ffb573d7686617eae1838be",
+    "tests/test_capabilities.py": "ac4e23b0e861bf650285122d6ac867ba94060966c9502e02d37f2347cba5397b",
+    "tests/test_company_cli.py": "9bf0d196b67d9d4da2e62903bc35b5bcb08052608193bf8db46e1a112d929717",
+    "tests/test_company_knowledge.py": "5c41ca0725ed86c65aa9cc6d5783d2d0bcf4e204d2c99b46df9cd19892b653dd",
+    "tests/test_company_records.py": "4f25c3945a96de193ccfe48d171034418812839629645fcbbf7828c02057884b",
+    "tests/test_container_executor.py": "df2626cebd834d73cda2f425aaf68ec216ce0be7bd96fb28d125df22fbe8717b",
+    "tests/test_container_runtime.py": "b3c8fb95ca3a858bae6af00492ab21ebfdce84e0cb5c6aadb691d59f68dd4d1c",
+    "tests/test_conversation_audio.py": "5a5beda8d7339fbb5e5ac6bf7806f3a9538f03236cdf176234f09c3aa49e7c68",
+    "tests/test_discussion_contracts.py": "43901dedb0a8a6126bc8697f6dbb9ced814c6fc6e172afa1668b4867e0ff90d5",
+    "tests/test_discussion_quality.py": "cfafb62b36208cdbf1bd52b865d9a0a5fd0b06e498c32e6c9888b894204403b5",
+    "tests/test_discussions.py": "717b60314c24b13d61d5c1483e2fb3b88f248df3815b406c18337d45e394445e",
+    "tests/test_encrypted_backup.py": "f5d0564a2ef3e2d6a8b832a463607757b69c1e382243722c6fc4913f3ff1ff51",
+    "tests/test_evidence.py": "89b69d6f766ee33e13ff08599e937b9d5c155cfdbc18e6f28f4cdd4b6b11fe5e",
+    "tests/test_executive_skills.py": "d48157a80168ab72ef26fbd0cfd598c65ed36efcd9e9f049198b00e71a849071",
+    "tests/test_experiments.py": "87633ea760cd0cf8261d7c309e1a31b3f8f4d4231eca4f1bb270df6190951fb5",
+    "tests/test_local_model_identity.py": "80422642163ae7ed9b6dd0a238f4c5a9e8c254a3eb6aeb398772689dc481e282",
+    "tests/test_local_model_smoke.py": "183431c8b3c317d960b43e636c8cce051d3301884258eb1c17acc9274e9d3437",
+    "tests/test_local_voice_samples.py": "7b90fb06e01f83b6878cb7cf2db4070be1f24a0ad367ec3988cbbd53079ffd65",
+    "tests/test_notification_privacy.py": "0a5535628153c4e03e59f489b1e0856407e04bcb08bcac7c2b49587bdc7fe867",
+    "tests/test_operating_foundation.py": "16f1dcab38a7f5353600d92008d8fc266efb06c2b7fbca3f952e986461914d13",
+    "tests/test_organizational_pipeline.py": "f4d11f20d518d838e3482c0500370df67ce24bc28122ce7da5aff3c2a72051a9",
+    "tests/test_output_quality.py": "c98b6a4cbd3e9aaa6c0b8253e013e9183b4c7c8103d6fa8a6b20bace9e9b8f80",
+    "tests/test_people_simulation.py": "701e6ea78797c24961ab3ee63a1ff1b8ff8357f2e7bf4f6cceb6de371a2f9b75",
+    "tests/test_planning.py": "bde05c46209a9a154e60c0d3afbbaf1dae9226664cb2de19d9a23ef7954a3a2d",
+    "tests/test_practice_artifacts.py": "7bbb238b0958236e65b8d52342001efa4c50a6783cdfdb21f580fe298402e73a",
+    "tests/test_quality_benchmark.py": "75d5c5c0eedcda2a0d014c250ed43c7e7c499028e3ce3af21b9eb16122991ae3",
+    "tests/test_research_encoding.py": "3c9fcdda374ab9f2efbb84bbde926bfced53e7cf3e50ff97324e3e13ec3ac7be",
+    "tests/test_run_inspector.py": "ac118413a808342da496087a9178ed53e79f1ebae18a2743e46dfbde1321838c",
+    "tests/test_sprint3_practice_evidence.py": "6c4f656785fe50f0773d8404fc22ce5b836fe9b68d3d39021dce57acf146a534",
+    "tests/test_sprint4_integration.py": "e0cefe219b6cbcbc066a25f9d91c0c03871a42b97ca2fd7db2692940e0babfd8",
+    "tests/test_sprint5_acceptance.py": "9fe1bd0cca80948d0ab43af5bfda0bdc885bd650c4658f2f8cbc77ad5bf8f62f",
+    "tests/test_sprint5_private_examples.py": "fad265bbe4ac31b8496960a17acc72585d1f41a46b21bdd409363b7117ecb352",
+    "tests/test_sprint5_recovery.py": "1236693f34ff74ea9a0470ddcb74936211c33af76c6a2b5d83bbd7d5d71d806a",
+    "tests/test_sprint5_time_regressions.py": "e82d15e1d18964c23053e5734d91bb21216699ec8cbd1bace509c498f4dbf951",
+    "tests/test_sql_injection_guards.py": "28eed28e02b5175f7cb48e2ad7a1bbe72e6a62a60ee5f3ef9bc89f8019c829fd",
+    "tests/test_step_checkpoints.py": "785b6cad96208b4d6c94ec93dfcd4a86bb2478ca75a8888a567a145fe8d89c7c",
+    "tests/test_trace_privacy.py": "8ccbef51bae4e6794709963e11aeb3fd0dcea1263f61da23be5f3045e2952a28",
+    "tests/test_workflow_queue.py": "ad3bad949cc0f2831451b87750d3ae77e5e9a693fdb954917578ea863ba7c78b",
+    "tests/test_workflow_recovery.py": "7a8e79af941e57572f8c2c7059cd79f15f26b6c3fd453fff24473f2d8dda08ed",
+    "tools/_dedupe_guard.py": "3ab15108cd6d4a2c301ee41549bfb71c2ef35f998af8ef74cbec0ae528cb85ab",
+    "tools/action_proposal_tool.py": "61e5c6175c0ad82c5ec59ed9d4cc626d6adb18ebd67a103dedfa1263d3ca1a57",
+    "tools/browser_action_tool.py": "d2d43d81a5948692a89dec127a4f9c2ebcf5c0bd523d3f0e939fe1c8af9df761",
+    "tools/file_operation_tool.py": "4aedfece4636f6a2f0cbccda1e82391f6e8ab6c9610b75ef03d1ffa71c6a67f0",
+    "tools/research_tool.py": "48b2f330ae3ef7ff15a15a96b893a853c793ee012cbaef4c456ca5a87918b7c9",
+    "tools/resource_request_tool.py": "c119dc69bf102746b930261c279c77b9a25f525a9e7872d7ef8ec644bd2c855a",
+    "verify_system.py": "1a2e5322b448c43d1a46e79e0852ee475771ee1561ea04627935704e90be3e3e",
+    "workflows/action_control.py": "6b75968b291fa58ac1edcac987ba89744deba2fe3b0c0fd8d0e2710ace22e012",
+    "workflows/action_executor.py": "45f1b2c7770f39210b351ca7350d9b2c66b3a7cd9be10c4d0fc089baf5342a65",
+    "workflows/autonomous_followup.py": "a42ff1b46a32a526baf10b8a6375dc04d33c7348d66c4dede36cc86bbd27d29a",
+    "workflows/business_discovery.py": "fb3614284a2f5abf17c44ec31c4a45c704178f43a01ce207b91be266d3a1d8b6",
+    "workflows/business_research_contract.py": "b2b384f0762b98c0f2cd68fc746546e85d1ffc61a19630cd020da6863bb3cead",
+    "workflows/business_revision_contract.py": "94aa08792066344bb3711b66f17b0c541cd2305da1832ac7445503bc354ae33d",
+    "workflows/capability_inventory.py": "0eadc53610ed030065e59f6d7ad3ca65ec43af562b56de30d44461b3e88ef01e",
+    "workflows/capability_policy.py": "a140c8f69c32d005be36528265b33f3dd3eff25f8db3e87a2f359f34497365c4",
+    "workflows/container_executor.py": "ea76fdbe727e467bd59bb34b8e1554729e29a2f2be82e5bc6a9f532055e42bac",
+    "workflows/conversation_audio.py": "fa64e3a2be9e0e3d00eb3be6fa54880890cc14ccf4494e8228fcfd67f4fbe4d9",
+    "workflows/daily_research.py": "0fda9ad7fa8f73f7a5ffcc9c3f2ebf41c55902d8c339de1e6e68b834c29b0134",
+    "workflows/discussion_contracts.py": "cadb314ac0f54c0523a5d7355565b23fafa89388a45a11da163600570e990a6b",
+    "workflows/discussion_rounds.py": "4a34253b601546e046606c774130b45695e70a206a5150063af0c49aa77769d7",
+    "workflows/durable_task.py": "36181488959f54781850769d271be06ef97a514406f835936eaf4bddee90e931",
+    "workflows/execution_lock.py": "cf21859ef0db564548fec777eade58a66d6bb1c25c452f69d71003560baf5652",
+    "workflows/executive_planning.py": "627dc075eb0ef43046e5fb2e47afadaf85f7817f0b44f7314055e25953e50ab2",
+    "workflows/executive_skills.py": "631850310fceb44c1a5ae3f13bdde378f8b5d8a8c1280508ba18444f5ccb3aed",
+    "workflows/instance_lock.py": "cef746a6078513780ecf2ef54d35c77ea64d6f5354f3e52e87a08e3ee576c0e9",
+    "workflows/local_model_identity.py": "cbb0c91531012f25b72106092984540daee15568e19a2de4628543b1da958ac0",
+    "workflows/local_voice_samples.py": "93d59b42401b31a34b59aa8b1e8c3b0c0289be4546adb829c966913e27b91ace",
+    "workflows/meeting.py": "6f3168e1562bb52a7773a6f3b0028afd63768d4c517c00fa6651ed3d64513d47",
+    "workflows/meeting_types.py": "b5a6ee731622f8dea5c81ccb018d98b4039ad736e6e903458c8351218caf3f67",
+    "workflows/output_quality.py": "1dac978ff25ddd3459458ebc59cb8b3814a287c6e7c5f6728af48086e1852b4c",
+    "workflows/practice_deliverables.py": "fa485f7331788afab549e080dc51d24fc0d5fc3fcc3d16ff1a2581ad7b445a75",
+    "workflows/quality_benchmark.py": "3a3d9b5b145b6b937be34bfefc4449a192535e71e6f56ac6270d3d5f524ca7dd",
+    "workflows/research_queue.py": "c847e4237844b2f5ed6f2f7d282708b097318efd16f8e6a8cea55c490215ab69",
+    "workflows/step_checkpoints.py": "570c87900dbbc8ccae9e2176900c2b0b22d802508fa7024d782df940f6a65a19",
+    "workflows/task_guide_contract.py": "65dccb1af8333b628f305b83922d37210e24944896c69e06bca29d5d7e3a1b8f"
+  },
+  "budget_eur": 0,
+  "permitted_loss_eur": 0,
+  "generated_company_artifact_retention_days": 30,
+  "real_inference": {
+    "scope": "Real local tool-free greeting; no usefulness assessment",
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+    "response": "Hello!"
+  },
+  "owner_usefulness_acceptance": false,
+  "merged": false,
+  "scope": "Disposable domain/security/browser verification and a separate real local greeting. No exhaustive security, usefulness or production clearance."
+}

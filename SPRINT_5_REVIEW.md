@@ -24,3 +24,12 @@ make the samples confusing. Passing an automatic check does not answer that.
 Exact rubrics and facts: [frozen examples](docs/planning/be35-examples.json).
 Earlier failures, revisions, limits and checks: [development evidence](BE35_PRIVATE_WORK_REVIEW.md).
 Your company data and keys are preserved; these samples used disposable records.
+
+## Complete implementation and review guide
+
+All nine engineering items are now prepared for review. Read
+[the completion handoff](SPRINT_5_COMPLETION.md) for actual audit results and gates,
+or run `./company review` for exact navigation and fictional inputs. The new
+next-step card is separate from the earlier recovery-demo clarity feedback.
+Claude feedback and owner usefulness acceptance remain outstanding; no merge or
+original-folder consolidation has occurred.

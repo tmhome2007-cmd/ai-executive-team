@@ -199,3 +199,11 @@ The owner then selected BE-23 local voiced contributions. Implementation is in R
 ## Sprint 5 backlog — 11 October 2026
 
 Sprint 4 is accepted and merged. [SPRINT_5_PLAN.md](SPRINT_5_PLAN.md) defines BE-34–42 around useful AI output, concise next steps, earlier integration checks, guarded recovery and reproducible local model identity, followed by an end-to-end review, audit and retrospective. Start with BE-34; other work follows its documented dependencies. Budget/loss remain €0. Cards are planning, not implementation evidence.
+
+## Sprint 5 engineering delivery — 11 October 2026
+
+BE-34–42 engineering work is prepared for review in the separate Sprint 5 checkout.
+See [implementation/test handoff](SPRINT_5_COMPLETION.md),
+[retrospective](SPRINT_5_RETROSPECTIVE.md) and [audit](BE41_SPRINT5_AUDIT.md).
+The initial backlog above is historical planning. No card is marked Done without
+owner acceptance and actual merge; the Chroma dependency release gate remains open.

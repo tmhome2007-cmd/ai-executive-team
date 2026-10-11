@@ -57,3 +57,12 @@ The complete `./company audit` remains the final integration gate.
 ## Fictional AI quality measurement
 
 With Ollama open: `./company quality`, then `./company quality summary`. See [BE24_QUALITY_BENCHMARKS.md](docs/BE24_QUALITY_BENCHMARKS.md) for limitations, prompt replay and comparisons. This uses fictional data and preserves your existing key and company records.
+
+## Sprint 5 review
+
+`./company review` prints [exact steps and fictional input data](COMPANY_REVIEW_GUIDE.md)
+without loading a company key. `./company review --check` tests the complete private
+work/feedback/files/procedure-reuse chain with disposable data and synthetic
+inference. `./company review --demo` launches the four fictional recovery cases,
+prints its own URL/demo key, and cleans its owned temporary apps on Ctrl+C.
+Your existing configured company still uses `./company start` and its existing key.
