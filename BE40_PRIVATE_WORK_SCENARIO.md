@@ -1,5 +1,10 @@
 # BE-40 — complete fictional private-work scenario
 
+Current status: owner accepted the documented bounded Sprint 5 scope on 11 October
+2026; merged via [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50). Earlier pending/
+not-merged entries below describe their original evidence stage. See
+[closure record](SPRINT_5_CLOSURE.md); known security/model-quality limits remain.
+
 Run `./company review` for exact navigation and sample data, `./company review
 --check` for the disposable automated scenario, or `./company review --demo` for
 the four fictional recovery cases. These commands do not read, generate, replace

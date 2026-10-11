@@ -1,5 +1,10 @@
 # BE-37 — earlier browser and calendar checks
 
+Current status: owner accepted the documented bounded Sprint 5 scope on 11 October
+2026; merged via [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50). Earlier pending/
+not-merged entries below describe their original evidence stage. See
+[closure record](SPRINT_5_CLOSURE.md); known security/model-quality limits remain.
+
 11 October 2026. Implemented for review; not Done or merged.
 
 Implementation: `e5fa8867b27470254a3c6840d71a2c63beb03b89` on

@@ -1,5 +1,10 @@
 # BE-36 — clear next steps and concise review
 
+Current status: owner accepted the documented bounded Sprint 5 scope on 11 October
+2026; merged via [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50). Earlier pending/
+not-merged entries below describe their original evidence stage. See
+[closure record](SPRINT_5_CLOSURE.md); known security/model-quality limits remain.
+
 Implemented on the Sprint 5 completion branch. The research/practice card now
 starts with its current state, one next step and the reason. Next-step eligibility
 is calculated from current source, rubric, skill and workflow records in the same

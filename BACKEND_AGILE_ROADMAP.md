@@ -207,3 +207,13 @@ See [implementation/test handoff](SPRINT_5_COMPLETION.md),
 [retrospective](SPRINT_5_RETROSPECTIVE.md) and [audit](BE41_SPRINT5_AUDIT.md).
 The initial backlog above is historical planning. No card is marked Done without
 owner acceptance and actual merge; the Chroma dependency release gate remains open.
+
+## Sprint 5 accepted and merged — 11 October 2026
+
+The owner explicitly confirmed review and authorized merging the documented Sprint 5
+scope. [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50) merged at
+`6712211efff4bc326ef50d32f8caedb59f7c31f3`. BE-34–42 are Done for their bounded scope.
+[Closure evidence](SPRINT_5_CLOSURE.md) records the decision and actual merge. Planning PR #49 was
+closed as superseded; its plan is included in PR #50. Runtime company/board data
+was preserved. Four known unpatched Chroma advisories and the production release
+gate remain open. Claude feedback is subsequent work when provided.

@@ -1,5 +1,10 @@
 # BE-41 — final Sprint 5 integration, security and privacy audit
 
+Current status: owner accepted the documented bounded Sprint 5 scope on 11 October
+2026; merged via [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50). Earlier pending/
+not-merged entries below describe their original evidence stage. See
+[closure record](SPRINT_5_CLOSURE.md); known security/model-quality limits remain.
+
 11 October 2026. Tested implementation commit:
 `3d924cddfc15bd31a5b4c6d07a918d0aa8db9d97`, branch `codex/sprint-5-completion`.
 Later closure changes are documentation only. The checked-in
