@@ -25,7 +25,19 @@ def main():
         action="store_true",
         help="Use a validated fictional comparison to isolate practice output",
     )
+    parser.add_argument(
+        "--sprint5-transfer",
+        action="store_true",
+        help="Use the frozen BE-35 support or greenhouse scenario with its existing rubric",
+    )
     args = parser.parse_args()
+    if args.sprint5_transfer and args.fixture not in {
+        "support_draft",
+        "evidence_summary",
+    }:
+        parser.error(
+            "--sprint5-transfer requires --fixture support_draft or evidence_summary"
+        )
     with tempfile.TemporaryDirectory(prefix="sprint3-local-examples-") as raw:
         temp = Path(raw)
         os.environ.update(
@@ -127,6 +139,28 @@ def main():
             for template in TEMPLATES:
                 if args.fixture and template["key"] != args.fixture:
                     continue
+                if args.sprint5_transfer:
+                    example = next(
+                        item
+                        for item in json.loads(
+                            (ROOT / "docs/planning/be35-examples.json").read_text()
+                        )
+                        if item["id"]
+                        == {
+                            "support_draft": "return-policy-transfer",
+                            "evidence_summary": "greenhouse-transfer",
+                        }[template["key"]]
+                    )
+                    if example["checks"] != template["checks"]:
+                        raise ValueError(
+                            "Transfer must preserve the exact support rubric"
+                        )
+                    template = dict(
+                        template,
+                        audience=example["audience"],
+                        supplied_facts=example["facts"],
+                        exercise=example["request"],
+                    )
                 b = create_brief(
                     "Fictional " + template["key"],
                     "Private local sample only; no owner professional skills assumed.",
@@ -157,6 +191,9 @@ def main():
                     },
                 )
                 print("RUN " + template["key"], flush=True)
+                (directory / (template["key"] + "-specification.json")).write_text(
+                    json.dumps(template, indent=2, ensure_ascii=False)
+                )
                 try:
                     captures = []
 
@@ -187,6 +224,13 @@ def main():
                     (directory / (template["key"] + ".txt")).write_text(
                         b["sample_display"]
                     )
+                for index, draft in enumerate(captures):
+                    (
+                        directory / (template["key"] + f"-raw-draft-{index+1}.txt")
+                    ).write_text(
+                        "Raw local-model draft; may fail checks. Owner assessment not recorded.\n\n"
+                        + draft
+                    )
                 outcomes.append(
                     dict(
                         fixture=template["key"],
@@ -209,6 +253,9 @@ def main():
                     == 0
                 )
             (directory / "results.json").write_text(json.dumps(outcomes, indent=2))
+            for file in directory.iterdir():
+                if file.is_file():
+                    file.chmod(0o600)
             print("Examples: " + str(directory), flush=True)
             return 0 if all(o["structural_checks"] == "PASS" for o in outcomes) else 1
 

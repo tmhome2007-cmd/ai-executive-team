@@ -157,7 +157,13 @@ class InspectorTests(unittest.TestCase):
         b = self.brief()
         b = claim_stage(b["id"], b["version"], "practice")
         ident, run, step = inspector.register_run(
-            b["id"], "practice", b["version"], "a" * 64, "b" * 64, "local/model"
+            b["id"],
+            "practice",
+            b["version"],
+            "a" * 64,
+            "b" * 64,
+            "local/model",
+            model_identity={"digest": "a" * 64, "configuration": {"tag": "synthetic"}},
         )
         run_json_step(run, step, "a" * 64, lambda: "private sentinel")
         with get_connection() as conn:

@@ -27,7 +27,43 @@ NOW = lambda: datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 class SprintThreeTests(unittest.TestCase):
+    def test_sprint5_transfer_examples_preserve_existing_exact_rubrics(self):
+        fixtures = json.loads(
+            (
+                Path(__file__).resolve().parents[1] / "docs/planning/be35-examples.json"
+            ).read_text()
+        )
+        templates = {item["key"]: item for item in TEMPLATES}
+        for ident, key in (
+            ("task-guide", "task_guide"),
+            ("return-policy-transfer", "support_draft"),
+            ("greenhouse-transfer", "evidence_summary"),
+        ):
+            fixture = next(item for item in fixtures if item["id"] == ident)
+            self.assertEqual(fixture["checks"], templates[key]["checks"])
+        greenhouse = next(
+            item for item in fixtures if item["id"] == "greenhouse-transfer"
+        )
+        self.assertIn(
+            "Crop condition, watering results and sensor accuracy are not supplied",
+            greenhouse["facts"],
+        )
+        self.assertIn("No greenhouse control action is authorized", greenhouse["facts"])
+
     def setUp(self):
+        identity_patch = patch(
+            "workflows.local_model_identity.resolve_model",
+            return_value={
+                "digest": "a" * 64,
+                "configuration": {
+                    "provider": "ollama",
+                    "tag": "synthetic",
+                    "temperature": 0.0,
+                },
+            },
+        )
+        identity_patch.start()
+        self.addCleanup(identity_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.db = patch.object(
             config, "DATABASE_PATH", str(Path(self.temp.name) / "test.db")
@@ -564,7 +600,7 @@ class SprintThreeTests(unittest.TestCase):
         samples = [
             "**Task guide**\n1. Create a task for the fictional example “Read chapter one” using the create function; exact controls are unknown.\n2. Edit that same task to “Read chapter two” using the edit function; keep the revised text with that task.\n3. Complete that task using the complete function after the fictional reading activity; check its recorded completion.\n**FAQ**\nQ: How do I start?\nA: Choose a short task description and use the create function.\nQ: How do I change it?\nA: Update the chosen task using the edit function.\nQ: How do I finish it?\nA: Use the complete function for the task you finished.\nInterface controls and reminder functionality are unknown.",
             "**Findings**\nFictional TEST-001 expected five checks; four passed and the reminder did not appear.\n**Unknowns**\nThe cause is unknown; reminder due time and original reproduction steps are unknown.\n**Next Action**\nRequest the reproduction steps and due time before defining another test.",
-            "Thank you for asking about the fictional return policy. Unused items may be reviewed for return within 14 days. Please provide your purchase date and describe the item condition so it can be reviewed against the policy. No refund is approved or promised; this is a private draft and no customer has been contacted.",
+            "Thank you for asking about the fictional return policy. Unused items may be reviewed for return within 14 days. Please provide your purchase date and describe the item condition so it can be reviewed against the policy. No refund has been approved or issued; this is a private draft and no customer has been contacted.",
         ]
         for template, sample in zip(TEMPLATES, samples):
             with self.subTest(template=template["key"]):
@@ -583,4 +619,50 @@ class SprintThreeTests(unittest.TestCase):
             validate_deliverable(
                 samples[2] + " Your refund will be processed today.",
                 dict(structured=True, specification=TEMPLATES[2]),
+            )
+
+    def test_return_transfer_rejects_observed_unfinished_and_inferred_start(self):
+        spec = dict(structured=True, specification=dict(TEMPLATES[2]))
+        spec["specification"][
+            "supplied_facts"
+        ] += " The event starting the 14-day period is unspecified."
+        sample = (
+            "Unused items may be reviewed for return within 14 days. "
+            "Please provide the purchase date and item condition for review. "
+            "The start event of the 14-day period is unspecified. "
+            "No refund has been approved or issued."
+        )
+        self.assertTrue(validate_deliverable(sample, spec))
+        with self.assertRaisesRegex(ValueError, "Preserve the supplied fact"):
+            validate_deliverable(
+                sample.replace("No refund has been approved or issued.", ""), spec
+            )
+        for placeholder in ("[Your Name]", "[Customer Name]", "[Company Name]"):
+            with self.assertRaisesRegex(ValueError, "placeholders"):
+                validate_deliverable(sample + "\n" + placeholder, spec)
+        with self.assertRaisesRegex(ValueError, "Explicitly state"):
+            validate_deliverable(
+                sample.replace(
+                    "The start event of the 14-day period is unspecified. ", ""
+                ),
+                spec,
+            )
+        with self.assertRaisesRegex(ValueError, "cannot establish"):
+            validate_deliverable(
+                sample
+                + " Your purchase date will help us assess whether the period has started.",
+                spec,
+            )
+
+    def test_evidence_summary_rejects_observed_reply_policy_contamination(self):
+        spec = dict(structured=True, specification=dict(TEMPLATES[1]))
+        sample = (
+            "Findings: Five checks expected; four passed; the reminder did not appear.\n"
+            "Unknowns: Cause unknown.\n"
+            "Next Action: Request missing reproduction steps and due time before another test."
+        )
+        self.assertTrue(validate_deliverable(sample, spec))
+        with self.assertRaisesRegex(ValueError, "unrelated 14-day"):
+            validate_deliverable(
+                sample + "\nStart event for the 14-day duration is unknown.", spec
             )

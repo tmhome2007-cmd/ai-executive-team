@@ -1,0 +1,34 @@
+{
+  "implementation_commit": "d52bdf145d3b2b86fcf3a4e64fbb172f0696e033",
+  "backend_tests": 25,
+  "browser_checks": [
+    {
+      "check": "production-build",
+      "status": "PASS"
+    },
+    {
+      "check": "runs",
+      "status": "PASS"
+    },
+    {
+      "check": "skills",
+      "status": "PASS"
+    },
+    {
+      "check": "artifacts",
+      "status": "PASS"
+    }
+  ],
+  "private_report": "audit-results/be37-759285b876e5408d966a40125dc88ccb",
+  "failed_browser_reports": [
+    "audit-results/be37-e4df26efb05b453ea0b666ec29598510",
+    "audit-results/be37-65e8c1a07cf74e4d924871403d3da890"
+  ],
+  "source_hashes": {
+    "memory/run_inspector.py": "cdfbf1b20e24b748864ab16e39fe45ac5241fc245d89c3f9e9834c404a3671f0",
+    "executive-dashboard/app/components/run-inspector.tsx": "83ddea8e40c6672fa2dcb204f9d9c9c8d3f2a3566cb271696307798580f78f54",
+    "scripts/runs_smoke.py": "2726fdc9ef04f9fb5e93e7a3007e1cc135506b243206f19e192bd93d17733d80",
+    "tests/test_sprint5_recovery.py": "1236693f34ff74ea9a0470ddcb74936211c33af76c6a2b5d83bbd7d5d71d806a"
+  },
+  "scope": "Disposable synthetic data. Implemented for review; no owner acceptance, merge, company action or complete audit claim."
+}

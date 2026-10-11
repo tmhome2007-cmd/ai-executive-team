@@ -1,0 +1,89 @@
+{
+  "implementation_commit": "e5fa8867b27470254a3c6840d71a2c63beb03b89",
+  "browser_report": "be37-a5baea6c61904474af6362e624e72b58",
+  "initial_failed_report": "be37-892198a2382748f1ad128454a9af163e",
+  "checks": [
+    {
+      "check": "production-build",
+      "status": "PASS"
+    },
+    {
+      "check": "dashboard",
+      "status": "PASS"
+    },
+    {
+      "check": "agile",
+      "status": "PASS"
+    },
+    {
+      "check": "experiments-UTC",
+      "status": "PASS"
+    },
+    {
+      "check": "experiments-Europe_Brussels",
+      "status": "PASS"
+    },
+    {
+      "check": "organizational",
+      "status": "PASS"
+    },
+    {
+      "check": "operating",
+      "status": "PASS"
+    },
+    {
+      "check": "review",
+      "status": "PASS"
+    },
+    {
+      "check": "business_discovery",
+      "status": "PASS"
+    },
+    {
+      "check": "people",
+      "status": "PASS"
+    },
+    {
+      "check": "conversation_audio",
+      "status": "PASS"
+    },
+    {
+      "check": "skills",
+      "status": "PASS"
+    },
+    {
+      "check": "artifacts",
+      "status": "PASS"
+    },
+    {
+      "check": "runs",
+      "status": "PASS"
+    },
+    {
+      "check": "workflow_queue",
+      "status": "PASS"
+    },
+    {
+      "check": "knowledge",
+      "status": "PASS"
+    },
+    {
+      "check": "dashboard_design",
+      "status": "PASS"
+    }
+  ],
+  "source_hashes_match_commit": true,
+  "backend_tests": 39,
+  "fixed_clock_tests_before": {
+    "run": 6,
+    "failures": 2
+  },
+  "fixed_clock_tests_after": {
+    "run": 6,
+    "failures": 0
+  },
+  "navigation_mutation_detected": true,
+  "full_audit_run": false,
+  "owner_acceptance": "pending",
+  "merge_status": "not_merged"
+}

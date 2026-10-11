@@ -1,5 +1,7 @@
 """People dashboard/owner API smoke on disposable SQLite; speech is stubbed, never transmitted."""
 
+from browser_navigation import open_view
+
 import os
 import sys
 import tempfile
@@ -89,9 +91,7 @@ def main():
             page.goto(os.environ.get("DASHBOARD_SMOKE_URL", "http://127.0.0.1:3000/"))
             page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
             page.get_by_role("button", name="Confirm", exact=True).click()
-            page.get_by_role("navigation", name="Company views").get_by_role(
-                "button", name="Organizational work", exact=True
-            ).click()
+            open_view(page, "Organizational work")
             page.get_by_role("button", name="People & simulation", exact=True).click()
             page.get_by_label("Voice pace", exact=True).fill("1.05")
             page.get_by_role(

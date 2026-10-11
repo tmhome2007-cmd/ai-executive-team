@@ -44,6 +44,25 @@ For initial environment installation or a broken dependency environment, follow 
 
 Audit results live under `audit-results/`. `PROJECT CHECKS: PASS` applies to the automated checks; separate upstream advisories remain visible. It does not certify every AI answer or production deployment.
 
+## Earlier browser checks
+
+After a UI change, run `./company check-ui` for the navigation, run inspector,
+calendar/experiment and business checks. Use `./company check-ui runs experiments`
+to select affected features, or `./company check-ui --all` for all 15 features.
+This builds a production dashboard on its own loopback test port and uses disposable
+data and synthetic API reads. It preserves company keys, records and running apps.
+Development dependencies must already be installed. Logs stay under `audit-results/`.
+The complete `./company audit` remains the final integration gate.
+
 ## Fictional AI quality measurement
 
 With Ollama open: `./company quality`, then `./company quality summary`. See [BE24_QUALITY_BENCHMARKS.md](docs/BE24_QUALITY_BENCHMARKS.md) for limitations, prompt replay and comparisons. This uses fictional data and preserves your existing key and company records.
+
+## Sprint 5 review
+
+`./company review` prints [exact steps and fictional input data](COMPANY_REVIEW_GUIDE.md)
+without loading a company key. `./company review --check` tests the complete private
+work/feedback/files/procedure-reuse chain with disposable data and synthetic
+inference. `./company review --demo` launches the four fictional recovery cases,
+prints its own URL/demo key, and cleans its owned temporary apps on Ctrl+C.
+Your existing configured company still uses `./company start` and its existing key.

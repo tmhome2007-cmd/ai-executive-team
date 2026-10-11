@@ -1,6 +1,6 @@
 /** Owner-controlled research, frozen private exercises and separately recorded assessments. */
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { businessProposals } from "../lib/business-proposals";
 import AiReport from "./ai-report";
 import ResearchWorkflow, { WorkflowTemplate } from "./research-workflow";
@@ -55,6 +55,13 @@ interface PracticeEvidence {
   scope: string;
 }
 interface Brief {
+  guidance?: {
+    state_label: string;
+    action: string;
+    label: string;
+    explanation: string;
+    blocked: boolean;
+  };
   workflow_template?: {
     id: number;
     name: string;
@@ -105,9 +112,11 @@ interface Source {
 export default function BusinessDiscovery({
   apiKey,
   onAuthFailure,
+  onInspectRuns,
 }: {
   apiKey: string;
   onAuthFailure: () => void;
+  onInspectRuns?: () => void;
 }) {
   const [items, setItems] = useState<Brief[]>([]),
     [selected, setSelected] = useState<Brief | null>(null);
@@ -230,6 +239,51 @@ export default function BusinessDiscovery({
     );
     setEvidence("");
     setCorrecting(false);
+  };
+  const planRef = useRef<HTMLFormElement>(null);
+  const sampleRef = useRef<HTMLDetailsElement>(null);
+  const reviewRef = useRef<HTMLFormElement>(null);
+  const researchRef = useRef<HTMLFormElement>(null);
+  const moveTo = (element: HTMLElement | null) => {
+    element?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const input = element?.querySelector<HTMLElement>(
+      "input, textarea, select, button",
+    );
+    input?.focus({ preventScroll: true });
+  };
+  const followNext = () => {
+    switch (selected?.guidance?.action) {
+      case "research":
+        stage("research");
+        break;
+      case "practice":
+        stage("practice");
+        break;
+      case "revise":
+        stage("revise");
+        break;
+      case "inspect_runs":
+        onInspectRuns?.();
+        break;
+      case "choose_practice":
+        moveTo(planRef.current);
+        break;
+      case "review_sample":
+        if (sampleRef.current) sampleRef.current.open = true;
+        moveTo(sampleRef.current);
+        break;
+      case "read_sample":
+        if (sampleRef.current) sampleRef.current.open = true;
+        moveTo(sampleRef.current);
+        break;
+      case "new_brief":
+      case "review_sources":
+        moveTo(researchRef.current);
+        break;
+      default:
+        if (selected)
+          act(async () => update(await request(`/business-discovery/${selected.id}`)));
+    }
   };
   const { sources: proposals, withheld } = businessProposals(selected?.research || "");
   const stage = (name: string) =>
@@ -366,6 +420,7 @@ export default function BusinessDiscovery({
             : " — select at least three."}
         </p>
         <form
+          ref={researchRef}
           onSubmit={(e) => {
             e.preventDefault();
             act(async () =>
@@ -451,13 +506,44 @@ export default function BusinessDiscovery({
       {selected && (
         <article className="command-card space-y-4">
           <h3 className="text-xl font-semibold break-words">{selected.title}</h3>
-          <p>State: {selected.state.replaceAll("_", " ")}</p>
-          <p className="whitespace-pre-wrap break-words text-sm">
-            {selected.constraints}
-          </p>
-          <p className="text-sm">
-            Source records: {selected.source_ids.map((id) => `#${id}`).join(", ")}
-          </p>
+          <section
+            aria-label="Your next step"
+            className="rounded border border-teal-700 p-3 space-y-2"
+          >
+            <p>
+              State:{" "}
+              {selected.guidance?.state_label || selected.state.replaceAll("_", " ")}
+            </p>
+            <h4 className="font-semibold">
+              Next: {selected.guidance?.label || "Refresh this record"}
+            </h4>
+            <p className="text-sm">
+              {selected.guidance?.explanation ||
+                "Refresh to load the current guidance."}
+            </p>
+            {selected.guidance?.blocked && (
+              <p className="text-amber-300">
+                Generation is blocked; saved work remains available.
+              </p>
+            )}
+            <button
+              className="office-filter"
+              type="button"
+              disabled={busy}
+              onClick={followNext}
+            >
+              Go to next step
+            </button>
+          </section>
+          <details>
+            <summary>Constraints and source records</summary>
+            <p className="whitespace-pre-wrap break-words text-sm">
+              {selected.constraints}
+            </p>
+            <p className="text-sm">
+              Source records: {selected.source_ids.map((id) => `#${id}`).join(", ")}
+            </p>
+          </details>
           <button
             disabled={busy}
             className="office-filter"
@@ -471,7 +557,7 @@ export default function BusinessDiscovery({
           </button>
           {selected.state === "draft" && (
             <button
-              disabled={busy}
+              disabled={busy || selected.guidance?.action !== "research"}
               className="office-filter"
               onClick={() => stage("research")}
             >
@@ -557,6 +643,7 @@ export default function BusinessDiscovery({
           {selected.state === "research_ready" &&
             [2, 3].includes(selected.research_contract_version) && (
               <form
+                ref={planRef}
                 className="space-y-3"
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -812,7 +899,7 @@ export default function BusinessDiscovery({
             </details>
           )}
           {selected.feedback_summary && (
-            <details open>
+            <details>
               <summary>Feedback improvement</summary>
               <p className="text-xs">{selected.feedback_summary.scope}</p>
               {selected.feedback_summary.comparisons.length === 0 && (
@@ -867,7 +954,7 @@ export default function BusinessDiscovery({
           )}
           {selected.state === "practice_ready" && (
             <button
-              disabled={busy}
+              disabled={busy || selected.guidance?.action !== "practice"}
               className="office-filter"
               onClick={() => stage("practice")}
             >
@@ -879,7 +966,13 @@ export default function BusinessDiscovery({
               <h4 className="font-semibold">
                 Practice sample — AI self-checks are unverified
               </h4>
-              <details open>
+              <p className="whitespace-pre-wrap text-sm">
+                {(selected.sample_display || selected.sample).slice(0, 220)}
+                {(selected.sample_display || selected.sample).length > 220
+                  ? "… (preview)"
+                  : ""}
+              </p>
+              <details ref={sampleRef}>
                 <summary>Full sample</summary>
                 <p className="whitespace-pre-wrap break-words text-sm">
                   {selected.sample_display || selected.sample}
@@ -899,6 +992,7 @@ export default function BusinessDiscovery({
           {(selected.state === "sample_ready" ||
             (selected.state === "reviewed" && correcting)) && (
             <form
+              ref={reviewRef}
               onSubmit={(e) => {
                 e.preventDefault();
                 act(async () =>
@@ -1013,7 +1107,7 @@ export default function BusinessDiscovery({
               </button>
               <button
                 className="office-filter"
-                disabled={busy}
+                disabled={busy || selected.guidance?.blocked}
                 onClick={() => stage("revise")}
               >
                 Revise sample using this review
@@ -1050,15 +1144,14 @@ export default function BusinessDiscovery({
           )}
           {selected.state === "needs_review" && (
             <p className="text-amber-300">
-              Generation failed or was interrupted. Nothing is approved. Previous
-              samples and reviews are preserved. Use a revision retry if reviewed
-              practice exists, or create a new research attempt.
+              Generation failed or was interrupted. Previous samples and reviews are
+              preserved. Use the next-step guidance above to check recovery.
             </p>
           )}
           {selected.state === "needs_review" && selected.sample && selected.review && (
             <button
               className="office-filter"
-              disabled={busy}
+              disabled={busy || selected.guidance?.blocked}
               onClick={() => stage("revise")}
             >
               Retry revision using this review

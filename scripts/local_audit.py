@@ -13,6 +13,7 @@ import urllib.error
 import subprocess
 import sys
 import tempfile
+from browser_navigation import SMOKE_FEATURES
 
 ROOT = Path(__file__).resolve().parents[1]
 KNOWN_CHROMA = {
@@ -27,7 +28,7 @@ def main():
     branch = subprocess.check_output(
         ["git", "branch", "--show-current"], cwd=ROOT, text=True
     ).strip()
-    if not branch.startswith("codex/sprint-4-") and branch not in {
+    if not branch.startswith(("codex/sprint-4-", "codex/sprint-5-")) and branch not in {
         "chatgpt/foundation-hardening",
         "main",
         "codex/operating-foundation-sprint",
@@ -117,6 +118,7 @@ def main():
             return ok
 
         run("python-compatibility", [sys.executable, "-m", "pip", "check"])
+        run("code-maintenance", [sys.executable, "scripts/maintain_code.py", "check"])
         docker_ready = run("docker-ready", ["docker", "info"], timeout=30)
         if docker_ready:
             run(
@@ -286,23 +288,7 @@ def main():
                             }
                         )
                         if ready:
-                            for feature in (
-                                "dashboard",
-                                "agile",
-                                "experiments",
-                                "organizational",
-                                "operating",
-                                "review",
-                                "business_discovery",
-                                "people",
-                                "conversation_audio",
-                                "skills",
-                                "artifacts",
-                                "runs",
-                                "workflow_queue",
-                                "knowledge",
-                                "dashboard_design",
-                            ):
+                            for feature in SMOKE_FEATURES:
                                 run(
                                     "browser-" + feature,
                                     [
@@ -334,10 +320,8 @@ def main():
         run(
             "ollama-local-inference",
             [
-                "ollama",
-                "run",
-                "llama3.1",
-                "Synthetic test only. Reply with one short greeting.",
+                sys.executable,
+                str(ROOT / "scripts/local_model_smoke.py"),
             ],
             timeout=180,
         )

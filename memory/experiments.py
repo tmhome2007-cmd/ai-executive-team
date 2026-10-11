@@ -69,7 +69,9 @@ def _date(value, name):
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             raise ValueError()
         return (
-            parsed.astimezone(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+            parsed.astimezone(datetime.timezone.utc)
+            .isoformat(timespec="microseconds")
+            .replace("+00:00", "Z")
         )
     except (ValueError, OverflowError):
         raise ValueError(f"{name} requires an ISO timestamp with timezone") from None
@@ -273,7 +275,7 @@ def record_observation(
         ).fetchone()
         if existing:
             if any(
-                existing[f] != v
+                (_date(existing[f], f) if f == "observed_at" else existing[f]) != v
                 for f, v in [
                     ("observed_at", observed_at),
                     ("value", value),
@@ -366,7 +368,9 @@ def get_experiment(ident):
             return None
         plan = dict(row)
         latest = conn.execute(
-            "SELECT * FROM experiment_observations WHERE experiment_id = ? ORDER BY observed_at DESC, id DESC LIMIT 1",
+            "SELECT * FROM experiment_observations WHERE experiment_id = ? "
+            "ORDER BY substr(observed_at,1,19) DESC, "
+            "CASE WHEN substr(observed_at,20,1)='.' THEN substr(observed_at,21,6) ELSE '000000' END DESC, id DESC LIMIT 1",
             (ident,),
         ).fetchone()
         plan["latest_observation"] = dict(latest) if latest else None
@@ -456,7 +460,9 @@ def list_observations(ident, limit=50, offset=0):
         return [
             dict(r)
             for r in conn.execute(
-                "SELECT * FROM experiment_observations WHERE experiment_id = ? ORDER BY observed_at DESC, id DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM experiment_observations WHERE experiment_id = ? "
+                "ORDER BY substr(observed_at,1,19) DESC, "
+                "CASE WHEN substr(observed_at,20,1)='.' THEN substr(observed_at,21,6) ELSE '000000' END DESC, id DESC LIMIT ? OFFSET ?",
                 (ident, limit, offset),
             )
         ]

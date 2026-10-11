@@ -1,5 +1,7 @@
 """Operations dashboard -> owner API -> disposable SQLite, with browser privacy checks."""
 
+from browser_navigation import open_view
+
 import datetime
 import json
 import os
@@ -131,9 +133,7 @@ def main():
             page.goto(os.environ.get("DASHBOARD_SMOKE_URL", "http://127.0.0.1:3000/"))
             page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
             page.get_by_role("button", name="Confirm", exact=True).click()
-            page.get_by_role("navigation", name="Company views").get_by_role(
-                "button", name="Organizational work", exact=True
-            ).click()
+            open_view(page, "Organizational work")
             page.get_by_role("button", name="Operations", exact=True).click()
             page.get_by_text("Company operating policy", exact=True).wait_for()
             page.get_by_label("Maximum action cost", exact=True).fill("5")

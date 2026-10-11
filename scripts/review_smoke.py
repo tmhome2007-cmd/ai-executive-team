@@ -1,5 +1,7 @@
 """Short-report browser review on disposable records. No live model/company mutations."""
 
+from browser_navigation import open_view
+
 import os
 import sys
 import tempfile
@@ -79,7 +81,7 @@ def main():
             page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
             page.get_by_role("button", name="Confirm", exact=True).click()
             nav = page.get_by_role("navigation", name="Company views")
-            nav.get_by_role("button", name="Decisions", exact=True).click()
+            open_view(page, "Decisions")
             reports = page.locator(
                 'section[aria-label="AI report short review"]:visible'
             )

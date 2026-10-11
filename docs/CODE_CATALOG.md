@@ -525,6 +525,12 @@ Owner classifications and frozen research contexts. Neither verifies demand.
 - `freeze_context`
 - `research_context`
 
+## [memory/business_guidance.py](../memory/business_guidance.py)
+
+Deterministic owner next steps; UI guidance never grants execution authority.
+
+- `guidance`: Read current bindings/source status in the brief's existing read transaction.
+
 ## [memory/business_practice_history.py](../memory/business_practice_history.py)
 
 Append-only practice samples and owner assessments, including legacy imports.
@@ -869,6 +875,7 @@ Safe run summaries and cooperative cancellation; existing ledgers own results.
 - `recover_inspector`: Startup never schedules another run; claims remain inconclusive.
 - `_row`
 - `_elapsed`
+- `_binding_guidance`: Fixed owner-facing messages; never expose approval notes or exception text.
 - `_summary`
 - `get_run`
 - `list_runs`
@@ -935,6 +942,13 @@ Real Chromium downloads and revision diff against a disposable owner API.
 
 - `main`
 
+## [scripts/browser_navigation.py](../scripts/browser_navigation.py)
+
+Shared navigation for production Chromium smokes, including collapsed mobile menus.
+
+- `open_view`: Open a named workspace destination and wait for its actual page heading.
+- `open_business_section`: Select one business section without broad text matching or draft resets.
+
 ## [scripts/business_discovery_smoke.py](../scripts/business_discovery_smoke.py)
 
 Full owner research/practice UI on disposable records and a supplied dashboard URL.
@@ -988,6 +1002,12 @@ Real experiment forms/API/storage checks; no running company API is contacted.
 
 - `main`
 
+## [scripts/feature_smoke.py](../scripts/feature_smoke.py)
+
+Early production-browser checks with isolated data; no live backend or model calls.
+
+- `main`
+
 ## [scripts/generate_voice_samples.py](../scripts/generate_voice_samples.py)
 
 Optional isolated neural runtime; consumes verified local assets and fixed text.
@@ -1005,6 +1025,12 @@ Chromium knowledge navigation over disposable history; no external traffic.
 Disposable local verification. Upstream findings remain visible, never ignored.
 
 - `main`
+
+## [scripts/local_model_smoke.py](../scripts/local_model_smoke.py)
+
+One bounded local greeting; native generate never installs a missing model.
+
+- `greeting`
 
 ## [scripts/maintain_code.py](../scripts/maintain_code.py)
 
@@ -1046,6 +1072,16 @@ Run/replay benchmark prompt versions using synthetic data and local Ollama.
 - `recheck`: Reassess preserved raw answers under today's checker without new inference.
 - `main`
 
+## [scripts/review_demo.py](../scripts/review_demo.py)
+
+Disposable owner review of the current dashboard; no scheduler/model/network work.
+
+- `backend`
+- `launcher`
+- `launch_servers`
+- `serve`
+- `retain_failure`
+
 ## [scripts/review_smoke.py](../scripts/review_smoke.py)
 
 Short-report browser review on disposable records. No live model/company mutations.
@@ -1067,6 +1103,12 @@ Disposable SQLite/FastAPI/Chromium skill review and reuse; no live company API.
 ## [scripts/sprint3_practice_smoke.py](../scripts/sprint3_practice_smoke.py)
 
 Optional real local-model examples on disposable data; never owner acceptance.
+
+- `main`
+
+## [scripts/sprint5_private_examples.py](../scripts/sprint5_private_examples.py)
+
+Tool-free local BE-35 drafts for owner review; no company database writes.
 
 - `main`
 
@@ -1159,6 +1201,12 @@ Disposable owner-controlled discovery; no inference/network or real execution.
 
 - `DiscoveryTests`
 
+## [tests/test_business_guidance.py](../tests/test_business_guidance.py)
+
+Owner next steps reflect current source, assessment and permission gates.
+
+- `GuidanceTests`
+
 ## [tests/test_capabilities.py](../tests/test_capabilities.py)
 
 Synthetic provider probes and real SQLite approval/claim scope gates.
@@ -1250,6 +1298,19 @@ Disposable experiments: evidence, risk enforcement, approval binding and honest 
 - `now`
 - `ExperimentTests`
 
+## [tests/test_local_model_identity.py](../tests/test_local_model_identity.py)
+
+Deterministic identity checks; all daemon responses and inference are synthetic.
+
+- `ResolutionTests`
+- `PrivateIdentityTests`
+
+## [tests/test_local_model_smoke.py](../tests/test_local_model_smoke.py)
+
+The final audit cannot implicitly pull a missing model or follow redirects.
+
+- `LocalModelSmokeTests`
+
 ## [tests/test_local_voice_samples.py](../tests/test_local_voice_samples.py)
 
 Neural audition boundaries; tiny synthetic WAV fixtures, no model inference/network.
@@ -1317,6 +1378,12 @@ Real byte decoding with mocked transport; no external requests.
 - `Response`
 - `ResearchEncodingTests`
 
+## [tests/test_review_demo.py](../tests/test_review_demo.py)
+
+Demo shutdown reaps only its children and clears only its own runtime record.
+
+- `ReviewDemoTests`
+
 ## [tests/test_run_inspector.py](../tests/test_run_inspector.py)
 
 Private stop/continue fencing, cached recovery and metadata privacy.
@@ -1334,6 +1401,33 @@ Fixed rubrics, exact source attribution and representative useful deliverables.
 Combined Sprint 4 privacy and recovery checks using disposable company data.
 
 - `SprintFourIntegrationTests`
+
+## [tests/test_sprint5_acceptance.py](../tests/test_sprint5_acceptance.py)
+
+Full fictional private-work chain; synthetic assessments never imply owner consent.
+
+- `PrivateAcceptanceTests`
+
+## [tests/test_sprint5_private_examples.py](../tests/test_sprint5_private_examples.py)
+
+Private example runs preserve unsuccessful raw drafts and sanitize errors.
+
+- `PrivateExamplesTests`
+
+## [tests/test_sprint5_recovery.py](../tests/test_sprint5_recovery.py)
+
+Combined permission changes, concurrent claims and private recovery guidance.
+
+- `RecoveryTests`
+
+## [tests/test_sprint5_time_regressions.py](../tests/test_sprint5_time_regressions.py)
+
+Fixed-clock calendar and microsecond observation regressions on disposable data.
+
+- `record`
+- `Clock`
+- `CalendarTests`
+- `ObservationTimeTests`
 
 ## [tests/test_sql_injection_guards.py](../tests/test_sql_injection_guards.py)
 
@@ -1586,6 +1680,14 @@ Local CSO drafting of proposed procedures from exact reviewed examples.
 Keep startup reconciliation from changing another live server's claims.
 
 - `database_instance_lock`
+
+## [workflows/local_model_identity.py](../workflows/local_model_identity.py)
+
+Read-only, bounded local Ollama identity resolution; no pull or fallback.
+
+- `NoRedirect`
+- `resolve_model`: Resolve the configured tag using Ollama GET /api/tags only.
+- `assert_identity`: Legacy rows cannot acquire identity retroactively or reuse saved output.
 
 ## [workflows/local_voice_samples.py](../workflows/local_voice_samples.py)
 

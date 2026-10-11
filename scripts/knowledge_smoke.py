@@ -1,5 +1,7 @@
 """Chromium knowledge navigation over disposable history; no external traffic."""
 
+from browser_navigation import open_view
+
 import os
 import sys
 import tempfile
@@ -85,9 +87,7 @@ def main():
                     page.goto(dashboard)
                     page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
                     page.get_by_role("button", name="Confirm", exact=True).click()
-                    page.get_by_role("navigation", name="Company views").get_by_role(
-                        "button", name="Company knowledge", exact=True
-                    ).click()
+                    open_view(page, "Company knowledge")
                     panel = page.get_by_role(
                         "region", name="Company knowledge", exact=True
                     )

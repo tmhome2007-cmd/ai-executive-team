@@ -1,0 +1,40 @@
+{
+  "implementation_commit": "30ba9668d5aabc7487e3b64e70878fc7511956ea",
+  "backend_tests": 63,
+  "production_checks": [
+    {
+      "check": "production-build",
+      "status": "PASS"
+    },
+    {
+      "check": "runs",
+      "status": "PASS"
+    },
+    {
+      "check": "business_discovery",
+      "status": "PASS"
+    }
+  ],
+  "private_report": "audit-results/be37-2dcb2c77d08c48419a26f7e8f0bfe046",
+  "failed_browser_report": "audit-results/be37-32cbfd5514e64f8da311ab7aeb1e0e8d",
+  "local_read_only_resolution": {
+    "tag": "llama3.1:latest",
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+    "generation": false
+  },
+  "source_hashes": {
+    "workflows/local_model_identity.py": "cbb0c91531012f25b72106092984540daee15568e19a2de4628543b1da958ac0",
+    "workflows/business_discovery.py": "fb3614284a2f5abf17c44ec31c4a45c704178f43a01ce207b91be266d3a1d8b6",
+    "memory/run_inspector.py": "5bf31b62141f1811a5cf868bdb62974884c83f995f910136e82437a39a743e06",
+    "executive-dashboard/app/components/run-inspector.tsx": "e6008172547fa779103499a6128e3d016b0d3884d381d9b809a828c70c842181",
+    "tests/test_local_model_identity.py": "80422642163ae7ed9b6dd0a238f4c5a9e8c254a3eb6aeb398772689dc481e282",
+    "scripts/runs_smoke.py": "457de90136cf1b75ec8ad314758105355eebe91d39cd6c385ebeca298909b17c",
+    "scripts/business_discovery_smoke.py": "81d896a5e2a2b01bc284a8c2b623c3fcf621cf80a8ebec743ebbe63b4ba5651c"
+  },
+  "scope": "Synthetic backend/browser verification plus separate real metadata-only local lookup. No owner acceptance, merge or complete audit claim.",
+  "limitations": [
+    "Recorded manifest identity and selected settings do not guarantee deterministic output.",
+    "Tag registry is not locked; changes restored between observations are not detectable.",
+    "Unspecified SDK/server defaults remain unspecified."
+  ]
+}

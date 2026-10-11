@@ -314,17 +314,54 @@ def main(argv=None):
             "voices",
             "format",
             "check-code",
+            "check-ui",
             "quality",
+            "review",
             "help",
         ],
     )
     args, extra = parser.parse_known_args(argv)
-    if extra and args.command != "quality":
+    if extra and args.command not in {"quality", "check-ui", "review"}:
         parser.error("Unexpected arguments")
     if args.command == "help":
         parser.print_help()
         return 0
     try:
+        if args.command == "review":
+            if extra == ["--demo"]:
+                return subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/review_demo.py")], cwd=ROOT
+                ).returncode
+            if extra == ["--check"]:
+                return subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "unittest",
+                        "tests.test_sprint5_acceptance",
+                        "-v",
+                    ],
+                    cwd=ROOT,
+                    env={
+                        **os.environ,
+                        "CREWAI_STORAGE_DIR": str(
+                            ROOT / "audit-results" / "review-check-crewai"
+                        ),
+                        "CREWAI_DISABLE_TELEMETRY": "true",
+                        "CREWAI_TRACING_ENABLED": "false",
+                    },
+                ).returncode
+            if extra:
+                raise RuntimeError(
+                    "Use ./company review, ./company review --demo or ./company review --check"
+                )
+            print((ROOT / "COMPANY_REVIEW_GUIDE.md").read_text())
+            return 0
+        if args.command == "check-ui":
+            return subprocess.run(
+                [sys.executable, str(ROOT / "scripts/feature_smoke.py"), *extra],
+                cwd=ROOT,
+            ).returncode
         if args.command in {"format", "check-code"}:
             return subprocess.run(
                 [

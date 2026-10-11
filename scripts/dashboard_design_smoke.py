@@ -1,5 +1,7 @@
 """Visual and navigation regression check with disposable company records."""
 
+from browser_navigation import open_business_section, open_view
+
 import os
 import sys
 import tempfile
@@ -25,7 +27,11 @@ def main():
         from config import config
         from main import app
         from fastapi.testclient import TestClient
-        from playwright.sync_api import sync_playwright, expect
+        from playwright.sync_api import (
+            sync_playwright,
+            expect,
+            TimeoutError as BrowserTimeout,
+        )
 
         f = CompanyKnowledgeTests()
         f.setUp()
@@ -100,7 +106,7 @@ def main():
                     assert page.get_by_role(
                         "button", name="Sandbox mode", exact=True
                     ).count()
-                    nav.get_by_role("button", name="Virtual office", exact=True).click()
+                    open_view(page, "Virtual office")
                     room = page.get_by_role(
                         "region", name="3D executive floor", exact=True
                     )
@@ -222,39 +228,59 @@ def main():
                     ).wait_for()
                     page.set_viewport_size({"width": 1440, "height": 1000})
                     names = [b.inner_text() for b in nav.get_by_role("button").all()]
+                    open_view(page, "Overview")
+                    page.evaluate("""() => {
+                        window.navigationRegression = event => {
+                            if (event.target.closest('button')?.textContent.trim() === 'Company knowledge') {
+                                event.preventDefault(); event.stopImmediatePropagation();
+                            }
+                        };
+                        document.querySelector('nav[aria-label="Company views"]').addEventListener('click', window.navigationRegression, true);
+                    }""")
+                    page.set_default_timeout(1000)
+                    try:
+                        open_view(page, "Company knowledge")
+                    except BrowserTimeout:
+                        print(
+                            "PASS navigation check detects a deliberately blocked destination"
+                        )
+                    else:
+                        raise AssertionError(
+                            "Navigation regression escaped the destination check"
+                        )
+                    finally:
+                        page.set_default_timeout(15000)
+                        page.evaluate(
+                            "document.querySelector('nav[aria-label=\"Company views\"]').removeEventListener('click', window.navigationRegression, true)"
+                        )
+                    open_view(page, "Company knowledge")
                     for name in names:
-                        nav.get_by_role("button", name=name, exact=True).click()
+                        open_view(page, name)
                         page.get_by_role(
                             "heading", level=1, name=name, exact=True
                         ).wait_for()
                         assert page.evaluate(
                             "document.documentElement.scrollWidth <= window.innerWidth"
                         ), name
-                    nav.get_by_role(
-                        "button", name="Business research", exact=True
-                    ).click()
+                    open_view(page, "Business research")
                     tabs = page.get_by_role(
                         "navigation", name="Business research sections", exact=True
                     )
                     page.get_by_label("Research title", exact=True).fill(
                         "Private draft retained while navigating"
                     )
-                    tabs.get_by_role(
-                        "button", name="Executive skills", exact=True
-                    ).click()
+                    open_business_section(page, "Executive skills")
                     page.get_by_role(
                         "region", name="Executive skill library", exact=True
                     ).wait_for()
                     assert not page.get_by_label(
                         "Research title", exact=True
                     ).is_visible()
-                    tabs.get_by_role("button", name="Run inspector", exact=True).click()
+                    open_business_section(page, "Run inspector")
                     page.get_by_role(
                         "region", name="Run inspector", exact=True
                     ).wait_for()
-                    tabs.get_by_role(
-                        "button", name="Research & practice", exact=True
-                    ).click()
+                    open_business_section(page, "Research & practice")
                     assert (
                         page.get_by_label("Research title", exact=True).input_value()
                         == "Private draft retained while navigating"
@@ -267,9 +293,7 @@ def main():
                         "knowledge"
                     )
                     assert nav.get_by_role("button").count() == 1
-                    nav.get_by_role(
-                        "button", name="Company knowledge", exact=True
-                    ).click()
+                    open_view(page, "Company knowledge")
                     assert (
                         page.get_by_label(
                             "Find a company view", exact=True
@@ -278,6 +302,14 @@ def main():
                     )
                     page.set_viewport_size({"width": 390, "height": 844})
                     assert not nav.is_visible()
+                    for name in names:
+                        open_view(page, name)
+                        assert (
+                            not nav.is_visible()
+                        ), "Mobile menu did not close after navigation"
+                        assert page.evaluate(
+                            "document.documentElement.scrollWidth <= innerWidth"
+                        ), name
                     menu = page.get_by_role(
                         "button", name="Toggle company navigation", exact=True
                     )
@@ -286,7 +318,7 @@ def main():
                     page.keyboard.press("Escape")
                     assert not nav.is_visible()
                     menu.click()
-                    nav.get_by_role("button", name="Overview", exact=True).click()
+                    open_view(page, "Overview")
                     assert not nav.is_visible()
                     page.get_by_role(
                         "heading", name="Overview", level=1, exact=True
