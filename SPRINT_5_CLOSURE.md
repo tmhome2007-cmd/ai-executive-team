@@ -27,6 +27,12 @@ The old planning-only PR #49 was rejected for merging because it omitted the
 implementation. PR #50 contains that plan plus all completed work; #49 is closed
 as superseded. No branch protections, security checks or failed evidence were removed.
 
+GitHub Actions [run 38156630709](https://github.com/tmhome2007-cmd/ai-executive-team/actions/runs/38156630709)
+confirmed passing backend unit tests, live Docker isolation, foundation verification,
+Bandit and the complete frontend job. Only Audit Python dependencies failed:
+Chroma 1.5.9 reports PYSEC-2026-311, PYSEC-2026-3813, PYSEC-2026-3814 and
+PYSEC-2026-3815, with no fix versions reported. The CI run is therefore not green.
+
 Four known unpatched Chroma advisories remain visible, so development acceptance
 and merge do not create a clean security release gate or production clearance.
 Narrow model scores and synthetic tests retain their documented limitations.

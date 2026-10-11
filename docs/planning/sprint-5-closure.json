@@ -56,5 +56,22 @@
   "security_release_gate": "Open: four known unpatched Chroma advisories",
   "claude_feedback": "Not yet provided; apply verified findings as subsequent work",
   "original_folder": "Preserved; consolidation not performed",
-  "runtime_board_records": "Unchanged; this records repository Development story statuses without changing any company database"
+  "runtime_board_records": "Unchanged; this records repository Development story statuses without changing any company database",
+  "github_ci": {
+    "run_id": 38156630709,
+    "url": "https://github.com/tmhome2007-cmd/ai-executive-team/actions/runs/38156630709",
+    "frontend": "success",
+    "backend_unit_tests": "success",
+    "live_docker": "success",
+    "foundation": "success",
+    "bandit": "success",
+    "python_dependency_audit": "failure",
+    "known_unpatched_advisories": [
+      "PYSEC-2026-311",
+      "PYSEC-2026-3813",
+      "PYSEC-2026-3814",
+      "PYSEC-2026-3815"
+    ],
+    "overall": "failure; known upstream findings retained"
+  }
 }
