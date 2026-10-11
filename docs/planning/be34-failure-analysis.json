@@ -1,0 +1,120 @@
+{
+  "analysis_date": "2026-10-11",
+  "implementation_base": "269a92a6b59f70c5df8f370e654c798621300dc7",
+  "dataset_hash": "72c0a869416206751c1e4990c39e2507ceb9e7a4bd064167bc0b677865aee6cc",
+  "checker_hash": "5d3360ce26f9e52d8da1b24c87c1efdecc22c963f65717ffb3d6fa3d5a17e426",
+  "prompt_hash": "e06630a8f1267767021d59a0b053c1564661807e9f93a38beee8333000cf8165",
+  "rubric_version": "fictional-json-contract-v1",
+  "model": {
+    "name": "llama3.1:latest",
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e"
+  },
+  "original_runs": [
+    {
+      "run_id": "b16c7015c1c24a24a757373993fd184d",
+      "report_sha256": "675b5a7aed0978701f47f69c65346c6cbbaa90011e97bbb8eeba996e7d7b956f",
+      "original_checker_hash": "9e1c5e14157ab56ba8e1a7af689ce9ef05911e81edcc3789c40e71cb7a367495",
+      "summary": {
+        "passed": 0,
+        "failed": 30,
+        "errors": 0,
+        "incomplete": 0,
+        "denominator": 30
+      }
+    },
+    {
+      "run_id": "0fe17de9c00842c4afc7912a23cf3528",
+      "report_sha256": "8f7d62b86f13af11b13b3f938f44636d5699673adc871718db17a655be645b23",
+      "original_checker_hash": "9e1c5e14157ab56ba8e1a7af689ce9ef05911e81edcc3789c40e71cb7a367495",
+      "summary": {
+        "passed": 24,
+        "failed": 6,
+        "errors": 0,
+        "incomplete": 0,
+        "denominator": 30
+      }
+    }
+  ],
+  "rechecked_run_ids": [
+    "d9d06f4a423c4780bd18aa380026ff0a",
+    "318536c64e414dd18ed5b745658fb2f5"
+  ],
+  "comparison": {
+    "left": {
+      "passed": 0,
+      "failed": 30,
+      "errors": 0,
+      "incomplete": 0,
+      "denominator": 30
+    },
+    "right": {
+      "passed": 24,
+      "failed": 6,
+      "errors": 0,
+      "incomplete": 0,
+      "denominator": 30
+    },
+    "prompt_changed": false,
+    "model_changed": false,
+    "configuration_changed": true,
+    "limit": "Automated contract measurements only; no competence or business claim"
+  },
+  "failures": [
+    {
+      "attempt": 1,
+      "fixture": "task-results",
+      "repeat": 1,
+      "errors": [
+        "Supplied fact not covered: four passed"
+      ],
+      "classification": "literal_phrase_mismatch"
+    },
+    {
+      "attempt": 2,
+      "fixture": "task-results",
+      "repeat": 2,
+      "errors": [
+        "Supplied fact not covered: four passed"
+      ],
+      "classification": "literal_phrase_mismatch"
+    },
+    {
+      "attempt": 3,
+      "fixture": "task-results",
+      "repeat": 3,
+      "errors": [
+        "Supplied fact not covered: four passed"
+      ],
+      "classification": "literal_phrase_mismatch"
+    },
+    {
+      "attempt": 7,
+      "fixture": "support-draft",
+      "repeat": 1,
+      "errors": [
+        "Supplied fact not covered: 14 days"
+      ],
+      "classification": "policy_echo_displaces_supplied_fact"
+    },
+    {
+      "attempt": 8,
+      "fixture": "support-draft",
+      "repeat": 2,
+      "errors": [
+        "Supplied fact not covered: 14 days"
+      ],
+      "classification": "policy_echo_displaces_supplied_fact"
+    },
+    {
+      "attempt": 9,
+      "fixture": "support-draft",
+      "repeat": 3,
+      "errors": [
+        "Supplied fact not covered: 14 days"
+      ],
+      "classification": "policy_echo_displaces_supplied_fact"
+    }
+  ],
+  "fresh_generation": "not run: loopback Ollama unavailable (URLError)",
+  "limit": "Reassessment of retained raw outputs, not independent generation or semantic acceptance. Original checker unchanged."
+}
