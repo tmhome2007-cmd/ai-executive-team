@@ -85,7 +85,9 @@ def prune_generated_artifacts(*, now: float | None = None) -> dict:
     from memory.practice_artifacts import prune_artifacts
 
     artifacts_deleted = prune_artifacts(now=current)
+    structured_deleted = prune_structured_decisions(cutoff)
     return {
+        "structured_decisions": structured_deleted,
         "conversation_audio": audio_deleted,
         "practice_artifacts": artifacts_deleted,
         "logs": _prune_directory(
@@ -102,3 +104,25 @@ def prune_generated_artifacts(*, now: float | None = None) -> dict:
             config.SYNC_EXPORT_DIR, lambda name: name in names, cutoff
         ),
     }
+
+
+def prune_structured_decisions(cutoff):
+    """Expire generated decision bytes, preserving non-sensitive provenance."""
+    root = Path(config.WORKSPACE_ROOT).absolute() / "structured-decisions"
+    if os.path.realpath(root) != str(root) or not root.is_dir():
+        return 0
+    deleted = 0
+    for child in root.iterdir():
+        if (
+            re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", child.name)
+            and child.is_dir()
+            and not child.is_symlink()
+        ):
+            deleted += _prune_directory(
+                str(child),
+                lambda name: name != "provenance.json"
+                and re.fullmatch(r"(?:input|brief|[a-z_]+-[12])\.json", name)
+                is not None,
+                cutoff,
+            )
+    return deleted

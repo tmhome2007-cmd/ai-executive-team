@@ -5,6 +5,40 @@ from workflows.output_quality import assess_output, verify_source_quotes
 
 
 class OutputQualityTests(unittest.TestCase):
+    def test_arbitrary_labels_and_explicit_contract_are_checked(self):
+        self.assertTrue(
+            assess_output("The pickup window is unknown.", "Pickup window: Tuesday")
+        )
+        self.assertTrue(
+            assess_output(
+                "The tray count is not supplied.", known_fields={"tray count": 16}
+            )
+        )
+        self.assertEqual(
+            assess_output("The pickup window is unknown.", "Pickup window: unknown"), []
+        )
+        self.assertEqual(
+            assess_output("The builder is unknown.", known_fields={"build": "v2"}), []
+        )
+
+    def test_quotes_fail_closed_on_fabricated_reference_or_quote(self):
+        from workflows.output_quality import verify_evidence_quotes
+
+        sources = {"r1": "The ledger reports sixteen sealed trays."}
+        good = [{"source_id": "r1", "quote": "sixteen sealed trays"}]
+        self.assertEqual(verify_evidence_quotes(good, sources), [])
+        self.assertTrue(
+            verify_evidence_quotes([{**good[0], "source_id": "r2"}], sources)
+        )
+        self.assertTrue(
+            verify_evidence_quotes(
+                [{**good[0], "quote": "twenty sealed trays"}], sources
+            )
+        )
+        self.assertTrue(
+            verify_evidence_quotes([{**good[0], "quote": "trays"}], sources)
+        )
+
     def test_supplied_details_are_not_missing(self):
         evidence = "Build: fixture-v2\nReminder due time: 12:02 UTC\nObservation channel: fixture event log"
         warnings = assess_output(

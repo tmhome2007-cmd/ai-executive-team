@@ -122,3 +122,9 @@ Use `./company test` for backend regressions. It discovers only tests/, override
 `verify_system.py` remains the separate foundation checker and `./company audit` remains the complete integration/security/browser check. Frontend `npm test` and vendor self-tests stay in their package directories. Opt-in examples now live under scripts/manual_checks/; see its README. They are not automatically run.
 
 Decision preparation now follows dashboard → api/decisions.py → workflows/decision_preparation.py → memory/database.py. main.py binds explicit callbacks per request, so owner auth and existing patch seams remain stable. The workflow has no application import and grants no execution/access authority.
+
+## Sprint 6 evaluation and source lookup
+
+Use `.venv/bin/python scripts/evaluation_protocol.py` to verify the frozen fictional split without inference. Read [the protocol](../BE47_EVALUATION_PROTOCOL.md) before running an evaluation. The structured strategy option preserves individual proposals and objections; generated quotes pass membership checks, while semantic and owner usefulness review remain separate.
+
+Refresh the compact catalog with `.venv/bin/python scripts/code_catalog.py`; verify it with `--check`, or print a scoped index with `--scope backend`, `--scope frontend` or `--scope tests`. Individual symbol lookup uses `rg`. Closed sprint narratives are in [the archive](archive/sprints/README.md); compatibility links preserve old paths.

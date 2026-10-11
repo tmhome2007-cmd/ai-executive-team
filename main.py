@@ -469,6 +469,7 @@ class DailyResearchResponse(BaseModel):
 
 
 class DecisionRequest(BaseModel):
+    output_mode: Literal["legacy", "structured"] = "legacy"
     source_ids: list[int] = Field(default_factory=list, max_length=20)
     workflow_run_id: Optional[str] = Field(
         default=None, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9:_-]+$"
@@ -983,31 +984,48 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             + registered_context
         )
     try:
-        meeting_result = run_executive_meeting(
-            topic=request.topic,
-            workflow_run_id=workflow_run_id,
-            task_description=meeting_task,
-            agent_keys=resolved_agent_keys,
-            # Decision meetings are reasoning-only. Tool-capable agents belong
-            # in the separate preparation/execution phase after human approval.
-            agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
-            memory_context={
-                "enabled": True,
-                "goal_id": request.goal_id,
-                "limit": 5,
-            },
-            meeting_type=request.meeting_type,
-        )
+        if request.output_mode == "structured":
+            if request.meeting_type != "strategy":
+                raise ValueError(
+                    "Structured output currently supports strategy meetings only"
+                )
+            from workflows.structured_decision import run_structured_decision
+
+            meeting_result = run_structured_decision(
+                question=meeting_task,
+                agent_keys=resolved_agent_keys,
+                agents=EXECUTIVE_AGENTS_NO_TOOLS,
+                model=config.OLLAMA_MODEL,
+                base_url=config.OLLAMA_BASE_URL,
+            )
+        else:
+            meeting_result = run_executive_meeting(
+                topic=request.topic,
+                workflow_run_id=workflow_run_id,
+                task_description=meeting_task,
+                agent_keys=resolved_agent_keys,
+                # Decision meetings are reasoning-only. Tool-capable agents belong
+                # in the separate preparation/execution phase after human approval.
+                agents_source=EXECUTIVE_AGENTS_NO_TOOLS,
+                memory_context={
+                    "enabled": True,
+                    "goal_id": request.goal_id,
+                    "limit": 5,
+                },
+                meeting_type=request.meeting_type,
+            )
     except ValueError as e:
+        logger.warning("decision_generation_rejected error_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid meeting request: {e}",
-        )
+            detail="Decision generation was rejected. Check the meeting inputs and retained local samples.",
+        ) from None
     except Exception as e:
+        logger.warning("decision_generation_failed error_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=502,
-            detail=f"Meeting execution failed: {e}",
-        )
+            detail="Decision generation failed. Check the local model and retained samples, then retry.",
+        ) from None
 
     final_decision = meeting_result.get("final_decision", "")
     participants = meeting_result.get("participants", [])
@@ -1031,8 +1049,8 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         message = f"📌 <b>Ad-Hoc Decision Triggered</b>\n\n<b>Topic:</b> {escape_html(request.topic)}\n\n<b>Decision Snippet:</b>\n{escape_html(snippet)}..."
         send_notification(message)
     except Exception as notify_err:
-        print(
-            f"Waarschuwing: Telegram notificatie kon niet worden verzonden: {notify_err}"
+        logger.warning(
+            "decision_notification_failed error_type=%s", type(notify_err).__name__
         )
 
     return DecisionResponse(

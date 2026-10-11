@@ -9,8 +9,10 @@
 | BE-45 | Review | Thin authenticated router and preparation workflow methods. [Review](../../BE45_DECISION_PREPARATION.md). |
 | BE-46 | Review | Safe executor failure events, fault injection and active worker limits. [Review](../../BE46_EXECUTOR_OBSERVABILITY.md). |
 | BE-47 | Review | Eight development and eight held-out cases, hashed rubric/baseline/settings; six integrity tests passed. [Protocol](../../BE47_EVALUATION_PROTOCOL.md). No model outputs yet. |
-| BE-48 | Backlog; next | General evidence checks developed only on the development split. |
-| BE-49–51 | Backlog | Structured meeting path, dissent brief and documentation. |
+| BE-48 | Review | General labels/contracts and quotation membership. [Review](../../BE48_EVIDENCE_CHECKS.md). |
+| BE-49 | Review; evaluation running | Local typed strategy path, retained failures and source validation. [Review](../../BE49_STRUCTURED_STRATEGY.md). |
+| BE-50 | Review | Attributed proposals/objections and production-browser review passed. [Review](../../BE50_ATTRIBUTED_BRIEF.md). |
+| BE-51 | Review | Eight archived narratives and compact reproducible catalog. [Review](../../BE51_DOCUMENTATION_CLEANUP.md). |
 | BE-52 | Backlog | Owner supplied a private brief and follow-up; input recorded locally. Evaluation awaits BE-47–50. [Input metadata](be52-input-status.json). |
 | BE-53–54 | Backlog | Final selected-scope audit, owner review and authorized merge still pending. |
 

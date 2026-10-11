@@ -41,6 +41,39 @@ def main():
             ),
         ]
         ids = []
+        from workflows.structured_decision import Contribution, render_brief
+
+        contribution = dict(
+            facts=[
+                dict(source_id="fixture", quote="The ledger has conflicting counts.")
+            ],
+            unknowns=["The correct count is unknown."],
+            assumptions=[],
+            recommendation="Compare the two records privately.",
+            objections=["The original ledger may be unavailable."],
+            success="One discrepancy recorded.",
+            stop="Stop without the ledger.",
+            pivotal_fact="Whether the original ledger is available.",
+            next_owner_decision="Choose a private review.",
+            effort_minutes=20,
+        )
+        cases.extend(
+            [
+                (
+                    "Structured disagreement",
+                    render_brief(
+                        {
+                            "cfo": Contribution(**contribution),
+                            "ceo": Contribution(**{**contribution, "objections": []}),
+                        }
+                    ),
+                ),
+                (
+                    "Incomplete structured draft",
+                    "Findings\nRecommended proposal (CEO): Private review only.",
+                ),
+            ]
+        )
         for title, text in cases:
             ids.append(
                 log_decision(
@@ -87,6 +120,18 @@ def main():
             )
             reports.first.wait_for()
             assert reports.count() == 4
+            briefs = page.locator(
+                'section[aria-label="Structured decision brief"]:visible'
+            )
+            assert briefs.count() == 2
+            page.get_by_text(
+                "CFO objection: The original ledger may be unavailable.", exact=True
+            ).wait_for()
+            briefs.get_by_text(
+                "The brief is incomplete. Review the available text before making a decision.",
+                exact=True,
+            ).wait_for()
+            page.get_by_label("Structured private brief", exact=False).check()
             page.get_by_text("Read the failed check log.", exact=True).wait_for()
             page.get_by_text("Original due time missing.", exact=True).wait_for()
             legacy = reports.filter(

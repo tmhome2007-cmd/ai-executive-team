@@ -1,7 +1,11 @@
 /** Compact report excerpts with access to full text; excerpts do not verify claims. */
 "use client";
 import { reviewSummary } from "../lib/review-summary";
+import DecisionBrief from "./decision-brief";
 export default function AiReport({ text }: { text: string }) {
+  if (text.startsWith("Findings\nRecommended proposal (")) {
+    return <DecisionBrief text={text} />;
+  }
   const report = reviewSummary(text);
   const sections = [
     [

@@ -1668,6 +1668,7 @@ export default function DashboardPage() {
   // --- Ad-hoc decision form state ---
   const [topic, setTopic] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
+  const [structuredDecision, setStructuredDecision] = useState(false);
   const [selectedAgents, setSelectedAgents] = useState<string[]>(["cso", "cfo", "ceo"]);
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [selectedMeetingType, setSelectedMeetingType] = useState("strategy");
@@ -1710,6 +1711,10 @@ export default function DashboardPage() {
         body: JSON.stringify({
           topic,
           task_description: taskDescription,
+          output_mode:
+            structuredDecision && selectedMeetingType === "strategy"
+              ? "structured"
+              : "legacy",
           meeting_type: selectedMeetingType,
           agent_keys: selectedAgents,
           goal_id: selectedGoalId ? Number(selectedGoalId) : null,
@@ -3115,6 +3120,17 @@ export default function DashboardPage() {
                   placeholder="Provide a detailed explanation of the situation and question..."
                   className="w-full rounded-md border border-gray-700 bg-gray-800 text-gray-100 p-2 placeholder-gray-500"
                 />
+                {selectedMeetingType === "strategy" && (
+                  <label className="flex items-center gap-2 text-sm text-gray-300 mt-3">
+                    <input
+                      type="checkbox"
+                      checked={structuredDecision}
+                      onChange={(event) => setStructuredDecision(event.target.checked)}
+                    />
+                    Structured private brief (up to four roles; preserves proposals and
+                    objections)
+                  </label>
+                )}
               </div>
 
               <div>

@@ -49,7 +49,7 @@
     "acceptance_criteria": "Replace scenario field-name assumptions in the shared checker with explicit evidence contracts and source-linked checks. Develop changes against the development split; use held-out results only for declared final assessment. Version the new rubric/checker separately; preserve original 24/30 and 30/30 fixtures and raw reports. Add false-positive and false-negative cases; changed measurements must not be presented as directly comparable scores.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-49 · Use structured output in one meeting path",
@@ -57,7 +57,7 @@
     "acceptance_criteria": "Adopt schema-constrained typed output for one representative existing meeting/decision path, including source-backed claims, unknowns, role positions and disagreement. Verify supported local provider behavior and fail closed on invalid output, fabricated references or unavailable schema support. Bound repair attempts, preserve failed samples and legacy reads. Grounding checks, owner approvals and personalities remain intact. Compare against the declared baseline with fixed inputs/settings and a separately labelled new schema prompt.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-50 · Preserve disagreement in the decision brief",
@@ -65,7 +65,7 @@
     "acceptance_criteria": "Render a concise one-page brief from actual role contributions: recommendation, supporting roles, objections, evidence, unknowns and next owner decision. Conflicting inputs retain attribution and unresolved disagreement; unanimous inputs do not gain fabricated dissent. Verify storage/API and affected dashboard behavior, including empty and error states. Ask the owner to judge whether the brief is understandable and useful.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-51 · Simplify documentation and the code catalog",
@@ -73,7 +73,7 @@
     "acceptance_criteria": "Archive closed sprint narratives with a closure index and working links. Keep active setup, authority/privacy contracts, fixtures and verification manifests at required operational paths. Make the generated catalog compact and reproducible with scoped refresh/check commands. Verify links and generation without editing immutable audit evidence or erasing failures; retain the existing generated-artifact retention policy.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-52 · Evaluate one real project decision",

@@ -2,7 +2,7 @@
 
 import re
 
-POLICY_VERSION = 2
+POLICY_VERSION = 3
 QUALITY_POLICY = """AI output quality policy:
 Write for a busy owner: keep each section to at most three concise bullets unless the task
 requires a longer exact source quotation or safety prerequisite. Avoid repeating the same point.
@@ -21,7 +21,34 @@ an observable next step, missing prerequisites and the separate owner approval b
 """
 
 
-def assess_output(body, evidence=""):
+def evidence_fields(evidence):
+    """Extract explicitly labelled records without scenario-specific field names."""
+    return {
+        label.strip().lower(): value.strip()
+        for label, value in re.findall(r"(?m)^([^\n:]{2,80}):\s*([^\n]+)", evidence)
+        if not re.search(
+            r"\b(?:unknown|missing|not supplied|not provided)\b", value, re.I
+        )
+    }
+
+
+def verify_evidence_quotes(claims, sources):
+    """Check exact quote membership and source IDs; not semantic interpretation."""
+    errors = []
+    normalize = lambda text: " ".join(text.split())
+    for claim in claims:
+        source_id, quote = claim.get("source_id"), claim.get("quote")
+        if (
+            source_id not in sources
+            or not isinstance(quote, str)
+            or len(quote.strip()) < 8
+            or normalize(quote) not in normalize(sources[source_id])
+        ):
+            errors.append("Missing or invalid evidence quotation")
+    return list(dict.fromkeys(errors))
+
+
+def assess_output(body, evidence="", known_fields=None):
     warnings = []
     if not isinstance(body, str) or not body.strip():
         return ["Empty AI output"]
@@ -48,20 +75,15 @@ def assess_output(body, evidence=""):
             warnings.append(
                 "Causal/component-health conclusion requires independent evidence"
             )
-    # Detect explicit contradictions for the fixture and labelled source records.
-    fields = (
-        "original reproduction steps",
-        "reminder due time",
-        "build",
-        "observation channel",
-    )
-    for field in fields:
-        supplied = re.search(re.escape(field) + r"\s*:\s*([^\n.]+)", evidence, re.I)
-        if supplied and not re.search(
-            r"\b(?:unknown|missing|not supplied|not provided)\b", supplied[1], re.I
+    # Labels come from supplied records or an explicit caller evidence contract.
+    for field, value in (
+        known_fields if known_fields is not None else evidence_fields(evidence)
+    ).items():
+        if value and not re.search(
+            r"\b(?:unknown|missing|not supplied|not provided)\b", str(value), re.I
         ):
             if any(
-                field in sentence.lower()
+                re.search(r"\b" + re.escape(field) + r"\b", sentence, re.I)
                 and re.search(
                     r"\b(?:unknown|not explicitly stated|not supplied|not provided|does not (?:provide|specify|include))\b",
                     sentence,
