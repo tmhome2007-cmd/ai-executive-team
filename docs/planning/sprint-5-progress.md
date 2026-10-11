@@ -53,3 +53,14 @@ navigation mutation proof are retained. See [BE-37 evidence](../../BE37_EARLY_CH
 
 Next independent implementation: BE-38 interruption/permission-change guidance.
 Owner usefulness reviews and merges remain pending; none are inferred from “next”.
+
+BE-38: Implemented for review, not Done or merged. Run metadata now returns fixed
+recovery codes and explicit next steps, with sanitized binding failures. Stale
+controls refresh eligibility. Combined permission changes block both stale claims
+and inflight publication while preserving history; concurrent claims have one
+winner. Actual checks: 25 targeted backend tests and 4/4 production stages
+(build, runs, skills, artifacts). Failed evidence is retained. See
+[BE-38 recovery evidence](../../BE38_RECOVERY_GUIDANCE.md).
+
+Next independent implementation: BE-39 local model identity. Useful-work owner
+acceptance, implementation PRs, merges and the full audit remain pending.
