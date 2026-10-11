@@ -9,6 +9,37 @@ from scripts import company_cli as cli
 
 
 class CompanyCliTests(unittest.TestCase):
+    def test_review_commands_do_not_load_or_replace_company_credentials(self):
+        for options in ([], ["--demo"], ["--check"]):
+            with (
+                self.subTest(options=options),
+                patch.object(cli, "environment") as environment,
+                patch.object(
+                    cli.subprocess, "run", return_value=Mock(returncode=0)
+                ) as run,
+                contextlib.redirect_stdout(io.StringIO()) as output,
+                patch.dict("os.environ", {"API_SECRET_KEY": "existing-private-key"}),
+            ):
+                self.assertEqual(cli.main(["review", *options]), 0)
+                environment.assert_not_called()
+                self.assertNotIn("existing-private-key", output.getvalue())
+                if options == ["--demo"]:
+                    self.assertEqual(
+                        run.call_args.args[0][-1],
+                        str(cli.ROOT / "scripts/review_demo.py"),
+                    )
+                elif options == ["--check"]:
+                    self.assertIn(
+                        "tests.test_sprint5_acceptance", run.call_args.args[0]
+                    )
+                    self.assertEqual(
+                        run.call_args.kwargs["env"]["API_SECRET_KEY"],
+                        "existing-private-key",
+                    )
+                else:
+                    run.assert_not_called()
+                    self.assertIn("exactly where to go", output.getvalue())
+
     def test_early_browser_dispatch_never_loads_company_environment(self):
         with (
             patch.object(cli, "environment") as environment,

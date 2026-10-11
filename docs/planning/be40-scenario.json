@@ -1,0 +1,21 @@
+{
+  "fictional": true,
+  "assessment_scope": "Synthetic test assessments, never recorded as actual owner usefulness acceptance.",
+  "title": "Fictional task app — private clarity exercise",
+  "constraints": "Private text only. No tools, publishing, customer contact, spending or generated code execution.",
+  "audience": "A beginner reading about a fictional task app",
+  "service_key": "documentation",
+  "deliverable_kind": "other_text",
+  "facts": [
+    "Fictional app alpha supports creating a task. Interface controls and reminders are unknown.",
+    "Fictional app beta supports editing a task. Interface controls and reminders are unknown.",
+    "Fictional app gamma supports completing a task. Interface controls and reminders are unknown."
+  ],
+  "exercise": "Write a short private explanation of the supplied task function. Preserve supplied facts and explicitly label interface controls and reminders unknown. Do not invent controls or claim any action happened.",
+  "checks": ["Preserves facts", "Labels unknowns"],
+  "first_draft": "Fictional app alpha supports creating a task. A beginner can use the create function to record a task. Unknown details remain to be clarified; this is private practice only, and no task has actually been created or tested.",
+  "first_results": [true, false],
+  "feedback": "Synthetic reviewer: the function is preserved, but 'unknown details' is too vague. Explicitly identify interface controls and reminders as unknown. This is test feedback, not owner acceptance.",
+  "revised_draft": "Fictional app alpha supports creating a task. Use that supplied create function to record the task text. Interface controls and reminder functionality are unknown; ask for those exact details before writing interface instructions. No task has actually been created or tested; this is private practice only.",
+  "revised_results": [true, true]
+}
