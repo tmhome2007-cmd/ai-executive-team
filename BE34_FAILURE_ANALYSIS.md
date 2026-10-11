@@ -1,5 +1,10 @@
 # BE-34 — retained quality baseline and failure analysis
 
+Current status: owner accepted the documented bounded Sprint 5 scope on 11 October
+2026; merged via [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50). Earlier pending/
+not-merged entries below describe their original evidence stage. See
+[closure record](SPRINT_5_CLOSURE.md); known security/model-quality limits remain.
+
 11 October 2026. Analysis and fresh baseline prepared for owner review; not Done or merged.
 
 The retained JSON-mode baseline has 24 passed, 6 failed, 0 transport errors and

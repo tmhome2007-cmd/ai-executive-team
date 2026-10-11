@@ -1,23 +1,25 @@
-# Sprint 5 retrospective and closure preparation
+# Sprint 5 retrospective and closure
 
 11 October 2026. All BE-34–42 engineering work is implemented, tested or documented
-in **AI Executive Team Sprint 5**. Formal sprint acceptance and merge remain open.
-No card is claimed Done: the plan requires documented owner acceptance and actual
-merge evidence. No velocity, deadline, earnings or professional competence is inferred.
+in **AI Executive Team Sprint 5**. The owner confirmed review and authorized merge;
+PR #50 merged at `6712211efff4bc326ef50d32f8caedb59f7c31f3`. BE-34–42 are Done
+for their documented bounded development scope. See [closure evidence](SPRINT_5_CLOSURE.md).
+Earlier pending-review notes below are historical; no velocity, deadline, earnings
+or professional competence is inferred.
 
 ## Intended and delivered scope
 
 | Item | Delivered | Evidence / remaining acceptance |
 |---|---|---|
 | BE-34 | Classified all six failures; retained datasets and comparable 24/30 baseline | BE34_FAILURE_ANALYSIS.md |
-| BE-35 | Unchanged-check 30/30 prompt experiment, supported task guide, corrected return reply and unfamiliar greenhouse summary | BE35_PRIVATE_WORK_REVIEW.md; owner usefulness pending |
-| BE-36 | Friendly current state, one next step, explicit blocked reasons and expandable text/provenance | BE36_NEXT_STEPS.md; new-card clarity review pending |
+| BE-35 | Unchanged-check 30/30 prompt experiment, supported task guide, corrected return reply and unfamiliar greenhouse summary | BE35_PRIVATE_WORK_REVIEW.md; bounded scope accepted |
+| BE-36 | Friendly current state, one next step, explicit blocked reasons and expandable text/provenance | BE36_NEXT_STEPS.md; bounded scope accepted |
 | BE-37 | Shared browser navigation, earlier feature checks and precise UTC/calendar ordering | BE37_EARLY_CHECKS.md |
 | BE-38 | Sanitized interruption/permission recovery; guarded claims/publication | BE38_RECOVERY_GUIDANCE.md |
 | BE-39 | Resolved local digest/configuration, repeat identity checks, legacy-unknown handling | BE39_LOCAL_MODEL_IDENTITY.md; implemented rather than deferred |
 | BE-40 | Complete fictional draft → failed review → revision → files → accepted-procedure reuse scenario; exact review guide/demo | BE40_PRIVATE_WORK_SCENARIO.md |
 | BE-41 | Final integrated audit: 289 tests, 150 foundation checks, 15 browser features; 33 passing stages, one UPSTREAM stage | BE41_SPRINT5_AUDIT.md; dependency release gate remains open |
-| BE-42 | Actual delivery comparison, defects, owner feedback and future priorities recorded | This retrospective; owner acceptance and merge evidence pending |
+| BE-42 | Actual delivery comparison, defects, owner feedback and future priorities recorded | This retrospective; owner acceptance and PR #50 merge recorded |
 
 ## What we learned
 
@@ -58,8 +60,8 @@ future action after review.
 1. Apply Claude's forthcoming findings here: record the observation, reproduce it,
    identify affected facts/permissions/data, fix confirmed defects and rerun the
    relevant checks. Feedback has not arrived; no review or fixes are invented.
-2. Improve the observed reply/summary presentation and gather explicit usefulness
-   and new-card clarity feedback, keeping original failures and unchanged rubrics.
+2. Improve the observed reply/summary presentation and gather more specific sample
+   usefulness feedback, keeping original failures and unchanged rubrics.
 3. Resolve the four Chroma findings when a compatible, verified remedy exists;
    keep the release gate visible meanwhile.
 4. Gather real, permitted buyer evidence before any business selection or revenue

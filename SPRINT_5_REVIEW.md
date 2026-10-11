@@ -1,5 +1,10 @@
 # Sprint 5 — first useful-work review
 
+Current status: owner accepted the documented bounded Sprint 5 scope on 11 October
+2026; merged via [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50). Earlier pending/
+not-merged entries below describe their original evidence stage. See
+[closure record](SPRINT_5_CLOSURE.md); known security/model-quality limits remain.
+
 BE-34 baseline and BE-35 examples are prepared for review. Nothing is marked Done
 or merged. Benchmark-only improvement: 24/30 to 30/30 under unchanged checks.
 This score does not assess usefulness.

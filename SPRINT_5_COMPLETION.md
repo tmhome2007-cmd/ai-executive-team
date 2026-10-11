@@ -1,9 +1,9 @@
-# Sprint 5 — implementation and test handoff
+# Sprint 5 — accepted and merged
 
-Everything is kept in **AI Executive Team Sprint 5**, branch
-`codex/sprint-5-completion`. The original AI Executive Team folder is preserved.
-Engineering work for all nine items is prepared for review; owner acceptance and
-actual merge are still required before formal Done/closure.
+Sprint 5 is accepted and merged into `main` through [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50).
+All nine BE-34–42 cards are Done for their documented bounded development scope.
+Work remains in **AI Executive Team Sprint 5**; the original folder is preserved.
+See [closure evidence](SPRINT_5_CLOSURE.md) for the owner decision and actual merge.
 
 Start with [the retrospective](SPRINT_5_RETROSPECTIVE.md) for the nine-item delivery
 list, [audit results](BE41_SPRINT5_AUDIT.md) for actual verification and findings,
@@ -17,5 +17,5 @@ there is no clean security release gate. The narrow AI benchmark improved from
 24/30 to 30/30; that score does not establish usefulness or business competence.
 
 Claude's feedback can be applied in this folder when available. Record verified
-findings and rerun affected checks before consolidation. No feedback is assumed
-and nothing has been moved into the original folder or merged into main.
+findings and rerun affected checks before consolidation. No feedback is assumed. GitHub main contains Sprint 5; original-folder
+consolidation remains separate.

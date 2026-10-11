@@ -1,5 +1,10 @@
 # BE-38 — private recovery guidance
 
+Current status: owner accepted the documented bounded Sprint 5 scope on 11 October
+2026; merged via [PR #50](https://github.com/tmhome2007-cmd/ai-executive-team/pull/50). Earlier pending/
+not-merged entries below describe their original evidence stage. See
+[closure record](SPRINT_5_CLOSURE.md); known security/model-quality limits remain.
+
 Implemented for owner review on 11 October 2026; not Done or merged.
 
 The run inspector now provides a fixed recovery code and an explicit next step:
