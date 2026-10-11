@@ -1,4 +1,4 @@
-"""Private rotating application logs with shared secret redaction.
+"""Private rotating application logs with owner-only file permissions.
 
 Centrale logging-configuratie voor het hele project. Tot nu toe gebruikte
 elke module gewone print()-statements — prima voor interactief testen, maar

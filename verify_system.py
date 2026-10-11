@@ -598,14 +598,20 @@ except Exception as e:
 # CHECK 17: STATIC CHECK — subprocess has resource limits beyond the timeout
 # -------------------------------------------------------------------
 try:
-    if "preexec_fn" in exec_content and "RLIMIT" in exec_content:
+    if (
+        all(
+            flag in worker_source_16
+            for flag in ('"--memory=256m"', '"--cpus=1"', '"--pids-limit=64"')
+        )
+        and "run_in_container(action_detail, _get_workspace_root())" in exec_content
+    ):
         log_pass(
-            "subprocess execution has CPU/memory resource limits (RLIMIT) beyond the wall-clock timeout"
+            "live execution delegates to a worker with fixed CPU, memory and process limits beyond its timeout"
         )
     else:
         log_fail(
             "Subprocess resource limit check",
-            "No RLIMIT/preexec_fn found — a runaway command could consume unlimited CPU/memory until the timeout fires.",
+            "Active worker must enforce fixed CPU, memory and process limits; an unused host helper is not evidence.",
         )
 except Exception as e:
     log_fail("Subprocess resource limit check crashed", str(e))
@@ -4337,6 +4343,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_109 = f.read()
+    main_content_109 += "\n" + preparation_contract_sources()
     with open("memory/database.py", "r", encoding="utf-8") as f:
         db_content_109 = f.read()
     with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
@@ -4446,6 +4453,7 @@ try:
         browser_tool_content_110 = f.read()
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_110 = f.read()
+    main_content_110 += "\n" + preparation_contract_sources()
     with open("workflows/meeting.py", "r", encoding="utf-8") as f:
         meeting_content_110 = f.read()
 
@@ -5605,6 +5613,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_128 = f.read()
+    main_content_128 += "\n" + preparation_contract_sources()
     with open("workflows/autonomous_followup.py", "r", encoding="utf-8") as f:
         followup_content_128 = f.read()
     with open("workflows/daily_research.py", "r", encoding="utf-8") as f:

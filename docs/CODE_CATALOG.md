@@ -353,7 +353,7 @@ Owner-facing planning and operating routes; assembles isolated feature routers.
 
 ## [logging_config.py](../logging_config.py)
 
-Private rotating application logs with shared secret redaction.
+Private rotating application logs with owner-only file permissions.
 
 - `PrivateRotatingFileHandler`: Rotating handler that keeps current and rotated logs owner-only.
 - `setup_logging`: Configureert de root logger EENMALIG bij het opstarten van de applicatie
@@ -1314,6 +1314,12 @@ Real SQLite proof of review-bound skill reuse and revocation boundaries.
 
 - `ExecutiveSkillsTests`
 
+## [tests/test_executor_observability.py](../tests/test_executor_observability.py)
+
+Safe failure events and durable uncertainty under notification/persistence faults.
+
+- `ExecutorObservabilityTests`
+
 ## [tests/test_experiments.py](../tests/test_experiments.py)
 
 Disposable experiments: evidence, risk enforcement, approval binding and honest gaps.
@@ -1558,7 +1564,7 @@ Shared action eligibility and authorization checks.
 
 Claimed action execution with constrained file, browser and process boundaries.
 
-- `_limit_subprocess_resources`: Wordt uitgevoerd IN het kindproces, vlak vóór het echte commando start
+- `_log_failure`: Log fixed event context, never exception text, payloads, prompts or URLs.
 - `_get_safe_subprocess_env`: Bouwt een MINIMALE environment voor subprocess.run() — NIET de volledige
 - `_get_workspace_root`: Retourneert het absolute, symlink-opgeloste WORKSPACE_ROOT pad, en
 - `_prune_browser_screenshots`: Bound private browser evidence retention by newest modification time.
