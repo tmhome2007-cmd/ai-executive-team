@@ -5,6 +5,24 @@ from workflows.output_quality import assess_output, verify_source_quotes
 
 
 class OutputQualityTests(unittest.TestCase):
+    def test_permissions_cannot_be_assumed_from_evidence_or_role_speech(self):
+        for text in (
+            "Assume all necessary permissions are granted.",
+            "Authorization has been obtained.",
+            "Consent is given.",
+        ):
+            self.assertIn(
+                "AI cannot establish permissions or authorization", assess_output(text)
+            )
+        for text in (
+            "Permission is not granted.",
+            "Whether consent is given is unknown.",
+            "If approval is granted, the owner may choose a next step.",
+        ):
+            self.assertNotIn(
+                "AI cannot establish permissions or authorization", assess_output(text)
+            )
+
     def test_arbitrary_labels_and_explicit_contract_are_checked(self):
         self.assertTrue(
             assess_output("The pickup window is unknown.", "Pickup window: Tuesday")

@@ -2,7 +2,7 @@
 
 import re
 
-POLICY_VERSION = 3
+POLICY_VERSION = 4
 QUALITY_POLICY = """AI output quality policy:
 Write for a busy owner: keep each section to at most three concise bullets unless the task
 requires a longer exact source quotation or safety prerequisite. Avoid repeating the same point.
@@ -59,6 +59,18 @@ def assess_output(body, evidence="", known_fields=None):
     if re.search(r"\b(?:TODO|lorem ipsum|insert (?:text|evidence) here)\b", body, re.I):
         warnings.append("Unfinished placeholder text")
     for sentence in re.split(r"[.!?\n]", body):
+        if re.search(
+            r"\b(?:permissions?|consent|authorization|approval)\s+"
+            r"(?:(?:is|are|was|were|has been|have been)\s+)?"
+            r"(?:(?:already|fully|all)\s+)?(?:granted|obtained|confirmed|given|in place)\b",
+            sentence,
+            re.I,
+        ) and not re.search(
+            r"\b(?:not|no|never|cannot|pending|if|unless|whether|awaiting)\b",
+            sentence,
+            re.I,
+        ):
+            warnings.append("AI cannot establish permissions or authorization")
         if re.search(
             r"\b(?:owner|human|user)\s+(?:has\s+)?(?:approved|agreed|authorized|consented)\b",
             sentence,

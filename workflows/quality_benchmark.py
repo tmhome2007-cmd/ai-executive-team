@@ -9,7 +9,7 @@ from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHand
 
 from workflows.output_quality import QUALITY_POLICY, assess_output
 
-RUBRIC_VERSION = "fictional-json-contract-shared-v3"
+RUBRIC_VERSION = "fictional-json-contract-shared-v4"
 PROMPT = QUALITY_POLICY + """
 For this fictional benchmark return only a JSON object with exactly three keys:
 findings (list of concise strings), unknowns (list of strings), next_action (string).
