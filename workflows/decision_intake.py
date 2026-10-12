@@ -122,7 +122,7 @@ def build_intake(value: IntakeInput, get_source):
         "If proposing an invitation, include an unsent draft, safe case-input instructions and specific feedback questions. A proposed stopping window must say when to abandon or change the route; successful agreement is not a failure stop."
     )
     lines = [
-        "OWNER-REVIEWED FIRST-USER BRIEF",
+        "FIRST-USER BRIEF — FOR OWNER REVIEW",
         f"Short request: {value.request.strip()}",
         "System boundaries: €0; team performs private analysis only. No team contact, posting, spending or execution. Only the human owner may later choose to act.",
         "Selected context (last recorded, not verified current):",
