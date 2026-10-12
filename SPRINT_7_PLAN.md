@@ -1,6 +1,6 @@
 # Sprint 7 — useful decisions from short requests
 
-Planned 12 October 2026 at the owner’s request. **Planning only: implementation and internet/GitHub research have not started.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
+Planned 12 October 2026 at the owner’s request. **Diagnosis and bounded read-only research are ready for review. Product implementation has not started.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
 
 ## Goal
 
@@ -20,9 +20,9 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 
 | ID | Priority | Item | State | Depends on |
 |---|---|---|---|---|
-| BE-55 | high | Trace owner-test failures from raw output to saved brief | ready | None |
+| BE-55 | high | Trace owner-test failures from raw output to saved brief | review | None |
 | BE-56 | high | Freeze usefulness evaluation and untouched transfer cases | backlog | BE-55 |
-| BE-57 | medium | Review reusable GitHub projects and primary documentation | backlog | None |
+| BE-57 | medium | Review reusable GitHub projects and primary documentation | review | None |
 | BE-58 | high | Make clarifications and freshness affect recommendations | backlog | BE-55, BE-56 |
 | BE-59 | high | Produce a complete actionable owner plan | backlog | BE-55, BE-56 |
 | BE-60 | high | Separate independent proposals from attributed critique | backlog | BE-56, BE-59 |
@@ -32,7 +32,7 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 | BE-64 | high | Audit integration, privacy and existing release dependencies | backlog | BE-58, BE-59, BE-60, BE-61, BE-62, BE-63 |
 | BE-65 | medium | Owner review, retrospective and closure | backlog | BE-63, BE-64 |
 
-BE-57 is deliberately pending the next owner discussion. Research is not an implementation blocker if no suitable reuse is found; document the decision. Future source adoption must be explicit and scoped. Sprint 7 planning does not accept, merge or erase Sprint 6 failures.
+The owner authorized BE-57’s narrow read-only scope; its first run is recorded in [the shortlist](BE57_RESEARCH_SHORTLIST.md). Research is not an implementation blocker if no suitable reuse is found; document the decision. Future source adoption must be explicit and scoped. Sprint 7 planning does not accept, merge or erase Sprint 6 failures.
 
 ## Stories and acceptance checks
 
@@ -91,3 +91,7 @@ Provide concise own-terminal/browser instructions and short test inputs, actual 
 ## Planning artifacts
 
 Matching backlog: [sprint-7-cards.json](docs/planning/sprint-7-cards.json). Status: [sprint-7-progress.md](docs/planning/sprint-7-progress.md). Previous work: [Sprint 6 review](SPRINT_6_REVIEW.md).
+
+## Diagnosis and first research run
+
+[BE-55 diagnosis](BE55_OWNER_TEST_DIAGNOSIS.md) traces raw samples through persistence and rendering. [BE-57 shortlist](BE57_RESEARCH_SHORTLIST.md) compares four projects within ten pages and recommends using existing contracts without new dependencies. No product code, schema or prompt was changed; next work is BE-56’s frozen evaluation protocol before tuning.

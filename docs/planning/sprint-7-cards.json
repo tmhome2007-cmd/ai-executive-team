@@ -5,7 +5,7 @@
     "acceptance_criteria": "Inspect the exact structured path, raw role samples, schema, renderer and saved decision from the owner test without regeneration. Map each requested deliverable to generated, stored and rendered fields. Verify prior-context visibility and critique/revision behavior from this path rather than assuming the legacy meeting code applies. Record observed omissions, incorrect proposed actor, unsupported stop rule, duplicate wording and historical-source handling separately from hypotheses. Preserve original inputs/results privately with hashes; inspect launcher path and timeout failures separately from model quality.",
     "assignee": "owner",
     "priority": "high",
-    "status": "ready"
+    "status": "review"
   },
   {
     "title": "BE-56 · Freeze usefulness evaluation and untouched transfer cases",
@@ -21,7 +21,7 @@
     "acceptance_criteria": "Research only after the planned owner discussion. Compare a small shortlist against diagnosed problems and the frozen rubric: structured plans, bounded clarification, independent proposals and evaluation. Record exact repository/version, license, maintenance evidence, local-provider compatibility, dependencies, privacy/cost implications and concrete reuse scope. Prefer primary documentation and source; disclose uncertainties. Recommend adopt, adapt or reject with reasons. Search generic problem descriptions without transmitting private briefs. No installation, copied code, external inference or dependency adoption follows automatically from a research recommendation.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-58 · Make clarifications and freshness affect recommendations",
