@@ -120,10 +120,12 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/sprint3_practice_smoke.py](../scripts/sprint3_practice_smoke.py) | Optional real local-model examples on disposable data; never owner acceptance. |
 | [scripts/sprint5_private_examples.py](../scripts/sprint5_private_examples.py) | Tool-free local BE-35 drafts for owner review; no company database writes. |
 | [scripts/sprint6_evaluation.py](../scripts/sprint6_evaluation.py) | Explicit local-only evaluation with immutable freezes and retained failed slots. |
+| [scripts/sprint7_schema_experiment.py](../scripts/sprint7_schema_experiment.py) | Freeze and run one explicit local-only three-variant schema comparison. |
 | [scripts/synthesize_conversation.py](../scripts/synthesize_conversation.py) | Bounded isolated local speech worker. Private input via stdin; WAV via stdout. |
 | [scripts/workflow_queue_smoke.py](../scripts/workflow_queue_smoke.py) | Real Chromium owner controls against disposable SQLite; public reader is mocked. |
 | [system_checks.py](../system_checks.py) | Runtime readiness checks for local model, storage, browser and notifications. |
 | [tests/test_action_checkpoints.py](../tests/test_action_checkpoints.py) | Exercise the approval -> durable execution -> restart boundary on SQLite. |
+| [tests/test_actionable_plan.py](../tests/test_actionable_plan.py) | Protect owner effort, actor, unsent drafts and evidence in the small experiment. |
 | [tests/test_activity_ledger.py](../tests/test_activity_ledger.py) | Retained transitions, transaction boundaries, migration gaps and cursor stability. |
 | [tests/test_agile_boards.py](../tests/test_agile_boards.py) | Real SQLite checks for task integrity and separate planning/execution authority. |
 | [tests/test_api_auth_boundaries.py](../tests/test_api_auth_boundaries.py) | Malformed owner headers must fail closed without crashing the API. |
@@ -170,6 +172,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_sprint5_recovery.py](../tests/test_sprint5_recovery.py) | Combined permission changes, concurrent claims and private recovery guidance. |
 | [tests/test_sprint5_time_regressions.py](../tests/test_sprint5_time_regressions.py) | Fixed-clock calendar and microsecond observation regressions on disposable data. |
 | [tests/test_sprint6_evaluation.py](../tests/test_sprint6_evaluation.py) | Evaluation errors, partial slots and contamination are not hidden. |
+| [tests/test_sprint7_schema_experiment.py](../tests/test_sprint7_schema_experiment.py) | Ensure comparison runs cannot hide retries, drift or changed contact variants. |
 | [tests/test_sql_injection_guards.py](../tests/test_sql_injection_guards.py) | Adversarial SQL-identifier/status input tests against real SQLite. |
 | [tests/test_step_checkpoints.py](../tests/test_step_checkpoints.py) | Transactional checkpoint and no-replay behavior using real SQLite. |
 | [tests/test_structured_decision.py](../tests/test_structured_decision.py) | Structured publication, failed sample retention and attributed dissent boundaries. |
@@ -186,6 +189,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [verify_system.py](../verify_system.py) | Foundation regression checks; run through the disposable local audit. |
 | [workflows/action_control.py](../workflows/action_control.py) | Shared action eligibility and authorization checks. |
 | [workflows/action_executor.py](../workflows/action_executor.py) | Claimed action execution with constrained file, browser and process boundaries. |
+| [workflows/actionable_plan.py](../workflows/actionable_plan.py) | Small experimental owner-plan contract; no action execution or API integration. |
 | [workflows/autonomous_followup.py](../workflows/autonomous_followup.py) | Scheduled outcome follow-ups using persisted company records. |
 | [workflows/business_discovery.py](../workflows/business_discovery.py) | Explicit owner-run local inference, without tools, browsing or task execution. |
 | [workflows/business_research_contract.py](../workflows/business_research_contract.py) | Bounded service hypotheses and source-exact quotes; no inferred market facts. |

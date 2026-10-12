@@ -1,6 +1,6 @@
 # Sprint 7 — useful decisions from short requests
 
-Planned 12 October 2026 at the owner’s request. **Diagnosis and bounded read-only research are ready for review. Product implementation has not started.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
+Planned 12 October 2026 at the owner’s request. **Diagnosis and bounded read-only research are ready for review. A small isolated schema experiment was implemented on codex/sprint-7-actionable-schema; its usefulness gate failed, so it remains unmerged and production behavior unchanged.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
 
 ## Goal
 
@@ -24,7 +24,7 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 | BE-56 | high | Freeze usefulness evaluation and untouched transfer cases | backlog | BE-55 |
 | BE-57 | medium | Review reusable GitHub projects and primary documentation | review | None |
 | BE-58 | high | Make clarifications and freshness affect recommendations | backlog | BE-55, BE-56 |
-| BE-59 | high | Produce a complete actionable owner plan | backlog | BE-55, BE-56 |
+| BE-59 | high | Produce a complete actionable owner plan | blocked | BE-55, BE-56 |
 | BE-60 | high | Separate independent proposals from attributed critique | backlog | BE-56, BE-59 |
 | BE-61 | high | Handle short requests with reviewed context and few questions | backlog | BE-58, BE-59 |
 | BE-62 | high | Make normal startup and long-running decision review reliable | backlog | BE-55 |
@@ -95,3 +95,7 @@ Matching backlog: [sprint-7-cards.json](docs/planning/sprint-7-cards.json). Stat
 ## Diagnosis and first research run
 
 [BE-55 diagnosis](BE55_OWNER_TEST_DIAGNOSIS.md) traces raw samples through persistence and rendering. [BE-57 shortlist](BE57_RESEARCH_SHORTLIST.md) compares four projects within ten pages and recommends using existing contracts without new dependencies. No product code, schema or prompt was changed; next work is BE-56’s frozen evaluation protocol before tuning.
+
+## First implementation experiment
+
+The owner authorized a small schema branch, the three-variant local comparison and merge only on improved output usefulness. [BE-59 experiment](BE59_SCHEMA_EXPERIMENT.md): both variants validate 9/9, but complete usefulness is 0/9 for both. Candidate adds typed steps/drafts but omits important checks and misuses stop conditions. Merge gate failed; branch remains unmerged. This freezes only the requested development comparison, not BE-56’s full reserved-transfer evaluation.

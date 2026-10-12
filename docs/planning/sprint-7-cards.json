@@ -37,7 +37,8 @@
     "acceptance_criteria": "Add typed steps with actors, durations, prerequisites, deliverables and conditional paths where needed. Outreach recommendations require an unsent draft, an eligibility check and a stop condition with a bounded time window. A multi-step owner task has at least two meaningful steps; estimated effort sums to the confirmed owner limit or is explicitly blocked. Require a current tool-availability check before inviting use when availability is unknown; the check remains a proposed owner step. Every real-world action is assigned to the human owner, never an AI executive. Drafting is distinct from sending. Required deliverables survive schema validation, storage/API and rendering; no empty filler fields or invented approvals. Schema completeness and semantic usefulness have separate checks.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "blocked",
+    "blocked_reason": "Isolated prototype built; 9/9 local candidate samples validate but 0/9 meet the full predeclared usefulness rubric. Conditional merge gate failed. Production integration and substantive plan improvement remain unfinished."
   },
   {
     "title": "BE-60 · Separate independent proposals from attributed critique",
