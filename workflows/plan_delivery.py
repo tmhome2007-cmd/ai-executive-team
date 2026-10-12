@@ -185,6 +185,11 @@ review window in days. Return only the evidence/explanation JSON.
             "request": question,
             "sources": sources,
             "lead_status": lead_status,
+            "constraints": {
+                "owner_minutes": owner_minutes,
+                "budget_euros": 0,
+                "scope": "private analysis; no team contact, spending, publishing, execution or new product features",
+            },
             "proposed_next_step": RECOMMENDATIONS[lead_status],
             "allowed_unknowns": {
                 k: UNKNOWN_QUESTIONS[k] for k in sorted(allowed_unknowns(lead_status))
