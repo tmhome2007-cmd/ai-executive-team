@@ -38,7 +38,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
-    "blocked_reason": "Isolated prototype built; 9/9 local candidate samples validate but 0/9 meet the full predeclared usefulness rubric. Conditional merge gate failed. Production integration and substantive plan improvement remain unfinished."
+    "blocked_reason": "Initial schema comparison validated 9/9 with 0/9 complete usefulness. After first-user intake, routing/prerequisites improve but all 9 plans fail the required outreach/draft consistency check; one private-review action is misclassified as outreach. No schema production rollout or merge."
   },
   {
     "title": "BE-60 · Separate independent proposals from attributed critique",
@@ -54,7 +54,8 @@
     "acceptance_criteria": "A short natural request can start the workflow without a manually authored long prompt. Show relevant reviewed stored facts as last recorded, not verified; disclose which context is used and allow correction. Reuse explicitly confirmed stable limits instead of asking again, while surfacing freshness and scope. Ask at most three decision-changing questions with quick answers and a skip path. Do not invent a factual plan when essential context is missing: produce a bounded conditional plan or explicit blocker. The owner can review the assembled brief before generation. Changed answers to selected questions must affect the relevant plan conditions; ask no questions whose answers cannot change the plan. Do not assume stored data exists in a fresh installation or retrieve unrelated company/private context.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review",
+    "review_scope": "Bounded first-user intake UI/API and confirmation checks passed full local audit. General intent handling and persistent defaults are not claimed. Model plan delivery remains blocked; no owner acceptance or merge."
   },
   {
     "title": "BE-62 · Make normal startup and long-running decision review reliable",

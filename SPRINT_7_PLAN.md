@@ -1,6 +1,6 @@
 # Sprint 7 — useful decisions from short requests
 
-Planned 12 October 2026 at the owner’s request. **Diagnosis and bounded read-only research are ready for review. A small isolated schema experiment was implemented on codex/sprint-7-actionable-schema; its usefulness gate failed, so it remains unmerged and production behavior unchanged.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
+Planned 12 October 2026 at the owner’s request. **Diagnosis and bounded read-only research are ready for review. The schema experiment remains isolated; a bounded first-user intake UI/API is now implemented on codex/sprint-7-actionable-schema. Final plan delivery still fails its gate, so no main merge or rollout is claimed.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
 
 ## Goal
 
@@ -26,7 +26,7 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 | BE-58 | high | Make clarifications and freshness affect recommendations | backlog | BE-55, BE-56 |
 | BE-59 | high | Produce a complete actionable owner plan | blocked | BE-55, BE-56 |
 | BE-60 | high | Separate independent proposals from attributed critique | backlog | BE-56, BE-59 |
-| BE-61 | high | Handle short requests with reviewed context and few questions | backlog | BE-58, BE-59 |
+| BE-61 | high | Handle short requests with reviewed context and few questions | review | BE-58, BE-59 |
 | BE-62 | high | Make normal startup and long-running decision review reliable | backlog | BE-55 |
 | BE-63 | high | Run final usefulness and owner end-to-end assessment | backlog | BE-56, BE-58, BE-59, BE-60, BE-61, BE-62 |
 | BE-64 | high | Audit integration, privacy and existing release dependencies | backlog | BE-58, BE-59, BE-60, BE-61, BE-62, BE-63 |
@@ -99,3 +99,7 @@ Matching backlog: [sprint-7-cards.json](docs/planning/sprint-7-cards.json). Stat
 ## First implementation experiment
 
 The owner authorized a small schema branch, the three-variant local comparison and merge only on improved output usefulness. [BE-59 experiment](BE59_SCHEMA_EXPERIMENT.md): both variants validate 9/9, but complete usefulness is 0/9 for both. Candidate adds typed steps/drafts but omits important checks and misuses stop conditions. Merge gate failed; branch remains unmerged. This freezes only the requested development comparison, not BE-56’s full reserved-transfer evaluation.
+
+## Bounded first-user intake
+
+[BE-61 prototype](BE61_SHORT_REQUEST_INTAKE.md) is ready for owner review after a full local integration audit. It accepts a short request, at most three current answers and explicitly chosen reviewed sources, then confirms a conditional brief before the existing meeting. The same development variants now produce distinct raw proposal routes, but the isolated experimental plan still fails draft consistency in 9/9 attempts. This is partial progress, not a passed usefulness/merge gate. General request handling, persistent defaults and full-team acceptance are not inferred.

@@ -1,0 +1,65 @@
+{
+  "implementation_commit": "0be2a90feec6169be1587aee1a89c946c204c638",
+  "inference_freeze_commit": "db579e25b26c1c320fd522f9c1bb1f37c3f3084b",
+  "branch": "codex/sprint-7-actionable-schema",
+  "audit_path": "audit-results/20261012-204839",
+  "audit_summary_sha256": "b8c6d450e776c0a0be7b989d9818f229a58491eb44f2615bb1dcd2aeb41515f4",
+  "audit_counts": {
+    "pass": 33,
+    "fail": 0,
+    "upstream": 1
+  },
+  "tests": {
+    "backend": 353,
+    "docker_skips": 0,
+    "foundation": 150,
+    "browser_features": 15,
+    "intake_regressions": 7
+  },
+  "run_path": "audit-results/sprint7-intake/run-c0b8c5d476ec443e8dc35dfe33033cdd",
+  "freeze_sha256": "8a42e10dc08f4e7aaa11b0fdcd6275246c89be15e2c70277b0ec422ab534885c",
+  "raw_summary_sha256": "6ce2f7163b447dda94274afccc84967e3f0598a5682ec370bebbfd456123868d",
+  "assessment_sha256": "35daab59cc7fd33fd9e7894d4a5d01246e3627131ba122fbffa96b53a36e2eba",
+  "source_hashes": {
+    "workflows/decision_intake.py": "a9946c1524502dab961b160f274eee4ef9a01bd08622953e01f54d7098bcacfd",
+    "workflows/actionable_plan.py": "191d27880a3d10973e7588b82b0f34e3d84671aeb337928fab40acd36363c361",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "scripts/sprint7_intake_experiment.py": "938b15d24ad366f31c67699505ab046630d453ee147e3d5f82f91564344a8bb7",
+    "api/decision_intake.py": "3f0de1a80f6f7637b5f219c0ab6e93a57355c609527e759b696b79a798cce1d9"
+  },
+  "model_digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+  "options": {
+    "temperature": 0,
+    "num_predict": 1200,
+    "num_ctx": 4096,
+    "seed": 47
+  },
+  "model_scope": "Same isolated CEO plan schema; changed intake brief and trusted route policy. Not a full three-role test or independent proof of model reasoning.",
+  "json_parses": 9,
+  "full_plan_contract_valid": 0,
+  "complete_usefulness_passes": 0,
+  "repair_attempts": 0,
+  "transport_errors": 0,
+  "validation_errors": 9,
+  "unique_outputs": 3,
+  "same_setting_repetitions": 3,
+  "owner_request_words": 9,
+  "deterministic_routes": {
+    "A_as_tested": "resolve_contact",
+    "B_replied": "recent_contact",
+    "C_silent": "different_route"
+  },
+  "owner_accepted": false,
+  "merged": false,
+  "merge_eligible": false,
+  "new_dependency": false,
+  "new_schema_production_enabled": false,
+  "full_team_model_test": false,
+  "held_out": false,
+  "earlier_audit_path": "audit-results/20261012-201605",
+  "earlier_audit_commit": "ab017bdae74a2156287693c6172076077ae5a04a",
+  "post_comparison_change": "Neutral preview heading changed after assessment; model results apply to frozen db579e2 assets, not a rerun of the new heading.",
+  "final_intake_workflow_sha256": "9c1f55774d9216a2465006d0c727fdc136440546a76eff599bd32796672de46d",
+  "remote_main_verified": "822712a671095803ed6fa46fd8e832811d2dbc60",
+  "remote_pr_listing": "unavailable: gh not installed; no PR state claim"
+}
