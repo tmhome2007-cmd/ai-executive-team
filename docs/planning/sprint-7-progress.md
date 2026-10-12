@@ -7,7 +7,7 @@
 | BE-55 | Review | [Raw-to-stored diagnosis](../../BE55_OWNER_TEST_DIAGNOSIS.md); exact contribution and brief comparisons, no regeneration |
 | BE-56 | Backlog | Requested development comparison frozen; full reserved-transfer protocol still pending |
 | BE-57 | Review | [Four-project, ten-page shortlist](../../BE57_RESEARCH_SHORTLIST.md); no installation/adoption, unknown maintenance fields explicit |
-| BE-59 | Blocked on usefulness | [Small schema experiment](../../BE59_SCHEMA_EXPERIMENT.md): 9/9 validated, 0/9 complete usefulness; unmerged |
+| BE-59 | Blocked on usefulness | [Separated draft delivery](../../BE59_DRAFT_DELIVERY_REPAIR.md): 9/9 validated, drafts delivered 3/3 where required, 0/9 complete usefulness; unmerged |
 | BE-61 | Review of bounded intake | [Short-request flow](../../BE61_SHORT_REQUEST_INTAKE.md), full local audit; plan delivery remains blocked |
 | BE-58, BE-60, BE-62–65 | Backlog | [Plan and acceptance checks](../../SPRINT_7_PLAN.md) |
 
@@ -24,3 +24,9 @@ Owner authorized the intake next step. Final local audit on 0be2a90 passed 353 b
 Frozen nine-sample model comparison: 9/9 JSON responses, 0/9 full-contract passes, 0/9 complete usefulness; each case repeated the same output three times. Raw proposals follow distinct supplied routes and now check tool availability, but omit drafts and mishandle action classification. Those routes come from deterministic intake policy, not independent model judgement. No repairs, discarded failures, cloud inference, new dependencies, owner acceptance or merge. Failed OwnerPlan remains isolated; the existing structured meeting is the app generation path. Full team/short-request owner usefulness, stable preference persistence and normal startup remain unaccepted.
 
 Final audit evidence: audit-results/20261012-204839. Model comparison is frozen on db579e2; the subsequent neutral-preview-heading change was not remeasured by inference. Remote main was reverified at 822712a; PR listing is unavailable (gh not installed). No remote state beyond that main ref is inferred.
+
+## Separated draft delivery
+
+Owner authorized the focused repair. Frozen f61570f uses private preparation plus a required unsent invitation stage only for typed recent replies. The exact prior intake contexts and local model/settings were retained; no repair or retry. Nine complete plans validate (previous intake 0/9); three responsive plans contain actual safe-input/feedback drafts, and six private plans contain no invitation. Three identical unique raw sequences represent nine repeated samples. [Verification](be59-delivery-verification.json).
+
+Complete usefulness remains 0/9: generic/duplicated checks, policy quotations as evidence, irrelevant pivotal facts and private-only no-response stops. Candidate stays isolated from the API and dashboard; no merge or acceptance. Seven new boundary/integrity tests plus existing guards passed; complete disposable backend run passed 360 tests with real Docker and no skips. Format/catalog and targeted Bandit passed; no full audit or new frontend verification is claimed. Subsequent test/catalog commit b87893a did not change frozen generation assets. Original raw runs, two unused preflight freezes and private assessments are retained. New experiment-folder retention coverage remains a production-integration prerequisite.

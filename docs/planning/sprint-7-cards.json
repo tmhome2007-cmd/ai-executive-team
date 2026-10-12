@@ -33,7 +33,7 @@
   },
   {
     "title": "BE-59 · Produce a complete actionable owner plan",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55, BE-56. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55, BE-56. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor. Delivery update: frozen separated-stage prototype validates 9/9, with actual unsent drafts 3/3 where required; complete analyst usefulness remains 0/9. See BE59_DRAFT_DELIVERY_REPAIR.md. Experimental only; unmerged.",
     "acceptance_criteria": "Add typed steps with actors, durations, prerequisites, deliverables and conditional paths where needed. Outreach recommendations require an unsent draft, an eligibility check and a stop condition with a bounded time window. A multi-step owner task has at least two meaningful steps; estimated effort sums to the confirmed owner limit or is explicitly blocked. Require a current tool-availability check before inviting use when availability is unknown; the check remains a proposed owner step. Every real-world action is assigned to the human owner, never an AI executive. Drafting is distinct from sending. Required deliverables survive schema validation, storage/API and rendering; no empty filler fields or invented approvals. Schema completeness and semantic usefulness have separate checks.",
     "assignee": "owner",
     "priority": "high",
