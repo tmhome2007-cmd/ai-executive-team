@@ -124,11 +124,12 @@ def payload(model, question, personality, owner_minutes):
     }
 
 
-def validate_plan(raw, question, owner_minutes):
+def validate_plan(raw, question, owner_minutes, *, sources=None):
     """Check typed completeness and existing evidence/authority guards."""
     obj = OwnerPlan.model_validate_json(raw, context={"owner_minutes": owner_minutes})
     errors = verify_evidence_quotes(
-        [fact.model_dump() for fact in obj.facts], {"owner-task": question}
+        [fact.model_dump() for fact in obj.facts],
+        sources if sources is not None else {"owner-task": question},
     )
     generated = obj.model_dump(exclude={"facts"})
     errors += assess_output(json.dumps(generated, ensure_ascii=False), question)

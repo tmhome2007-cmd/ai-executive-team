@@ -17,7 +17,7 @@ from workflows import plan_delivery as delivery
 from workflows.quality_benchmark import local_request
 from workflows.structured_decision import private_save
 
-STORE = ROOT / "audit-results/sprint7-delivery"
+STORE = ROOT / "audit-results/sprint7-reasoning"
 ASSETS = (
     "workflows/plan_delivery.py",
     "workflows/actionable_plan.py",
@@ -38,6 +38,10 @@ def freeze(previous):
     old = json.loads((previous / "freeze.json").read_text())
     if old["model"] != identity():
         raise ValueError("Installed model differs from the prior comparison")
+    if any(c["input"]["tool_status"] != "unknown" for c in old["cases"].values()):
+        raise ValueError(
+            "This development comparison requires unknown tool availability"
+        )
     directory = STORE / ("run-" + uuid.uuid4().hex)
     private_save(
         directory,
@@ -55,7 +59,7 @@ def freeze(previous):
             "repairs": 0,
             "rubric": old["rubric"],
             "prior_run": str(previous),
-            "scope": "Isolated CEO, existing intake contexts unchanged. Trusted status fixes action scope: A/C private-only; B conditional outreach with separate required draft. Not independent route reasoning, full team or held-out evaluation.",
+            "scope": "Isolated CEO; same prior reviewed records/corrections and typed answers, separated from policy rather than one flat brief. Unique-purpose private checks and allowed pivotal unknowns are trusted contracts, not independent model reasoning. No full-team or held-out claim.",
             "extra_gate": "All 9 complete plans valid without repair; no outbound instruction disguised as private check; B has a usable safe-input/feedback draft; A/C may honestly end with a blocker and require no draft. Apply original usefulness axes and gate; no automatic merge or owner acceptance.",
         },
     )
@@ -74,6 +78,7 @@ def run(directory):
     for case, context in frozen["cases"].items():
         value = context["input"]
         question = context["intake"]["brief"]
+        sources = delivery.evidence_sources(context)
         for repetition in range(1, 4):
             slot = {
                 "case": case,
@@ -87,10 +92,11 @@ def run(directory):
                 model = frozen["model"]["configuration"]["resolved_tag"]
                 payload = delivery.preparation_payload(
                     model,
-                    question,
+                    value["request"],
                     frozen["persona"],
                     value["lead_status"],
                     value["owner_minutes"],
+                    sources,
                 )
                 reply = local_request(
                     "http://127.0.0.1:11434", "/api/generate", payload
@@ -111,13 +117,16 @@ def run(directory):
                     question,
                     value["lead_status"],
                     value["owner_minutes"],
+                    sources,
                 )
                 draft_raw = None
                 if delivery.outreach_required(value["lead_status"]):
                     reply = local_request(
                         "http://127.0.0.1:11434",
                         "/api/generate",
-                        delivery.invitation_payload(model, question, preparation),
+                        delivery.invitation_payload(
+                            model, value["request"], preparation, sources
+                        ),
                     )
                     slot["raw_stages"].append(
                         {
@@ -137,6 +146,7 @@ def run(directory):
                     question,
                     value["lead_status"],
                     value["owner_minutes"],
+                    sources,
                 )
                 slot.update(validated=True, status="valid", plan=result.model_dump())
             except Exception as error:
