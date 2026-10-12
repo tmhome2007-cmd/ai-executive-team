@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from tests.test_actionable_plan import QUESTION, plan
+from tests.test_actionable_plan import QUESTION
 
 from workflows import plan_delivery as delivery
 
@@ -11,28 +11,22 @@ SOURCES = {"record:1": QUESTION}
 
 
 def preparation(lead="silent"):
-    value = plan()
-    del value["draft_message"]
-    value["facts"][0]["source_id"] = "record:1"
-    value["unknowns"] = ["tool_availability"]
-    value.pop("assumptions")
-    value["stop_after_days"] = value.pop("stop")["after_days"]
-    value["pivotal_fact"] = {
-        "key": "tool_availability",
-        "if_yes": "Review existing records before an invitation.",
-        "if_no": "Record unavailable-tool blocker and pause.",
-    }
-    for step, purpose in zip(
-        value["steps"], ["tool_check", "alternative_record_check"]
-    ):
-        step["purpose"] = purpose
-        step["done_when"] = "Record whether the prerequisite is established or missing."
-    value["steps"][1]["purpose"] = (
-        "eligibility_record_check"
-        if lead == "recent_reply"
-        else "alternative_record_check"
+    return json.dumps(
+        {
+            "why_this_step": "Private checks establish whether an invitation is appropriate.",
+            "alternative_considered": "Inviting a contact immediately",
+            "why_not_alternative": "Current tool availability is still unknown.",
+            "facts": [
+                {"source_id": "record:1", "quote": "The tool availability is unknown."}
+            ],
+            "unknowns": ["tool_availability"],
+            "stop_after_days": 7,
+            "pivotal_fact": {
+                "key": "tool_availability",
+                "why_changes_plan": "An unavailable tool blocks any invitation.",
+            },
+        }
     )
-    return json.dumps(value)
 
 
 def draft():
@@ -55,7 +49,7 @@ def draft():
 class PlanDeliveryTests(unittest.TestCase):
     def test_private_scope_rejects_outbound_labels_and_unrequested_draft(self):
         value = json.loads(preparation())
-        value["steps"][1]["kind"] = "outreach"
+        value["steps"] = [{"actor": "ceo", "kind": "outreach"}]
         with self.assertRaises(ValueError):
             delivery.validate_preparation(
                 json.dumps(value), QUESTION, "silent", 30, SOURCES
@@ -81,7 +75,7 @@ class PlanDeliveryTests(unittest.TestCase):
             private, draft(), QUESTION, "recent_reply", 30, SOURCES
         )
         self.assertEqual(result.steps[-1].kind, "outreach")
-        self.assertEqual(sum(s.minutes for s in result.steps), 25)
+        self.assertEqual(sum(s.minutes for s in result.steps), 30)
         self.assertIn("Was the plan useful?", result.draft_message.text)
         with self.assertRaises(ValueError):
             delivery.validate_preparation(
@@ -168,22 +162,25 @@ class PlanDeliveryTests(unittest.TestCase):
                 json.dumps(value), QUESTION, "recent_reply", 30, SOURCES
             )
         value = json.loads(preparation())
-        value["pivotal_fact"]["if_no"] = value["pivotal_fact"]["if_yes"]
-        with self.assertRaisesRegex(ValueError, "does not change"):
+        value["pivotal_fact"]["why_changes_plan"] = " "
+        with self.assertRaisesRegex(ValueError, "Blank"):
             delivery.validate_preparation(
                 json.dumps(value), QUESTION, "silent", 30, SOURCES
             )
 
-    def test_duplicate_check_or_blank_observable_result_is_rejected(self):
+    def test_operational_steps_and_success_are_workflow_rules_not_model_labels(self):
+        private = delivery.validate_preparation(
+            preparation(), QUESTION, "silent", 30, SOURCES
+        )
+        self.assertIn(delivery.FICTIONAL_TEST, private.steps[0].instruction)
+        self.assertIn("Run its normal analysis", private.steps[0].instruction)
+        self.assertIn("record that blocker", private.steps[1].instruction)
+        self.assertIn("own current live case", private.success)
+        self.assertIn("starting this private review", private.stop.condition)
+        self.assertNotIn("without a reply", private.stop.condition)
         value = json.loads(preparation())
-        value["steps"][1]["purpose"] = "tool_check"
-        with self.assertRaisesRegex(ValueError, "distinct"):
-            delivery.validate_preparation(
-                json.dumps(value), QUESTION, "silent", 30, SOURCES
-            )
-        value = json.loads(preparation())
-        value["steps"][1]["done_when"] = " "
-        with self.assertRaisesRegex(ValueError, "Blank"):
+        value["recommendation"] = "Contact someone now"
+        with self.assertRaises(ValueError):
             delivery.validate_preparation(
                 json.dumps(value), QUESTION, "silent", 30, SOURCES
             )
