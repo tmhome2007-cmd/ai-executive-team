@@ -137,22 +137,17 @@ class PlanDeliveryTests(unittest.TestCase):
                 SOURCES,
             )
 
-    def test_owner_correction_must_be_attributed_not_dropped(self):
+    def test_owner_correction_is_preserved_verbatim_by_the_application(self):
         sources = {
             **SOURCES,
             "owner-correction": "The contact never replied after offering to test.",
         }
-        with self.assertRaisesRegex(ValueError, "correction"):
-            delivery.validate_preparation(
-                preparation(), QUESTION, "silent", 30, sources
-            )
-        value = json.loads(preparation())
-        value["facts"].append(
-            {"source_id": "owner-correction", "quote": sources["owner-correction"]}
+        result = delivery.validate_preparation(
+            preparation(), QUESTION, "silent", 30, sources
         )
-        delivery.validate_preparation(
-            json.dumps(value), QUESTION, "silent", 30, sources
-        )
+        self.assertEqual(result.facts[0].source_id, "owner-correction")
+        self.assertEqual(result.facts[0].quote, sources["owner-correction"])
+        self.assertTrue(any(f.source_id == "record:1" for f in result.facts))
 
     def test_pivotal_fact_must_be_unresolved_and_have_different_consequences(self):
         value = json.loads(preparation("recent_reply"))
@@ -194,13 +189,20 @@ class PlanDeliveryTests(unittest.TestCase):
         value["facts"].append(
             {"source_id": "owner-correction", "quote": "The founder replied last week."}
         )
-        with self.assertRaisesRegex(ValueError, "correction"):
-            delivery.validate_preparation(
-                json.dumps(value), QUESTION, "silent", 30, sources
-            )
+        result = delivery.validate_preparation(
+            json.dumps(value), QUESTION, "silent", 30, sources
+        )
+        self.assertEqual(result.facts[0].quote, sources["owner-correction"])
         value = json.loads(preparation())
         value["why_this_step"] = "This fits because the latest reply"
         with self.assertRaisesRegex(ValueError, "Incomplete"):
             delivery.validate_preparation(
                 json.dumps(value), QUESTION, "silent", 30, SOURCES
             )
+
+    def test_reasoning_helper_does_not_transmit_role_personality_as_evidence(self):
+        payload = delivery.preparation_payload(
+            "local", QUESTION, "PERSONA_MARKER_NOT_A_FACT", "silent", 30, SOURCES
+        )
+        self.assertNotIn("PERSONA_MARKER_NOT_A_FACT", payload["prompt"])
+        self.assertIn("role-neutral", payload["prompt"])

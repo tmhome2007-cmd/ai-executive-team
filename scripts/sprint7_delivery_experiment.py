@@ -59,7 +59,7 @@ def freeze(previous):
             "repairs": 0,
             "rubric": old["rubric"],
             "prior_run": str(previous),
-            "scope": "Isolated CEO; exact prior records/corrections and typed answers separated from policy. Explicit application recipes supply operational checks, success, phase, pivot branches and stop anchors; model supplies factual quotes, comparison and pivotal explanation. This measures the combined workflow, not independent model planning, full team or held-out performance.",
+            "scope": "Role-neutral explanation helper, not CEO speech: canonical persona is retained as comparison metadata but omitted from helper model input. Same reviewed records/corrections and typed answers. Explicit rules supply operational checks, success, phase, pivot branches, stop anchors and full correction snapshot. Model supplies selected evidence, comparison and pivotal explanation. This measures combined workflow, not independent model planning, full team or held-out performance.",
             "extra_gate": "All 9 complete plans valid without repair; no outbound instruction disguised as private check; B has a usable safe-input/feedback draft; A/C may honestly end with a blocker and require no draft. Apply original usefulness axes and gate; no automatic merge or owner acceptance.",
         },
     )
