@@ -29,7 +29,7 @@ def main():
         ["git", "branch", "--show-current"], cwd=ROOT, text=True
     ).strip()
     if not branch.startswith(
-        ("codex/sprint-4-", "codex/sprint-5-", "codex/sprint-6-")
+        ("codex/sprint-4-", "codex/sprint-5-", "codex/sprint-6-", "codex/sprint-7-")
     ) and branch not in {
         "chatgpt/foundation-hardening",
         "main",
