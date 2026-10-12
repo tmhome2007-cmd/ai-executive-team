@@ -14,7 +14,7 @@ def preparation(lead="silent"):
     return json.dumps(
         {
             "why_this_step": "Private checks establish whether an invitation is appropriate.",
-            "alternative_considered": "Inviting a contact immediately",
+            "alternative_considered": "Inviting a contact immediately.",
             "why_not_alternative": "Current tool availability is still unknown.",
             "facts": [
                 {"source_id": "record:1", "quote": "The tool availability is unknown."}
@@ -181,6 +181,26 @@ class PlanDeliveryTests(unittest.TestCase):
         value = json.loads(preparation())
         value["recommendation"] = "Contact someone now"
         with self.assertRaises(ValueError):
+            delivery.validate_preparation(
+                json.dumps(value), QUESTION, "silent", 30, SOURCES
+            )
+
+    def test_partial_correction_and_clipped_reasoning_cannot_be_published(self):
+        sources = {
+            **SOURCES,
+            "owner-correction": "The founder and CEO are different people. The founder replied last week.",
+        }
+        value = json.loads(preparation())
+        value["facts"].append(
+            {"source_id": "owner-correction", "quote": "The founder replied last week."}
+        )
+        with self.assertRaisesRegex(ValueError, "correction"):
+            delivery.validate_preparation(
+                json.dumps(value), QUESTION, "silent", 30, sources
+            )
+        value = json.loads(preparation())
+        value["why_this_step"] = "This fits because the latest reply"
+        with self.assertRaisesRegex(ValueError, "Incomplete"):
             delivery.validate_preparation(
                 json.dumps(value), QUESTION, "silent", 30, SOURCES
             )
