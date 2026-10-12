@@ -122,6 +122,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/sprint3_practice_smoke.py](../scripts/sprint3_practice_smoke.py) | Optional real local-model examples on disposable data; never owner acceptance. |
 | [scripts/sprint5_private_examples.py](../scripts/sprint5_private_examples.py) | Tool-free local BE-35 drafts for owner review; no company database writes. |
 | [scripts/sprint6_evaluation.py](../scripts/sprint6_evaluation.py) | Explicit local-only evaluation with immutable freezes and retained failed slots. |
+| [scripts/sprint7_delivery_experiment.py](../scripts/sprint7_delivery_experiment.py) | Freeze a two-stage delivery candidate against the retained intake variants. |
 | [scripts/sprint7_intake_experiment.py](../scripts/sprint7_intake_experiment.py) | Freeze and assess the same contact variants after deterministic owner intake. |
 | [scripts/sprint7_schema_experiment.py](../scripts/sprint7_schema_experiment.py) | Freeze and run one explicit local-only three-variant schema comparison. |
 | [scripts/synthesize_conversation.py](../scripts/synthesize_conversation.py) | Bounded isolated local speech worker. Private input via stdin; WAV via stdout. |
@@ -163,6 +164,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_organizational_pipeline.py](../tests/test_organizational_pipeline.py) | Real CrewAI and durable checkpoints, without network/provider/model side effects. |
 | [tests/test_output_quality.py](../tests/test_output_quality.py) | Regression checks for output quality. |
 | [tests/test_people_simulation.py](../tests/test_people_simulation.py) | Fictional adult presentation/workforce/social tests; no external services or business effects. |
+| [tests/test_plan_delivery.py](../tests/test_plan_delivery.py) | Protect the separated private preparation and unsent-message boundaries. |
 | [tests/test_planning.py](../tests/test_planning.py) | Regression checks for planning. |
 | [tests/test_practice_artifacts.py](../tests/test_practice_artifacts.py) | Disposable artifact confinement, recovery, expiry and owner API checks. |
 | [tests/test_quality_benchmark.py](../tests/test_quality_benchmark.py) | Regression coverage for benchmark comparability, failures and private snapshots. |
@@ -217,6 +219,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [workflows/meeting.py](../workflows/meeting.py) | Executive meetings and preparation with durable published contributions. |
 | [workflows/meeting_types.py](../workflows/meeting_types.py) | Meeting contracts: participants, evidence expectations and output sections. |
 | [workflows/output_quality.py](../workflows/output_quality.py) | Shared, bounded checks on published AI text. These checks do not certify truth. |
+| [workflows/plan_delivery.py](../workflows/plan_delivery.py) | Experimental two-stage owner delivery; no API integration or execution. |
 | [workflows/practice_deliverables.py](../workflows/practice_deliverables.py) | Small representative contract checks, not a universal AI truth evaluator. |
 | [workflows/quality_benchmark.py](../workflows/quality_benchmark.py) | Fictional local-model contract measurements, never approval or truth certification. |
 | [workflows/research_queue.py](../workflows/research_queue.py) | Explicit owner public reads with durable payload recovery and atomic evidence linking. |
