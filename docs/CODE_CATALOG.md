@@ -178,6 +178,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_sprint5_recovery.py](../tests/test_sprint5_recovery.py) | Combined permission changes, concurrent claims and private recovery guidance. |
 | [tests/test_sprint5_time_regressions.py](../tests/test_sprint5_time_regressions.py) | Fixed-clock calendar and microsecond observation regressions on disposable data. |
 | [tests/test_sprint6_evaluation.py](../tests/test_sprint6_evaluation.py) | Evaluation errors, partial slots and contamination are not hidden. |
+| [tests/test_sprint7_delivery_experiment.py](../tests/test_sprint7_delivery_experiment.py) | Delivery experiment cannot silently retry or use drifted assets. |
 | [tests/test_sprint7_schema_experiment.py](../tests/test_sprint7_schema_experiment.py) | Ensure comparison runs cannot hide retries, drift or changed contact variants. |
 | [tests/test_sql_injection_guards.py](../tests/test_sql_injection_guards.py) | Adversarial SQL-identifier/status input tests against real SQLite. |
 | [tests/test_step_checkpoints.py](../tests/test_step_checkpoints.py) | Transactional checkpoint and no-replay behavior using real SQLite. |
