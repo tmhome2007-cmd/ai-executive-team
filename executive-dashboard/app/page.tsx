@@ -12,6 +12,7 @@ import Experiments from "./components/experiments";
 import OrganizationalWork from "./components/organizational-work";
 import CompanyKnowledge from "./components/company-knowledge";
 import CompanyRecords, { type ExecutiveProfile } from "./components/company-records";
+import DecisionIntake, { type ConfirmedIntake } from "./components/decision-intake";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(
   /\/$/,
@@ -1669,6 +1670,7 @@ export default function DashboardPage() {
   const [topic, setTopic] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [structuredDecision, setStructuredDecision] = useState(false);
+  const [confirmedIntake, setConfirmedIntake] = useState<ConfirmedIntake | null>(null);
   const [selectedAgents, setSelectedAgents] = useState<string[]>(["cso", "cfo", "ceo"]);
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [selectedMeetingType, setSelectedMeetingType] = useState("strategy");
@@ -1710,6 +1712,8 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({
           topic,
+          intake_confirmation: confirmedIntake,
+          source_ids: confirmedIntake?.source_ids || [],
           task_description: taskDescription,
           output_mode:
             structuredDecision && selectedMeetingType === "strategy"
@@ -2970,6 +2974,26 @@ export default function DashboardPage() {
         {/* Ad-hoc decision trigger form */}
         <section hidden={view !== "decisions"} className="space-y-6">
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
+            <DecisionIntake
+              apiBase={API_BASE}
+              apiKey={apiKey || ""}
+              onInvalidate={() => {
+                if (confirmedIntake) {
+                  setConfirmedIntake(null);
+                  setTaskDescription("");
+                }
+              }}
+              onConfirmed={(value, brief) => {
+                setTopic(value.request.slice(0, 200));
+                setTaskDescription(brief);
+                setConfirmedIntake(value);
+                setSelectedMeetingType("strategy");
+                setStructuredDecision(true);
+                setSelectedAgents(["cso", "cfo", "ceo"]);
+                setSelectedGoalId("");
+                setError(null);
+              }}
+            />
             <h2 className="text-lg font-semibold">Start New Ad-Hoc Decision</h2>
 
             {result && (
@@ -3115,7 +3139,10 @@ export default function DashboardPage() {
                 </label>
                 <textarea
                   value={taskDescription}
-                  onChange={(e) => setTaskDescription(e.target.value)}
+                  onChange={(e) => {
+                    setTaskDescription(e.target.value);
+                    setConfirmedIntake(null);
+                  }}
                   rows={3}
                   placeholder="Provide a detailed explanation of the situation and question..."
                   className="w-full rounded-md border border-gray-700 bg-gray-800 text-gray-100 p-2 placeholder-gray-500"

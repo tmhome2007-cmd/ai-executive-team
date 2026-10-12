@@ -98,10 +98,19 @@ def main():
             def respond(route):
                 req = route.request
                 urls.append(req.url)
-                assert req.method == "GET", "Review must not mutate company state"
-                response = client.get(
-                    req.url.removeprefix("http://127.0.0.1:8001"),
-                    headers={"X-API-Key": config.API_SECRET_KEY},
+                path = req.url.removeprefix("http://127.0.0.1:8001")
+                assert req.method == "GET" or (
+                    req.method == "POST"
+                    and path in {"/decisions/intake", "/decisions/intake/confirm"}
+                ), "Review allows only stateless intake; no generation or company mutation"
+                response = client.request(
+                    req.method,
+                    path,
+                    headers={
+                        "X-API-Key": config.API_SECRET_KEY,
+                        "Content-Type": "application/json",
+                    },
+                    content=req.post_data,
                 )
                 route.fulfill(
                     status=response.status_code,
@@ -115,6 +124,47 @@ def main():
             page.get_by_role("button", name="Confirm", exact=True).click()
             nav = page.get_by_role("navigation", name="Company views")
             open_view(page, "Decisions")
+            intake = page.get_by_role("region", name="First-user request intake")
+            intake.get_by_placeholder(
+                "Help me get the first real user for my tool"
+            ).fill("Help me find a first real user for a fictional tool")
+            intake.get_by_role("button", name="Clarify my request").click()
+            intake.get_by_label("Intake brief preview").wait_for()
+            assert intake.locator("select").count() == 3
+            assert (
+                "Available owner minutes this week: unknown"
+                in intake.get_by_label("Intake brief preview").inner_text()
+            )
+            intake.get_by_label("Has your intended contact", exact=False).select_option(
+                "recent_reply"
+            )
+            intake.get_by_label("Have you checked", exact=False).select_option(
+                "working"
+            )
+            intake.get_by_label("How many minutes", exact=False).select_option("30")
+            intake.get_by_role("button", name="Review brief with these answers").click()
+            intake.get_by_text("After the tool check", exact=False).wait_for()
+            intake.get_by_role(
+                "button", name="Confirm brief and fill decision form"
+            ).click()
+            intake.get_by_role("status").wait_for()
+            task = page.get_by_placeholder(
+                "Provide a detailed explanation of the situation and question..."
+            )
+            assert "recently responsive contact" in task.input_value()
+            intake.get_by_label("Has your intended contact", exact=False).select_option(
+                "silent"
+            )
+            assert task.input_value() == ""
+            intake.get_by_role("button", name="Review brief with these answers").click()
+            intake.get_by_text(
+                "Do not assume the silent contact", exact=False
+            ).wait_for()
+            intake.get_by_role(
+                "button", name="Confirm brief and fill decision form"
+            ).click()
+            intake.get_by_role("status").wait_for()
+            assert "different existing permitted conversation" in task.input_value()
             reports = page.locator(
                 'section[aria-label="AI report short review"]:visible'
             )
@@ -167,7 +217,7 @@ def main():
             assert not errors, errors
             browser.close()
         print(
-            "PASS: evidence/unknown/next-action visibility, conflict and blocking warnings, legacy fallback/full report, no approval mutation, mobile and text/key safety"
+            "PASS: short-request intake/skip/changed-answer confirmation, evidence/unknown/next-action visibility, conflict and blocking warnings, legacy fallback/full report, no generation/approval mutation, mobile and text/key safety"
         )
 
 

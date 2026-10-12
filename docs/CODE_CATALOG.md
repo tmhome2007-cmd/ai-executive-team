@@ -13,6 +13,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [api/common.py](../api/common.py) | Shared strict request validation, private headers and API error mapping. |
 | [api/company_knowledge.py](../api/company_knowledge.py) | Owner-authenticated read-only company knowledge navigation. |
 | [api/conversation_audio.py](../api/conversation_audio.py) | Owner-requested local conversation audio API routes. |
+| [api/decision_intake.py](../api/decision_intake.py) | Stateless authenticated preview/confirmation; no generation, persistence or tools. |
 | [api/decisions.py](../api/decisions.py) | Thin owner-authenticated HTTP boundary for approved decision preparation. |
 | [api/people.py](../api/people.py) | Character presentation, workforce and fictional simulation API routes. |
 | [api/practice_artifacts.py](../api/practice_artifacts.py) | Owner-authenticated inert exports and bounded comparisons of saved samples. |
@@ -30,6 +31,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [executive-dashboard/app/components/conversation-voice.tsx](../executive-dashboard/app/components/conversation-voice.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/dashboard-shell.tsx](../executive-dashboard/app/components/dashboard-shell.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/decision-brief.tsx](../executive-dashboard/app/components/decision-brief.tsx) | Dashboard component, library or style; see filename and source. |
+| [executive-dashboard/app/components/decision-intake.tsx](../executive-dashboard/app/components/decision-intake.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/executive-skills.tsx](../executive-dashboard/app/components/executive-skills.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/experiments.tsx](../executive-dashboard/app/components/experiments.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/neural-voice-audition.tsx](../executive-dashboard/app/components/neural-voice-audition.tsx) | Dashboard component, library or style; see filename and source. |
@@ -120,6 +122,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/sprint3_practice_smoke.py](../scripts/sprint3_practice_smoke.py) | Optional real local-model examples on disposable data; never owner acceptance. |
 | [scripts/sprint5_private_examples.py](../scripts/sprint5_private_examples.py) | Tool-free local BE-35 drafts for owner review; no company database writes. |
 | [scripts/sprint6_evaluation.py](../scripts/sprint6_evaluation.py) | Explicit local-only evaluation with immutable freezes and retained failed slots. |
+| [scripts/sprint7_intake_experiment.py](../scripts/sprint7_intake_experiment.py) | Freeze and assess the same contact variants after deterministic owner intake. |
 | [scripts/sprint7_schema_experiment.py](../scripts/sprint7_schema_experiment.py) | Freeze and run one explicit local-only three-variant schema comparison. |
 | [scripts/synthesize_conversation.py](../scripts/synthesize_conversation.py) | Bounded isolated local speech worker. Private input via stdin; WAV via stdout. |
 | [scripts/workflow_queue_smoke.py](../scripts/workflow_queue_smoke.py) | Real Chromium owner controls against disposable SQLite; public reader is mocked. |
@@ -141,6 +144,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_container_executor.py](../tests/test_container_executor.py) | Unit tests for fail-closed Docker execution (never start a real container). |
 | [tests/test_container_runtime.py](../tests/test_container_runtime.py) | Opt-in real Docker confinement test. No mocks; CI pre-pulls Alpine. |
 | [tests/test_conversation_audio.py](../tests/test_conversation_audio.py) | Private speech on disposable SQLite and synthetic audio; no company data or downloads. |
+| [tests/test_decision_intake.py](../tests/test_decision_intake.py) | Short-request skips, trusted conditional routing and source/confirmation gates. |
 | [tests/test_decision_preparation.py](../tests/test_decision_preparation.py) | Real SQLite/API characterization of decision preparation without live agents. |
 | [tests/test_discussion_contracts.py](../tests/test_discussion_contracts.py) | Real CrewAI prompt contracts distinguish discussion phases from generic strategy. |
 | [tests/test_discussion_quality.py](../tests/test_discussion_quality.py) | Regression checks for discussion quality. |
@@ -199,6 +203,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [workflows/container_executor.py](../workflows/container_executor.py) | Constrained Docker command executor. |
 | [workflows/conversation_audio.py](../workflows/conversation_audio.py) | Explicit owner-requested, bounded local speech; source/profile-bound private cache. |
 | [workflows/daily_research.py](../workflows/daily_research.py) | Scheduled executive research with persisted attempts and recovery. |
+| [workflows/decision_intake.py](../workflows/decision_intake.py) | Owner-reviewed first-user intake; deterministic questions, no inference or actions. |
 | [workflows/decision_preparation.py](../workflows/decision_preparation.py) | Approved decision preparation: claims, bounded proposals, provenance and private recovery. |
 | [workflows/discussion_contracts.py](../workflows/discussion_contracts.py) | Fixed, phase-specific published discussion contracts, separate from strategy meetings. |
 | [workflows/discussion_rounds.py](../workflows/discussion_rounds.py) | Opt-in proposal -> critique -> revision -> CEO synthesis, with durable role steps. |
@@ -329,6 +334,8 @@ Routes retain authentication and approval requirements; this index grants no aut
 | POST | `/capabilities/{capability_id}/revoke` | [foundation_api.py](../foundation_api.py) · `capability_revoke` |
 | POST | `/capabilities/{capability_id}/verify` | [foundation_api.py](../foundation_api.py) · `capability_verify` |
 | POST | `/conversation-audio` | [api/conversation_audio.py](../api/conversation_audio.py) · `generate_conversation_audio` |
+| POST | `/decisions/intake` | [api/decision_intake.py](../api/decision_intake.py) · `intake` |
+| POST | `/decisions/intake/confirm` | [api/decision_intake.py](../api/decision_intake.py) · `confirm` |
 | POST | `/decisions/trigger` | [main.py](../main.py) · `trigger_ad_hoc_decision` |
 | POST | `/decisions/{decision_id}/approve` | [main.py](../main.py) · `approve_decision` |
 | POST | `/decisions/{decision_id}/prepare` | [api/decisions.py](../api/decisions.py) · `prepare_approved_decision` |

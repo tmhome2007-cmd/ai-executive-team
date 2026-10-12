@@ -468,7 +468,11 @@ class DailyResearchResponse(BaseModel):
     message: Optional[str] = None
 
 
+from api.decision_intake import IntakeConfirmation, confirm_intake, make_intake_router
+
+
 class DecisionRequest(BaseModel):
+    intake_confirmation: IntakeConfirmation | None = None
     output_mode: Literal["legacy", "structured"] = "legacy"
     source_ids: list[int] = Field(default_factory=list, max_length=20)
     workflow_run_id: Optional[str] = Field(
@@ -932,6 +936,9 @@ def list_meeting_types():
     }
 
 
+app.include_router(make_intake_router(verify_api_key))
+
+
 @app.post(
     "/decisions/trigger",
     response_model=DecisionResponse,
@@ -941,6 +948,22 @@ def list_meeting_types():
 def trigger_ad_hoc_decision(request: DecisionRequest):
     """Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op."""
     import uuid
+
+    if request.intake_confirmation is not None:
+        try:
+            intake = confirm_intake(request.intake_confirmation)
+            if (
+                request.meeting_type != "strategy"
+                or request.output_mode != "structured"
+                or request.task_description != intake["brief"]
+                or request.source_ids != request.intake_confirmation.source_ids
+                or request.goal_id is not None
+            ):
+                raise ValueError("Intake generation input changed")
+        except (ValueError, LookupError):
+            raise HTTPException(
+                409, "Review and confirm the intake again before generation."
+            ) from None
 
     workflow_run_id = request.workflow_run_id or f"decision:{uuid.uuid4()}"
     goal = None
