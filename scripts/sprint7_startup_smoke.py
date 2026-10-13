@@ -14,8 +14,6 @@ import tempfile
 from unittest.mock import patch
 import uuid
 
-from workflows.quality_benchmark import local_request
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
