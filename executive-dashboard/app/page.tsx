@@ -1679,6 +1679,7 @@ export default function DashboardPage() {
   );
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DecisionResponse | null>(null);
+  const [decisionRequestUncertain, setDecisionRequestUncertain] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const toggleAgent = (key: string) => {
@@ -1702,6 +1703,8 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setDecisionRequestUncertain(false);
+    let outcomeUncertain = true;
 
     try {
       const response = await fetch(`${API_BASE}/decisions/trigger`, {
@@ -1732,11 +1735,13 @@ export default function DashboardPage() {
       }
 
       if (!response.ok) {
+        outcomeUncertain = response.status >= 500 || response.status === 408;
         const detail = await response.json().catch(() => null);
         throw new Error(detail?.detail || `Error: ${response.statusText}`);
       }
 
       const data: DecisionResponse = await response.json();
+      outcomeUncertain = false;
       setResult(data);
       fetchDashboardData();
       if (apiKey) {
@@ -1744,6 +1749,7 @@ export default function DashboardPage() {
         fetchActionHistory(apiKey);
       }
     } catch (err: unknown) {
+      setDecisionRequestUncertain(outcomeUncertain);
       setError(errorMessage(err) || "An unknown error occurred.");
     } finally {
       setLoading(false);
@@ -3083,6 +3089,37 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {decisionRequestUncertain && (
+              <div
+                role="status"
+                aria-label="Decision request recovery"
+                className="p-3 border border-amber-900 rounded text-sm text-amber-200 space-y-2"
+              >
+                <p>
+                  The request outcome is uncertain. A completed decision may already be
+                  saved in Decision History. Keep the terminal open; generation may
+                  still be running. Check history before starting another request.
+                </p>
+                <button
+                  type="button"
+                  className="text-cyan-300 underline"
+                  onClick={() => {
+                    fetchDashboardData();
+                    document
+                      .getElementById("decision-history")
+                      ?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  Refresh Decision History
+                </button>
+                <p>
+                  If nothing appears, check again after generation finishes. An empty
+                  history is not proof the request stopped. Refreshing history does not
+                  start a new meeting.
+                </p>
+              </div>
+            )}
+
             <form onSubmit={handleTriggerDecision} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">
@@ -3219,7 +3256,7 @@ export default function DashboardPage() {
         </section>
         {/* Decision history */}
         <section hidden={view !== "decisions"} className="space-y-6">
-          <div>
+          <div id="decision-history">
             <h2 className="text-xl font-bold mb-4">Decision History</h2>
             <div className="space-y-4">
               {history.length === 0 && (

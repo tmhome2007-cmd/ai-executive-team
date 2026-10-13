@@ -51,7 +51,7 @@ From this checkout:
 
 Open `http://127.0.0.1:3000`. In another terminal in the same checkout, `./company key` copies the **existing** API key for dashboard login. `./company audit` runs checks with disposable data. The launcher preserves the database and `.env`, uses backend port 8001, starts in sandbox with Telegram and remote LLM disabled, and stops if ports are occupied. Existing eligible scheduled work may run while the application is awake.
 
-Dependencies, `.venv/`, `node_modules/` and `.env` are excluded from Git. For a fresh installation use the manual setup below; do not replace an existing `.env` with the example.
+Dependencies, `.venv/`, `node_modules/` and `.env` are excluded from Git. After installing dependencies, a fresh checkout with no `.env` or company database can run `./company init-local` once, then use the usual `./company start`. This creates owner-only local credentials without printing them, and refuses existing configuration/data. For an existing company preserve its original `.env`; see [local setup and request recovery](LOCAL_COMMANDS.md).
 
 ## Prerequisites
 

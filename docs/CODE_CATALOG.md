@@ -94,7 +94,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/browser_navigation.py](../scripts/browser_navigation.py) | Shared navigation for production Chromium smokes, including collapsed mobile menus. |
 | [scripts/business_discovery_smoke.py](../scripts/business_discovery_smoke.py) | Full owner research/practice UI on disposable records and a supplied dashboard URL. |
 | [scripts/code_catalog.py](../scripts/code_catalog.py) | Build a compact, searchable source/route index without importing application code. |
-| [scripts/company_cli.py](../scripts/company_cli.py) | Local owner launcher. Never creates keys, resets data, switches branches or kills existing apps. |
+| [scripts/company_cli.py](../scripts/company_cli.py) | Local owner launcher. Preserves credentials/data; explicit init-local creates fresh configuration. |
 | [scripts/conversation_audio_smoke.py](../scripts/conversation_audio_smoke.py) | Temporary owner playback test with synthetic WAV, no model/cloud calls. |
 | [scripts/dashboard_design_smoke.py](../scripts/dashboard_design_smoke.py) | Visual and navigation regression check with disposable company records. |
 | [scripts/dashboard_smoke.py](../scripts/dashboard_smoke.py) | Dashboard navigation/privacy smoke test with synthetic API responses only. |

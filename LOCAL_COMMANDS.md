@@ -3,12 +3,14 @@
 Use this checkout rather than the older `Ai village/AI Executive Team` copy. From any terminal:
 
 ```sh
-cd "/Users/alpha/.codex/.chatgpt-projects/g-p-6ac6034a5d7881918e21bf72595bb34b/foundation-hardening"
+cd "/Users/alpha/Ai village/AI Executive Team V2CHAT"
 ./company doctor
 ./company start
 ```
 
 `cd` selects the checkout. `doctor` checks the current Git branch, this checkout's Python 3.12 environment, configured key, Node/npm, Docker, local Ollama and both application ports. It does not change files, fetch commits, switch branches or stop apps. Open Docker Desktop and Ollama if it reports they are unavailable.
+
+For a fresh checkout with no `.env` or company database, run `./company init-local` once. It creates private owner-only configuration and new local credentials without displaying them. It refuses existing configuration or company data. Then use the usual `./company start`. Do not use fresh setup to replace credentials for an existing company. Environment variables still override `.env`.
 
 `start` builds the current branch's dashboard, starts the backend on 8001 and dashboard on 3000, then copies your **existing** API key to the macOS clipboard. Open `http://127.0.0.1:3000` and paste the key. Keep this single terminal open. Ctrl+C stops only the apps this launcher started.
 
@@ -19,6 +21,7 @@ If older apps already occupy those ports, stop them with Ctrl+C in their own ter
 | Command | Purpose |
 |---|---|
 | `./company doctor` | Diagnose local setup without starting apps |
+| `./company init-local` | Explicit one-time setup for a fresh checkout only |
 | `./company start` | Build and run both apps in one terminal |
 | `./company key` | Copy the configured key again, without displaying or replacing it |
 | `./company audit` | Run automated checks using disposable data and a separate frontend copy |
@@ -26,7 +29,7 @@ If older apps already occupy those ports, stop them with Ctrl+C in their own ter
 
 The launcher enforces local sandbox settings, disables raw shell, remote LLMs, Telegram and framework telemetry for its children. It preserves your `.env`, database, goals, existing key and unrelated processes. Existing approved local schedules still run under sandbox settings. It does not make a fresh test company or reset the current one. The audit's disposable internal key never replaces your dashboard key.
 
-A missing/short `API_SECRET_KEY` must be set privately in this checkout's `.env`; the launcher will not generate one silently. Environment variables override `.env`, so use the same launcher/terminal configuration for start and key copy. Never paste keys into chat or commit `.env`.
+A missing/short/example `API_SECRET_KEY` is rejected. `start`, `doctor` and `key` never generate or replace credentials. Only the explicit fresh-setup command creates new configuration. Environment variables override `.env`, so use the same launcher/terminal configuration for start and key copy. Never paste keys into chat or commit `.env`.
 
 ## Git, separately
 
@@ -72,3 +75,7 @@ Your existing configured company still uses `./company start` and its existing k
 Use `./company test` for backend regressions. It discovers only tests/, overrides company paths and credentials with temporary values before imports, disables Telegram/cloud/raw shell, and cleans temporary records after exit. `./company test --list` discovers without running cases; `./company test --pattern test_decision_preparation.py` narrows the filename pattern. `./company test --docker` explicitly includes the real Docker boundary check using the existing pinned image; it never pulls an image. Skips remain visible.
 
 `verify_system.py` remains the separate foundation checker and `./company audit` remains the complete integration/security/browser check. Frontend `npm test` and vendor self-tests stay in their package directories. Opt-in examples now live under scripts/manual_checks/; see its README. They are not automatically run.
+
+## Long decision requests
+
+Keep the startup terminal open while a meeting runs. The dashboard calls the local API directly; there is no thirty-second Next proxy in the normal launcher. If the connection drops or the server returns an unexpected error, use **Refresh Decision History** before starting another meeting. The original request may still complete and save a pending brief. An empty history immediately after an error does not prove generation stopped. Refresh again after it finishes; refreshing never starts generation or grants approval. This guidance does not implement durable jobs, cancellation or idempotent request retries.

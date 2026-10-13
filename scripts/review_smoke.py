@@ -93,12 +93,25 @@ def main():
             page.set_default_timeout(15000)
             errors = []
             urls = []
+            trigger_mode = ["network"]
+            trigger_attempts = []
             page.on("pageerror", lambda e: errors.append(str(e)))
 
             def respond(route):
                 req = route.request
                 urls.append(req.url)
                 path = req.url.removeprefix("http://127.0.0.1:8001")
+                if req.method == "POST" and path == "/decisions/trigger":
+                    trigger_attempts.append(trigger_mode[0])
+                    if trigger_mode[0] == "network":
+                        route.abort("failed")
+                    else:
+                        route.fulfill(
+                            status=500,
+                            content_type="text/plain",
+                            body="Internal Server Error",
+                        )
+                    return  # Never reach the real generation handler or write a decision.
                 assert req.method == "GET" or (
                     req.method == "POST"
                     and path in {"/decisions/intake", "/decisions/intake/confirm"}
@@ -206,6 +219,34 @@ def main():
                 get_decision_by_id(ident)["approval_status"] == "pending"
                 for ident in ids
             )
+            for failure in ("network", "server"):
+                trigger_mode[0] = failure
+                page.get_by_placeholder("E.g. Expansion into the German market").fill(
+                    "Fictional connection recovery"
+                )
+                page.get_by_role("button", name="Start Decision", exact=True).click()
+                recovery = page.get_by_role("status", name="Decision request recovery")
+                recovery.wait_for()
+                recovery.get_by_text(
+                    "An empty history is not proof", exact=False
+                ).wait_for()
+                attempts = len(trigger_attempts)
+                with page.expect_request(
+                    lambda r: "/decisions/history" in r.url and r.method == "GET"
+                ):
+                    recovery.get_by_role(
+                        "button", name="Refresh Decision History"
+                    ).click()
+                self_report = page.get_by_role(
+                    "heading", name="Decision History", exact=True
+                )
+                self_report.wait_for()
+                assert len(trigger_attempts) == attempts
+                assert all(
+                    get_decision_by_id(ident)["approval_status"] == "pending"
+                    for ident in ids
+                )
+            assert trigger_attempts == ["network", "server"]
             page.set_viewport_size({"width": 390, "height": 844})
             page.screenshot(path="/private/tmp/short-review-mobile.png", full_page=True)
             assert page.evaluate(
@@ -217,7 +258,7 @@ def main():
             assert not errors, errors
             browser.close()
         print(
-            "PASS: short-request intake/skip/changed-answer confirmation, evidence/unknown/next-action visibility, conflict and blocking warnings, legacy fallback/full report, no generation/approval mutation, mobile and text/key safety"
+            "PASS: short-request intake/skip/changed-answer confirmation, evidence/unknown/next-action visibility, conflict and blocking warnings, legacy fallback/full report, uncertain-request/history recovery without retry or generation/approval mutation, mobile and text/key safety"
         )
 
 
