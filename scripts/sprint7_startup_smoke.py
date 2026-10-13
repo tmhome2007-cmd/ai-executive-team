@@ -163,7 +163,7 @@ app.router.lifespan_context = _isolated_startup
                 with opener.open(f"http://127.0.0.1:{ui_port}/", timeout=5) as response:
                     assert response.status == 200
                     assert (
-                        "http://127.0.0.1:8001"
+                        f"http://127.0.0.1:{api_port}"
                         in response.headers["Content-Security-Policy"]
                     )
                 results.update(
