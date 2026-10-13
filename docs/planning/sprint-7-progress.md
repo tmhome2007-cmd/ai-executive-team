@@ -5,7 +5,7 @@
 | Item | State | Evidence |
 |---|---|---|
 | BE-55 | Review | [Raw-to-stored diagnosis](../../BE55_OWNER_TEST_DIAGNOSIS.md); exact contribution and brief comparisons, no regeneration |
-| BE-56 | Backlog | Requested development comparison frozen; full reserved-transfer protocol still pending |
+| BE-56 | Review of protocol/input freeze | [Reserved transfer protocol](../../BE56_TRANSFER_PROTOCOL.md); two new private tasks, no outputs; candidate-specific assessment pending |
 | BE-57 | Review | [Four-project, ten-page shortlist](../../BE57_RESEARCH_SHORTLIST.md); no installation/adoption, unknown maintenance fields explicit |
 | BE-59 | Blocked on usefulness | [Separated draft delivery](../../BE59_DRAFT_DELIVERY_REPAIR.md): 9/9 validated, drafts delivered 3/3 where required, 0/9 complete usefulness; unmerged |
 | BE-61 | Review of bounded intake | [Short-request flow](../../BE61_SHORT_REQUEST_INTAKE.md), full local audit; plan delivery remains blocked |
@@ -34,3 +34,11 @@ Complete usefulness remains 0/9: generic/duplicated checks, policy quotations as
 ## Reasoning repair and owner-requested pause
 
 Owner authorized concrete reasoning work, then explicitly paused for sleep on 12 October 2026. See [reasoning review](../../BE59_REASONING_REPAIR.md) and [verification](be59-reasoning-verification.json). Four separately frozen development candidates, 36 samples/45 stage responses, all retained; final 5ebec95 validates 6/9, complete analyst usefulness 0/9. Final backend suite: 366 tests, real Docker, no skips. Explicit operational recipes/correction snapshots improve the practical plan; role-neutral model interpretation still introduces unsupported inferences/misattribution. BE-59 remains blocked and experimental, no merge or API rollout. All inference/tests finished; resume only when the owner asks. Next: bounded model-quality comparison; only two 8B models are currently installed, no downloads/cloud authorized.
+
+## Resume — 13 October 2026
+
+Owner resumed work while in class. Remote main reverified at 822712a; no matching Sprint 7 remote branch/PR found. Installed llama3 comparison frozen on 5023725 validates 3/9 versus retained llama3.1 6/9; both complete usefulness 0/9. [Comparison metadata](be59-installed-model-comparison.json). No automatic source relabelling, shortening or fallback. Backend 368 tests with real Docker/no skips passed; 24 focused guards and maintenance/Bandit passed. This is a retained previous-day comparison, not a statistical model ranking.
+
+Two new fictional transfer tasks and protocol reserved privately, no model outputs. Author exposure disclosed, not blind; all earlier cases remain development. Independent five-round protocol is planned, not implemented. BE-56 protocol/input freeze ready for review, final candidate/model freeze still pending.
+
+Owner explicitly approved the [9GB Qwen2.5 14B local-model experiment](../../MODEL_QUALITY_NEXT_STEP.md). Download is in progress; installed identity, new freeze and nine-case test follow only after successful verification. No default model, role, API, CI, database, deployment or cloud change.

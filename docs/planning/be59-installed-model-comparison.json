@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-13",
+  "candidate_commit": "50237251fd35be88375dd32f9fbec229845866e3",
+  "source_hashes": {
+    "workflows/plan_delivery.py": "b4c250db33dfcbcbf93ebe6c1ec4414192ce7fe11369bef72eaa256017c33e7c",
+    "workflows/actionable_plan.py": "38f9c7a274ee72b0f9920a18c7a18c1318401d8aa94be50e179673b1a48d280d",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "workflows/structured_decision.py": "d2770fdba45fe8524edd3287324d2f9a9624c6a05ebebdf1f38951031b26d37f",
+    "scripts/sprint7_delivery_experiment.py": "0840efd238a1ed72743573370bd890921c7d1cf4e746af82d4f65653e434af5c",
+    "scripts/sprint7_schema_experiment.py": "b22b89dfe4472b2855a7a9374f09097fffcf28d83ed67660e87ef6fe4f494cab"
+  },
+  "model": {
+    "digest": "365c0bd3c000a25d28ddbf732fe1c6add414de7275464c4e4d1c3b5fcb5d8ad1",
+    "configuration": {
+      "temperature": 0,
+      "max_tokens": 1200,
+      "timeout": 120,
+      "provider": "ollama",
+      "tag": "llama3",
+      "resolved_tag": "llama3:latest",
+      "endpoint": "http://127.0.0.1:11434",
+      "response_mode": "False",
+      "other_options": "SDK and Ollama defaults; not a deterministic generation guarantee"
+    }
+  },
+  "baseline_model": {
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+    "configuration": {
+      "temperature": 0,
+      "max_tokens": 1200,
+      "timeout": 120,
+      "provider": "ollama",
+      "tag": "llama3.1",
+      "resolved_tag": "llama3.1:latest",
+      "endpoint": "http://127.0.0.1:11434",
+      "response_mode": "False",
+      "other_options": "SDK and Ollama defaults; not a deterministic generation guarantee"
+    }
+  },
+  "options": {
+    "temperature": 0,
+    "num_predict": 1200,
+    "num_ctx": 4096,
+    "seed": 47
+  },
+  "counts": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 3,
+    "stage_responses": 9,
+    "errors": 6,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "pending",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "semantic_usefulness": {
+    "complete": 0,
+    "denominator": 9,
+    "owner_accepted": false
+  },
+  "baseline": {
+    "private_run": "/Users/alpha/Ai village/AI Executive Team V2CHAT/audit-results/sprint7-reasoning/run-7f48dcb659da476ea5e79e0d407733ad",
+    "validated": 6,
+    "complete_usefulness": 0,
+    "denominator": 9,
+    "scope": "Retained previous-day samples; identical helper/assets, cases and options, not temporal/performance ranking."
+  },
+  "private_run": "audit-results/sprint7-reasoning/run-caf1997db5634d7080e8f2cd4bc737f7",
+  "assessment_sha256": "49caaf709b12873642c063a89f096e4ffa0f31f7b77e5e7768e542d1512508b3",
+  "technical_checks": {
+    "backend": 368,
+    "docker": true,
+    "skips": 0,
+    "commit": "50237251fd35be88375dd32f9fbec229845866e3",
+    "focused": 24,
+    "format_catalog": "PASS",
+    "targeted_bandit": "PASS",
+    "new_full_audit": false
+  },
+  "remote_snapshot": {
+    "main": "822712a671095803ed6fa46fd8e832811d2dbc60",
+    "matching_branch": false,
+    "matching_pr_search_count": 0
+  },
+  "new_model_permission": "Owner explicitly approved downloading qwen2.5:14b-instruct-q4_K_M and same private tests on 2026-10-13; no default-model or production rollout permission inferred.",
+  "merge": false
+}

@@ -15,3 +15,7 @@ The prepared runner can select this tag only after it is installed; identity loo
 Permission is needed because the saved project boundary excludes model downloads. The next action would download about 9GB and occupy local storage. The model itself has no purchase price; no paid service or cloud inference is proposed. If permission is not given, keep current models and leave model usefulness blocked while working on independent maintenance.
 
 Research scope: one candidate, three unique resolved primary pages (Qwen repository redirect, official model tag and license), generic queries, no private text transmitted, no cloning/install/source copying. No “best model” or guaranteed quality claim.
+
+## Owner authorization
+
+On 13 October 2026 the owner explicitly approved downloading this exact local model and running the same private tests. Download is in progress; resolve/freeze identity before inference. This authorization does not change production defaults, privacy gates or deployment/merge requirements.

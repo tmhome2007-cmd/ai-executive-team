@@ -9,11 +9,11 @@
   },
   {
     "title": "BE-56 · Freeze usefulness evaluation and untouched transfer cases",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor. Protocol/input freeze on 13 October 2026: two new private fictional transfer tasks, author exposure disclosed; no model outputs, candidate/model freeze and assessment pending. See BE56_TRANSFER_PROTOCOL.md.",
     "acceptance_criteria": "Freeze a rubric, model identity/settings, protocol and sample counts before implementation tuning. Treat the owner example and contact variants as development/regression data. Reserve at least two newly authored transfer tasks for final assessment; disclose author exposure and do not call them blind. Assess structure, grounding, authority, responsiveness to changed facts and owner usefulness separately. Freeze five runs for the independent-proposal comparison and explain deterministic-setting limits. Retain failed, repaired, incomplete and error samples; any assessment case used for a fix becomes development data.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review"
   },
   {
     "title": "BE-57 · Review reusable GitHub projects and primary documentation",
