@@ -31,6 +31,25 @@ class StructuredDecisionTests(unittest.TestCase):
         "owner-task": "The ledger records 12 forms. Participant count is unknown."
     }
 
+    def test_wording_matches_ignore_punctuation_without_inventing_agreement(self):
+        ceo = sd.validate_contribution(json.dumps(sample()), self.sources)
+        cfo = sd.validate_contribution(
+            json.dumps(sample("  REVIEW the supplied   ledger privately  ")),
+            self.sources,
+        )
+        brief = sd.render_brief({"cfo": cfo, "ceo": ceo})
+        self.assertIn("Matching proposals: CFO, CEO.", brief)
+        self.assertIn("no implied vote", brief)
+        self.assertIn("CFO: no objection recorded; agreement is not inferred.", brief)
+        different = sd.validate_contribution(
+            json.dumps(sample("Do not review the supplied ledger privately.")),
+            self.sources,
+        )
+        self.assertIn(
+            "Matching proposals: CEO.",
+            sd.render_brief({"cfo": different, "ceo": ceo}),
+        )
+
     def test_rejects_bad_schema_reference_quote_and_consent(self):
         for change in (
             dict(extra="invented"),

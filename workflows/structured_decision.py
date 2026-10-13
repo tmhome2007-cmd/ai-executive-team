@@ -210,6 +210,11 @@ def generate_contribution(payload, sources, directory, role, base_url, transport
             return obj
 
 
+def normalized_proposal_wording(value):
+    """Compare spelling only; matching wording never establishes agreement."""
+    return " ".join(value.split()).casefold().rstrip(".!?").rstrip()
+
+
 def render_brief(contributions):
     """Render actual proposals and objections without manufacturing agreement."""
     final_role = "ceo" if "ceo" in contributions else list(contributions)[-1]
@@ -217,7 +222,8 @@ def render_brief(contributions):
     support = [
         role.upper()
         for role, item in contributions.items()
-        if item.recommendation == chosen.recommendation
+        if normalized_proposal_wording(item.recommendation)
+        == normalized_proposal_wording(chosen.recommendation)
     ]
     lines = [
         "Findings",
@@ -225,7 +231,7 @@ def render_brief(contributions):
         f"Proposed owner effort: {chosen.effort_minutes} minutes (estimate).",
         "Matching proposals: "
         + ", ".join(support)
-        + ". Exact wording matches only; no implied vote.",
+        + ". Wording matches ignore case, whitespace and final punctuation; no implied vote.",
         "\nRole positions and objections",
     ]
     for role, item in contributions.items():
