@@ -253,4 +253,34 @@ def prune_evaluation_samples(cutoff):
                     is not None,
                     cutoff,
                 )
+    # Sprint 7 contains private input snapshots and assessments as well as raw
+    # outputs. Expire those bytes too; counts/settings and hash receipts remain.
+    for label in ("schema", "intake", "delivery", "reasoning", "transfer"):
+        container = audit / ("sprint7-" + label)
+        if not container.is_dir() or os.path.realpath(container) != str(container):
+            continue
+        for child in container.iterdir():
+            if not re.fullmatch(r"(?:run|freeze)-[0-9a-f]{32}", child.name):
+                continue
+            deleted += _expire_evaluation_directory(
+                child,
+                lambda name: name
+                in {
+                    "freeze.json",
+                    "cases.json",
+                    "semantic-assessment.json",
+                    "backend-tests.log",
+                }
+                or re.fullmatch(
+                    r"(?:A_as_tested|B_replied|C_silent)-[1-3](?:-(?:baseline|candidate))?\.json",
+                    name,
+                )
+                is not None,
+                cutoff,
+            )
+    deleted += _expire_evaluation_directory(
+        audit / "sprint7-diagnosis",
+        lambda name: name == "owner-run-trace.json",
+        cutoff,
+    )
     return deleted
