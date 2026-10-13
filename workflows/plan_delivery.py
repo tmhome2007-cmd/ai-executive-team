@@ -1,14 +1,14 @@
 """Experimental two-stage owner delivery; no API integration or execution."""
 
 import json
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from workflows.actionable_plan import validate_plan
 from workflows.structured_decision import EvidenceQuote, OPTIONS, Text
 
-VERSION = "owner-delivery-experiment-v5"
+VERSION = "owner-delivery-experiment-v6"
 
 Reason = Text
 
@@ -78,11 +78,15 @@ class Invitation(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
     status: Literal["not_sent"]
-    opening: Text
-    live_case_request: Text
-    safe_input_instructions: Text
-    feedback_questions: list[Text] = Field(min_length=2, max_length=3)
-    closing: Text
+    # Budget the final message, including separators and the application estimate.
+    # Schema-valid components must fit the unchanged 600-character OwnerPlan cap.
+    opening: str = Field(min_length=1, max_length=30)
+    live_case_request: str = Field(min_length=1, max_length=140)
+    safe_input_instructions: str = Field(min_length=1, max_length=120)
+    feedback_questions: list[Annotated[str, Field(min_length=1, max_length=35)]] = (
+        Field(min_length=2, max_length=3)
+    )
+    closing: str = Field(min_length=1, max_length=90)
 
     def message(self):
         return "\n\n".join(

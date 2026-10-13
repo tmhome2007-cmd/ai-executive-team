@@ -47,6 +47,37 @@ def draft():
 
 
 class PlanDeliveryTests(unittest.TestCase):
+    def test_schema_maximum_components_fit_complete_draft_without_truncation(self):
+        schema = delivery.Invitation.model_json_schema()["properties"]
+        value = json.loads(draft())
+        for key in (
+            "opening",
+            "live_case_request",
+            "safe_input_instructions",
+            "closing",
+        ):
+            value[key] = "x" * schema[key]["maxLength"]
+        value["feedback_questions"] = [
+            "x" * schema["feedback_questions"]["items"]["maxLength"]
+        ] * schema["feedback_questions"]["maxItems"]
+        private = delivery.validate_preparation(
+            preparation("recent_reply"), QUESTION, "recent_reply", 30, SOURCES
+        )
+        result = delivery.assemble(
+            private, json.dumps(value), QUESTION, "recent_reply", 30, SOURCES
+        )
+        expected = delivery.Invitation.model_validate(value).message()
+        self.assertEqual(
+            result.draft_message.text,
+            expected + "\n\nProposed test: about 10 minutes (estimate).",
+        )
+        self.assertLessEqual(len(result.draft_message.text), 600)
+        value["live_case_request"] += "x"
+        with self.assertRaises(ValueError):
+            delivery.assemble(
+                private, json.dumps(value), QUESTION, "recent_reply", 30, SOURCES
+            )
+
     def test_private_scope_rejects_outbound_labels_and_unrequested_draft(self):
         value = json.loads(preparation())
         value["steps"] = [{"actor": "ceo", "kind": "outreach"}]
