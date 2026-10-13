@@ -25,9 +25,9 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 | BE-57 | medium | Review reusable GitHub projects and primary documentation | review | None |
 | BE-58 | high | Make clarifications and freshness affect recommendations | backlog | BE-55, BE-56 |
 | BE-59 | high | Produce a complete actionable owner plan | blocked | BE-55, BE-56 |
-| BE-60 | high | Separate independent proposals from attributed critique | backlog | BE-56, BE-59 |
+| BE-60 | high | Separate independent proposals from attributed critique | partial | BE-56, BE-59 |
 | BE-61 | high | Handle short requests with reviewed context and few questions | review | BE-58, BE-59 |
-| BE-62 | high | Make normal startup and long-running decision review reliable | backlog | BE-55 |
+| BE-62 | high | Make normal startup and long-running decision review reliable | partial review | BE-55 |
 | BE-63 | high | Run final usefulness and owner end-to-end assessment | backlog | BE-56, BE-58, BE-59, BE-60, BE-61, BE-62 |
 | BE-64 | high | Audit integration, privacy and existing release dependencies | backlog | BE-58, BE-59, BE-60, BE-61, BE-62, BE-63 |
 | BE-65 | medium | Owner review, retrospective and closure | backlog | BE-63, BE-64 |
@@ -103,3 +103,7 @@ The owner authorized a small schema branch, the three-variant local comparison a
 ## Bounded first-user intake
 
 [BE-61 prototype](BE61_SHORT_REQUEST_INTAKE.md) is ready for owner review after a full local integration audit. It accepts a short request, at most three current answers and explicitly chosen reviewed sources, then confirms a conditional brief before the existing meeting. The same development variants now produce distinct raw proposal routes, but the isolated experimental plan still fails draft consistency in 9/9 attempts. This is partial progress, not a passed usefulness/merge gate. General request handling, persistent defaults and full-team acceptance are not inferred.
+
+## 13 October bounded follow-up
+
+The owner explicitly approved one local Qwen2.5 14B download/test, overriding the plan's initial no-download boundary for this exact experiment only. [Model comparison](BE59_QWEN_COMPARISON.md) fails usefulness despite 9/9 validity after a draft-budget repair. No default model change or experimental plan rollout. [Startup/recovery review](BE62_STARTUP_RECOVERY_REVIEW.md) records explicit fresh setup, uncertain history recovery and private experiment retention within tested limits. BE-60 wording normalization is implemented, independent proposals/critique pending. Final audit, owner acceptance and merge remain open.

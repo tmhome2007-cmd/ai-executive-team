@@ -10,7 +10,8 @@
 | BE-59 | Blocked on usefulness | [Separated draft delivery](../../BE59_DRAFT_DELIVERY_REPAIR.md): 9/9 validated, drafts delivered 3/3 where required, 0/9 complete usefulness; unmerged |
 | BE-61 | Review of bounded intake | [Short-request flow](../../BE61_SHORT_REQUEST_INTAKE.md), full local audit; plan delivery remains blocked |
 | BE-62 | Partial review | [Startup and recovery](../../BE62_STARTUP_RECOVERY_REVIEW.md); isolated normal launcher, browser recovery; durable request identity and scheduler/owner checks pending |
-| BE-58, BE-60, BE-63–65 | Backlog | [Plan and acceptance checks](../../SPRINT_7_PLAN.md) |
+| BE-60 | Partial implementation | Wording matches normalize case/space/final punctuation; independent first proposals, critique and five-run evaluation pending |
+| BE-58, BE-63–65 | Backlog | [Plan and acceptance checks](../../SPRINT_7_PLAN.md) |
 
 The missing steps/draft were absent in raw outputs and have no typed fields in the current schema. The invalid proposed actor originated in the final role output. Stored contributions and brief exactly match retained samples, and renderer reproduction matches the saved text. Copying due to prior-context exposure remains a hypothesis, not a demonstrated cause. Private trace metadata is ignored and owner-only.
 
@@ -47,3 +48,9 @@ Owner explicitly approved the [9GB Qwen2.5 14B local-model experiment](../../MOD
 ## Startup recovery and retention prerequisite
 
 [Review](../../BE62_STARTUP_RECOVERY_REVIEW.md): final 374 backend tests pass with real Docker/no skips. Fresh local setup is explicit and refuses existing company artifacts. Uncertain decision requests offer history refresh without automatic resubmission. Isolated real launcher and production browser checks pass within documented limits. New private experiment byte retention tested only in disposable fixtures; no actual company files pruned. BE-62 remains partial; BE-64 final audit remains pending.
+
+## Approved model comparison and draft-budget repair
+
+[Qwen review](../../BE59_QWEN_COMPARISON.md): exact approved 9GB local download/digest verification completed. First nine samples: 6 valid, 3 complete seven-axis analyst passes as conditional private blockers. B overlength drafts fail, C reasoning remains unusable. Component-budget repair: 9 valid, still 3 useful. Both frozen runs retained with all failures, zero repair/retry, three unique raw sequences per run. Default app model unchanged. No transfer/full-team success, rollout, acceptance or merge. Wording-match regression fixed separately; independent-proposal comparison still pending.
+
+Final backend on 6c547b6: 376 tests pass, real Docker/no skips; targeted checks and maintenance pass. Final full integration/dependency audit remains pending. All own model/test sessions finished; Qwen stays installed, no background inference was scheduled.

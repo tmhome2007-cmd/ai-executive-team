@@ -1,0 +1,112 @@
+{
+  "source_commit": "e6e30d6d43fa13037930ead33580904df6e927e4",
+  "run": "audit-results/sprint7-reasoning/run-b3f925552e0843f8b4c22b9c2e70a9b8",
+  "model": {
+    "digest": "7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6",
+    "configuration": {
+      "temperature": 0,
+      "max_tokens": 1200,
+      "timeout": 120,
+      "provider": "ollama",
+      "tag": "qwen2.5:14b-instruct-q4_K_M",
+      "resolved_tag": "qwen2.5:14b-instruct-q4_K_M",
+      "endpoint": "http://127.0.0.1:11434",
+      "response_mode": "False",
+      "other_options": "SDK and Ollama defaults; not a deterministic generation guarantee"
+    }
+  },
+  "technical": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 9,
+    "stage_responses": 12,
+    "errors": 0,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "pending",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "assessment": {
+    "reviewer": "Codex analyst, not owner acceptance",
+    "complete_usefulness": 3,
+    "denominator": 9,
+    "merge_gate_passed": false,
+    "reason": "Only three complete useful conditional plans; B drafts fail semantics and C reasoning fails, no two useful plans in each case. Schema validity alone does not pass gate.",
+    "unique_raw_sequences": 3,
+    "repairs": 0,
+    "owner_accepted": false
+  },
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "repetition": 1,
+      "sample_sha256": "1b72b57730868f3cd26581d5bacd6120098e07eb7a044b7f124757b73d4a635a",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 2,
+      "sample_sha256": "91a90f215381de5c963b50c7a02ccc10c81f3903835429bd482a4450399d35ca",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 3,
+      "sample_sha256": "ea8eb0ee8f18b2df8939253e42411a48f1b41fdc42c43268772a63aae9ffd591",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 1,
+      "sample_sha256": "f3a1010bde27e1e5b5da9f994c6a4cbb08580a8219e8ea910947eae4a70a6c92",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 2,
+      "sample_sha256": "cd7d809e13ac0ca833f0ae206ee460862560cc55cea21d34316c3cc3f74082e2",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 3,
+      "sample_sha256": "e86998563d3c9b7143ceae5f251f0398374c54f15bbdb6fd2f42623722f7ea48",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 1,
+      "sample_sha256": "ee05418862dfe3cc9583c48c8e9de2ece30bb0fc7a87d63598aa58ef362ca178",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 2,
+      "sample_sha256": "d6301c9621760a01407434041fadf56c48923acca08d9165b9dc079501d37ef5",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 3,
+      "sample_sha256": "79c2e04ded5eaff660bbae5611cee916b9be71b3ea1349051759c852618440a3",
+      "validated": true,
+      "complete_usefulness": false
+    }
+  ],
+  "slot_seconds": 448.6,
+  "baseline_run": "run-4955bf60b522421d987e41858c39d769",
+  "baseline_valid": 6,
+  "candidate_valid": 9,
+  "baseline_complete_usefulness": 3,
+  "candidate_complete_usefulness": 3,
+  "scope": "Development comparison, three identical raw sequences repeated; no transfer, full-team or owner success. Model outputs never shortened or silently repaired."
+}
