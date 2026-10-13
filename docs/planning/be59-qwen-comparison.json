@@ -1,0 +1,116 @@
+{
+  "source_commit": "875df30a0af040beae469eeb99d5939f9163cd81",
+  "run": "audit-results/sprint7-reasoning/run-4955bf60b522421d987e41858c39d769",
+  "model": {
+    "digest": "7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6",
+    "configuration": {
+      "temperature": 0,
+      "max_tokens": 1200,
+      "timeout": 120,
+      "provider": "ollama",
+      "tag": "qwen2.5:14b-instruct-q4_K_M",
+      "resolved_tag": "qwen2.5:14b-instruct-q4_K_M",
+      "endpoint": "http://127.0.0.1:11434",
+      "response_mode": "False",
+      "other_options": "SDK and Ollama defaults; not a deterministic generation guarantee"
+    }
+  },
+  "technical": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 6,
+    "stage_responses": 12,
+    "errors": 3,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "pending",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "assessment": {
+    "reviewer": "Codex analyst, not owner acceptance",
+    "rubric": "Original seven axes and development merge gate; no new acceptance or held-out claim",
+    "complete_usefulness": 3,
+    "denominator": 9,
+    "merge_gate_passed": false,
+    "reason": "Only six of nine complete plans valid and only three complete usefulness passes; no usable complete B plan. C comparison fails.",
+    "unique_raw_sequences": 3,
+    "repetitions": "Each case repeated byte-identical raw stages three times; not statistical independence",
+    "repairs": 0,
+    "owner_accepted": false
+  },
+  "sample_hashes": [
+    {
+      "case": "A_as_tested",
+      "repetition": 1,
+      "sample_sha256": "c4db11006b79d1cd1cac53fa16e374f73ce1a8743355eda1e4124401e0699045",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 2,
+      "sample_sha256": "29a627b68fc4495c12769d0cee082baa53cab92b14ba58b16a9a7bc61396f38b",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 3,
+      "sample_sha256": "b9bfda7391c6fcc711229bddb5cbbb7f5e8d73387f5b530720976c63fc9515e1",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 1,
+      "sample_sha256": "d9ed13d9134d985b9934a887cd0d7c4c5ebaa2d2f16ae7e27bdad7e9d7f18387",
+      "validated": false,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 2,
+      "sample_sha256": "648e051429597f16470cfaaa37e32d0f5f4374af9e7094eca6bc0703a136ee40",
+      "validated": false,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 3,
+      "sample_sha256": "3d58bf14daf50f4aab6e8cba2e260dc564807e2df0235672899d99dc3116988e",
+      "validated": false,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 1,
+      "sample_sha256": "1d7612a87274c415b037cc00749cc4e03b5cd983d6d56a7a3d464023791515e2",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 2,
+      "sample_sha256": "59f414b80eca86ef38d0cd7dd862e5da3ec324a6d803a630050bcf578b631dea",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 3,
+      "sample_sha256": "c18f7e10bcdfc3b266e16c7f7defb66c51b762943ae5f001bea819118f6fab7d",
+      "validated": true,
+      "complete_usefulness": false
+    }
+  ],
+  "elapsed_slot_seconds": 403.65,
+  "comparison": {
+    "baseline": "run-7f48dcb659da476ea5e79e0d407733ad",
+    "baseline_valid": 6,
+    "baseline_complete_usefulness": 0,
+    "candidate_valid": 6,
+    "candidate_complete_usefulness": 3,
+    "scope": "Retained prior-day baseline; workflow supplies steps/conditions, model supplies interpretation. No causal/general model ranking."
+  }
+}

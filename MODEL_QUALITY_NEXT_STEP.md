@@ -1,6 +1,6 @@
 # Proposed next local-model test
 
-13 October 2026. Proposal only; no model has been downloaded or adopted.
+13 October 2026. Approved experiment completed; no production adoption.
 
 The installed-model comparison does not pass usefulness: retained llama3.1 validates 6/9; llama3 validates 3/9, with zero complete analyst usefulness passes for either. These are development repetitions, not a general model ranking. Another prompt round on the same cases would not establish transfer.
 
@@ -18,4 +18,4 @@ Research scope: one candidate, three unique resolved primary pages (Qwen reposit
 
 ## Owner authorization
 
-On 13 October 2026 the owner explicitly approved downloading this exact local model and running the same private tests. Download is in progress; resolve/freeze identity before inference. This authorization does not change production defaults, privacy gates or deployment/merge requirements.
+On 13 October 2026 the owner explicitly approved downloading this exact local model and running the same private tests. Download and frozen nine-sample comparison completed; see BE59_QWEN_COMPARISON.md. This authorization does not change production defaults, privacy gates or deployment/merge requirements.
