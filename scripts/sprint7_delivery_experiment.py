@@ -192,7 +192,7 @@ def main():
     group.add_argument("--run")
     parser.add_argument(
         "--model",
-        choices=["llama3", "llama3.1"],
+        choices=["llama3", "llama3.1", "qwen2.5:14b-instruct-q4_K_M"],
         help="Freeze an already installed alternative; no pull or remote fallback.",
     )
     args = parser.parse_args()
