@@ -287,3 +287,18 @@ class CompanyCliTests(unittest.TestCase):
         ):
             cli.copy_key({"API_SECRET_KEY": "generate_with_openssl_rand_hex_32"})
         run.assert_not_called()
+
+    def test_port_probe_refuses_live_listener_but_accepts_closed_connection(self):
+        with cli.socket.socket() as listener:
+            listener.setsockopt(cli.socket.SOL_SOCKET, cli.socket.SO_REUSEADDR, 1)
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+            listener.listen(1)
+            self.assertFalse(cli.available(port))
+            with cli.socket.socket() as client:
+                client.settimeout(2)
+                client.connect(("127.0.0.1", port))
+                connection, _ = listener.accept()
+                connection.close()
+                self.assertEqual(client.recv(1), b"")
+        self.assertTrue(cli.available(port))
