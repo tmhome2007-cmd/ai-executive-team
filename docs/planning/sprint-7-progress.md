@@ -9,7 +9,8 @@
 | BE-57 | Review | [Four-project, ten-page shortlist](../../BE57_RESEARCH_SHORTLIST.md); no installation/adoption, unknown maintenance fields explicit |
 | BE-59 | Blocked on usefulness | [Separated draft delivery](../../BE59_DRAFT_DELIVERY_REPAIR.md): 9/9 validated, drafts delivered 3/3 where required, 0/9 complete usefulness; unmerged |
 | BE-61 | Review of bounded intake | [Short-request flow](../../BE61_SHORT_REQUEST_INTAKE.md), full local audit; plan delivery remains blocked |
-| BE-58, BE-60, BE-62–65 | Backlog | [Plan and acceptance checks](../../SPRINT_7_PLAN.md) |
+| BE-62 | Partial review | [Startup and recovery](../../BE62_STARTUP_RECOVERY_REVIEW.md); isolated normal launcher, browser recovery; durable request identity and scheduler/owner checks pending |
+| BE-58, BE-60, BE-63–65 | Backlog | [Plan and acceptance checks](../../SPRINT_7_PLAN.md) |
 
 The missing steps/draft were absent in raw outputs and have no typed fields in the current schema. The invalid proposed actor originated in the final role output. Stored contributions and brief exactly match retained samples, and renderer reproduction matches the saved text. Copying due to prior-context exposure remains a hypothesis, not a demonstrated cause. Private trace metadata is ignored and owner-only.
 
@@ -42,3 +43,7 @@ Owner resumed work while in class. Remote main reverified at 822712a; no matchin
 Two new fictional transfer tasks and protocol reserved privately, no model outputs. Author exposure disclosed, not blind; all earlier cases remain development. Independent five-round protocol is planned, not implemented. BE-56 protocol/input freeze ready for review, final candidate/model freeze still pending.
 
 Owner explicitly approved the [9GB Qwen2.5 14B local-model experiment](../../MODEL_QUALITY_NEXT_STEP.md). Download is in progress; installed identity, new freeze and nine-case test follow only after successful verification. No default model, role, API, CI, database, deployment or cloud change.
+
+## Startup recovery and retention prerequisite
+
+[Review](../../BE62_STARTUP_RECOVERY_REVIEW.md): final 374 backend tests pass with real Docker/no skips. Fresh local setup is explicit and refuses existing company artifacts. Uncertain decision requests offer history refresh without automatic resubmission. Isolated real launcher and production browser checks pass within documented limits. New private experiment byte retention tested only in disposable fixtures; no actual company files pruned. BE-62 remains partial; BE-64 final audit remains pending.
