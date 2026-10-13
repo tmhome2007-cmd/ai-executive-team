@@ -1,12 +1,12 @@
 """Exercise fresh setup/start/auth/intake on a tracked-source archive and empty data.
 
-No clipboard writes, generation or scheduler jobs; occupied normal ports refuse
-rather than disrupting existing apps. This is not owner/scheduler acceptance.
+No clipboard writes, generation or scheduler jobs; test archive varies ports rather than disrupting existing apps. This is not owner/scheduler acceptance.
 """
 
 import importlib.util
 import json
 import os
+import socket
 from pathlib import Path
 import subprocess
 import tarfile
@@ -58,12 +58,36 @@ async def _isolated_startup(application):
 app.router.lifespan_context = _isolated_startup
 """
             )
+        ports = []
+        while len(ports) < 2:
+            with socket.socket() as probe:
+                probe.bind(("127.0.0.1", 0))
+                port = probe.getsockname()[1]
+                if port not in ports:
+                    ports.append(port)
+        api_port, ui_port = ports
+        cli_path = checkout / "scripts/company_cli.py"
+        cli_path.write_text(
+            cli_path.read_text()
+            .replace("8001", str(api_port))
+            .replace("3000", str(ui_port))
+        )
+        main_path = checkout / "main.py"
+        main_path.write_text(
+            main_path.read_text()
+            .replace("http://localhost:3000", f"http://localhost:{ui_port}")
+            .replace("http://127.0.0.1:3000", f"http://127.0.0.1:{ui_port}")
+        )
+        results["test_ports"] = ports
+        results["port_variation"] = (
+            "Only temporary archive constants/CORS vary; production defaults and existing apps unchanged."
+        )
         spec = importlib.util.spec_from_file_location(
             "isolated_company_cli", checkout / "scripts/company_cli.py"
         )
         cli = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cli)
-        if not all(cli.available(port) for port in (8001, 3000)):
+        if not all(cli.available(port) for port in ports):
             raise RuntimeError(
                 "Normal ports occupied; no existing app was stopped or reused"
             )
@@ -107,7 +131,8 @@ app.router.lifespan_context = _isolated_startup
                 )
                 try:
                     opener.open(
-                        "http://127.0.0.1:8001/decisions/history?limit=20", timeout=5
+                        f"http://127.0.0.1:{api_port}/decisions/history?limit=20",
+                        timeout=5,
                     )
                 except cli.urllib.error.HTTPError as error:
                     assert error.code == 401
@@ -116,7 +141,7 @@ app.router.lifespan_context = _isolated_startup
                 headers = {"X-API-Key": environment["API_SECRET_KEY"]}
                 with opener.open(
                     Request(
-                        "http://127.0.0.1:8001/decisions/history?limit=20",
+                        f"http://127.0.0.1:{api_port}/decisions/history?limit=20",
                         headers=headers,
                     ),
                     timeout=5,
@@ -127,7 +152,7 @@ app.router.lifespan_context = _isolated_startup
                 ).encode()
                 with opener.open(
                     Request(
-                        "http://127.0.0.1:8001/decisions/intake",
+                        f"http://127.0.0.1:{api_port}/decisions/intake",
                         data=payload,
                         headers={**headers, "Content-Type": "application/json"},
                     ),
@@ -135,7 +160,7 @@ app.router.lifespan_context = _isolated_startup
                 ) as response:
                     preview = json.load(response)
                     assert len(preview["questions"]) == 3 and not preview["confirmed"]
-                with opener.open("http://127.0.0.1:3000/", timeout=5) as response:
+                with opener.open(f"http://127.0.0.1:{ui_port}/", timeout=5) as response:
                     assert response.status == 200
                     assert (
                         "http://127.0.0.1:8001"
@@ -156,7 +181,7 @@ app.router.lifespan_context = _isolated_startup
                 except KeyboardInterrupt:
                     pass
             assert results.get("status") == "PASS"
-        assert cli.available(8001) and cli.available(3000)
+        assert cli.available(api_port) and cli.available(ui_port)
         results["owned_servers_stopped"] = True
     target = report / "summary.json"
     target.write_text(json.dumps(results, indent=2) + "\n")
