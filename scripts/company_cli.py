@@ -40,10 +40,28 @@ def init_local():
         raise RuntimeError(
             "This checkout already has .env. It was preserved; configure its existing key privately."
         )
+    inherited_db = Path(inherited).expanduser() if inherited else None
+    if inherited_db is not None and not inherited_db.is_absolute():
+        inherited_db = ROOT / inherited_db
+    workspace = ROOT / "workspace"
+    inherited_workspace = os.environ.get("WORKSPACE_ROOT", "").strip()
+    inherited_work = (
+        Path(inherited_workspace).expanduser() if inherited_workspace else workspace
+    )
+    if not inherited_work.is_absolute():
+        inherited_work = ROOT / inherited_work
+    stored_artifacts = any(
+        path.is_dir() and any(child.name != ".gitkeep" for child in path.iterdir())
+        for path in {workspace, inherited_work}
+    )
     if (
         database.exists()
         or database.is_symlink()
-        or (inherited and Path(inherited).exists())
+        or (
+            inherited_db is not None
+            and (inherited_db.exists() or inherited_db.is_symlink())
+        )
+        or stored_artifacts
     ):
         raise RuntimeError(
             "Existing company data detected. Restore/configure its original credentials; fresh setup will not replace them."

@@ -202,7 +202,13 @@ class CompanyCliTests(unittest.TestCase):
             self.assertFalse((root / "memory").exists())
 
     def test_setup_refuses_existing_env_database_and_symlink_without_changes(self):
-        for existing in ["env", "database", "symlink"]:
+        for existing in [
+            "env",
+            "database",
+            "symlink",
+            "workspace",
+            "inherited_database",
+        ]:
             with (
                 self.subTest(existing=existing),
                 tempfile.TemporaryDirectory(
@@ -215,11 +221,24 @@ class CompanyCliTests(unittest.TestCase):
                 elif existing == "database":
                     (root / "memory").mkdir()
                     (root / "memory/executive_team.db").write_bytes(b"owner database")
-                else:
+                elif existing == "symlink":
                     (root / ".env").symlink_to(root / "absent-owner-env")
+                elif existing == "workspace":
+                    (root / "workspace").mkdir()
+                    (root / "workspace/owner-report.txt").write_text("owner artifact")
+                else:
+                    (root / "another-company.db").write_bytes(b"owner database")
                 with (
                     patch.object(cli, "ROOT", root),
-                    patch.dict("os.environ", {}, clear=True),
+                    patch.dict(
+                        "os.environ",
+                        (
+                            {"DATABASE_PATH": "another-company.db"}
+                            if existing == "inherited_database"
+                            else {}
+                        ),
+                        clear=True,
+                    ),
                     self.assertRaises(RuntimeError),
                 ):
                     cli.init_local()
@@ -231,6 +250,17 @@ class CompanyCliTests(unittest.TestCase):
                     self.assertEqual(
                         (root / "memory/executive_team.db").read_bytes(),
                         b"owner database",
+                    )
+                    self.assertFalse((root / ".env").exists())
+                if existing == "workspace":
+                    self.assertEqual(
+                        (root / "workspace/owner-report.txt").read_text(),
+                        "owner artifact",
+                    )
+                    self.assertFalse((root / ".env").exists())
+                if existing == "inherited_database":
+                    self.assertEqual(
+                        (root / "another-company.db").read_bytes(), b"owner database"
                     )
                     self.assertFalse((root / ".env").exists())
                 if existing == "symlink":
