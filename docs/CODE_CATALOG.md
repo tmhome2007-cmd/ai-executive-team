@@ -125,6 +125,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/sprint7_delivery_experiment.py](../scripts/sprint7_delivery_experiment.py) | Freeze a two-stage delivery candidate against the retained intake variants. |
 | [scripts/sprint7_intake_experiment.py](../scripts/sprint7_intake_experiment.py) | Freeze and assess the same contact variants after deterministic owner intake. |
 | [scripts/sprint7_schema_experiment.py](../scripts/sprint7_schema_experiment.py) | Freeze and run one explicit local-only three-variant schema comparison. |
+| [scripts/sprint7_startup_smoke.py](../scripts/sprint7_startup_smoke.py) | Exercise fresh setup/start/auth/intake on a tracked-source archive and empty data. |
 | [scripts/synthesize_conversation.py](../scripts/synthesize_conversation.py) | Bounded isolated local speech worker. Private input via stdin; WAV via stdout. |
 | [scripts/workflow_queue_smoke.py](../scripts/workflow_queue_smoke.py) | Real Chromium owner controls against disposable SQLite; public reader is mocked. |
 | [system_checks.py](../system_checks.py) | Runtime readiness checks for local model, storage, browser and notifications. |
