@@ -29,11 +29,11 @@ ASSETS = (
 )
 
 
-def identity():
+def identity(model_tag="llama3.1"):
     """Resolve the installed local model without pull or cloud fallback."""
     return resolve_model(
         SimpleNamespace(
-            model="ollama/llama3.1",
+            model="ollama/" + model_tag,
             provider="ollama",
             base_url="http://127.0.0.1:11434",
             temperature=0,

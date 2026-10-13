@@ -24,6 +24,7 @@ ASSETS = (
     "workflows/output_quality.py",
     "workflows/structured_decision.py",
     "scripts/sprint7_delivery_experiment.py",
+    "scripts/sprint7_schema_experiment.py",
 )
 
 
@@ -33,10 +34,12 @@ def hashes():
     }
 
 
-def freeze(previous):
+def freeze(previous, model_tag=None):
     previous = Path(previous).resolve()
     old = json.loads((previous / "freeze.json").read_text())
-    if old["model"] != identity():
+    old_tag = old["model"]["configuration"]["tag"]
+    selected = identity(model_tag or old_tag)
+    if model_tag is None and old["model"] != selected:
         raise ValueError("Installed model differs from the prior comparison")
     if any(c["input"]["tool_status"] != "unknown" for c in old["cases"].values()):
         raise ValueError(
@@ -51,7 +54,13 @@ def freeze(previous):
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
             ).strip(),
             "source_hashes": hashes(),
-            "model": old["model"],
+            "model": selected,
+            "baseline_model": old["model"],
+            "comparison_kind": (
+                "different-installed-model"
+                if selected != old["model"]
+                else "same-installed-model"
+            ),
             "options": old["options"],
             "persona": old["persona"],
             "cases": old["cases"],
@@ -71,7 +80,11 @@ def run(directory):
     if directory.parent != STORE.resolve() or not directory.name.startswith("run-"):
         raise ValueError("Invalid experiment directory")
     frozen = json.loads((directory / "freeze.json").read_text())
-    if hashes() != frozen["source_hashes"] or identity() != frozen["model"]:
+    if (
+        hashes() != frozen["source_hashes"]
+        or identity(frozen["model"].get("configuration", {}).get("tag", "llama3.1"))
+        != frozen["model"]
+    ):
         raise ValueError("Frozen source or model identity changed")
     private_save(directory, "started.json", {"time": time.time()})
     slots = []
@@ -161,7 +174,8 @@ def run(directory):
         "validated": sum(s["validated"] for s in slots),
         "stage_responses": sum(len(s["raw_stages"]) for s in slots),
         "errors": sum(s["status"] == "error" for s in slots),
-        "identity_unchanged": identity() == frozen["model"],
+        "identity_unchanged": identity(frozen["model"]["configuration"]["tag"])
+        == frozen["model"],
         "source_unchanged": hashes() == frozen["source_hashes"],
         "semantic_review": "pending",
         "merged": False,
@@ -176,8 +190,19 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--freeze-previous")
     group.add_argument("--run")
+    parser.add_argument(
+        "--model",
+        choices=["llama3", "llama3.1"],
+        help="Freeze an already installed alternative; no pull or remote fallback.",
+    )
     args = parser.parse_args()
-    print(freeze(args.freeze_previous)) if args.freeze_previous else run(args.run)
+    if args.model and not args.freeze_previous:
+        parser.error("Select the model at freeze time, never while running")
+    (
+        print(freeze(args.freeze_previous, args.model))
+        if args.freeze_previous
+        else run(args.run)
+    )
 
 
 if __name__ == "__main__":
