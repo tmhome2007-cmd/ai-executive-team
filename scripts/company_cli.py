@@ -50,6 +50,12 @@ def init_local():
     )
     if not inherited_work.is_absolute():
         inherited_work = ROOT / inherited_work
+    memory_root = ROOT / "memory"
+    stored_database = memory_root.is_symlink() or any(
+        path.name.endswith((".db", ".sqlite", ".sqlite3", ".db-wal", ".sqlite3-wal"))
+        for path in memory_root.rglob("*")
+        if path.is_file() or path.is_symlink()
+    )
     stored_artifacts = any(
         path.is_dir() and any(child.name != ".gitkeep" for child in path.iterdir())
         for path in {workspace, inherited_work}
@@ -62,6 +68,9 @@ def init_local():
             and (inherited_db.exists() or inherited_db.is_symlink())
         )
         or stored_artifacts
+        or workspace.is_symlink()
+        or inherited_work.is_symlink()
+        or stored_database
     ):
         raise RuntimeError(
             "Existing company data detected. Restore/configure its original credentials; fresh setup will not replace them."

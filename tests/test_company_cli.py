@@ -208,6 +208,8 @@ class CompanyCliTests(unittest.TestCase):
             "symlink",
             "workspace",
             "inherited_database",
+            "legacy_database",
+            "workspace_symlink",
         ]:
             with (
                 self.subTest(existing=existing),
@@ -226,8 +228,17 @@ class CompanyCliTests(unittest.TestCase):
                 elif existing == "workspace":
                     (root / "workspace").mkdir()
                     (root / "workspace/owner-report.txt").write_text("owner artifact")
-                else:
+                elif existing == "inherited_database":
                     (root / "another-company.db").write_bytes(b"owner database")
+                elif existing == "legacy_database":
+                    (root / "memory/vectors").mkdir(parents=True)
+                    (root / "memory/vectors/chroma.sqlite3").write_bytes(
+                        b"owner vectors"
+                    )
+                else:
+                    (root / "workspace").symlink_to(
+                        root / "absent-owner-workspace", target_is_directory=True
+                    )
                 with (
                     patch.object(cli, "ROOT", root),
                     patch.dict(
@@ -263,6 +274,16 @@ class CompanyCliTests(unittest.TestCase):
                         (root / "another-company.db").read_bytes(), b"owner database"
                     )
                     self.assertFalse((root / ".env").exists())
+                if existing in {"legacy_database", "workspace_symlink"}:
+                    self.assertFalse((root / ".env").exists())
+                if existing == "legacy_database":
+                    self.assertEqual(
+                        (root / "memory/vectors/chroma.sqlite3").read_bytes(),
+                        b"owner vectors",
+                    )
+                if existing == "workspace_symlink":
+                    self.assertTrue((root / "workspace").is_symlink())
+                    self.assertFalse((root / "absent-owner-workspace").exists())
                 if existing == "symlink":
                     self.assertTrue((root / ".env").is_symlink())
                     self.assertFalse((root / "absent-owner-env").exists())

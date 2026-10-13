@@ -272,7 +272,7 @@ def prune_evaluation_samples(cutoff):
                     "backend-tests.log",
                 }
                 or re.fullmatch(
-                    r"(?:A_as_tested|B_replied|C_silent)-[1-3](?:-(?:baseline|candidate))?\.json",
+                    r"(?:A_as_tested|B_replied|C_silent|transfer-[0-9]{2})-[1-3](?:-(?:baseline|candidate))?\.json",
                     name,
                 )
                 is not None,
