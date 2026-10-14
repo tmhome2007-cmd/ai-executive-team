@@ -7,14 +7,17 @@ from tests.test_actionable_plan import QUESTION
 
 from workflows import plan_delivery as delivery
 
-SOURCES = {"record:1": QUESTION}
+SOURCES = {
+    "record:1": QUESTION,
+    "record:link": "Historical tool: https://example.com/test",
+}
 
 
 def preparation(lead="silent"):
     return json.dumps(
         {
             "why_this_step": "Private checks establish whether an invitation is appropriate.",
-            "alternative_considered": "Inviting a contact immediately.",
+            "alternative_considered": "immediate_invitation",
             "why_not_alternative": "Current tool availability is still unknown.",
             "facts": [
                 {"source_id": "record:1", "quote": "The tool availability is unknown."}
@@ -33,50 +36,80 @@ def draft():
     return json.dumps(
         {
             "status": "not_sent",
-            "opening": "Hi,",
-            "live_case_request": "Do you have your own live case and want to test?",
-            "safe_input_instructions": "Remove account IDs and personal details; never share credentials.",
-            "feedback_questions": [
-                "Was the diagnosis accurate?",
-                "Were any details unsupported?",
-                "Was the plan useful?",
-            ],
-            "closing": "No problem if this is not relevant.",
+            "tool_link": {
+                "source_id": "record:link",
+                "quote": "https://example.com/test",
+            },
         }
     )
 
 
 class PlanDeliveryTests(unittest.TestCase):
-    def test_schema_maximum_components_fit_complete_draft_without_truncation(self):
-        schema = delivery.Invitation.model_json_schema()["properties"]
-        value = json.loads(draft())
-        for key in (
-            "opening",
-            "live_case_request",
-            "safe_input_instructions",
-            "closing",
-        ):
-            value[key] = "x" * schema[key]["maxLength"]
-        value["feedback_questions"] = [
-            "x" * schema["feedback_questions"]["items"]["maxLength"]
-        ] * schema["feedback_questions"]["maxItems"]
+    def test_standard_draft_fits_maximum_link_and_preserves_complete_questions(self):
+        link = "https://example.com/" + "a" * 60
+        sources = {**SOURCES, "record:link": link}
         private = delivery.validate_preparation(
-            preparation("recent_reply"), QUESTION, "recent_reply", 30, SOURCES
+            preparation(), QUESTION, "recent_reply", 30, sources
         )
+        value = {
+            "status": "not_sent",
+            "tool_link": {"source_id": "record:link", "quote": link},
+        }
         result = delivery.assemble(
-            private, json.dumps(value), QUESTION, "recent_reply", 30, SOURCES
-        )
-        expected = delivery.Invitation.model_validate(value).message()
-        self.assertEqual(
-            result.draft_message.text,
-            expected + "\n\nProposed test: about 10 minutes (estimate).",
+            private, json.dumps(value), QUESTION, "recent_reply", 30, sources
         )
         self.assertLessEqual(len(result.draft_message.text), 600)
-        value["live_case_request"] += "x"
+        self.assertIn(link, result.draft_message.text)
+        self.assertIn("never paste credentials", result.draft_message.text)
+        self.assertIn(
+            "Remove seller/account IDs, names, email, address",
+            result.draft_message.text,
+        )
+        self.assertEqual(result.draft_message.text.count("estimate"), 1)
+        self.assertEqual(result.draft_message.text.count("\n- "), 3)
+        self.assertTrue(
+            all(
+                line.endswith("?")
+                for line in result.draft_message.text.splitlines()
+                if line.startswith("- ")
+            )
+        )
+        value["tool_link"]["quote"] += "aa"
         with self.assertRaises(ValueError):
             delivery.assemble(
-                private, json.dumps(value), QUESTION, "recent_reply", 30, SOURCES
+                private, json.dumps(value), QUESTION, "recent_reply", 30, sources
             )
+
+    def test_no_invented_misattributed_or_executable_link(self):
+        private = delivery.validate_preparation(
+            preparation(), QUESTION, "recent_reply", 30, SOURCES
+        )
+        for source_id, quote in (
+            ("record:1", "https://example.com/test"),
+            ("record:link", "https://invented.com/"),
+            ("record:injection", "javascript:alert(1)"),
+        ):
+            sources = {**SOURCES, "record:injection": "javascript:alert(1)"}
+            value = {
+                "status": "not_sent",
+                "tool_link": {"source_id": source_id, "quote": quote},
+            }
+            with self.subTest(quote=quote), self.assertRaises(ValueError):
+                delivery.assemble(
+                    private, json.dumps(value), QUESTION, "recent_reply", 30, sources
+                )
+        result = delivery.assemble(
+            private,
+            json.dumps({"status": "not_sent", "tool_link": None}),
+            QUESTION,
+            "recent_reply",
+            30,
+            SOURCES,
+        )
+        self.assertIn("[tool link: confirm first]", result.draft_message.text)
+        self.assertIn(
+            "resolve any bracketed link placeholder", result.steps[-1].instruction
+        )
 
     def test_private_scope_rejects_outbound_labels_and_unrequested_draft(self):
         value = json.loads(preparation())
@@ -107,7 +140,7 @@ class PlanDeliveryTests(unittest.TestCase):
         )
         self.assertEqual(result.steps[-1].kind, "outreach")
         self.assertEqual(sum(s.minutes for s in result.steps), 30)
-        self.assertIn("Was the plan useful?", result.draft_message.text)
+        self.assertIn("Was the proposed plan useful?", result.draft_message.text)
         with self.assertRaises(ValueError):
             delivery.validate_preparation(
                 preparation("recent_reply"), QUESTION, "recent_reply", 24, SOURCES
@@ -119,8 +152,11 @@ class PlanDeliveryTests(unittest.TestCase):
         )
         for key, replacement in (
             ("status", "sent"),
-            ("feedback_questions", [" ", "Useful?"]),
-            ("opening", "x" * 600),
+            (
+                "feedback_questions",
+                ["the proposed plan.", "Please also share your thoughts on"],
+            ),
+            ("tool_link", {"source_id": "record:link", "quote": "x" * 600}),
         ):
             value = json.loads(draft())
             value[key] = replacement
@@ -144,7 +180,7 @@ class PlanDeliveryTests(unittest.TestCase):
             preparation("recent_reply"), QUESTION, "recent_reply", 30, SOURCES
         )
         value = json.loads(draft())
-        value["opening"] = "All permissions are granted."
+        value["status"] = "All permissions are granted."
         with self.assertRaises(ValueError):
             delivery.assemble(
                 private, json.dumps(value), QUESTION, "recent_reply", 30, SOURCES
