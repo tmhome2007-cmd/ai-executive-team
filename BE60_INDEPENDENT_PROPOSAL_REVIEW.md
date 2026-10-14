@@ -1,0 +1,11 @@
+# Independent proposal experiment
+
+14 October 2026. Experimental branch code; no API integration or owner acceptance.
+
+V2 gives each role the same compact proposal schema: recommendation, reason, one exact paired source quotation, unknown and labelled assumption. Canonical role backstories remain intact. Candidate first proposals have no visibility of earlier proposals; review uses one immutable attributed snapshot. Baseline first proposals see earlier proposals. Both arms use native paired quotation constraints and runtime source checks. Review binds the target role to its whole actual recommendation; a substring is insufficient. Empty objections are allowed, and convergent wording needs an explicit no-alternative explanation. No vote or permission is inferred.
+
+The original v1 development run aafe4d5b7ce749a082033c7d17239b6a was stopped after repeated 120-second local call timeouts. Four of ten planned comparison arms completed, all invalid; nine timeouts among twelve recorded stages. Six planned arms plus the interrupted in-flight slot remain incomplete. Completed raw responses and interruption receipt are retained. Its freeze description overstated native citation binding: v1 first rounds used the existing contribution schema and runtime verification, whereas v2 actually binds quotation pairs in both arms. No independence benefit can be inferred from this failed partial run.
+
+V2 removes the repeated full delivery contract from each first proposal and limits generation to 400 tokens. It tests positions and attributed critique, not steps, effort, drafts or full owner delivery. Those are evaluated separately. Five paired v2 meetings are frozen on installed llama3.1 with the same development inputs and seed; actual results remain pending. Earlier unused freezes remain labelled not-run. Unit tests cover isolation, canonical identities, shared snapshot, exact attribution, convergence, unsupported claims, raw failure retention and sequential baseline visibility.
+
+Same-setting repetitions do not estimate independent variance. Both arms changed the schema together; extra review calls and latency must be disclosed. Wording differences alone are not meaningful alternatives. App integration, full-team usefulness, owner acceptance and merge require separate evidence.

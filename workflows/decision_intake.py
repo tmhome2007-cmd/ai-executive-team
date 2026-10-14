@@ -101,14 +101,18 @@ def build_intake(value: IntakeInput, get_source):
             }
         )
     conditions = []
-    if value.tool_status != "working":
+    if value.tool_status == "unavailable":
+        conditions.append(
+            "Record the confirmed unavailable-tool blocker and pause all invitations. A later owner working confirmation is required before testing; do not claim a repair or add features."
+        )
+    elif value.tool_status != "working":
         conditions.append(
             "First check the tool privately. If unavailable, stop invitations; record the blocker without adding features."
         )
     if value.lead_status == "recent_reply":
         route = "recent_contact"
         conditions.append(
-            "After the tool check, ask the recently responsive contact whether they have their own current live case; invite only if eligible and willing. Do not ask again whether they already replied."
+            "Once tool readiness is established, ask the recently responsive contact whether they have their own current live case; invite only if eligible and willing. Reuse a current working confirmation; an unavailable-tool confirmation blocks invitations. Do not ask again whether they already replied."
         )
     elif value.lead_status == "silent":
         route = "different_route"

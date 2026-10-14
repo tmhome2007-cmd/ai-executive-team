@@ -22,6 +22,22 @@ def record(**changes):
 
 
 class DecisionIntakeTests(unittest.TestCase):
+    def test_known_outage_is_a_blocker_instead_of_an_unknown_availability_check(self):
+        result = build_intake(
+            IntakeInput(
+                request="Find a tester",
+                lead_status="recent_reply",
+                tool_status="unavailable",
+                owner_minutes=30,
+            ),
+            lambda _: None,
+        )
+        self.assertEqual(result["questions"], [])
+        conditions = "\n".join(result["conditions"])
+        self.assertIn("confirmed unavailable-tool blocker", conditions)
+        self.assertIn("pause all invitations", conditions)
+        self.assertNotIn("First check the tool privately", conditions)
+
     def test_current_answers_expire_at_the_owners_review_day_boundary(self):
         from api.decision_intake import IntakeConfirmation, confirm_intake
 

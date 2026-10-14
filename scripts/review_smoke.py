@@ -184,7 +184,9 @@ def main():
             )
             intake.get_by_label("How many minutes", exact=False).select_option("30")
             intake.get_by_role("button", name="Review brief with these answers").click()
-            intake.get_by_text("After the tool check", exact=False).wait_for()
+            intake.get_by_text(
+                "Reuse a current working confirmation", exact=False
+            ).wait_for()
             intake.get_by_role(
                 "button", name="Confirm brief and fill decision form"
             ).click()
