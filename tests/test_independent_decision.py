@@ -9,6 +9,7 @@ from workflows import independent_decision as flow
 SOURCES = {
     "owner-task": "The ledger records 12 forms. Distinct participants are unknown."
 }
+UNKNOWNS = ["Distinct participants are unknown."]
 PROFILES = {"cso": "Canonical CSO", "cfo": "Canonical CFO", "ceo": "Canonical CEO"}
 
 
@@ -23,6 +24,34 @@ def sample(recommendation="Review the supplied ledger privately."):
 
 
 class IndependentDecisionTests(unittest.TestCase):
+    def test_unterminated_model_explanations_are_rejected_without_rewriting(self):
+        for change in (
+            {"reason": "The supplied evidence matters because the"},
+            {"unknown": "Whether the records are"},
+            {"assumption": "None"},
+        ):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                flow.validate_proposal(
+                    json.dumps({**sample(), **change}), SOURCES, UNKNOWNS
+                )
+        first = {
+            role: flow.validate_proposal(json.dumps(sample()), SOURCES, UNKNOWNS)
+            for role in PROFILES
+        }
+        with self.assertRaises(ValueError):
+            flow.validate_review(
+                json.dumps(
+                    {
+                        "selected_role": "ceo",
+                        "justification": "The ledger is necessary because the",
+                        "objections": [],
+                        "no_alternative_reason": "Only the supplied ledger is available.",
+                    }
+                ),
+                first,
+                SOURCES,
+            )
+
     def test_first_inputs_are_independent_and_reviews_share_attributed_snapshot(self):
         inputs = []
         recommendations = [
@@ -54,7 +83,13 @@ class IndependentDecisionTests(unittest.TestCase):
             return {"done": True, "response": json.dumps(raw)}
 
         result = flow.run_rounds(
-            "Review the ledger", SOURCES, PROFILES, "local", "candidate", transport
+            "Review the ledger",
+            SOURCES,
+            PROFILES,
+            "local",
+            "candidate",
+            transport,
+            unknowns=UNKNOWNS,
         )
         self.assertTrue(result["valid"])
         self.assertEqual(len(inputs), 6)
@@ -71,7 +106,7 @@ class IndependentDecisionTests(unittest.TestCase):
 
     def test_unknown_target_misattribution_and_unexplained_convergence_rejected(self):
         first = {
-            key: flow.validate_proposal(json.dumps(sample()), SOURCES)
+            key: flow.validate_proposal(json.dumps(sample()), SOURCES, UNKNOWNS)
             for key in PROFILES
         }
         valid = {
@@ -112,7 +147,13 @@ class IndependentDecisionTests(unittest.TestCase):
     def test_failures_retained_without_retry_or_partial_review(self):
         transport = Mock(return_value={"done": True, "response": "not JSON"})
         result = flow.run_rounds(
-            "Review", SOURCES, PROFILES, "local", "candidate", transport
+            "Review",
+            SOURCES,
+            PROFILES,
+            "local",
+            "candidate",
+            transport,
+            unknowns=UNKNOWNS,
         )
         self.assertFalse(result["valid"])
         self.assertIsNone(result["brief"])
@@ -131,7 +172,13 @@ class IndependentDecisionTests(unittest.TestCase):
             return {"done": True, "response": json.dumps(sample())}
 
         result = flow.run_rounds(
-            "Review", SOURCES, PROFILES, "local", "baseline", transport
+            "Review",
+            SOURCES,
+            PROFILES,
+            "local",
+            "baseline",
+            transport,
+            unknowns=UNKNOWNS,
         )
         self.assertTrue(result["valid"])
         self.assertEqual(
@@ -140,8 +187,11 @@ class IndependentDecisionTests(unittest.TestCase):
         self.assertEqual(result["reviews"], {})
 
     def test_compact_native_pairs_runtime_limits_and_exact_attribution(self):
-        payload = flow.proposal_payload("local", "Review", SOURCES, "cfo", "CFO")
+        payload = flow.proposal_payload(
+            "local", "Review", SOURCES, "cfo", "CFO", UNKNOWNS
+        )
         self.assertEqual(payload["options"]["num_predict"], 400)
+        self.assertEqual(payload["format"]["properties"]["unknown"]["enum"], UNKNOWNS)
         pairs = payload["format"]["properties"]["fact"]["anyOf"]
         self.assertEqual(pairs[0]["properties"]["source_id"]["const"], "owner-task")
         self.assertIn(
@@ -150,13 +200,16 @@ class IndependentDecisionTests(unittest.TestCase):
         for change in (
             {"reason": "Owner approved execution."},
             {"unknown": " "},
+            {"unknown": "Was the supplied ledger provided?"},
             {"recommendation": "x" * 181},
             {"fact": {"source_id": "other", "quote": "The ledger records 12 forms."}},
         ):
             with self.subTest(change=change), self.assertRaises(ValueError):
-                flow.validate_proposal(json.dumps({**sample(), **change}), SOURCES)
+                flow.validate_proposal(
+                    json.dumps({**sample(), **change}), SOURCES, UNKNOWNS
+                )
         first = {
-            key: flow.validate_proposal(json.dumps(sample()), SOURCES)
+            key: flow.validate_proposal(json.dumps(sample()), SOURCES, UNKNOWNS)
             for key in PROFILES
         }
         with self.assertRaises(ValueError):

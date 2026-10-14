@@ -190,6 +190,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_sprint7_retention.py](../tests/test_sprint7_retention.py) | Private Sprint 7 bytes expire; durable metadata and unrelated files survive. |
 | [tests/test_sprint7_schema_experiment.py](../tests/test_sprint7_schema_experiment.py) | Ensure comparison runs cannot hide retries, drift or changed contact variants. |
 | [tests/test_sql_injection_guards.py](../tests/test_sql_injection_guards.py) | Adversarial SQL-identifier/status input tests against real SQLite. |
+| [tests/test_startup_scheduler.py](../tests/test_startup_scheduler.py) | Verify real lifespan registration/cleanup without executing scheduled work. |
 | [tests/test_step_checkpoints.py](../tests/test_step_checkpoints.py) | Transactional checkpoint and no-replay behavior using real SQLite. |
 | [tests/test_structured_decision.py](../tests/test_structured_decision.py) | Structured publication, failed sample retention and attributed dissent boundaries. |
 | [tests/test_test_entrypoints.py](../tests/test_test_entrypoints.py) | Test discovery and opt-in demos must not inherit company authority or initialize agents. |

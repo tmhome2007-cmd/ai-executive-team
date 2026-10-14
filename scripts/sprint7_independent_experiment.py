@@ -126,6 +126,14 @@ def run(directory):
                 frozen["profiles"],
                 frozen["model"]["configuration"]["resolved_tag"],
                 mode,
+                unknowns=[
+                    plan_delivery.UNKNOWN_QUESTIONS[key]
+                    for key in sorted(
+                        plan_delivery.allowed_unknowns(
+                            value["lead_status"], value["tool_status"]
+                        )
+                    )
+                ],
             )
             result.update(
                 case=case, meeting=number, seconds=round(time.monotonic() - started, 2)

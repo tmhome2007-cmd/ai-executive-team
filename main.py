@@ -292,10 +292,6 @@ async def _lifespan_unlocked(app: FastAPI):
     # thread uit zodat Playwright niet crasht met "Sync API inside the asyncio loop".
     await asyncio.to_thread(run_startup_checks)
 
-    # Start de interactieve Telegram-listener (Approve/Reject/Execute knoppen)
-    # in zijn eigen achtergrond-thread met een eigen event loop.
-    start_telegram_listener()
-
     # Gebruik AsyncIOScheduler voor asynchrone achtergrondtaken
     scheduler = AsyncIOScheduler()
     from memory.observation_jobs import run_observation_jobs
@@ -374,32 +370,28 @@ async def _lifespan_unlocked(app: FastAPI):
     )
     scheduler.start()
     app.state.scheduler = scheduler
-    logger.info(
-        "Scheduler started: daily-research catch-up every 15 min, autonomous "
-        "follow-up every 1h (first scan after 2 min), daily DB backup every 24h."
-    )
-
-    # Eén backup bij het opstarten, zodat je niet 24 uur moet wachten op de
-    # eerste veiligheidskopie na een verse installatie.
     try:
-        backup_path = backup_database(keep_last=config.BACKUP_RETENTION_COUNT)
-        logger.info(f"Startup database backup created: {backup_path}")
-    except Exception as e:
-        logger.warning(f"Startup database backup failed: {e}")
-
-    logger.info("Application startup complete.")
-
-    yield
-
-    logger.info("Application shutting down...")
-
-    # Sluit de scheduler netjes af bij het stoppen van de app
-    app.state.scheduler.shutdown()
-    logger.info("Scheduler stopped.")
-
-    # Stop de Telegram-listener netjes (wacht tot de achtergrond-thread eindigt)
-    stop_telegram_listener()
-    logger.info("Telegram listener stopped. Shutdown complete.")
+        # Startup failures after the scheduler starts must clean up both services.
+        start_telegram_listener()
+        logger.info(
+            "Scheduler started: daily-research catch-up every 15 min, autonomous "
+            "follow-up every 1h (first scan after 2 min), daily DB backup every 24h."
+        )
+        try:
+            backup_path = backup_database(keep_last=config.BACKUP_RETENTION_COUNT)
+            logger.info(f"Startup database backup created: {backup_path}")
+        except Exception as e:
+            logger.warning(f"Startup database backup failed: {e}")
+        logger.info("Application startup complete.")
+        yield
+    finally:
+        logger.info("Application shutting down...")
+        try:
+            app.state.scheduler.shutdown()
+            logger.info("Scheduler stopped.")
+        finally:
+            stop_telegram_listener()
+            logger.info("Telegram listener stopped. Shutdown complete.")
 
 
 @asynccontextmanager
