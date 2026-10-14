@@ -11,7 +11,7 @@ from workflows.actionable_plan import validate_plan
 from workflows.structured_decision import EvidenceQuote, OPTIONS, Text
 from workflows.output_quality import verify_evidence_quotes
 
-VERSION = "owner-delivery-experiment-v11"
+VERSION = "owner-delivery-experiment-v12"
 
 Reason = Text
 Alternative = Literal["immediate_invitation", "public_post", "consultant_introduction"]
@@ -240,28 +240,37 @@ def request(model, schema, prompt, context):
 
 
 CHECKS = {
-    "unknown": "Open the existing conversation history. Match the founder's and CEO's names; record the latest outgoing date and reply for each. Classify the intended contact as recent reply, silent or still unknown. Do not send a message during this check. If identity or status cannot be established, record the exact missing item and pause.",
-    "recent_reply": "Read the contact's latest existing reply. Record any explicit statement that they have their own current live suspension case. An offer to test alone does not establish this. Mark eligibility unknown if it is not stated; the unsent draft asks that question. Do not contact anyone during this check.",
+    "unknown": "Open the existing conversation history. Identify the intended contact using the supplied names and roles; record the latest outgoing date and reply. Classify the contact as recent reply, silent or still unknown. Do not send a message during this check. If identity or status cannot be established, record the exact missing item and pause.",
+    "recent_reply": "Read the contact's latest existing reply. Record whether they have their own current real input in the tool's documented input format and whether using it is permitted. An offer to test alone does not establish eligibility. Mark missing information unknown; the unsent draft asks about eligibility. Do not contact anyone during this check.",
     "silent": "Review existing messages for another conversation where follow-up is permitted. Record any explicit interest in testing and evidence of an own current live case; label each missing item unknown. If no such conversation is known, record that blocker and pause. Do not assume the silent contact is uninterested or send another follow-up.",
     "none": "Review existing messages for a permitted conversation with a potential tester. Record explicit interest and own-current-live-case evidence, or mark them unknown. If no route is known, record that blocker and pause. Do not invent a person, group or permission and do not contact anyone during this check.",
 }
 
 RECOMMENDATIONS = {
-    "unknown": "Check the tool once, then identify the intended contact and reply status from existing messages before choosing an invitation route.",
-    "recent_reply": "Check the tool once and review live-case eligibility; then review the unsent invitation for the recently responsive contact.",
-    "silent": "Check the tool once, then review a different already permitted conversation; pause if none is known rather than repeating the silent follow-up.",
-    "none": "Check the tool once, then look for a permitted conversation in existing records; no known route means a blocker.",
+    "unknown": "Identify the intended contact and reply status from existing messages before choosing an invitation route.",
+    "recent_reply": "Review eligibility for permitted current real input; then review the unsent invitation for the recently responsive contact.",
+    "silent": "Review a different already permitted conversation; pause if none is known rather than repeating the silent follow-up.",
+    "none": "Look for a permitted conversation in existing records; no known route means a blocker.",
 }
 
 
 def recommendation(lead_status, owner_minutes, tool_status):
+    allowed_unknowns(lead_status, tool_status)
     if tool_status == "unavailable":
         return "Record the confirmed unavailable-tool blocker and pause all invitations; choose a future private recheck without adding features."
+    readiness = (
+        "Use the owner's working-at-review confirmation. "
+        if tool_status == "working"
+        else "Check the tool once. "
+    )
     if lead_status == "recent_reply" and not outreach_required(
         lead_status, owner_minutes, tool_status
     ):
-        return "Review tool readiness and live-case eligibility in this private time block; confirm another time block before preparing an invitation."
-    return RECOMMENDATIONS[lead_status]
+        return (
+            readiness
+            + "Review eligibility in this private time block; confirm another time block before preparing an invitation."
+        )
+    return readiness + RECOMMENDATIONS[lead_status]
 
 
 PIVOT_BRANCHES = {

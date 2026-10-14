@@ -42,6 +42,27 @@ def draft():
 
 
 class PlanDeliveryTests(unittest.TestCase):
+    def test_route_instructions_do_not_require_a_particular_business_domain(self):
+        instruction = delivery.CHECKS["recent_reply"]
+        self.assertNotIn("suspension", instruction.lower())
+        self.assertIn("documented input format", instruction)
+        self.assertIn("permitted", instruction)
+        self.assertNotIn("founder", delivery.CHECKS["unknown"].lower())
+        self.assertNotIn("CEO", delivery.CHECKS["unknown"])
+
+    def test_working_confirmation_changes_recommendation_in_every_contact_route(self):
+        for lead in ("unknown", "recent_reply", "silent", "none"):
+            with self.subTest(lead=lead):
+                known = delivery.recommendation(lead, 60, "working")
+                unknown = delivery.recommendation(lead, 60, "unknown")
+                self.assertNotEqual(known, unknown)
+                self.assertNotIn("Check the tool once", known)
+                self.assertIn("working-at-review confirmation", known)
+                self.assertIn("Check the tool once", unknown)
+        private = delivery.recommendation("recent_reply", 15, "working")
+        self.assertIn("working-at-review confirmation", private)
+        self.assertIn("another time block", private)
+
     def test_recorded_link_selection_is_explicit_and_does_not_guess_ambiguous_urls(
         self,
     ):

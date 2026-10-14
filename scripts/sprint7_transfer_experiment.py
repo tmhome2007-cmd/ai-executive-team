@@ -41,6 +41,20 @@ def freeze(reserved, development):
     assessment = json.loads((development / "semantic-assessment.json").read_text())
     if assessment.get("development_gate_passed") is not True:
         raise ValueError("A completed development gate is required before transfer")
+    development_freeze = json.loads((development / "freeze.json").read_text())
+    summary = json.loads((development / "summary.json").read_text())
+    shared_assets = set(ASSETS) - {"scripts/sprint7_transfer_experiment.py"}
+    if (
+        any(
+            development_freeze.get("source_hashes", {}).get(name) != sha(ROOT / name)
+            for name in shared_assets
+        )
+        or summary.get("completed") != 9
+        or summary.get("validated") != 9
+        or summary.get("identity_unchanged") is not True
+        or summary.get("source_unchanged") is not True
+    ):
+        raise ValueError("Current-code completed development evidence is required")
     manifest = json.loads((reserved / "manifest.json").read_text())
     if (
         sha(reserved / "cases.json") != manifest["cases_sha256"]

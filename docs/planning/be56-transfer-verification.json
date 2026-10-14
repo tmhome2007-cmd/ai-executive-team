@@ -1,0 +1,230 @@
+{
+  "reviewer": "Codex analyst, not owner acceptance",
+  "source_commit": "82ae607",
+  "run": "audit-results/sprint7-transfer/run-13fad9a0028f4c2596956c96dbc6610d",
+  "samples": [
+    {
+      "case": "transfer-01",
+      "mode": "baseline",
+      "repetition": 1,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "484441490edec81649053ea4910c24f85860744460fc629cad6f4aa1cf106d70",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": true,
+        "concrete_appropriate_steps": false,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Domain-specific eligibility instruction conflicts with the supplied product."
+    },
+    {
+      "case": "transfer-01",
+      "mode": "candidate",
+      "repetition": 1,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "9c6103939c0e6ec7264551ddcf42f63ce54308a69c17c191536421775bfac00a",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": true,
+        "concrete_appropriate_steps": false,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Domain-specific eligibility instruction conflicts with the supplied product."
+    },
+    {
+      "case": "transfer-01",
+      "mode": "baseline",
+      "repetition": 2,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "2129910cae17671518995d2b84e389d52e3ac98820bf8950785c485d9c981967",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": true,
+        "concrete_appropriate_steps": false,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Domain-specific eligibility instruction conflicts with the supplied product."
+    },
+    {
+      "case": "transfer-01",
+      "mode": "candidate",
+      "repetition": 2,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "73805b752662ea5b46c0b0b6d4e337e630ef0447fc19d6a7376f464924629192",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": true,
+        "concrete_appropriate_steps": false,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Domain-specific eligibility instruction conflicts with the supplied product."
+    },
+    {
+      "case": "transfer-01",
+      "mode": "baseline",
+      "repetition": 3,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "95f130005dace04f588478323e9ad5e685bde7ee2aa8077da6c28e8d2b5eba7b",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": true,
+        "concrete_appropriate_steps": false,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Domain-specific eligibility instruction conflicts with the supplied product."
+    },
+    {
+      "case": "transfer-01",
+      "mode": "candidate",
+      "repetition": 3,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "5e99f7883a5e0512fafb9a5522349af850903c588446c2befabe545c012ad1a6",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": true,
+        "concrete_appropriate_steps": false,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Domain-specific eligibility instruction conflicts with the supplied product."
+    },
+    {
+      "case": "transfer-02",
+      "mode": "baseline",
+      "repetition": 1,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "20b8d4802a363af229aaa549f79b4a19d37f075d3955479150fa48f845d90d5a",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": false,
+        "concrete_appropriate_steps": true,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Recommendation and explanation repeat functionality checking despite current working confirmation; step body correctly preserves confirmation."
+    },
+    {
+      "case": "transfer-02",
+      "mode": "candidate",
+      "repetition": 1,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "0c0a5536cf6dc1ae7f3b836e523b549f7b17dd380cf83ffba4fb6e04db875b06",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": false,
+        "concrete_appropriate_steps": true,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Recommendation and explanation repeat functionality checking despite current working confirmation; step body correctly preserves confirmation."
+    },
+    {
+      "case": "transfer-02",
+      "mode": "baseline",
+      "repetition": 2,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "dd9a4ae96c4e27b83c2cbf992e3470a0b95218478f91f36a2802911ca169244c",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": false,
+        "concrete_appropriate_steps": true,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Recommendation and explanation repeat functionality checking despite current working confirmation; step body correctly preserves confirmation."
+    },
+    {
+      "case": "transfer-02",
+      "mode": "candidate",
+      "repetition": 2,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "e0aac043ac9adbc30b96c794ffd19121ada9711796e62a3305cdc3b1edcc3529",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": false,
+        "concrete_appropriate_steps": true,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Recommendation and explanation repeat functionality checking despite current working confirmation; step body correctly preserves confirmation."
+    },
+    {
+      "case": "transfer-02",
+      "mode": "baseline",
+      "repetition": 3,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "b7867ad292e4aa76e002cdb6c337de1b2a74c27d710c9fd163d3bb983b41f856",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": false,
+        "concrete_appropriate_steps": true,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Recommendation and explanation repeat functionality checking despite current working confirmation; step body correctly preserves confirmation."
+    },
+    {
+      "case": "transfer-02",
+      "mode": "candidate",
+      "repetition": 3,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "820f598bf1902d9f039a756f55120491bb5ae441714cbe7a47582bdec5286073",
+      "axes": {
+        "structure_effort": true,
+        "source_attribution": true,
+        "no_invented_permissions": true,
+        "appropriate_current_facts": false,
+        "concrete_appropriate_steps": true,
+        "pivotal_alternative": true,
+        "readability_usefulness": false
+      },
+      "notes": "Recommendation and explanation repeat functionality checking despite current working confirmation; step body correctly preserves confirmation."
+    }
+  ],
+  "validated": 12,
+  "denominator": 12,
+  "complete_usefulness": 0,
+  "transfer_gate_passed": false,
+  "source_and_models_unchanged": true,
+  "repairs": 0,
+  "scope": "Same guided workflow on two installed local models; four unique plans. Not independent role planning. Both tasks now promoted to development because failures inform repairs. Fresh untouched replacement tasks required before any final transfer claim."
+}

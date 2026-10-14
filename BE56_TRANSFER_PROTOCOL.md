@@ -11,3 +11,7 @@ The independent-proposal protocol reserves five meetings per model, canonical CS
 If a transfer failure is used for a repair, preserve its score and promote the task to development. Reserve a fresh unused task for the next final assessment. Do not tune against transfer outputs, hide retries or mark work Done from analyst scores. Short-request/full-team owner review through normal startup remains required.
 
 State: protocol and input freeze ready for review; candidate-specific freeze, inference, independent rounds and owner assessment pending. No model download, board write, merge, or rollout authority follows.
+
+## First transfer result — 14 October 2026
+
+The reserved run is complete: [verification](docs/planning/be56-transfer-verification.json). Twelve structurally valid samples, zero complete analyst usefulness passes; all raw results retained, no repair/retry within the run. The shared template had domain-specific eligibility and repeated a known tool check. Both tasks are promoted to development after informing the repair. Their original scores remain failed; a fresh unused replacement set and passing current-code development assessment are required for a subsequent final transfer claim. Independent v2 is implemented experimentally, not yet assessed in five paired meetings or integrated.

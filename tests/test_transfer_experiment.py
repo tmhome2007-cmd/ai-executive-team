@@ -51,6 +51,27 @@ class TransferExperimentTests(unittest.TestCase):
                 runner.freeze(reserved, development)
             identity.assert_not_called()
             assessment.write_text(json.dumps({"development_gate_passed": True}))
+            source_hashes = runner.hashes()
+            source_hashes["workflows/plan_delivery.py"] = "old passed code"
+            (development / "freeze.json").write_text(
+                json.dumps({"source_hashes": source_hashes})
+            )
+            (development / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "completed": 9,
+                        "validated": 9,
+                        "identity_unchanged": True,
+                        "source_unchanged": True,
+                    }
+                )
+            )
+            with self.assertRaisesRegex(ValueError, "Current-code"):
+                runner.freeze(reserved, development)
+            identity.assert_not_called()
+            (development / "freeze.json").write_text(
+                json.dumps({"source_hashes": runner.hashes()})
+            )
             reserved.mkdir()
             (reserved / "cases.json").write_text("{}")
             (reserved / "protocol.json").write_text("{}")
