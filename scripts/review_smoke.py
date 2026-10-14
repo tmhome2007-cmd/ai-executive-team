@@ -288,6 +288,8 @@ def main():
                         "Delivery may still be pending", exact=False
                     ).wait_for()
                     page.reload()
+                    page.get_by_placeholder("API Key").fill(config.API_SECRET_KEY)
+                    page.get_by_role("button", name="Confirm", exact=True).click()
                     open_view(page, "Decisions")
                     recovery = page.get_by_role(
                         "status", name="Decision request recovery"

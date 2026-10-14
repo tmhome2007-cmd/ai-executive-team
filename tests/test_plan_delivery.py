@@ -21,7 +21,6 @@ def preparation(lead="silent"):
             "facts": [
                 {"source_id": "record:1", "quote": "The tool availability is unknown."}
             ],
-            "unknowns": ["tool_availability"],
             "stop_after_days": 7,
             "pivotal_fact": {
                 "key": "tool_availability",
@@ -45,7 +44,6 @@ def draft():
 class PlanDeliveryTests(unittest.TestCase):
     def test_known_availability_is_not_asked_again_and_short_time_stays_private(self):
         value = json.loads(preparation("recent_reply"))
-        value["unknowns"] = ["eligible_live_case"]
         value["pivotal_fact"] = {"key": "eligible_live_case"}
         raw = json.dumps(value)
         private = delivery.validate_preparation(
@@ -74,7 +72,6 @@ class PlanDeliveryTests(unittest.TestCase):
 
     def test_known_outage_blocks_invitation_and_asks_only_future_recovery(self):
         value = json.loads(preparation("recent_reply"))
-        value["unknowns"] = ["tool_recovery"]
         value["pivotal_fact"] = {"key": "tool_recovery"}
         private = delivery.validate_preparation(
             json.dumps(value),

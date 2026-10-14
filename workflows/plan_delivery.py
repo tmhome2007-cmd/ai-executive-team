@@ -11,7 +11,7 @@ from workflows.actionable_plan import validate_plan
 from workflows.structured_decision import EvidenceQuote, OPTIONS, Text
 from workflows.output_quality import verify_evidence_quotes
 
-VERSION = "owner-delivery-experiment-v9"
+VERSION = "owner-delivery-experiment-v10"
 
 Reason = Text
 Alternative = Literal["immediate_invitation", "public_post", "consultant_introduction"]
@@ -94,15 +94,6 @@ class Preparation(BaseModel):
     why_this_step: Reason
     alternative_considered: Alternative
     facts: list[EvidenceQuote] = Field(min_length=1, max_length=2)
-    unknowns: list[
-        Literal[
-            "tool_availability",
-            "contact_status",
-            "eligible_live_case",
-            "alternative_route",
-            "tool_recovery",
-        ]
-    ] = Field(min_length=1, max_length=3)
     stop_after_days: int = Field(ge=1, le=14)
     pivotal_fact: PivotalUnknown
 
@@ -190,7 +181,6 @@ def request(model, schema, prompt, context):
         # older record. Runtime quotation verification remains authoritative.
         shape["properties"]["facts"]["items"] = {"anyOf": choices}
         keys = sorted(allowed_unknowns(context["lead_status"], context["tool_status"]))
-        shape["properties"]["unknowns"]["items"]["enum"] = keys
         shape["$defs"]["PivotalUnknown"]["properties"]["key"]["enum"] = keys
     elif schema is Invitation:
         choices = [{"type": "null"}]
@@ -348,12 +338,8 @@ def validate_preparation(
     reserve = 15 if outreach_required(lead_status, owner_minutes, tool_status) else 0
     if type(owner_minutes) is not int or not 15 + reserve <= owner_minutes <= 60:
         raise ValueError("Insufficient confirmed owner time for this route")
-    if value.pivotal_fact.key not in allowed_unknowns(lead_status, tool_status) or any(
-        k not in allowed_unknowns(lead_status, tool_status) for k in value.unknowns
-    ):
+    if value.pivotal_fact.key not in allowed_unknowns(lead_status, tool_status):
         raise ValueError("Plan asks about an already supplied or unrelated fact")
-    if value.pivotal_fact.key not in value.unknowns:
-        raise ValueError("Pivotal fact must be a listed unknown")
     if any(
         not x.strip()
         for x in [

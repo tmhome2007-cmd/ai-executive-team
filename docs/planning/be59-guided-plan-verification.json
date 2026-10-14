@@ -1,0 +1,87 @@
+{
+  "source_commit": "9f2d95d",
+  "run": "audit-results/sprint7-reasoning/run-1e47843093c84998b7fd6899e297a2f3",
+  "technical": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 9,
+    "stage_responses": 12,
+    "errors": 0,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "pending",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "complete_usefulness": 9,
+  "denominator": 9,
+  "development_gate_passed": true,
+  "reviewer": "Codex analyst, owner acceptance pending",
+  "scope": "Guided application-composed operational text, comparisons/pivots and invitation; source/key/link selection and a step explanation are model supplied. Generic/redundant selected evidence remains. No independent-model/full-team/transfer claim.",
+  "raw_sequence_count": 3,
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "repetition": 1,
+      "sample_sha256": "1fb826d46843ac503a722cc4d8f15d5773e4a37eccac9aa9aa17c1444b7407ff",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 2,
+      "sample_sha256": "35f37be5ea5311984d7078826aa3297998984bede2d9e89c33aab01b59a69615",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 3,
+      "sample_sha256": "3dc1a5b7b86c8bb8d6244862de24c7514ed39c2871a8847ec5263db8094b2dcb",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 1,
+      "sample_sha256": "6c0786a859bad474195fb0f87e0b3e4afc6a5c1e0bc48b0e7dfd3f6fb2ec20be",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 2,
+      "sample_sha256": "a2b5651209525859d2396bd44136fe6d50a9bb799fe5d6d28e7a71529ac61222",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 3,
+      "sample_sha256": "b5d68d979ae92d6b86c931e62bc430f9eb14ea369c325a5acd305e931f9a226c",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "C_silent",
+      "repetition": 1,
+      "sample_sha256": "cc0de96f9af00f074d2cc75c49cbf513b7a2f46be609b005f9ac009d6dfb7421",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "C_silent",
+      "repetition": 2,
+      "sample_sha256": "b1bb7decd0d30bd2c46bbd5905dfd1b4e745b5919dc0c0e46ae8a2490bf7a977",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "C_silent",
+      "repetition": 3,
+      "sample_sha256": "3007b21c43e61df68c836804a6a6a34d33f1457d0304653551bb80bf50efd9d8",
+      "validated": true,
+      "complete_usefulness": true
+    }
+  ]
+}
