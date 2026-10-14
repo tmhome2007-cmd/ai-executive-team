@@ -3,6 +3,7 @@
 from browser_navigation import open_view
 
 import os
+import json
 import hashlib
 import sys
 import tempfile
