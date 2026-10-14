@@ -251,6 +251,11 @@ def main():
                 page.get_by_placeholder("E.g. Expansion into the German market").fill(
                     "Fictional connection recovery"
                 )
+                page.get_by_placeholder(
+                    "Provide a detailed explanation of the situation and question..."
+                ).fill(
+                    "Private fictional connection-recovery test. No real meeting or contact."
+                )
                 page.get_by_role("button", name="Start Decision", exact=True).click()
                 recovery = page.get_by_role("status", name="Decision request recovery")
                 recovery.wait_for()
