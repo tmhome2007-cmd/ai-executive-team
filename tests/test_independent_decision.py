@@ -4,14 +4,22 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from tests.test_structured_decision import sample
 from workflows import independent_decision as flow
-from workflows import structured_decision as sd
 
 SOURCES = {
     "owner-task": "The ledger records 12 forms. Distinct participants are unknown."
 }
 PROFILES = {"cso": "Canonical CSO", "cfo": "Canonical CFO", "ceo": "Canonical CEO"}
+
+
+def sample(recommendation="Review the supplied ledger privately."):
+    return {
+        "recommendation": recommendation,
+        "reason": "The ledger is the supplied private evidence.",
+        "fact": {"source_id": "owner-task", "quote": "The ledger records 12 forms."},
+        "unknown": "Distinct participants are unknown.",
+        "assumption": None,
+    }
 
 
 class IndependentDecisionTests(unittest.TestCase):
@@ -63,7 +71,7 @@ class IndependentDecisionTests(unittest.TestCase):
 
     def test_unknown_target_misattribution_and_unexplained_convergence_rejected(self):
         first = {
-            key: sd.validate_contribution(json.dumps(sample()), SOURCES)
+            key: flow.validate_proposal(json.dumps(sample()), SOURCES)
             for key in PROFILES
         }
         valid = {
@@ -130,3 +138,43 @@ class IndependentDecisionTests(unittest.TestCase):
             [len(x["prior_proposals_not_evidence"]) for x in inputs], [0, 1, 2]
         )
         self.assertEqual(result["reviews"], {})
+
+    def test_compact_native_pairs_runtime_limits_and_exact_attribution(self):
+        payload = flow.proposal_payload("local", "Review", SOURCES, "cfo", "CFO")
+        self.assertEqual(payload["options"]["num_predict"], 400)
+        pairs = payload["format"]["properties"]["fact"]["anyOf"]
+        self.assertEqual(pairs[0]["properties"]["source_id"]["const"], "owner-task")
+        self.assertIn(
+            "The ledger records 12 forms.", pairs[0]["properties"]["quote"]["enum"]
+        )
+        for change in (
+            {"reason": "Owner approved execution."},
+            {"unknown": " "},
+            {"recommendation": "x" * 181},
+            {"fact": {"source_id": "other", "quote": "The ledger records 12 forms."}},
+        ):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                flow.validate_proposal(json.dumps({**sample(), **change}), SOURCES)
+        first = {
+            key: flow.validate_proposal(json.dumps(sample()), SOURCES)
+            for key in PROFILES
+        }
+        with self.assertRaises(ValueError):
+            flow.validate_review(
+                json.dumps(
+                    {
+                        "selected_role": "ceo",
+                        "justification": "The ledger is supplied.",
+                        "objections": [
+                            {
+                                "target_role": "cfo",
+                                "proposal_quote": "Review the supplied ledger",
+                                "concern": "Distinct participants remain unknown.",
+                            }
+                        ],
+                        "no_alternative_reason": "Only the supplied ledger is available.",
+                    }
+                ),
+                first,
+                SOURCES,
+            )

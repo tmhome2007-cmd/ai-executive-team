@@ -1,6 +1,6 @@
 # Sprint 7 — useful decisions from short requests
 
-Planned 12 October 2026 at the owner’s request. **Diagnosis and bounded read-only research are ready for review. The schema experiment remains isolated; a bounded first-user intake UI/API is now implemented on codex/sprint-7-actionable-schema. Final plan delivery still fails its gate, so no main merge or rollout is claimed.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
+Planned 12 October 2026, updated 14 October. **Request recovery and source/day freshness are implemented on the branch. The experimental guided plan passes nine development samples on the unchanged default model. Independent-role proposals and reserved transfer assessment remain unfinished; guided delivery is not integrated into app generation. No main merge or rollout is claimed.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
 
 ## Goal
 
@@ -21,9 +21,9 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 | ID | Priority | Item | State | Depends on |
 |---|---|---|---|---|
 | BE-55 | high | Trace owner-test failures from raw output to saved brief | review | None |
-| BE-56 | high | Freeze usefulness evaluation and untouched transfer cases | backlog | BE-55 |
+| BE-56 | high | Freeze usefulness evaluation and untouched transfer cases | partial review | BE-55 |
 | BE-57 | medium | Review reusable GitHub projects and primary documentation | review | None |
-| BE-58 | high | Make clarifications and freshness affect recommendations | backlog | BE-55, BE-56 |
+| BE-58 | high | Make clarifications and freshness affect recommendations | partial review | BE-55, BE-56 |
 | BE-59 | high | Produce a complete actionable owner plan | blocked | BE-55, BE-56 |
 | BE-60 | high | Separate independent proposals from attributed critique | partial | BE-56, BE-59 |
 | BE-61 | high | Handle short requests with reviewed context and few questions | review | BE-58, BE-59 |

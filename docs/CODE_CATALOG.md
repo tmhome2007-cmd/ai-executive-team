@@ -130,6 +130,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/sprint7_intake_experiment.py](../scripts/sprint7_intake_experiment.py) | Freeze and assess the same contact variants after deterministic owner intake. |
 | [scripts/sprint7_schema_experiment.py](../scripts/sprint7_schema_experiment.py) | Freeze and run one explicit local-only three-variant schema comparison. |
 | [scripts/sprint7_startup_smoke.py](../scripts/sprint7_startup_smoke.py) | Exercise fresh setup/start/auth/intake on a tracked-source archive and empty data. |
+| [scripts/sprint7_transfer_experiment.py](../scripts/sprint7_transfer_experiment.py) | Freeze untouched transfer inputs after the guided development gate, no repair. |
 | [scripts/synthesize_conversation.py](../scripts/synthesize_conversation.py) | Bounded isolated local speech worker. Private input via stdin; WAV via stdout. |
 | [scripts/workflow_queue_smoke.py](../scripts/workflow_queue_smoke.py) | Real Chromium owner controls against disposable SQLite; public reader is mocked. |
 | [system_checks.py](../system_checks.py) | Runtime readiness checks for local model, storage, browser and notifications. |
@@ -193,6 +194,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_structured_decision.py](../tests/test_structured_decision.py) | Structured publication, failed sample retention and attributed dissent boundaries. |
 | [tests/test_test_entrypoints.py](../tests/test_test_entrypoints.py) | Test discovery and opt-in demos must not inherit company authority or initialize agents. |
 | [tests/test_trace_privacy.py](../tests/test_trace_privacy.py) | Privacy defaults must override saved tracing consent and interactive prompts. |
+| [tests/test_transfer_experiment.py](../tests/test_transfer_experiment.py) | Transfer inference cannot silently resume, retune or discard failed samples. |
 | [tests/test_workflow_queue.py](../tests/test_workflow_queue.py) | Workflow review gates and source retries on disposable SQLite. |
 | [tests/test_workflow_recovery.py](../tests/test_workflow_recovery.py) | Real SQLite and CrewAI pipeline tests with an in-process synthetic LLM. |
 | [tools/_dedupe_guard.py](../tools/_dedupe_guard.py) | Short-lived duplicate invocation guard for agent tool requests. |

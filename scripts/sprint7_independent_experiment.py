@@ -71,7 +71,7 @@ def freeze(previous, model_tag):
             ).strip(),
             "source_hashes": hashes(),
             "model": model,
-            "options": dict(sd.OPTIONS),
+            "options": dict(flow.OPTIONS),
             "profiles": profiles(),
             "cases": cases,
             "order": order,
@@ -81,7 +81,7 @@ def freeze(previous, model_tag):
                 "technical": "Five candidate meetings valid, independent first visibility and attributed shared-snapshot review; no repairs or critical factual/authority error.",
                 "semantic": "Each candidate has at least two genuinely distinct first proposals or an explicit evidence-grounded no-alternative reason. Preserve actual concerns and role identities; normalized wording is not voting. Analyst and owner acceptance separate.",
             },
-            "scope": "Paired development primitive comparison, not full API/current company run or held-out data. Both arms bind native citation source/quote pairs; candidate review binds role/proposal quotations. Same owner sources and canonical backstories; baseline has earlier-first visibility and three calls, candidate has independent first plus review and six calls. No claim independence alone causes quality; latency/extra calls disclosed.",
+            "scope": "Paired development primitive comparison, not full API/current company run or held-out data. Both arms use the same compact proposal schema, bind native citation source/quote pairs; candidate review binds role/proposal quotations. Same owner sources and canonical backstories; baseline has earlier-first visibility and three calls, candidate has independent first plus review and six calls. Full actionable delivery is evaluated separately, not present in this proposal schema. No claim independence alone causes quality; latency/extra calls disclosed.",
         },
     )
     return directory
@@ -96,7 +96,7 @@ def run(directory):
     if (
         hashes() != frozen["source_hashes"]
         or identity(tag) != frozen["model"]
-        or frozen["options"] != sd.OPTIONS
+        or frozen["options"] != flow.OPTIONS
     ):
         raise ValueError("Frozen source, options or model changed")
     sd.private_save(directory, "started.json", {"time": time.time()})

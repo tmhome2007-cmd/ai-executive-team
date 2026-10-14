@@ -1,0 +1,85 @@
+{
+  "source_commit": "b0c8d79",
+  "run": "audit-results/sprint7-reasoning/run-013f81904d2e46f083e10eb32be1a29f",
+  "technical": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 9,
+    "stage_responses": 9,
+    "errors": 0,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "pending",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "complete_usefulness": 9,
+  "denominator": 9,
+  "development_gate_passed": true,
+  "scope": "Guided application workflow, not independent model drafting/planning or owner/full-team acceptance. Three byte-identical unique sequences; no repairs.",
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "repetition": 1,
+      "sample_sha256": "ed474c1efb74d0dbc5fd8a295865111b93bbef6fb2a77c731b090acc755147f9",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 2,
+      "sample_sha256": "1c1077fccd11e2ab3a1d8d86f8b9dde81cd5ea51adde7dd70b3dde13dbf606e2",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 3,
+      "sample_sha256": "c68daaf300931e0c2fa3ba04586164eff0dda9a9ad78304dd4a420f1d18ca794",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 1,
+      "sample_sha256": "a7a5eb2588f1f6686748c7c73412a9f318ffd1437a21545bfd20dfdd82c1b4ff",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 2,
+      "sample_sha256": "b2445b13117c1b105cd6f6c8b7a25450980e0720f67cf4941aae9379d4ab3e7c",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 3,
+      "sample_sha256": "f1caa6db53b2b2b63ab9e3d1c49abd8c2cb9f9f432f55d8dc9f515ac2932fb11",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "C_silent",
+      "repetition": 1,
+      "sample_sha256": "030843dcce66d57a2a8145d8d013688e889123515be959d7563406533397b958",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "C_silent",
+      "repetition": 2,
+      "sample_sha256": "c3eb89a175d92d33e61406e5feed8e20e10933aff5a8ce573e7a22783c9db4b8",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "C_silent",
+      "repetition": 3,
+      "sample_sha256": "86a83b54f0c0312b61430f2140dc50f36eb7bb54778c5aa477b3040162fd7956",
+      "validated": true,
+      "complete_usefulness": true
+    }
+  ]
+}

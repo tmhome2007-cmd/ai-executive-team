@@ -29,7 +29,8 @@
     "acceptance_criteria": "Represent owner clarifications with attributable evidence and preserve freshness/conflicts. Exercise three development variants: unknown relationship as originally supplied; distinct contact with recent reply; same contact already silent after an offer. Recent and silent variants must change the recommendation or explicit conditions and rationale; silence must be represented as risk rather than assumed interest. Unknown identity/date stays unknown. Explain why the chosen path beats relevant alternatives without fabricated response rates or success probabilities. Do not require the same recommendation to change when the changed fact is immaterial.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "review",
+    "review_scope": "Source-version/freshness and local review-day checks implemented and tested; conditional guided helper remains experimental and owner usefulness pending."
   },
   {
     "title": "BE-59 · Produce a complete actionable owner plan",
@@ -38,7 +39,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
-    "blocked_reason": "Initial schema comparison validated 9/9 with 0/9 complete usefulness. After first-user intake, routing/prerequisites improve but all 9 plans fail the required outreach/draft consistency check; one private-review action is misclassified as outreach. No schema production rollout or merge."
+    "blocked_reason": "Guided v11 development passes 9/9 on unchanged default model. App integration, reserved transfer assessment and owner/full-team acceptance still pending; prior failed model samples preserved."
   },
   {
     "title": "BE-60 · Separate independent proposals from attributed critique",
@@ -46,7 +47,8 @@
     "acceptance_criteria": "Generate first proposals without access to other first proposals, then provide bounded context for actual critique and synthesis. Preserve canonical identities and attribution; no tools or authority expansion. Compare five frozen runs before/after using the same permitted inputs and settings where possible. Meaningful alternatives or evidence-based explanations of convergence must be visible; do not force diversity or invent objections. A trailing period, case or whitespace difference is normalized for wording matches without treating different meanings as agreement. Bound calls, context size and repairs, retain failures, and disclose latency/cost implications.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "in_progress",
+    "review_scope": "Wording normalization active; compact independent proposal/review prototype tested. Initial local comparison stopped after repeated timeouts; five-pair v2 evaluation pending, no rollout."
   },
   {
     "title": "BE-61 · Handle short requests with reviewed context and few questions",
@@ -63,7 +65,8 @@
     "acceptance_criteria": "Exercise ./company doctor, ./company start and ./company key in an explicitly isolated review installation with disposable data and owner-controlled local configuration. Preserve existing credentials/database; do not silently copy original company data or weaken path/approval guards. Verify long generation, interrupted browser connections, errors, refresh and saved-history recovery. A network timeout must not imply the team failed or invite duplicate submissions: retain request identity and provide an inspectable status/recovery route. Model validation failures have useful safe guidance without exposing raw private samples. Owner instructions use the normal launcher and own browser; no temporary /private/tmp script is the product entry point. Verify effective settings, local provider and scheduler behavior rather than assuming sandbox disables scheduling.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "backlog",
+    "review_scope": "Durable hash-bound requests, reload/status/closure, startup reconciliation and freshness checked in disposable tests and production browser audit; owner normal-startup/scheduler acceptance pending."
   },
   {
     "title": "BE-63 · Run final usefulness and owner end-to-end assessment",
