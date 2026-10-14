@@ -11,7 +11,7 @@ from workflows.actionable_plan import validate_plan
 from workflows.structured_decision import EvidenceQuote, OPTIONS, Text
 from workflows.output_quality import verify_evidence_quotes
 
-VERSION = "owner-delivery-experiment-v7"
+VERSION = "owner-delivery-experiment-v8"
 
 Reason = Text
 Alternative = Literal["immediate_invitation", "public_post", "consultant_introduction"]
@@ -19,6 +19,18 @@ ALTERNATIVES = {
     "immediate_invitation": "Invite the intended contact immediately, before checking prerequisites.",
     "public_post": "Draft a new public invitation to find a willing tester.",
     "consultant_introduction": "Draft a request for a consultant to introduce a willing tester.",
+}
+
+ALTERNATIVE_REVIEW = {
+    "immediate_invitation": "Use an immediate invitation only after checking the tool, the contact's own current live case and willingness. This plan keeps those prerequisites visible instead of treating an offer alone as eligibility.",
+    "public_post": "A public-invitation draft needs an appropriate destination and eligibility instructions; publication remains a separate owner choice. Check the tool and existing permitted conversations before committing to that route.",
+    "consultant_introduction": "A consultant introduction requires a known recipient able and willing to refer an eligible tester. Treat it as a conditional route rather than assuming access or predicting response rates.",
+}
+PIVOT_REVIEW = {
+    "tool_availability": "An unavailable tool blocks testing on every contact route; a working tool allows eligibility checks to proceed.",
+    "contact_status": "Reply status changes whether to prepare an invitation or review another permitted route; the tool check must also pass.",
+    "eligible_live_case": "Without an own current live case, this contact cannot provide the requested real-case feedback, even if the tool works.",
+    "alternative_route": "No other permitted conversation means no established recipient; a known route lets eligibility and willingness checks proceed.",
 }
 
 
@@ -29,7 +41,6 @@ class PivotalUnknown(BaseModel):
     key: Literal[
         "tool_availability", "contact_status", "eligible_live_case", "alternative_route"
     ]
-    why_changes_plan: Text
 
 
 UNKNOWN_QUESTIONS = {
@@ -68,7 +79,6 @@ class Preparation(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     why_this_step: Reason
     alternative_considered: Alternative
-    why_not_alternative: Reason
     facts: list[EvidenceQuote] = Field(min_length=1, max_length=2)
     unknowns: list[
         Literal[
@@ -121,6 +131,38 @@ def outreach_required(lead_status):
 def request(model, schema, prompt, context):
     """Same local options as prior comparisons; stages have distinct contracts."""
     shape = schema.model_json_schema()
+    sources = context["sources"]
+    if schema is Preparation:
+        choices = []
+        for source_id, body in sources.items():
+            excerpts = list(
+                dict.fromkeys(
+                    chunk.strip()
+                    for chunk in [
+                        body,
+                        *body.splitlines(),
+                        *re.split(r"(?<=[.!?])\s+", body),
+                    ]
+                    if 8 <= len(chunk.strip()) <= 600
+                )
+            )
+            if excerpts:
+                choices.append(
+                    {
+                        "type": "object",
+                        "properties": {
+                            "source_id": {"type": "string", "const": source_id},
+                            "quote": {"type": "string", "enum": excerpts},
+                        },
+                        "required": ["source_id", "quote"],
+                        "additionalProperties": False,
+                    }
+                )
+        if not choices:
+            raise ValueError("No supplied evidence excerpt fits the contract")
+        # Pair constraints prevent a correction quotation being assigned to an
+        # older record. Runtime quotation verification remains authoritative.
+        shape["properties"]["facts"]["items"] = {"anyOf": choices}
     return {
         "model": model,
         "prompt": prompt + "\nInput:\n" + json.dumps(context, ensure_ascii=False),
@@ -185,20 +227,21 @@ This is a role-neutral explanation helper, not an executive speech. Explain the
 owner facts and constraints; do not mention an executive name or personality.
 Select alternative_considered from the supplied acquisition approaches. It must
 be a different route, not another description of the proposed private check.
-Explain why that alternative should wait using a supplied fact, unresolved
-prerequisite or current private-only scope. Do not predict faster feedback,
-greater interest or lower chances from historical non-response; those are unknown.
+The application supplies conditional comparison and pivotal-key explanations;
+do not generate additional comparison fields or response-rate predictions.
+Explain why the selected private-first step suits the supplied facts, without
+predicting interest, speed or chances from historical non-response.
 Write one short complete sentence per explanation field;
 finish each sentence with punctuation. Technical character limits are not targets.
 Do not repeat the question or field label, and do not mention the role's name/style.
-Choose a genuinely missing pivotal key from allowed_unknowns and explain why its
-answer changes the route more than the other unknown. Do not generate action steps,
+Choose a genuinely missing pivotal key from allowed_unknowns;
+the application explains the differing consequences. Do not generate action steps,
 claim success, consent or completed work, or infer lack of interest from silence.
 Known statuses must not become questions again. Keep the explanation concise and
 specific to supplied facts. The application supplies private check instructions,
-conditional branches, actual success criterion and an anchored stop window; these
+conditional comparisons, pivotal reasoning, actual success and an anchored stop; these
 are disclosed workflow rules, not independent model reasoning. Pick a proposed
-review window in days. Return only the evidence/explanation JSON.
+review window in days. Return only the evidence, step explanation, alternative key and pivotal key JSON.
 """,
         {
             "request": question,
@@ -233,8 +276,6 @@ def validate_preparation(raw, question, lead_status, owner_minutes, sources):
         not x.strip()
         for x in [
             value.why_this_step,
-            value.why_not_alternative,
-            value.pivotal_fact.why_changes_plan,
         ]
     ):
         raise ValueError("Blank reasoning or pivotal explanation")
@@ -242,8 +283,6 @@ def validate_preparation(raw, question, lead_status, owner_minutes, sources):
         not x.strip().endswith((".", "?", "!"))
         for x in [
             value.why_this_step,
-            value.why_not_alternative,
-            value.pivotal_fact.why_changes_plan,
         ]
     ):
         raise ValueError("Incomplete explanation; never truncate or silently repair it")
@@ -280,7 +319,7 @@ def validate_preparation(raw, question, lead_status, owner_minutes, sources):
         + " Alternative: "
         + ALTERNATIVES[value.alternative_considered]
         + " "
-        + value.why_not_alternative,
+        + ALTERNATIVE_REVIEW[value.alternative_considered],
         "facts": (
             [{"source_id": "owner-correction", "quote": sources["owner-correction"]}]
             if "owner-correction" in sources
@@ -297,7 +336,7 @@ def validate_preparation(raw, question, lead_status, owner_minutes, sources):
         "success": "A willing, eligible person tests their own current live case and reports diagnosis accuracy, unsupported details/placeholders and usefulness of the proposed plan; positive feedback is not required.",
         "pivotal_fact": UNKNOWN_QUESTIONS[pivot.key]
         + " Why: "
-        + pivot.why_changes_plan
+        + PIVOT_REVIEW[pivot.key]
         + " If yes: "
         + yes
         + " If no: "

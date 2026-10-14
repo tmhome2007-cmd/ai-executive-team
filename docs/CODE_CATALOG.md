@@ -123,6 +123,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/sprint5_private_examples.py](../scripts/sprint5_private_examples.py) | Tool-free local BE-35 drafts for owner review; no company database writes. |
 | [scripts/sprint6_evaluation.py](../scripts/sprint6_evaluation.py) | Explicit local-only evaluation with immutable freezes and retained failed slots. |
 | [scripts/sprint7_delivery_experiment.py](../scripts/sprint7_delivery_experiment.py) | Freeze a two-stage delivery candidate against the retained intake variants. |
+| [scripts/sprint7_independent_experiment.py](../scripts/sprint7_independent_experiment.py) | Freeze five paired sequential/independent meetings on development inputs. |
 | [scripts/sprint7_intake_experiment.py](../scripts/sprint7_intake_experiment.py) | Freeze and assess the same contact variants after deterministic owner intake. |
 | [scripts/sprint7_schema_experiment.py](../scripts/sprint7_schema_experiment.py) | Freeze and run one explicit local-only three-variant schema comparison. |
 | [scripts/sprint7_startup_smoke.py](../scripts/sprint7_startup_smoke.py) | Exercise fresh setup/start/auth/intake on a tracked-source archive and empty data. |
@@ -157,6 +158,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_executive_skills.py](../tests/test_executive_skills.py) | Real SQLite proof of review-bound skill reuse and revocation boundaries. |
 | [tests/test_executor_observability.py](../tests/test_executor_observability.py) | Safe failure events and durable uncertainty under notification/persistence faults. |
 | [tests/test_experiments.py](../tests/test_experiments.py) | Disposable experiments: evidence, risk enforcement, approval binding and honest gaps. |
+| [tests/test_independent_decision.py](../tests/test_independent_decision.py) | First proposals stay independent; critique cannot invent role attribution. |
 | [tests/test_local_model_identity.py](../tests/test_local_model_identity.py) | Deterministic identity checks; all daemon responses and inference are synthetic. |
 | [tests/test_local_model_smoke.py](../tests/test_local_model_smoke.py) | The final audit cannot implicitly pull a missing model or follow redirects. |
 | [tests/test_local_voice_samples.py](../tests/test_local_voice_samples.py) | Neural audition boundaries; tiny synthetic WAV fixtures, no model inference/network. |
@@ -216,6 +218,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [workflows/execution_lock.py](../workflows/execution_lock.py) | Cross-process locking for action execution claims. |
 | [workflows/executive_planning.py](../workflows/executive_planning.py) | Tool-free planning and durable, dependency-aware recommendation dispatch. |
 | [workflows/executive_skills.py](../workflows/executive_skills.py) | Local CSO drafting of proposed procedures from exact reviewed examples. |
+| [workflows/independent_decision.py](../workflows/independent_decision.py) | Experimental independent proposals and attributed review; no API or tools. |
 | [workflows/instance_lock.py](../workflows/instance_lock.py) | Keep startup reconciliation from changing another live server's claims. |
 | [workflows/local_model_identity.py](../workflows/local_model_identity.py) | Read-only, bounded local Ollama identity resolution; no pull or fallback. |
 | [workflows/local_voice_samples.py](../workflows/local_voice_samples.py) | Owner-only auditions of a fixed public sentence; no runtime/cloud synthesis. |

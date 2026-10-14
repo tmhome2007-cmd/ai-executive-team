@@ -13,6 +13,27 @@ from memory.artifact_retention import prune_evaluation_samples
 
 
 class Sprint7RetentionTests(unittest.TestCase):
+    def test_independent_meeting_samples_expire_with_safe_provenance(self):
+        with (
+            tempfile.TemporaryDirectory(
+                dir=Path(tempfile.gettempdir()).resolve()
+            ) as tmp,
+            patch.object(config, "WORKSPACE_ROOT", str(Path(tmp) / "workspace")),
+        ):
+            run = Path(tmp) / "audit-results/sprint7-independent" / ("run-" + "a" * 32)
+            run.mkdir(parents=True, mode=0o700)
+            sample = run / "meeting-05-candidate.json"
+            sample.write_text('{"private":"PRIVATE CONTENT","valid":false}')
+            os.utime(sample, (10, 10))
+            owner_file = run / "meeting-06-candidate.json"
+            owner_file.write_text("owner data")
+            os.utime(owner_file, (10, 10))
+            self.assertEqual(prune_evaluation_samples(20), 1)
+            self.assertFalse(sample.exists())
+            receipt = (run / "meeting-05-candidate.json.provenance.json").read_text()
+            self.assertNotIn("PRIVATE CONTENT", receipt)
+            self.assertTrue(owner_file.exists())
+
     def test_expired_inputs_samples_and_assessments_leave_only_hash_receipts(self):
         with (
             tempfile.TemporaryDirectory(

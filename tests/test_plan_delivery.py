@@ -18,7 +18,6 @@ def preparation(lead="silent"):
         {
             "why_this_step": "Private checks establish whether an invitation is appropriate.",
             "alternative_considered": "immediate_invitation",
-            "why_not_alternative": "Current tool availability is still unknown.",
             "facts": [
                 {"source_id": "record:1", "quote": "The tool availability is unknown."}
             ],
@@ -26,7 +25,6 @@ def preparation(lead="silent"):
             "stop_after_days": 7,
             "pivotal_fact": {
                 "key": "tool_availability",
-                "why_changes_plan": "An unavailable tool blocks any invitation.",
             },
         }
     )
@@ -45,6 +43,25 @@ def draft():
 
 
 class PlanDeliveryTests(unittest.TestCase):
+    def test_native_fact_choices_bind_quotes_to_their_actual_source(self):
+        sources = {
+            "record:1": "Historical status is unknown.",
+            "owner-correction": "The owner confirmed a recent reply.",
+        }
+        payload = delivery.preparation_payload(
+            "local", QUESTION, "CEO", "recent_reply", 30, sources
+        )
+        choices = payload["format"]["properties"]["facts"]["items"]["anyOf"]
+        pairs = {
+            (item["properties"]["source_id"]["const"], quote)
+            for item in choices
+            for quote in item["properties"]["quote"]["enum"]
+        }
+        self.assertIn(("owner-correction", sources["owner-correction"]), pairs)
+        self.assertNotIn(("record:1", sources["owner-correction"]), pairs)
+        self.assertNotIn(("owner-correction", sources["record:1"]), pairs)
+        self.assertTrue(all(quote in sources[source_id] for source_id, quote in pairs))
+
     def test_standard_draft_fits_maximum_link_and_preserves_complete_questions(self):
         link = "https://example.com/" + "a" * 60
         sources = {**SOURCES, "record:link": link}
@@ -224,8 +241,8 @@ class PlanDeliveryTests(unittest.TestCase):
                 json.dumps(value), QUESTION, "recent_reply", 30, SOURCES
             )
         value = json.loads(preparation())
-        value["pivotal_fact"]["why_changes_plan"] = " "
-        with self.assertRaisesRegex(ValueError, "Blank"):
+        value["pivotal_fact"]["key"] = " "
+        with self.assertRaises(ValueError):
             delivery.validate_preparation(
                 json.dumps(value), QUESTION, "silent", 30, SOURCES
             )

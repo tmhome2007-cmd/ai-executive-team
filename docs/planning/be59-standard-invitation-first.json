@@ -1,0 +1,86 @@
+{
+  "source_commit": "ea3e441",
+  "run": "audit-results/sprint7-reasoning/run-e5e3324ed5ee44e7ba9e0c9d6dbb88f0",
+  "technical": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 6,
+    "stage_responses": 9,
+    "errors": 3,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "pending",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "complete_usefulness": 0,
+  "denominator": 9,
+  "merge_gate_passed": false,
+  "raw_sequence_count": 3,
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "repetition": 1,
+      "sample_sha256": "ac67d6d551d26721b0a4fdc49ff2f33003ef6962bf85e61ef3891f3fd8046a35",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 2,
+      "sample_sha256": "f5c53f1ae668ce12cda43949d163e25c9d605bdc210e9927c757921e95d5f1a2",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 3,
+      "sample_sha256": "f0aa8642add2e1b881d1adee2a6e12fec73936088b999aad3d7b67303ba513c2",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 1,
+      "sample_sha256": "2e3c3b545e8bef1b08080495854793afc53a2bbca3764b598051e544ceb8cf0f",
+      "validated": false,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 2,
+      "sample_sha256": "a74d8c9721106bf1fd722f9b034ad344e0a1fcfdee0279a3716611f35d6810c1",
+      "validated": false,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 3,
+      "sample_sha256": "32fba050e9c8e3e2696e77b769b98c35e75085c742c85f5165f535e8ee4c3217",
+      "validated": false,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 1,
+      "sample_sha256": "ebc5a14e1451a24fd62f4df94c50553936db7b2c4ed58707c49aa2243602288d",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 2,
+      "sample_sha256": "24fdd4bba7734db20d5a07ada4a42020be8447666f20200c3b466a87c6506e1f",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 3,
+      "sample_sha256": "8798bda46da4d86a57d229e2a58c071b519d70e516993fa43d11161165f2432b",
+      "validated": true,
+      "complete_usefulness": false
+    }
+  ],
+  "scope": "Independent decision prototype not exercised. Application standard invitation not reached; no draft success claimed."
+}

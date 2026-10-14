@@ -255,7 +255,14 @@ def prune_evaluation_samples(cutoff):
                 )
     # Sprint 7 contains private input snapshots and assessments as well as raw
     # outputs. Expire those bytes too; counts/settings and hash receipts remain.
-    for label in ("schema", "intake", "delivery", "reasoning", "transfer"):
+    for label in (
+        "schema",
+        "intake",
+        "delivery",
+        "reasoning",
+        "transfer",
+        "independent",
+    ):
         container = audit / ("sprint7-" + label)
         if not container.is_dir() or os.path.realpath(container) != str(container):
             continue
@@ -272,7 +279,7 @@ def prune_evaluation_samples(cutoff):
                     "backend-tests.log",
                 }
                 or re.fullmatch(
-                    r"(?:A_as_tested|B_replied|C_silent|transfer-[0-9]{2})-[1-3](?:-(?:baseline|candidate))?\.json",
+                    r"(?:(?:A_as_tested|B_replied|C_silent|transfer-[0-9]{2})-[1-3](?:-(?:baseline|candidate))?|meeting-0[1-5]-(?:baseline|candidate))\.json",
                     name,
                 )
                 is not None,

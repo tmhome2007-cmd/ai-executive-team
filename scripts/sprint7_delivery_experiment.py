@@ -68,7 +68,7 @@ def freeze(previous, model_tag=None):
             "repairs": 0,
             "rubric": old["rubric"],
             "prior_run": str(previous),
-            "scope": "Role-neutral explanation helper, not CEO speech: canonical persona is metadata only. Same reviewed records/corrections and typed answers. Application supplies operational checks, success, pivot branches, stop anchors, full correction snapshot, distinct alternative labels and complete standard invitation/privacy/feedback text. Model supplies evidence, alternative selection/rejection explanation, pivotal explanation and exact source-link selection. This measures combined workflow, not independent drafting/planning, full team or held-out performance.",
+            "scope": "Role-neutral explanation helper, not CEO speech: canonical persona is metadata only. Same reviewed records/corrections and typed answers. Application supplies operational checks, success, pivot branches, stop anchors, full correction snapshot, distinct alternative labels/conditional comparison/pivotal explanations and complete standard invitation/privacy/feedback text. Model supplies evidence, step explanation, alternative/pivotal-key selection and exact source-link selection. This measures combined workflow, not independent drafting/planning, full team or held-out performance.",
             "extra_gate": "All 9 complete plans valid without repair; no outbound instruction disguised as private check; B has a usable safe-input/feedback draft; A/C may honestly end with a blocker and require no draft. Apply original usefulness axes and gate; no automatic merge or owner acceptance.",
         },
     )
@@ -105,6 +105,7 @@ def run(directory):
                         value["lead_status"]
                     ),
                     "distinct_alternative_labels": True,
+                    "conditional_comparison_and_pivotal_explanation": "application rules",
                 },
             }
             start = time.monotonic()
