@@ -14,6 +14,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [api/company_knowledge.py](../api/company_knowledge.py) | Owner-authenticated read-only company knowledge navigation. |
 | [api/conversation_audio.py](../api/conversation_audio.py) | Owner-requested local conversation audio API routes. |
 | [api/decision_intake.py](../api/decision_intake.py) | Stateless authenticated preview/confirmation; no generation, persistence or tools. |
+| [api/decision_requests.py](../api/decision_requests.py) | Authenticated generation status and explicit recovery closure, no retries. |
 | [api/decisions.py](../api/decisions.py) | Thin owner-authenticated HTTP boundary for approved decision preparation. |
 | [api/people.py](../api/people.py) | Character presentation, workforce and fictional simulation API routes. |
 | [api/practice_artifacts.py](../api/practice_artifacts.py) | Owner-authenticated inert exports and bounded comparisons of saved samples. |
@@ -32,6 +33,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [executive-dashboard/app/components/dashboard-shell.tsx](../executive-dashboard/app/components/dashboard-shell.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/decision-brief.tsx](../executive-dashboard/app/components/decision-brief.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/decision-intake.tsx](../executive-dashboard/app/components/decision-intake.tsx) | Dashboard component, library or style; see filename and source. |
+| [executive-dashboard/app/components/decision-request-recovery.tsx](../executive-dashboard/app/components/decision-request-recovery.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/executive-skills.tsx](../executive-dashboard/app/components/executive-skills.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/experiments.tsx](../executive-dashboard/app/components/experiments.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/neural-voice-audition.tsx](../executive-dashboard/app/components/neural-voice-audition.tsx) | Dashboard component, library or style; see filename and source. |
@@ -70,6 +72,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [memory/company_knowledge.py](../memory/company_knowledge.py) | Read-only, source-explained navigation over existing company SQLite records. |
 | [memory/context_policy.py](../memory/context_policy.py) | One exclusion policy for current executive context and its owner explanation. |
 | [memory/database.py](../memory/database.py) | SQLite schema, transaction boundaries and durable company record operations. |
+| [memory/decision_requests.py](../memory/decision_requests.py) | Local generation request identity; hashes/status only, never action approval. |
 | [memory/discussions.py](../memory/discussions.py) | Published, source-linked discussion rounds; no hidden reasoning or consent fabrication. |
 | [memory/encrypted_backup.py](../memory/encrypted_backup.py) | Opt-in authenticated SQLite snapshots; keys stay outside backup artifacts. |
 | [memory/evidence.py](../memory/evidence.py) | Dated source provenance. Registration or owner confirmation is not independent verification. |
@@ -149,6 +152,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_conversation_audio.py](../tests/test_conversation_audio.py) | Private speech on disposable SQLite and synthetic audio; no company data or downloads. |
 | [tests/test_decision_intake.py](../tests/test_decision_intake.py) | Short-request skips, trusted conditional routing and source/confirmation gates. |
 | [tests/test_decision_preparation.py](../tests/test_decision_preparation.py) | Real SQLite/API characterization of decision preparation without live agents. |
+| [tests/test_decision_requests.py](../tests/test_decision_requests.py) | Atomic generation claims, uncertain delivery closure and saved-history recovery. |
 | [tests/test_discussion_contracts.py](../tests/test_discussion_contracts.py) | Real CrewAI prompt contracts distinguish discussion phases from generic strategy. |
 | [tests/test_discussion_quality.py](../tests/test_discussion_quality.py) | Regression checks for discussion quality. |
 | [tests/test_discussions.py](../tests/test_discussions.py) | Regression checks for discussions. |
@@ -264,6 +268,7 @@ Routes retain authentication and approval requirements; this index grants no aut
 | GET | `/company/knowledge/{kind}/{ident}` | [api/company_knowledge.py](../api/company_knowledge.py) · `knowledge_detail` |
 | GET | `/conversation-audio/{key}` | [api/conversation_audio.py](../api/conversation_audio.py) · `get_conversation_audio` |
 | GET | `/decisions/history` | [main.py](../main.py) · `get_decision_history` |
+| GET | `/decisions/requests/{request_id}` | [api/decision_requests.py](../api/decision_requests.py) · `inspect` |
 | GET | `/decisions/{decision_id}/conversations` | [main.py](../main.py) · `decision_conversations` |
 | GET | `/decisions/{decision_id}/discussion` | [foundation_api.py](../foundation_api.py) · `discussion_get` |
 | GET | `/decisions/{decision_id}/lineage` | [main.py](../main.py) · `read_decision_lineage` |
@@ -345,6 +350,7 @@ Routes retain authentication and approval requirements; this index grants no aut
 | POST | `/conversation-audio` | [api/conversation_audio.py](../api/conversation_audio.py) · `generate_conversation_audio` |
 | POST | `/decisions/intake` | [api/decision_intake.py](../api/decision_intake.py) · `intake` |
 | POST | `/decisions/intake/confirm` | [api/decision_intake.py](../api/decision_intake.py) · `confirm` |
+| POST | `/decisions/requests/{request_id}/close` | [api/decision_requests.py](../api/decision_requests.py) · `close` |
 | POST | `/decisions/trigger` | [main.py](../main.py) · `trigger_ad_hoc_decision` |
 | POST | `/decisions/{decision_id}/approve` | [main.py](../main.py) · `approve_decision` |
 | POST | `/decisions/{decision_id}/prepare` | [api/decisions.py](../api/decisions.py) · `prepare_approved_decision` |

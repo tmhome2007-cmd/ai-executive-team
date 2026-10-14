@@ -6,6 +6,7 @@ import json
 from pydantic import BaseModel, ConfigDict, Field
 
 from workflows import structured_decision as sd
+from workflows.plan_delivery import quotation_choices
 from workflows.output_quality import assess_output
 from workflows.quality_benchmark import local_request
 
@@ -31,7 +32,28 @@ def review_payload(model, question, sources, role, personality, first):
     """Every reviewer sees the same immutable, attributed first-round snapshot."""
     schema = Review.model_json_schema()
     schema["properties"]["selected_role"]["enum"] = list(first)
-    schema["$defs"]["Objection"]["properties"]["target_role"]["enum"] = list(first)
+    schema["properties"]["objections"]["items"] = {
+        "anyOf": [
+            {
+                "type": "object",
+                "properties": {
+                    "target_role": {"type": "string", "const": key},
+                    "proposal_quote": {"type": "string", "const": value.recommendation},
+                    "concern": {"type": "string", "minLength": 1, "maxLength": 600},
+                },
+                "required": ["target_role", "proposal_quote", "concern"],
+                "additionalProperties": False,
+            }
+            for key, value in first.items()
+            if len(value.recommendation) >= 8
+        ]
+    }
+    if not schema["properties"]["objections"]["items"]["anyOf"]:
+        schema["properties"]["objections"] = {
+            "type": "array",
+            "maxItems": 0,
+            "items": {"type": "null"},
+        }
     context = {
         "question": question,
         "sources": sources,

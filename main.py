@@ -230,6 +230,9 @@ async def _lifespan_unlocked(app: FastAPI):
 
     # Initialiseer de database
     init_db()
+    from memory.decision_requests import recover_interrupted_requests
+
+    recover_interrupted_requests()
 
     # Durable step checkpoints: interrupted effects require explicit human
     # reconciliation, never automatic replay on a server restart.
@@ -937,6 +940,9 @@ def list_meeting_types():
 
 
 app.include_router(make_intake_router(verify_api_key))
+from api.decision_requests import make_request_router
+
+app.include_router(make_request_router(verify_api_key))
 
 
 @app.post(
@@ -946,6 +952,51 @@ app.include_router(make_intake_router(verify_api_key))
     dependencies=[Depends(verify_api_key)],
 )
 def trigger_ad_hoc_decision(request: DecisionRequest):
+    """Claim a durable identity before generation; identical repeats never rerun."""
+    import hashlib
+    import json
+    import uuid
+    from fastapi.responses import JSONResponse
+    from memory import decision_requests
+
+    workflow = request.workflow_run_id or f"decision:{uuid.uuid4()}"
+    request = request.model_copy(update={"workflow_run_id": workflow})
+    digest = hashlib.sha256(
+        json.dumps(
+            request.model_dump(exclude={"workflow_run_id"}), sort_keys=True
+        ).encode()
+    ).hexdigest()
+    try:
+        owned, state = decision_requests.claim(workflow, digest)
+    except decision_requests.RequestConflict:
+        raise HTTPException(
+            409,
+            "This request identity belongs to other inputs. Inspect history and use a new request.",
+        ) from None
+    if not owned:
+        return JSONResponse(status_code=202, content=state)
+    try:
+        response = _generate_ad_hoc_decision(request)
+    except HTTPException as error:
+        decision_requests.finish(
+            workflow,
+            reason_code=(
+                "input_rejected" if error.status_code < 500 else "generation_failed"
+            ),
+        )
+        raise
+    except Exception as error:
+        decision_requests.finish(workflow, reason_code="generation_failed")
+        logger.warning("decision_request_failed error_type=%s", type(error).__name__)
+        raise HTTPException(
+            502,
+            "Decision generation could not complete. Inspect this request and history before starting another.",
+        ) from None
+    decision_requests.finish(workflow, decision_id=response.database_id)
+    return response
+
+
+def _generate_ad_hoc_decision(request: DecisionRequest):
     """Start een ad-hoc overleg tussen geselecteerde agenten en slaat het besluit op."""
     import uuid
 
@@ -968,12 +1019,21 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
     workflow_run_id = request.workflow_run_id or f"decision:{uuid.uuid4()}"
     goal = None
     meeting_task = request.task_description
-    from memory.evidence import source_context
+    from memory.evidence import source_context_snapshot
 
     try:
-        registered_context = source_context(request.source_ids)
+        registered_context, source_snapshot = source_context_snapshot(
+            request.source_ids
+        )
     except (ValueError, LookupError) as error:
         raise HTTPException(400, str(error)) from None
+    if request.intake_confirmation is not None and source_snapshot != {
+        record["id"]: {"version": record["version"], "freshness": record["freshness"]}
+        for record in intake["records"]
+    }:
+        raise HTTPException(
+            409, "Selected context changed. Review and confirm the intake again."
+        )
     try:
         resolved_agent_keys = resolve_meeting_agents(
             request.meeting_type,
@@ -1047,25 +1107,39 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
         logger.warning("decision_generation_failed error_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=502,
-            detail="Decision generation failed. Check the local model and retained samples, then retry.",
+            detail="Decision generation failed. Check this request and history, then review the local model and retained samples before a new request.",
         ) from None
 
     final_decision = meeting_result.get("final_decision", "")
     participants = meeting_result.get("participants", [])
 
-    db_id = log_decision(
-        topic=request.topic,
-        agents_involved=participants,
-        task_description=request.task_description,
-        decision_outcome=final_decision,
-        sandbox_mode=config.SANDBOX_MODE,
-        goal_id=request.goal_id,
-        meeting_type=request.meeting_type,
-        workflow_key=workflow_run_id,
-        individual_outputs=meeting_result.get("individual_outputs", {}),
-        executive_profiles=get_executive_profiles(),
-        source_ids=request.source_ids,
-    )
+    from memory.evidence import SourceContextChanged
+
+    try:
+        db_id = log_decision(
+            topic=request.topic,
+            agents_involved=participants,
+            task_description=request.task_description,
+            decision_outcome=final_decision,
+            sandbox_mode=config.SANDBOX_MODE,
+            goal_id=request.goal_id,
+            meeting_type=request.meeting_type,
+            workflow_key=workflow_run_id,
+            individual_outputs=meeting_result.get("individual_outputs", {}),
+            executive_profiles=get_executive_profiles(),
+            source_ids=request.source_ids,
+            expected_source_snapshot=source_snapshot,
+            expected_intake_day=(
+                (request.intake_confirmation.timezone, intake["review_day"])
+                if request.intake_confirmation is not None
+                else None
+            ),
+        )
+    except SourceContextChanged:
+        raise HTTPException(
+            409,
+            "Selected source review or freshness changed during generation. Review the context again before a new request.",
+        ) from None
 
     try:
         snippet = final_decision[:200]

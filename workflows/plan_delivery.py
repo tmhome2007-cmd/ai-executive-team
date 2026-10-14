@@ -11,7 +11,7 @@ from workflows.actionable_plan import validate_plan
 from workflows.structured_decision import EvidenceQuote, OPTIONS, Text
 from workflows.output_quality import verify_evidence_quotes
 
-VERSION = "owner-delivery-experiment-v8"
+VERSION = "owner-delivery-experiment-v9"
 
 Reason = Text
 Alternative = Literal["immediate_invitation", "public_post", "consultant_introduction"]
@@ -28,6 +28,7 @@ ALTERNATIVE_REVIEW = {
 }
 PIVOT_REVIEW = {
     "tool_availability": "An unavailable tool blocks testing on every contact route; a working tool allows eligibility checks to proceed.",
+    "tool_recovery": "The known outage blocks every test now; a future working confirmation would allow eligibility checks to resume.",
     "contact_status": "Reply status changes whether to prepare an invitation or review another permitted route; the tool check must also pass.",
     "eligible_live_case": "Without an own current live case, this contact cannot provide the requested real-case feedback, even if the tool works.",
     "alternative_route": "No other permitted conversation means no established recipient; a known route lets eligibility and willingness checks proceed.",
@@ -39,12 +40,17 @@ class PivotalUnknown(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
     key: Literal[
-        "tool_availability", "contact_status", "eligible_live_case", "alternative_route"
+        "tool_availability",
+        "contact_status",
+        "eligible_live_case",
+        "alternative_route",
+        "tool_recovery",
     ]
 
 
 UNKNOWN_QUESTIONS = {
     "tool_availability": "Does the tool work today with fictional input?",
+    "tool_recovery": "Will the next owner check confirm that the unavailable tool can be used again?",
     "contact_status": "Do existing records identify a recently responsive intended contact?",
     "eligible_live_case": "Does the responsive contact have their own current live case?",
     "alternative_route": "Do existing records show another permitted conversation with a potentially eligible tester?",
@@ -62,15 +68,23 @@ def evidence_sources(context):
     return sources
 
 
-def allowed_unknowns(lead_status):
-    outreach_required(lead_status)
+def allowed_unknowns(lead_status, tool_status="unknown"):
+    if lead_status not in {
+        "unknown",
+        "recent_reply",
+        "silent",
+        "none",
+    } or tool_status not in {"unknown", "working", "unavailable"}:
+        raise ValueError("Unsupported confirmed intake status")
+    if tool_status == "unavailable":
+        return {"tool_recovery"}
     route = {
         "unknown": "contact_status",
         "recent_reply": "eligible_live_case",
         "silent": "alternative_route",
         "none": "alternative_route",
     }[lead_status]
-    return {"tool_availability", route}
+    return {route, "tool_availability"} if tool_status == "unknown" else {route}
 
 
 class Preparation(BaseModel):
@@ -86,6 +100,7 @@ class Preparation(BaseModel):
             "contact_status",
             "eligible_live_case",
             "alternative_route",
+            "tool_recovery",
         ]
     ] = Field(min_length=1, max_length=3)
     stop_after_days: int = Field(ge=1, le=14)
@@ -108,24 +123,59 @@ class Invitation(BaseModel):
     def message(self):
         link = self.tool_link.quote if self.tool_link else "[tool link: confirm first]"
         return (
-            "Hi! Do you have your own current live case and want to test? "
-            "If yes, paste your notice at the recorded link below, once I confirm the tool works. "
-            "If no, no test is needed.\n\n"
+            "Hi! Want to test your own current real case/input? "
+            "For a notice-text tool, paste a redacted notice; otherwise use its documented input format. I will check the tool first. "
+            "No relevant case means no test.\n\n"
             "Remove seller/account IDs, names, email, address and other personal details; "
             "never paste credentials.\n\n"
-            "Feedback:\n- Was the diagnosis accurate?\n"
+            "Feedback:\n- Was the diagnosis/result accurate?\n"
             "- Which details were unsupported or placeholders?\n"
-            "- Was the proposed plan useful?\n\n"
+            "- Was the draft/plan/output useful?\n\n"
             f"Recorded link (check first): {link}\n"
             "Proposed test: about 10 minutes (estimate)."
         )
 
 
-def outreach_required(lead_status):
-    """Trusted typed intake controls scope, not model labels or source prose."""
-    if lead_status not in {"recent_reply", "silent", "unknown", "none"}:
-        raise ValueError("Unsupported contact status")
-    return lead_status == "recent_reply"
+def outreach_required(lead_status, owner_minutes, tool_status="unknown"):
+    """Typed status and confirmed time, never model wording, control scope."""
+    allowed_unknowns(lead_status, tool_status)
+    if type(owner_minutes) is not int or not 1 <= owner_minutes <= 60:
+        raise ValueError("A confirmed owner time limit is required")
+    return (
+        lead_status == "recent_reply"
+        and tool_status != "unavailable"
+        and owner_minutes >= 30
+    )
+
+
+def quotation_choices(sources):
+    """Legal citation pairs from supplied bytes, shared by experimental stages."""
+    choices = []
+    for source_id, body in sources.items():
+        excerpts = list(
+            dict.fromkeys(
+                chunk.strip()
+                for chunk in [
+                    body,
+                    *body.splitlines(),
+                    *re.split(r"(?<=[.!?])\s+", body),
+                ]
+                if 8 <= len(chunk.strip()) <= 600
+            )
+        )
+        if excerpts:
+            choices.append(
+                {
+                    "type": "object",
+                    "properties": {
+                        "source_id": {"type": "string", "const": source_id},
+                        "quote": {"type": "string", "enum": excerpts},
+                    },
+                    "required": ["source_id", "quote"],
+                    "additionalProperties": False,
+                }
+            )
+    return choices
 
 
 def request(model, schema, prompt, context):
@@ -133,36 +183,41 @@ def request(model, schema, prompt, context):
     shape = schema.model_json_schema()
     sources = context["sources"]
     if schema is Preparation:
-        choices = []
-        for source_id, body in sources.items():
-            excerpts = list(
-                dict.fromkeys(
-                    chunk.strip()
-                    for chunk in [
-                        body,
-                        *body.splitlines(),
-                        *re.split(r"(?<=[.!?])\s+", body),
-                    ]
-                    if 8 <= len(chunk.strip()) <= 600
-                )
-            )
-            if excerpts:
-                choices.append(
-                    {
-                        "type": "object",
-                        "properties": {
-                            "source_id": {"type": "string", "const": source_id},
-                            "quote": {"type": "string", "enum": excerpts},
-                        },
-                        "required": ["source_id", "quote"],
-                        "additionalProperties": False,
-                    }
-                )
+        choices = quotation_choices(sources)
         if not choices:
             raise ValueError("No supplied evidence excerpt fits the contract")
         # Pair constraints prevent a correction quotation being assigned to an
         # older record. Runtime quotation verification remains authoritative.
         shape["properties"]["facts"]["items"] = {"anyOf": choices}
+        keys = sorted(allowed_unknowns(context["lead_status"], context["tool_status"]))
+        shape["properties"]["unknowns"]["items"]["enum"] = keys
+        shape["$defs"]["PivotalUnknown"]["properties"]["key"]["enum"] = keys
+    elif schema is Invitation:
+        choices = [{"type": "null"}]
+        for source_id, body in sources.items():
+            links = list(
+                dict.fromkeys(
+                    match.group(0).rstrip(".")
+                    for match in re.finditer(
+                        r"(?<![A-Za-z0-9@])(?:https?://)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,63}(?:/[A-Za-z0-9._~/-]*)?",
+                        body,
+                    )
+                    if 8 <= len(match.group(0).rstrip(".")) <= 80
+                )
+            )
+            if links:
+                choices.append(
+                    {
+                        "type": "object",
+                        "properties": {
+                            "source_id": {"type": "string", "const": source_id},
+                            "quote": {"type": "string", "enum": links},
+                        },
+                        "required": ["source_id", "quote"],
+                        "additionalProperties": False,
+                    }
+                )
+        shape["properties"]["tool_link"] = {"anyOf": choices}
     return {
         "model": model,
         "prompt": prompt + "\nInput:\n" + json.dumps(context, ensure_ascii=False),
@@ -187,7 +242,22 @@ RECOMMENDATIONS = {
     "none": "Check the tool once, then look for a permitted conversation in existing records; no known route means a blocker.",
 }
 
+
+def recommendation(lead_status, owner_minutes, tool_status):
+    if tool_status == "unavailable":
+        return "Record the confirmed unavailable-tool blocker and pause all invitations; choose a future private recheck without adding features."
+    if lead_status == "recent_reply" and not outreach_required(
+        lead_status, owner_minutes, tool_status
+    ):
+        return "Review tool readiness and live-case eligibility in this private time block; confirm another time block before preparing an invitation."
+    return RECOMMENDATIONS[lead_status]
+
+
 PIVOT_BRANCHES = {
+    "tool_recovery": (
+        "Update intake with the new working confirmation before choosing an invitation route.",
+        "Keep the known outage blocker and pause invitations; no new features are proposed.",
+    ),
     "tool_availability": (
         "Continue private route checks; invite only after eligibility and willingness are confirmed.",
         "Record the unavailable-tool blocker and pause invitations; no new features are proposed.",
@@ -208,9 +278,15 @@ PIVOT_BRANCHES = {
 
 
 def preparation_payload(
-    model, question, personality, lead_status, owner_minutes, sources
+    model,
+    question,
+    personality,
+    lead_status,
+    owner_minutes,
+    sources,
+    tool_status="unknown",
 ):
-    reserve = 15 if outreach_required(lead_status) else 0
+    reserve = 15 if outreach_required(lead_status, owner_minutes, tool_status) else 0
     if type(owner_minutes) is not int or not 15 + reserve <= owner_minutes <= 60:
         raise ValueError("Insufficient confirmed owner time for this route")
     return request(
@@ -247,27 +323,33 @@ review window in days. Return only the evidence, step explanation, alternative k
             "request": question,
             "sources": sources,
             "lead_status": lead_status,
+            "tool_status": tool_status,
             "constraints": {
                 "owner_minutes": owner_minutes,
                 "budget_euros": 0,
                 "scope": "private analysis; no team contact, spending, publishing, execution or new product features",
             },
-            "proposed_next_step": RECOMMENDATIONS[lead_status],
+            "proposed_next_step": recommendation(
+                lead_status, owner_minutes, tool_status
+            ),
             "alternative_approaches": ALTERNATIVES,
             "allowed_unknowns": {
-                k: UNKNOWN_QUESTIONS[k] for k in sorted(allowed_unknowns(lead_status))
+                k: UNKNOWN_QUESTIONS[k]
+                for k in sorted(allowed_unknowns(lead_status, tool_status))
             },
         },
     )
 
 
-def validate_preparation(raw, question, lead_status, owner_minutes, sources):
+def validate_preparation(
+    raw, question, lead_status, owner_minutes, sources, tool_status="unknown"
+):
     value = Preparation.model_validate_json(raw)
-    reserve = 15 if outreach_required(lead_status) else 0
+    reserve = 15 if outreach_required(lead_status, owner_minutes, tool_status) else 0
     if type(owner_minutes) is not int or not 15 + reserve <= owner_minutes <= 60:
         raise ValueError("Insufficient confirmed owner time for this route")
-    if value.pivotal_fact.key not in allowed_unknowns(lead_status) or any(
-        k not in allowed_unknowns(lead_status) for k in value.unknowns
+    if value.pivotal_fact.key not in allowed_unknowns(lead_status, tool_status) or any(
+        k not in allowed_unknowns(lead_status, tool_status) for k in value.unknowns
     ):
         raise ValueError("Plan asks about an already supplied or unrelated fact")
     if value.pivotal_fact.key not in value.unknowns:
@@ -287,10 +369,16 @@ def validate_preparation(raw, question, lead_status, owner_minutes, sources):
     ):
         raise ValueError("Incomplete explanation; never truncate or silently repair it")
     tool_check = (
-        "Open the tool at the URL in your reviewed record (if absent, record that blocker). Paste this synthetic notice: "
+        "Open the tool link in the reviewed record (if absent, record that blocker). "
+        "Confirm its documented input format; if unknown, pause and ask for a safe example. "
+        "Only for a suspension-notice text tool, use this synthetic notice: "
         + FICTIONAL_TEST
-        + " Run its normal analysis. Record whether a diagnosis/draft appears, any error and invented facts. Stop invitations if unavailable. This is a functionality check, not real seller validation."
+        + " Run its normal analysis only if the format fits. Record output, errors and invented facts; stop invitations if unavailable. This checks functionality, not real-user validation."
     )
+    if tool_status == "working":
+        tool_check = "Record the owner's working-at-review confirmation and its date. Do not ask the same availability question again; recheck only if the confirmation is stale or an error appears."
+    elif tool_status == "unavailable":
+        tool_check = "Record the owner's unavailable-tool confirmation and any supplied error; keep missing details unknown. Pause all invitations. This records a blocker, not a completed repair."
     steps = [
         {
             "actor": "owner",
@@ -301,20 +389,24 @@ def validate_preparation(raw, question, lead_status, owner_minutes, sources):
         {
             "actor": "owner",
             "kind": "private_check",
-            "instruction": CHECKS[lead_status],
+            "instruction": (
+                CHECKS[lead_status]
+                if tool_status != "unavailable"
+                else "Review the existing outage information and record what the owner would need for a later availability check. If cause or safe test input is missing, mark it unknown; do not add code, claim a repair or invite testing."
+            ),
             "minutes": 10,
         },
     ]
     window = value.stop_after_days
     stop = (
         f"Stop invitations if the tool check fails or eligibility/willingness remains unconfirmed. If the owner chooses to send the draft, change route after {window} days without a reply; the clock starts when the owner sends it."
-        if outreach_required(lead_status)
+        if outreach_required(lead_status, owner_minutes, tool_status)
         else f"Record a blocker and pause if the tool check fails or no eligible permitted route is established. If checks remain unresolved {window} days after starting this private review, pause and review the missing evidence; no follow-up is implied."
     )
     pivot = value.pivotal_fact
     yes, no = PIVOT_BRANCHES[pivot.key]
     composed = {
-        "recommendation": RECOMMENDATIONS[lead_status],
+        "recommendation": recommendation(lead_status, owner_minutes, tool_status),
         "why_this_step": value.why_this_step
         + " Alternative: "
         + ALTERNATIVES[value.alternative_considered]
@@ -327,13 +419,14 @@ def validate_preparation(raw, question, lead_status, owner_minutes, sources):
         )
         + [f.model_dump() for f in value.facts],
         "unknowns": [
-            UNKNOWN_QUESTIONS[k] for k in sorted(allowed_unknowns(lead_status))
+            UNKNOWN_QUESTIONS[k]
+            for k in sorted(allowed_unknowns(lead_status, tool_status))
         ],
         "assumptions": [],
         "steps": steps,
         "draft_message": None,
         "stop": {"condition": stop, "after_days": window},
-        "success": "A willing, eligible person tests their own current live case and reports diagnosis accuracy, unsupported details/placeholders and usefulness of the proposed plan; positive feedback is not required.",
+        "success": "A willing, eligible person tests their own current live case and reports output accuracy, unsupported details/placeholders and usefulness for their case; positive feedback is not required.",
         "pivotal_fact": UNKNOWN_QUESTIONS[pivot.key]
         + " Why: "
         + PIVOT_REVIEW[pivot.key]
@@ -368,10 +461,18 @@ names, eligibility, consent, guarantees or extra fields. No message is sent.
     )
 
 
-def assemble(preparation, draft_raw, question, lead_status, owner_minutes, sources):
+def assemble(
+    preparation,
+    draft_raw,
+    question,
+    lead_status,
+    owner_minutes,
+    sources,
+    tool_status="unknown",
+):
     """Deterministic composition with the original full-plan guard, no repair."""
     value = preparation.model_dump()
-    if outreach_required(lead_status):
+    if outreach_required(lead_status, owner_minutes, tool_status):
         if draft_raw is None:
             raise ValueError("Required drafting stage is missing")
         draft = Invitation.model_validate_json(draft_raw)

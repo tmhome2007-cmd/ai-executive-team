@@ -13,6 +13,9 @@ import OrganizationalWork from "./components/organizational-work";
 import CompanyKnowledge from "./components/company-knowledge";
 import CompanyRecords, { type ExecutiveProfile } from "./components/company-records";
 import DecisionIntake, { type ConfirmedIntake } from "./components/decision-intake";
+import DecisionRequestRecovery, {
+  useDecisionRequestRecovery,
+} from "./components/decision-request-recovery";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(
   /\/$/,
@@ -1680,6 +1683,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DecisionResponse | null>(null);
   const [decisionRequestUncertain, setDecisionRequestUncertain] = useState(false);
+  const requestRecovery = useDecisionRequestRecovery(
+    API_BASE,
+    apiKey,
+    handleAuthFailure,
+  );
   const [error, setError] = useState<string | null>(null);
 
   const toggleAgent = (key: string) => {
@@ -1700,6 +1708,19 @@ export default function DashboardPage() {
       return;
     }
 
+    if (requestRecovery.requestId) {
+      setError(
+        "Check the current request and close recovery before starting another decision.",
+      );
+      return;
+    }
+    const submittedRequest = requestRecovery.begin();
+    if (!submittedRequest) {
+      setError(
+        "Another request is active. Check its status before starting a new decision.",
+      );
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
@@ -1714,6 +1735,7 @@ export default function DashboardPage() {
           "X-API-Key": apiKey || "",
         },
         body: JSON.stringify({
+          workflow_run_id: submittedRequest,
           topic,
           intake_confirmation: confirmedIntake,
           source_ids: confirmedIntake?.source_ids || [],
@@ -1728,20 +1750,33 @@ export default function DashboardPage() {
         }),
       });
 
+      if (!requestRecovery.isActive(submittedRequest)) return;
       if (response.status === 401) {
         handleAuthFailure();
         setError("Invalid key — please try again.");
         return;
       }
 
+      if (response.status === 202) {
+        const state = await response.json();
+        if (!requestRecovery.isActive(submittedRequest)) return;
+        requestRecovery.accept(state);
+        setDecisionRequestUncertain(true);
+        fetchDashboardData();
+        return;
+      }
       if (!response.ok) {
-        outcomeUncertain = response.status >= 500 || response.status === 408;
+        outcomeUncertain =
+          response.status >= 500 || response.status === 408 || response.status === 409;
         const detail = await response.json().catch(() => null);
         throw new Error(detail?.detail || `Error: ${response.statusText}`);
       }
 
       const data: DecisionResponse = await response.json();
+      if (!requestRecovery.isActive(submittedRequest)) return;
       outcomeUncertain = false;
+      setLoading(false);
+      requestRecovery.clear();
       setResult(data);
       fetchDashboardData();
       if (apiKey) {
@@ -1749,10 +1784,15 @@ export default function DashboardPage() {
         fetchActionHistory(apiKey);
       }
     } catch (err: unknown) {
+      if (!requestRecovery.isActive(submittedRequest)) return;
+      if (!outcomeUncertain) {
+        setLoading(false);
+        requestRecovery.clear();
+      }
       setDecisionRequestUncertain(outcomeUncertain);
       setError(errorMessage(err) || "An unknown error occurred.");
     } finally {
-      setLoading(false);
+      if (requestRecovery.isActive(submittedRequest)) setLoading(false);
     }
   };
 
@@ -3089,35 +3129,22 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {decisionRequestUncertain && (
-              <div
-                role="status"
-                aria-label="Decision request recovery"
-                className="p-3 border border-amber-900 rounded text-sm text-amber-200 space-y-2"
-              >
-                <p>
-                  The request outcome is uncertain. A completed decision may already be
-                  saved in Decision History. Keep the terminal open; generation may
-                  still be running. Check history before starting another request.
-                </p>
-                <button
-                  type="button"
-                  className="text-cyan-300 underline"
-                  onClick={() => {
-                    fetchDashboardData();
-                    document
-                      .getElementById("decision-history")
-                      ?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                >
-                  Refresh Decision History
-                </button>
-                <p>
-                  If nothing appears, check again after generation finishes. An empty
-                  history is not proof the request stopped. Refreshing history does not
-                  start a new meeting.
-                </p>
-              </div>
+            {(decisionRequestUncertain || requestRecovery.requestId) && (
+              <DecisionRequestRecovery
+                recovery={requestRecovery}
+                onRefreshHistory={() => {
+                  fetchDashboardData();
+                  document
+                    .getElementById("decision-history")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                onClosed={() => {
+                  setDecisionRequestUncertain(false);
+                  setError(null);
+                  setLoading(false);
+                  fetchDashboardData();
+                }}
+              />
             )}
 
             <form onSubmit={handleTriggerDecision} className="space-y-4">
@@ -3244,7 +3271,7 @@ export default function DashboardPage() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || Boolean(requestRecovery.requestId)}
                 className="w-full sm:w-auto px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
                 {loading

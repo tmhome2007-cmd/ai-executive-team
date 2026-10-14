@@ -81,7 +81,7 @@ def freeze(previous, model_tag):
                 "technical": "Five candidate meetings valid, independent first visibility and attributed shared-snapshot review; no repairs or critical factual/authority error.",
                 "semantic": "Each candidate has at least two genuinely distinct first proposals or an explicit evidence-grounded no-alternative reason. Preserve actual concerns and role identities; normalized wording is not voting. Analyst and owner acceptance separate.",
             },
-            "scope": "Paired development primitive comparison, not full API/current company run or held-out data. Same owner sources and canonical backstories; baseline has earlier-first visibility and three calls, candidate has independent first plus review and six calls. No claim independence alone causes quality; latency/extra calls disclosed.",
+            "scope": "Paired development primitive comparison, not full API/current company run or held-out data. Both arms bind native citation source/quote pairs; candidate review binds role/proposal quotations. Same owner sources and canonical backstories; baseline has earlier-first visibility and three calls, candidate has independent first plus review and six calls. No claim independence alone causes quality; latency/extra calls disclosed.",
         },
     )
     return directory

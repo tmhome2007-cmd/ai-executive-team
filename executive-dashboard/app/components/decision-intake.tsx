@@ -10,6 +10,7 @@ export interface IntakeValue {
   lead_status: string | null;
   tool_status: string | null;
   owner_minutes: number | null;
+  timezone: string;
 }
 
 export interface ConfirmedIntake extends IntakeValue {
@@ -70,6 +71,7 @@ export default function DecisionIntake({
       answers.owner_minutes && answers.owner_minutes !== "unknown"
         ? Number(answers.owner_minutes)
         : null,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   });
   const changed = () => {
     setPreview(null);

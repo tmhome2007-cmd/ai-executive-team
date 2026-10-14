@@ -22,6 +22,33 @@ def record(**changes):
 
 
 class DecisionIntakeTests(unittest.TestCase):
+    def test_current_answers_expire_at_the_owners_review_day_boundary(self):
+        from api.decision_intake import IntakeConfirmation, confirm_intake
+
+        value = IntakeInput(
+            request="Find a first user",
+            timezone="Europe/Brussels",
+            tool_status="working",
+            owner_minutes=30,
+        )
+        with patch("workflows.decision_intake.review_day", return_value="2026-10-14"):
+            first = build_intake(value, lambda _: None)
+            confirmed = IntakeConfirmation(
+                **value.model_dump(), review_hash=first["review_hash"]
+            )
+            self.assertTrue(confirm_intake(confirmed)["confirmed"])
+        with (
+            patch("workflows.decision_intake.review_day", return_value="2026-10-15"),
+            self.assertRaises(ValueError),
+        ):
+            confirm_intake(confirmed)
+        self.assertEqual(len(first["questions"]), 1)
+        with self.assertRaises(ValueError):
+            build_intake(
+                IntakeInput(request="Find a user", timezone="../invalid"),
+                lambda _: None,
+            )
+
     def test_short_request_no_context_returns_three_questions_and_conditional_brief(
         self,
     ):

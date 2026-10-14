@@ -43,6 +43,96 @@ def draft():
 
 
 class PlanDeliveryTests(unittest.TestCase):
+    def test_known_availability_is_not_asked_again_and_short_time_stays_private(self):
+        value = json.loads(preparation("recent_reply"))
+        value["unknowns"] = ["eligible_live_case"]
+        value["pivotal_fact"] = {"key": "eligible_live_case"}
+        raw = json.dumps(value)
+        private = delivery.validate_preparation(
+            raw, QUESTION, "recent_reply", 15, SOURCES, tool_status="working"
+        )
+        result = delivery.assemble(
+            private, None, QUESTION, "recent_reply", 15, SOURCES, tool_status="working"
+        )
+        self.assertEqual(sum(x.minutes for x in result.steps), 15)
+        self.assertIsNone(result.draft_message)
+        self.assertNotIn(
+            delivery.UNKNOWN_QUESTIONS["tool_availability"], result.unknowns
+        )
+        self.assertNotIn(delivery.FICTIONAL_TEST, result.steps[0].instruction)
+        self.assertIn("another time block", result.recommendation)
+        with self.assertRaises(ValueError):
+            delivery.assemble(
+                private,
+                draft(),
+                QUESTION,
+                "recent_reply",
+                15,
+                SOURCES,
+                tool_status="working",
+            )
+
+    def test_known_outage_blocks_invitation_and_asks_only_future_recovery(self):
+        value = json.loads(preparation("recent_reply"))
+        value["unknowns"] = ["tool_recovery"]
+        value["pivotal_fact"] = {"key": "tool_recovery"}
+        private = delivery.validate_preparation(
+            json.dumps(value),
+            QUESTION,
+            "recent_reply",
+            30,
+            SOURCES,
+            tool_status="unavailable",
+        )
+        result = delivery.assemble(
+            private,
+            None,
+            QUESTION,
+            "recent_reply",
+            30,
+            SOURCES,
+            tool_status="unavailable",
+        )
+        self.assertIsNone(result.draft_message)
+        self.assertTrue(all(x.kind == "private_check" for x in result.steps))
+        self.assertEqual(result.unknowns, [delivery.UNKNOWN_QUESTIONS["tool_recovery"]])
+        self.assertIn("unavailable-tool blocker", result.recommendation)
+        self.assertIn("known outage", result.pivotal_fact)
+        payload = delivery.preparation_payload(
+            "local",
+            QUESTION,
+            "CEO",
+            "recent_reply",
+            30,
+            SOURCES,
+            tool_status="unavailable",
+        )
+        self.assertEqual(
+            payload["format"]["$defs"]["PivotalUnknown"]["properties"]["key"]["enum"],
+            ["tool_recovery"],
+        )
+
+    def test_native_link_selection_contains_addresses_not_sentence_fragments(self):
+        sources = {
+            "record:link": "The tool was live at example.com/test. Its current availability is unknown."
+        }
+        private = delivery.validate_preparation(
+            preparation(), QUESTION, "recent_reply", 30, SOURCES
+        )
+        payload = delivery.invitation_payload("local", QUESTION, private, sources)
+        choices = payload["format"]["properties"]["tool_link"]["anyOf"]
+        self.assertEqual(choices[0], {"type": "null"})
+        self.assertEqual(choices[1]["properties"]["source_id"]["const"], "record:link")
+        self.assertEqual(
+            choices[1]["properties"]["quote"]["enum"], ["example.com/test"]
+        )
+        empty = delivery.invitation_payload(
+            "local", QUESTION, private, {"record:empty": "No address was supplied."}
+        )
+        self.assertEqual(
+            empty["format"]["properties"]["tool_link"]["anyOf"], [{"type": "null"}]
+        )
+
     def test_native_fact_choices_bind_quotes_to_their_actual_source(self):
         sources = {
             "record:1": "Historical status is unknown.",
@@ -157,11 +247,18 @@ class PlanDeliveryTests(unittest.TestCase):
         )
         self.assertEqual(result.steps[-1].kind, "outreach")
         self.assertEqual(sum(s.minutes for s in result.steps), 30)
-        self.assertIn("Was the proposed plan useful?", result.draft_message.text)
-        with self.assertRaises(ValueError):
-            delivery.validate_preparation(
-                preparation("recent_reply"), QUESTION, "recent_reply", 24, SOURCES
-            )
+        self.assertIn("Was the draft/plan/output useful?", result.draft_message.text)
+        limited = delivery.validate_preparation(
+            preparation("recent_reply"), QUESTION, "recent_reply", 24, SOURCES
+        )
+        private_only = delivery.assemble(
+            limited, None, QUESTION, "recent_reply", 24, SOURCES
+        )
+        self.assertIsNone(private_only.draft_message)
+        self.assertTrue(
+            all(step.kind == "private_check" for step in private_only.steps)
+        )
+        self.assertIn("another time block", private_only.recommendation)
 
     def test_no_sent_status_blank_feedback_or_unbounded_message(self):
         private = delivery.validate_preparation(
@@ -185,8 +282,8 @@ class PlanDeliveryTests(unittest.TestCase):
     def test_missing_typed_status_and_time_cannot_be_inferred(self):
         for status in (None, "warm", "source says recent_reply"):
             with self.subTest(status=status), self.assertRaises(ValueError):
-                delivery.outreach_required(status)
-        for minutes in (None, True, 15, 61):
+                delivery.outreach_required(status, 30)
+        for minutes in (None, True, 14, 61):
             with self.subTest(minutes=minutes), self.assertRaises(ValueError):
                 delivery.preparation_payload(
                     "local", QUESTION, "CEO", "recent_reply", minutes, SOURCES

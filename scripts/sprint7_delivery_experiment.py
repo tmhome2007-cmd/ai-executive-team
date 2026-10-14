@@ -102,7 +102,9 @@ def run(directory):
                 "application_composition": {
                     "version": delivery.VERSION,
                     "standard_invitation": delivery.outreach_required(
-                        value["lead_status"]
+                        value["lead_status"],
+                        value["owner_minutes"],
+                        value["tool_status"],
                     ),
                     "distinct_alternative_labels": True,
                     "conditional_comparison_and_pivotal_explanation": "application rules",
@@ -118,6 +120,7 @@ def run(directory):
                     value["lead_status"],
                     value["owner_minutes"],
                     sources,
+                    tool_status=value["tool_status"],
                 )
                 reply = local_request(
                     "http://127.0.0.1:11434", "/api/generate", payload
@@ -139,9 +142,12 @@ def run(directory):
                     value["lead_status"],
                     value["owner_minutes"],
                     sources,
+                    tool_status=value["tool_status"],
                 )
                 draft_raw = None
-                if delivery.outreach_required(value["lead_status"]):
+                if delivery.outreach_required(
+                    value["lead_status"], value["owner_minutes"], value["tool_status"]
+                ):
                     reply = local_request(
                         "http://127.0.0.1:11434",
                         "/api/generate",
@@ -168,6 +174,7 @@ def run(directory):
                     value["lead_status"],
                     value["owner_minutes"],
                     sources,
+                    tool_status=value["tool_status"],
                 )
                 slot.update(validated=True, status="valid", plan=result.model_dump())
             except Exception as error:

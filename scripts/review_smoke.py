@@ -3,6 +3,7 @@
 from browser_navigation import open_view
 
 import os
+import hashlib
 import sys
 import tempfile
 from pathlib import Path
@@ -95,6 +96,9 @@ def main():
             urls = []
             trigger_mode = ["network"]
             trigger_attempts = []
+            request_ids = []
+            from memory import decision_requests
+
             page.on("pageerror", lambda e: errors.append(str(e)))
 
             def respond(route):
@@ -103,9 +107,26 @@ def main():
                 path = req.url.removeprefix("http://127.0.0.1:8001")
                 if req.method == "POST" and path == "/decisions/trigger":
                     trigger_attempts.append(trigger_mode[0])
+                    body = json.loads(req.post_data)
+                    request_ids.append(body["workflow_run_id"])
                     if trigger_mode[0] == "network":
                         route.abort("failed")
                     else:
+                        # Simulate a claimed generation whose HTTP response was lost.
+                        # No model runs: a synthetic saved result is inserted below.
+                        decision_requests.claim(
+                            body["workflow_run_id"],
+                            hashlib.sha256(
+                                json.dumps(
+                                    {
+                                        k: v
+                                        for k, v in body.items()
+                                        if k != "workflow_run_id"
+                                    },
+                                    sort_keys=True,
+                                ).encode()
+                            ).hexdigest(),
+                        )
                         route.fulfill(
                             status=500,
                             content_type="text/plain",
@@ -114,8 +135,14 @@ def main():
                     return  # Never reach the real generation handler or write a decision.
                 assert req.method == "GET" or (
                     req.method == "POST"
-                    and path in {"/decisions/intake", "/decisions/intake/confirm"}
-                ), "Review allows only stateless intake; no generation or company mutation"
+                    and (
+                        path in {"/decisions/intake", "/decisions/intake/confirm"}
+                        or (
+                            path.startswith("/decisions/requests/")
+                            and path.endswith("/close")
+                        )
+                    )
+                ), "Review permits intake and request recovery only; no generated meeting or action approval"
                 response = client.request(
                     req.method,
                     path,
@@ -246,6 +273,56 @@ def main():
                     get_decision_by_id(ident)["approval_status"] == "pending"
                     for ident in ids
                 )
+                assert page.get_by_role(
+                    "button", name="Start Decision", exact=True
+                ).is_disabled()
+                recovery.get_by_role("button", name="Check Request Status").click()
+                if failure == "network":
+                    recovery.get_by_text(
+                        "Delivery may still be pending", exact=False
+                    ).wait_for()
+                    page.reload()
+                    open_view(page, "Decisions")
+                    recovery = page.get_by_role(
+                        "status", name="Decision request recovery"
+                    )
+                    recovery.wait_for()
+                    assert len(trigger_attempts) == attempts
+                    assert page.get_by_role(
+                        "button", name="Start Decision", exact=True
+                    ).is_disabled()
+                    recovery.get_by_role("button", name="Close Recovery").click()
+                    recovery.wait_for(state="hidden")
+                    assert (
+                        decision_requests.inspect(request_ids[-1])["status"] == "closed"
+                    )
+                else:
+                    recovery.get_by_text(
+                        "The meeting is queued or running", exact=False
+                    ).wait_for()
+                    recovery.get_by_role("button", name="Close Recovery").click()
+                    recovery.get_by_text(
+                        "This request cannot be closed yet", exact=False
+                    ).wait_for()
+                    assert page.get_by_role(
+                        "button", name="Start Decision", exact=True
+                    ).is_disabled()
+                    saved = log_decision(
+                        "Synthetic saved recovery",
+                        ["ceo"],
+                        "Fictional request only",
+                        "Private synthetic result. Pending owner review.",
+                        workflow_key=request_ids[-1],
+                    )
+                    decision_requests.finish(request_ids[-1], decision_id=saved)
+                    recovery.get_by_role("button", name="Check Request Status").click()
+                    recovery.get_by_text(
+                        f"Saved as decision #{saved}", exact=False
+                    ).wait_for()
+                    assert get_decision_by_id(saved)["approval_status"] == "pending"
+                    recovery.get_by_role("button", name="Close Recovery").click()
+                    recovery.wait_for(state="hidden")
+                assert len(trigger_attempts) == attempts
             assert trigger_attempts == ["network", "server"]
             page.set_viewport_size({"width": 390, "height": 844})
             page.screenshot(path="/private/tmp/short-review-mobile.png", full_page=True)
@@ -258,7 +335,7 @@ def main():
             assert not errors, errors
             browser.close()
         print(
-            "PASS: short-request intake/skip/changed-answer confirmation, evidence/unknown/next-action visibility, conflict and blocking warnings, legacy fallback/full report, uncertain-request/history recovery without retry or generation/approval mutation, mobile and text/key safety"
+            "PASS: short-request intake/skip/changed-answer confirmation, evidence/unknown/next-action visibility, conflict and blocking warnings, legacy fallback/full report, persisted request/status/history recovery, reload, blocked running closure and saved completion without retry or real generation/approval mutation, mobile and text/key safety"
         )
 
 

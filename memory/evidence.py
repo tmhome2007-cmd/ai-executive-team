@@ -265,7 +265,11 @@ def entity_evidence(entity_kind, entity_id):
     }
 
 
-def source_context(source_ids):
+class SourceContextChanged(ValueError):
+    """A frozen generation context no longer matches the source review state."""
+
+
+def source_context_snapshot(source_ids):
     if (
         not isinstance(source_ids, list)
         or len(source_ids) > 20
@@ -273,10 +277,47 @@ def source_context(source_ids):
         or len(set(source_ids)) != len(source_ids)
     ):
         raise ValueError("Invalid source IDs")
-    sources = [get_source(i) for i in source_ids]
+    with get_connection() as conn:
+        conn.execute("BEGIN")
+        rows = [
+            conn.execute(
+                "SELECT * FROM evidence_sources WHERE id=?", (ident,)
+            ).fetchone()
+            for ident in source_ids
+        ]
+        sources = [_source(row) if row else None for row in rows]
+        conn.commit()
     if any(s is None for s in sources):
         raise LookupError("Source not found")
-    return "\n".join(
+    text = "\n".join(
         f"Source #{s['id']}: {s['title']} · observed {s['observed_at']} · {s['freshness']} · {s['verification']}\n{s['summary']}"
         for s in sources
     )
+    return text, {
+        item["id"]: {"version": item["version"], "freshness": item["freshness"]}
+        for item in sources
+    }
+
+
+def source_context(source_ids):
+    return source_context_snapshot(source_ids)[0]
+
+
+def require_source_snapshot(cursor, source_ids, expected):
+    """Validate at decision insertion under its existing write transaction."""
+    if not isinstance(expected, dict) or set(expected) != set(source_ids or []):
+        raise ValueError("Source snapshot must match selected sources")
+    for ident, snapshot in expected.items():
+        if not isinstance(snapshot, dict) or set(snapshot) != {"version", "freshness"}:
+            raise ValueError("Invalid source snapshot")
+        row = cursor.execute(
+            "SELECT * FROM evidence_sources WHERE id=?", (ident,)
+        ).fetchone()
+        current = _source(row) if row else None
+        if current is None or snapshot != {
+            "version": current["version"],
+            "freshness": current["freshness"],
+        }:
+            raise SourceContextChanged(
+                "Selected source review or freshness changed during generation"
+            )

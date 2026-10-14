@@ -2,11 +2,20 @@
 
 import hashlib
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-VERSION = "first-user-intake-v1"
+VERSION = "first-user-intake-v2"
+
+
+def review_day(timezone):
+    try:
+        return datetime.now(ZoneInfo(timezone)).date().isoformat()
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError("Use a valid review timezone") from None
 
 
 class IntakeInput(BaseModel):
@@ -20,12 +29,14 @@ class IntakeInput(BaseModel):
     lead_status: Literal["recent_reply", "silent", "none", "unknown"] | None = None
     tool_status: Literal["working", "unavailable", "unknown"] | None = None
     owner_minutes: int | None = Field(default=None, ge=1, le=60)
+    timezone: str = Field(default="UTC", min_length=1, max_length=80)
 
 
 def build_intake(value: IntakeInput, get_source):
     """Assemble a labelled brief; records never become current answers by inference."""
     if not value.request.strip():
         raise ValueError("Write a short first-user request")
+    day = review_day(value.timezone)
     if len(set(value.source_ids)) != len(value.source_ids) or any(
         ident < 1 for ident in value.source_ids
     ):
@@ -123,6 +134,7 @@ def build_intake(value: IntakeInput, get_source):
     )
     lines = [
         "FIRST-USER BRIEF — FOR OWNER REVIEW",
+        f"Current answers reviewed for {day} ({value.timezone}); reconfirm on a later day.",
         f"Short request: {value.request.strip()}",
         "System boundaries: €0; team performs private analysis only. No team contact, posting, spending or execution. Only the human owner may later choose to act.",
         "Selected context (last recorded, not verified current):",
@@ -169,6 +181,7 @@ def build_intake(value: IntakeInput, get_source):
         json.dumps(
             {
                 "version": VERSION,
+                "review_day": day,
                 "input": value.model_dump(),
                 "records": records,
                 "brief": brief,
@@ -179,6 +192,7 @@ def build_intake(value: IntakeInput, get_source):
     ).hexdigest()
     return {
         "version": VERSION,
+        "review_day": day,
         "questions": questions,
         "records": records,
         "route": route,
