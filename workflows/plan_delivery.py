@@ -11,7 +11,7 @@ from workflows.actionable_plan import validate_plan
 from workflows.structured_decision import EvidenceQuote, OPTIONS, Text
 from workflows.output_quality import verify_evidence_quotes
 
-VERSION = "owner-delivery-experiment-v10"
+VERSION = "owner-delivery-experiment-v11"
 
 Reason = Text
 Alternative = Literal["immediate_invitation", "public_post", "consultant_introduction"]
@@ -167,6 +167,27 @@ def quotation_choices(sources):
                 }
             )
     return choices
+
+
+def recorded_invitation(sources):
+    """Suggest only a unique recorded address, never verified tool identity/access."""
+    links = {}
+    for source_id, body in sources.items():
+        for match in re.finditer(
+            r'https?://[^\s<>"\[\]()]+|(?<![A-Za-z0-9@:/])(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,63}(?:/[^\s<>"\[\]()]+)?',
+            body,
+        ):
+            quote = match.group(0).rstrip(".,;")
+            if match.end() < len(body) and body[match.end()] in ":?#@":
+                continue
+            if 8 <= len(quote) <= 80 and re.fullmatch(
+                r"(?:https?://)?[A-Za-z0-9.-]+(?:/[A-Za-z0-9._~/-]*)?", quote
+            ):
+                links.setdefault(quote, ToolLink(source_id=source_id, quote=quote))
+    return Invitation(
+        status="not_sent",
+        tool_link=next(iter(links.values())) if len(links) == 1 else None,
+    )
 
 
 def request(model, schema, prompt, context):
@@ -477,7 +498,7 @@ def assemble(
             {
                 "actor": "owner",
                 "kind": "outreach",
-                "instruction": "Confirm the recorded link is the intended tool and the private check passes; resolve any bracketed link placeholder before sending. Review the unsent standard draft and decide whether to send it personally. Request a test only if the recipient confirms their own current live case and willingness; otherwise record the blocker.",
+                "instruction": "Confirm the recorded link is the intended tool, is accessible to the recipient and the private check passes; resolve any bracketed link placeholder before sending. Review the unsent standard draft and decide whether to send it personally. Request a test only if the recipient confirms their own current live case and willingness; otherwise record the blocker.",
                 "minutes": 15,
             }
         )

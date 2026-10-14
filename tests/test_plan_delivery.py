@@ -42,6 +42,34 @@ def draft():
 
 
 class PlanDeliveryTests(unittest.TestCase):
+    def test_recorded_link_selection_is_explicit_and_does_not_guess_ambiguous_urls(
+        self,
+    ):
+        one = delivery.recorded_invitation(
+            {"record:1": "Historical tool: example.com/test."}
+        )
+        self.assertEqual(one.tool_link.quote, "example.com/test")
+        self.assertEqual(one.tool_link.source_id, "record:1")
+        self.assertIsNone(
+            delivery.recorded_invitation(
+                {"record:1": "Tool example.com/test; competitor other.example.com."}
+            ).tool_link
+        )
+        self.assertIsNone(
+            delivery.recorded_invitation(
+                {"record:1": "https://example.com?api_key=secret"}
+            ).tool_link
+        )
+        self.assertIsNone(
+            delivery.recorded_invitation({"record:1": "No address supplied."}).tool_link
+        )
+        self.assertEqual(
+            delivery.recorded_invitation(
+                {"record:1": "example.com/test", "owner-correction": "example.com/test"}
+            ).tool_link.quote,
+            "example.com/test",
+        )
+
     def test_known_availability_is_not_asked_again_and_short_time_stays_private(self):
         value = json.loads(preparation("recent_reply"))
         value["pivotal_fact"] = {"key": "eligible_live_case"}

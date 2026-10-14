@@ -68,7 +68,7 @@ def freeze(previous, model_tag=None):
             "repairs": 0,
             "rubric": old["rubric"],
             "prior_run": str(previous),
-            "scope": "Role-neutral explanation helper, not CEO speech: canonical persona is metadata only. Same reviewed records/corrections and typed answers. Application supplies operational checks, success, pivot branches, stop anchors, full correction snapshot, distinct alternative labels/conditional comparison/pivotal explanations and complete standard invitation/privacy/feedback text. Model supplies evidence, step explanation, alternative/pivotal-key selection and exact source-link selection. This measures combined workflow, not independent drafting/planning, full team or held-out performance.",
+            "scope": "Role-neutral explanation helper, not CEO speech: canonical persona is metadata only. Same reviewed records/corrections and typed answers. Application supplies operational checks, success, pivot branches, stop anchors, full correction snapshot, distinct alternative labels/conditional comparison/pivotal explanations and complete standard invitation/privacy/feedback text. Application also selects a unique recorded address for owner identity/access verification, otherwise a placeholder. Model supplies evidence, step explanation and alternative/pivotal-key selection. This measures combined workflow, not independent drafting/planning, full team or held-out performance.",
             "extra_gate": "All 9 complete plans valid without repair; no outbound instruction disguised as private check; B has a usable safe-input/feedback draft; A/C may honestly end with a blocker and require no draft. Apply original usefulness axes and gate; no automatic merge or owner acceptance.",
         },
     )
@@ -148,25 +148,10 @@ def run(directory):
                 if delivery.outreach_required(
                     value["lead_status"], value["owner_minutes"], value["tool_status"]
                 ):
-                    reply = local_request(
-                        "http://127.0.0.1:11434",
-                        "/api/generate",
-                        delivery.invitation_payload(
-                            model, value["request"], preparation, sources
-                        ),
-                    )
-                    slot["raw_stages"].append(
-                        {
-                            "stage": "invitation",
-                            "raw": reply.get("response"),
-                            "done": reply.get("done"),
-                        }
-                    )
-                    if reply.get("done") is not True or not isinstance(
-                        reply.get("response"), str
-                    ):
-                        raise ValueError("Incomplete invitation")
-                    draft_raw = reply["response"]
+                    draft_raw = delivery.recorded_invitation(sources).model_dump_json()
+                    slot["application_composition"][
+                        "recorded_link_selection"
+                    ] = "unique quoted address; owner must verify identity/access"
                 result = delivery.assemble(
                     preparation,
                     draft_raw,
