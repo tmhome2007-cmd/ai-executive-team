@@ -1,0 +1,96 @@
+{
+  "source_commit": "42e7fc0",
+  "run": "audit-results/sprint7-reasoning/run-b6624f1b33d24d1f9821ac3817452399",
+  "technical": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 9,
+    "stage_responses": 9,
+    "errors": 0,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "pending",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "reviewer": "Codex analyst, not owner acceptance",
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "repetition": 1,
+      "sample_sha256": "f7dbef94576fb012f127586cc2ddd4727773e9d56ecfde33135cc9885fd87d86",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 2,
+      "sample_sha256": "64daef1873e99e2dca5c97e0396011d3f8ecf6823ae54359736ee2a3b68834c0",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 3,
+      "sample_sha256": "fe4e34ff59ddfc9e1f4773c334f23cd1afa28a7142c7a299ba1039a1a2f2bcb5",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    },
+    {
+      "case": "B_replied",
+      "repetition": 1,
+      "sample_sha256": "f7bad983f6a7cd7739cf8991e8f5e7e5de761397ebcba1974fcdc300636607ea",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    },
+    {
+      "case": "B_replied",
+      "repetition": 2,
+      "sample_sha256": "543078abc284892092758984c892927a98d7aa751d1924002ca01ea0cad39dfe",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    },
+    {
+      "case": "B_replied",
+      "repetition": 3,
+      "sample_sha256": "7d7cda7a8ccf7ac1e071abbca5240c8870c136286d0b55b81a4cfa16a0327adc",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    },
+    {
+      "case": "C_silent",
+      "repetition": 1,
+      "sample_sha256": "07c97eaa3a16120f3987da8161d7ed1178326a2783d378911d605b5b5e907e3d",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    },
+    {
+      "case": "C_silent",
+      "repetition": 2,
+      "sample_sha256": "b24931060e36268bf76cd9a0056dd9fa62615699dda485f5d2517103fe8937bd",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    },
+    {
+      "case": "C_silent",
+      "repetition": 3,
+      "sample_sha256": "496f1811b2158e9eaf80d2c030ac847c0d330edb03535a718cedbedb28532c9e",
+      "validated": true,
+      "complete_usefulness": true,
+      "notes": "Seven practical axes pass for the disclosed guided workflow. Complete owner correction and conditional route preserved; relevant draft/link and effort present. Model evidence selection is redundant historical metrics; operational guidance comes from application policy, not independent model planning."
+    }
+  ],
+  "development_gate_passed": true,
+  "complete_usefulness": 9,
+  "denominator": 9,
+  "source_and_models_unchanged": true,
+  "scope": "Original contact-variant development only; three unique plans, no repairs; transferred failures not retrospectively passed."
+}
