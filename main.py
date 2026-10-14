@@ -974,6 +974,25 @@ def trigger_ad_hoc_decision(request: DecisionRequest):
             "This request identity belongs to other inputs. Inspect history and use a new request.",
         ) from None
     if not owned:
+        if state["status"] == "completed":
+            from memory.database import get_decision_contributions
+
+            saved = get_decision_by_id(state["decision_id"])
+            return DecisionResponse(
+                workflow_run_id=workflow,
+                database_id=saved["id"],
+                topic=saved["topic"],
+                meeting_type=saved["meeting_type"],
+                goal_id=saved["goal_id"],
+                final_decision=saved["decision_outcome"],
+                participants=saved["agents_involved"].split(","),
+                individual_outputs={
+                    item["executive_key"]: item["body"]
+                    for item in get_decision_contributions(saved["id"])
+                    if item["phase"] == "decision"
+                },
+                quality_warnings={"recovered_saved_decision": True},
+            )
         return JSONResponse(status_code=202, content=state)
     try:
         response = _generate_ad_hoc_decision(request)

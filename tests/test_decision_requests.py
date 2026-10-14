@@ -236,9 +236,9 @@ class DecisionRequestTests(unittest.TestCase):
             response = first.result(timeout=10)
             self.assertEqual(response.status_code, 200, response.text)
             repeated = client.post("/decisions/trigger", json=body, headers=headers)
-            self.assertEqual(repeated.status_code, 202)
+            self.assertEqual(repeated.status_code, 200)
             self.assertEqual(
-                repeated.json()["decision_id"], response.json()["database_id"]
+                repeated.json()["database_id"], response.json()["database_id"]
             )
             self.assertEqual(model.call_count, 1)
             self.assertEqual(
