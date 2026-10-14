@@ -36,8 +36,10 @@ def hashes():
     return {name: sha(ROOT / name) for name in ASSETS}
 
 
-def freeze(reserved, development):
+def freeze(reserved, development, *, development_cases=False):
     reserved, development = Path(reserved).resolve(), Path(development).resolve()
+    if (reserved / "promoted.json").exists() and not development_cases:
+        raise ValueError("Promoted cases are development data, not reserved transfer")
     assessment = json.loads((development / "semantic-assessment.json").read_text())
     if assessment.get("development_gate_passed") is not True:
         raise ValueError("A completed development gate is required before transfer")
@@ -84,7 +86,15 @@ def freeze(reserved, development):
             "development_run": str(development),
             "reserved_input": str(reserved),
             "reserved_cases_sha256": manifest["cases_sha256"],
-            "scope": "Same final guided workflow on two installed local models, six samples/model. Application supplies operational/comparison/pivotal/draft/link text; not independent model planning or author-blind evaluation. No transfer output used for tuning.",
+            "evaluation_kind": (
+                "development" if development_cases else "reserved_transfer"
+            ),
+            "scope": "Same guided workflow on two installed local models, six samples/model. Application supplies operational/comparison/pivotal/draft/link text; not independent model planning or author-blind evaluation. "
+            + (
+                "Previously exposed cases, development regression only; no transfer claim."
+                if development_cases
+                else "No transfer output used for tuning."
+            ),
             "scorer": "Reserved seven-axis protocol, analyst grades after inference; owner acceptance separate",
             "repairs": 0,
         },
@@ -217,12 +227,19 @@ if __name__ == "__main__":
     parser.add_argument("--reserved")
     parser.add_argument("--development")
     parser.add_argument("--run")
+    parser.add_argument("--development-cases", action="store_true")
     args = parser.parse_args()
-    if args.run and (args.reserved or args.development):
+    if args.run and (args.reserved or args.development or args.development_cases):
         parser.error("Use run alone")
     if args.run:
         run(args.run)
     elif args.reserved and args.development:
-        print(freeze(args.reserved, args.development))
+        print(
+            freeze(
+                args.reserved,
+                args.development,
+                development_cases=args.development_cases,
+            )
+        )
     else:
         parser.error("Choose run or both reserved/development paths")

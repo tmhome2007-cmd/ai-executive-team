@@ -50,6 +50,7 @@ class TransferExperimentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "development gate"):
                 runner.freeze(reserved, development)
             identity.assert_not_called()
+
             assessment.write_text(json.dumps({"development_gate_passed": True}))
             source_hashes = runner.hashes()
             source_hashes["workflows/plan_delivery.py"] = "old passed code"
@@ -80,6 +81,15 @@ class TransferExperimentTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "drift"):
                 runner.freeze(reserved, development)
+            identity.assert_not_called()
+
+    def test_promoted_inputs_cannot_be_reused_as_reserved_transfer(self):
+        reserved = self.store / "reserved"
+        reserved.mkdir()
+        (reserved / "promoted.json").write_text('{"reason":"used for repair"}')
+        with patch.object(runner, "identity") as identity:
+            with self.assertRaisesRegex(ValueError, "Promoted cases"):
+                runner.freeze(reserved, self.store / "missing-development")
             identity.assert_not_called()
 
     def test_source_drift_and_duplicate_start_never_request_inference(self):
