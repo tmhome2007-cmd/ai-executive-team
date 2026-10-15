@@ -1134,9 +1134,9 @@ def _generate_ad_hoc_decision(request: DecisionRequest):
             + "\n\nExecutive proposals — generated separately; review for conflicts with the checklist\n\n"
             + final_decision
         )
-        meeting_result.setdefault("quality_warnings", {})[
-            "application_checklist"
-        ] = "first-user-checklist-v1; not an executive recommendation"
+        meeting_result.setdefault("quality_warnings", {})["application_checklist"] = (
+            intake["checklist_version"] + "; not an executive recommendation"
+        )
     participants = meeting_result.get("participants", [])
 
     from memory.evidence import SourceContextChanged

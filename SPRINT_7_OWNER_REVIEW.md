@@ -22,7 +22,7 @@ Alles staat in `/Users/alpha/Ai village/AI Executive Team V2CHAT`. Deze branch i
 
    > The external human CEO I spoke with about Reinstatly never tested the tool and never replied afterward. Whether this person is the seller-group founder is unknown. The last exchange date is unknown. No current eligible tester is confirmed.
 
-5. Klik **Clarify my request**. Kies de werkelijke status van je bedoelde contact; bij de CEO is dat **Offered, then went silent**. Kies alleen **Yes, it works** als je de tool vandaag hebt gecontroleerd; anders **Unknown / skip**. Kies bijvoorbeeld **30 minutes** als je die werkelijk beschikbaar hebt. Klik **Review brief with these answers**.
+5. Klik **Clarify my request**. Kies de werkelijke status van je bedoelde contact; bij de CEO is dat **No reply after earlier contact**. Die keuze beweert niet dat deze persoon heeft aangeboden te testen. Kies alleen **Yes, it works** als je de tool vandaag hebt gecontroleerd; anders **Unknown / skip**. Kies bijvoorbeeld **30 minutes** als je die werkelijk beschikbaar hebt. Klik **Review brief with these answers**.
 
 6. Lees **Practical owner checklist (application guidance)**. Die is direct beschikbaar zonder teamgeneratie. Bij een stilgevallen contact hoort hij bestaande andere toegestane gesprekken te laten controleren, of eerlijk te pauzeren als er geen route bekend is. Hij mag geen geïnteresseerde persoon verzinnen. Bij onbekende toolstatus hoort eerst een voorwaardelijke privécontrole. De correctie moet volledig zichtbaar blijven. Een bekende storing blokkeert uitnodigingen.
 

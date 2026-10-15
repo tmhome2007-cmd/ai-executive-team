@@ -79,24 +79,32 @@ def run_check(root, source_run):
         )
         private_save(directory, "input.json", {"request": request, "preview": preview})
         started = time.monotonic()
-        with patch.object(main, "send_notification") as notification:
-            response = client.post("/decisions/trigger", json=request, headers=headers)
-            data = response.json()
-            replay = None
-            if response.status_code == 200:
-                saved = get_decision_by_id(data["database_id"])
-                assert saved["approval_status"] == "pending"
-                assert saved["decision_outcome"] == data["final_decision"]
-                before = sorted(Path(config.WORKSPACE_ROOT).rglob("*.json"))
-                repeated = client.post(
+        response, data, replay = None, None, None
+        try:
+            with patch.object(main, "send_notification") as notification:
+                response = client.post(
                     "/decisions/trigger", json=request, headers=headers
                 )
-                assert repeated.status_code == 200
-                assert repeated.json()["database_id"] == data["database_id"]
-                assert repeated.json()["final_decision"] == data["final_decision"]
-                assert sorted(Path(config.WORKSPACE_ROOT).rglob("*.json")) == before
-                assert notification.call_count == 1
-                replay = "Saved HTTP200 result, no new artifact or notification"
+                data = response.json()
+                if response.status_code == 200:
+                    saved = get_decision_by_id(data["database_id"])
+                    assert saved["approval_status"] == "pending"
+                    assert saved["decision_outcome"] == data["final_decision"]
+                    before = sorted(Path(config.WORKSPACE_ROOT).rglob("*.json"))
+                    repeated = client.post(
+                        "/decisions/trigger", json=request, headers=headers
+                    )
+                    assert repeated.status_code == 200
+                    assert repeated.json()["database_id"] == data["database_id"]
+                    assert repeated.json()["final_decision"] == data["final_decision"]
+                    assert sorted(Path(config.WORKSPACE_ROOT).rglob("*.json")) == before
+                    assert notification.call_count == 1
+                    replay = "Saved HTTP200 result, no new artifact or notification"
+        finally:
+            # Even assertion/decoding failures must retain native attempts before
+            # the disposable workspace is removed. The exception still propagates.
+            failure = sys.exc_info()[1]
+            status = response.status_code if response is not None else None
             artifacts = {
                 str(path.relative_to(config.WORKSPACE_ROOT)): json.loads(
                     path.read_text()
@@ -107,35 +115,36 @@ def run_check(root, source_run):
                 directory,
                 "C_silent-1.json",
                 {
-                    "http_status": response.status_code,
+                    "http_status": status,
                     "response": data,
+                    "response_text_if_unparsed": (
+                        response.text if response is not None and data is None else None
+                    ),
+                    "error_type": type(failure).__name__ if failure else None,
                     "raw_artifacts": artifacts,
                     "replay": replay,
                     "seconds": round(time.monotonic() - started, 2),
                 },
             )
-        private_save(
-            directory,
-            "summary.json",
-            {
-                "http_status": response.status_code,
-                "replay": replay,
-                "raw_artifact_count": len(artifacts),
-                "semantic_review": "pending",
-                "owner_accepted": False,
-                "merged": False,
-            },
-        )
-        print(
-            json.dumps(
+            private_save(
+                directory,
+                "summary.json",
                 {
-                    "report": str(directory),
-                    "http_status": response.status_code,
+                    "http_status": status,
                     "replay": replay,
-                }
-            ),
-            flush=True,
-        )
+                    "error_type": type(failure).__name__ if failure else None,
+                    "raw_artifact_count": len(artifacts),
+                    "semantic_review": "pending",
+                    "owner_accepted": False,
+                    "merged": False,
+                },
+            )
+            print(
+                json.dumps(
+                    {"report": str(directory), "http_status": status, "replay": replay}
+                ),
+                flush=True,
+            )
         return 0 if response.status_code == 200 else 1
 
 

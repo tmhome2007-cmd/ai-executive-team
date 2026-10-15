@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-VERSION = "first-user-intake-v3"
+VERSION = "first-user-intake-v4"
 
 
 def review_day(timezone):
@@ -66,10 +66,10 @@ def build_intake(value: IntakeInput, get_source):
         questions.append(
             {
                 "key": "lead_status",
-                "prompt": "Has your intended contact replied recently, gone silent after an offer, or is there no contact yet?",
+                "prompt": "Has your intended contact replied recently, stopped responding after earlier contact, or is there no contact yet?",
                 "options": [
                     {"value": "recent_reply", "label": "Replied recently"},
-                    {"value": "silent", "label": "Offered, then went silent"},
+                    {"value": "silent", "label": "No reply after earlier contact"},
                     {"value": "none", "label": "No contact yet"},
                     {"value": "unknown", "label": "Unknown / skip"},
                 ],
@@ -153,7 +153,7 @@ def build_intake(value: IntakeInput, get_source):
         )
     lead_label = {
         "recent_reply": "Replied recently",
-        "silent": "Offered to test, then went silent",
+        "silent": "No reply after earlier contact; no testing offer inferred",
         "none": "No contact yet",
         "unknown": "Unknown / skipped",
         None: "Unknown / skipped",
@@ -181,7 +181,10 @@ def build_intake(value: IntakeInput, get_source):
         raise ValueError(
             "Selected context is too long; choose fewer or shorter records"
         )
-    from workflows.first_user_checklist import build_checklist
+    from workflows.first_user_checklist import (
+        VERSION as CHECKLIST_VERSION,
+        build_checklist,
+    )
 
     checklist = build_checklist(value, records)
     digest = hashlib.sha256(
@@ -193,6 +196,7 @@ def build_intake(value: IntakeInput, get_source):
                 "records": records,
                 "brief": brief,
                 "checklist": checklist,
+                "checklist_version": CHECKLIST_VERSION,
             },
             sort_keys=True,
             ensure_ascii=False,
@@ -207,6 +211,7 @@ def build_intake(value: IntakeInput, get_source):
         "conditions": conditions,
         "brief": brief,
         "checklist": checklist,
+        "checklist_version": CHECKLIST_VERSION,
         "review_hash": digest,
         "confirmed": False,
     }

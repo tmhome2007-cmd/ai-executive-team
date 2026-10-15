@@ -12,6 +12,31 @@ def preview(**changes):
 
 
 class FirstUserChecklistTests(unittest.TestCase):
+    def test_one_pivotal_unknown_and_format_conditional_test_data(self):
+        expected = {
+            "unknown": "Does the tool work today with fictional input?",
+            "working": "Do existing records show another permitted conversation with a potentially eligible tester?",
+            "unavailable": "Will the next owner check confirm that the unavailable tool can be used again?",
+        }
+        for tool, question in expected.items():
+            text = preview(lead_status="silent", tool_status=tool, owner_minutes=30)[
+                "checklist"
+            ]
+            line = next(
+                line
+                for line in text.splitlines()
+                if line.startswith("Most decision-changing unknown")
+            )
+            self.assertTrue(line.endswith(question))
+            self.assertEqual(line.count("?"), 1)
+            self.assertIn("If yes:", text)
+            self.assertIn("If no:", text)
+            self.assertEqual("FICTIONAL TEST ONLY:" in text, tool == "unknown")
+        unknown = preview()["checklist"]
+        self.assertIn("Only for a suspension-notice text tool", unknown)
+        self.assertIn("For another input format", unknown)
+        self.assertIn("do not submit this notice in an incompatible format", unknown)
+
     def test_unanswered_request_has_conditional_steps_without_assumed_time(self):
         result = preview()
         text = result["checklist"]

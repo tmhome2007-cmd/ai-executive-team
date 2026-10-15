@@ -1,0 +1,24 @@
+{
+  "source_commit": "38dcbaa0c603d6e0dd3cb2678596b70ea6d12a48",
+  "run": "audit-results/sprint7-reasoning/run-b2ea3a3460e042c7841558ef4299d62a",
+  "sample_sha256": "8cbda18b99634a94e69635853eac6e84b87b8c8433605052104c3cc13f4001d1",
+  "model_digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+  "model_tag": "llama3.1:latest",
+  "http_status": 200,
+  "seconds": 91.46,
+  "native_attempts": 3,
+  "repairs_used": 0,
+  "all_native_first_attempts_valid": true,
+  "replay": "Saved HTTP200 result, no new artifact or notification",
+  "approval_status": "pending",
+  "technical_flow_passed": true,
+  "complete_usefulness_accepted": false,
+  "notes": [
+    "Actual default-model intake, authenticated generation, database save and same-request replay pass; no new raw artifact/notification on replay.",
+    "Clarification is preserved and recommended route changes to private review of another permitted conversation; no actor assignment to an AI executive.",
+    "Original structured schema still makes unnecessary or unsupported interest assumptions, labels a confirmed time limit an assumption, and picks a known fact as pivotal. Quotations mix historical and corrected facts; interpretation needs owner review.",
+    "Application checklist is separate, not an executive-quality pass. Later checklist-v2 adds conditional notice test input and one pivotal unknown; intake-v4 removes inferred testing offer. Those deterministic changes receive their own regression/final-audit checks, not an inherited model score."
+  ],
+  "scope": "One fictional development case with existing installed default model, not held-out or owner usefulness. Disposable database/workspace and isolated framework home; no scheduler, real notification, approval or execution. App allows1repair/role; zero used. Original date unknown remains labelled; registry date describes fixture-copy observation only.",
+  "preflight_failure_retained": "audit-results/sprint7-reasoning/run-dd08da63232841ce808e8d051111bf54"
+}

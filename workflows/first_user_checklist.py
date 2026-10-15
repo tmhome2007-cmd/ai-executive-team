@@ -2,7 +2,7 @@
 
 from workflows import plan_delivery as rules
 
-VERSION = "first-user-checklist-v1"
+VERSION = "first-user-checklist-v2"
 
 
 def build_checklist(value, records):
@@ -37,6 +37,12 @@ def build_checklist(value, records):
         "unavailable": "Record the confirmed outage and any supplied error; keep missing causes unknown. Pause invitations. Do not claim a repair or add features.",
         "unknown": "Find the intended tool link in your reviewed records and confirm its documented input format. If either is missing, record that blocker and pause. Use a safe fictional example only if it fits that format, with no personal details or credentials. Record errors and unsupported output; a failed check blocks invitations. A fictional check is not real-user validation.",
     }[tool]
+    if tool == "unknown":
+        readiness += (
+            " Only for a suspension-notice text tool, this safe example may fit: "
+            + rules.FICTIONAL_TEST
+            + " For another input format, use a documented safe example or pause; do not submit this notice in an incompatible format."
+        )
     route = (
         rules.CHECKS[lead]
         if tool != "unavailable"
@@ -65,13 +71,22 @@ def build_checklist(value, records):
             "Stop: record a blocker and pause if the tool is unavailable or no permitted eligible route is established. Review unresolved checks 7 days after starting this private review; no follow-up is implied.",
         ]
     keys = sorted(rules.allowed_unknowns(lead, tool))
+    pivotal = (
+        "tool_recovery"
+        if tool == "unavailable"
+        else "tool_availability" if tool == "unknown" else keys[0]
+    )
+    yes, no = rules.PIVOT_BRANCHES[pivotal]
     lines += [
         "Still unknown (selected by application rules): "
         + " ".join(rules.UNKNOWN_QUESTIONS[key] for key in keys),
         "Why this order: tool readiness and a permitted, willing person with their own relevant current input are prerequisites for a real test. An earlier offer alone proves neither eligibility nor present interest.",
         "Alternative: a new public invitation needs a suitable destination and permission; a consultant introduction needs an established willing intermediary. Neither is assumed available or authorized. Review existing permitted conversations before choosing either route.",
-        "Most route-changing unknowns: "
-        + " ".join(rules.PIVOT_REVIEW[key] for key in keys),
+        "Most decision-changing unknown (selected by application rules): "
+        + rules.UNKNOWN_QUESTIONS[pivotal],
+        "Why: " + rules.PIVOT_REVIEW[pivotal],
+        "If yes: " + yes,
+        "If no: " + no,
         "Success: a willing, eligible person uses their own current real input in the documented format and reports accuracy, unsupported details/placeholders and usefulness. Positive feedback is not required.",
         "Next owner choice: record the checks, update missing facts, and decide whether an invitation is ready for personal review or must pause. No step is assigned to an AI role.",
     ]

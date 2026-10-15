@@ -113,6 +113,8 @@ class DecisionIntakeTests(unittest.TestCase):
         )
         self.assertIn("Do not assume the silent contact", silent["brief"])
         self.assertIn("If no such route is known", silent["brief"])
+        self.assertNotIn("Offered to test", silent["brief"])
+        self.assertIn("no testing offer inferred", silent["brief"])
 
     def test_historical_context_is_explicit_and_records_are_not_instructions(self):
         source = record(
