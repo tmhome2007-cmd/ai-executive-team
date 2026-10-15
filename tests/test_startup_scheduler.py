@@ -12,6 +12,70 @@ from config import config
 
 
 class StartupSchedulerTests(unittest.TestCase):
+    def test_real_scheduler_dispatches_startup_and_delayed_jobs_and_stops(self):
+        """Real scheduler/executor, stub work; accelerate only the delayed test job."""
+        import datetime
+        import main
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+        with tempfile.TemporaryDirectory() as raw, ExitStack() as stack:
+            stack.enter_context(
+                patch.object(
+                    config, "DATABASE_PATH", str(Path(raw).resolve() / "test.db")
+                )
+            )
+            for name in (
+                "validate_config",
+                "run_startup_checks",
+                "backup_database",
+                "start_telegram_listener",
+                "stop_telegram_listener",
+            ):
+                stack.enter_context(patch.object(main, name))
+            stack.enter_context(
+                patch(
+                    "memory.artifact_retention.prune_generated_artifacts",
+                    return_value={},
+                )
+            )
+
+            async def run():
+                research_seen, followup_seen = asyncio.Event(), asyncio.Event()
+
+                async def research():
+                    research_seen.set()
+
+                async def followup():
+                    followup_seen.set()
+
+                scheduler = AsyncIOScheduler()
+                application = SimpleNamespace(state=SimpleNamespace())
+                with (
+                    patch.object(main, "AsyncIOScheduler", return_value=scheduler),
+                    patch.object(main, "scheduled_research_job", side_effect=research),
+                    patch.object(
+                        main, "scheduled_autonomous_followup_job", side_effect=followup
+                    ),
+                ):
+                    async with main.lifespan(application):
+                        await asyncio.wait_for(research_seen.wait(), timeout=3)
+                        self.assertFalse(followup_seen.is_set())
+                        delayed = scheduler.get_job("autonomous_followup_interval_job")
+                        now = datetime.datetime.now(delayed.next_run_time.tzinfo)
+                        self.assertGreater(
+                            (delayed.next_run_time - now).total_seconds(), 110
+                        )
+                        self.assertLessEqual(
+                            (delayed.next_run_time - now).total_seconds(), 120
+                        )
+                        scheduler.modify_job(delayed.id, next_run_time=now)
+                        await asyncio.wait_for(followup_seen.wait(), timeout=3)
+                    # AsyncIOScheduler schedules shutdown on its event loop.
+                    await asyncio.sleep(0)
+                    self.assertFalse(scheduler.running)
+
+            asyncio.run(run())
+
     def exercise(
         self, *, body_failure=False, shutdown_failure=False, startup_failure=False
     ):

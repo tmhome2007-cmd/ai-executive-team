@@ -1,17 +1,18 @@
 # Sprint 7 progress
 
-12 October 2026. Work remains in AI Executive Team V2CHAT, now on codex/sprint-7-actionable-schema for the owner-authorized prototype. Owner authorized a narrow read-only research run and continuing that work while busy.
+Updated 15 October 2026. Work remains in AI Executive Team V2CHAT on codex/sprint-7-actionable-schema. Owner requested continuation through the remaining issues. Current status below supersedes the dated historical entries; no Done, owner acceptance, merge or default-model change is claimed.
 
 | Item | State | Evidence |
 |---|---|---|
 | BE-55 | Review | [Raw-to-stored diagnosis](../../BE55_OWNER_TEST_DIAGNOSIS.md); exact contribution and brief comparisons, no regeneration |
-| BE-56 | Review of protocol/input freeze | [Reserved transfer protocol](../../BE56_TRANSFER_PROTOCOL.md); two new private tasks, no outputs; candidate-specific assessment pending |
+| BE-56 | Review | [Replacement transfer](be56-replacement-transfer-verification.json): 12/12 valid; guided Qwen6/6 practical analyst passes, default3/6. Author-exposed, not blind; separate from independent/full-team quality |
 | BE-57 | Review | [Four-project, ten-page shortlist](../../BE57_RESEARCH_SHORTLIST.md); no installation/adoption, unknown maintenance fields explicit |
-| BE-59 | Blocked on usefulness | [Separated draft delivery](../../BE59_DRAFT_DELIVERY_REPAIR.md): 9/9 validated, drafts delivered 3/3 where required, 0/9 complete usefulness; unmerged |
+| BE-59 | Application checklist review; team quality blocked | [Actual app fallback](../../BE59_APPLICATION_CHECKLIST_REVIEW.md): owner steps/time/stop/conditional unsent draft available before generation and saved separately from executive proposals. Experimental model-assisted scores do not transfer to this implementation |
 | BE-61 | Review of bounded intake | [Short-request flow](../../BE61_SHORT_REQUEST_INTAKE.md), full local audit; plan delivery remains blocked |
-| BE-62 | Partial review | [Startup and recovery](../../BE62_STARTUP_RECOVERY_REVIEW.md); isolated normal launcher, browser recovery; durable request identity and scheduler/owner checks pending |
-| BE-60 | Partial implementation | Wording matches normalize case/space/final punctuation; independent first proposals, critique and five-run evaluation pending |
-| BE-58, BE-63–65 | Backlog | [Plan and acceptance checks](../../SPRINT_7_PLAN.md) |
+| BE-62 | Review within limits | [Durable recovery](../../BE62_DURABLE_REQUEST_REVIEW.md); identity/status/reload/atomic freshness, real scheduler dispatch of stub jobs and cleanup tested; owner real-job/clipboard acceptance separate |
+| BE-60 | Evaluation in progress | V2 five-pair usefulness failed; [v3 default](be60-strict-default-verification.json)0/10 valid, including punctuation failures. Approved installed-Qwen five-pair run completing; no rollout |
+| BE-58 | Review | Atomic source/version/freshness and local review-day guards; changed typed answers change checklist routes |
+| BE-63–65 | Final audit/owner/release work | [Own-terminal review guide](../../SPRINT_7_OWNER_REVIEW.md); final complete audit pending; CI-specific approval requested and four Chroma findings remain open |
 
 The missing steps/draft were absent in raw outputs and have no typed fields in the current schema. The invalid proposed actor originated in the final role output. Stored contributions and brief exactly match retained samples, and renderer reproduction matches the saved text. Copying due to prior-context exposure remains a hypothesis, not a demonstrated cause. Private trace metadata is ignored and owner-only.
 

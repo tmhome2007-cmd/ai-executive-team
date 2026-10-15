@@ -1,6 +1,6 @@
 # Sprint 7 — useful decisions from short requests
 
-Planned 12 October 2026, updated 14 October. **Request recovery and source/day freshness are implemented on the branch. The experimental guided plan passes nine development samples on the unchanged default model. Independent-role proposals and reserved transfer assessment remain unfinished; guided delivery is not integrated into app generation. No main merge or rollout is claimed.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
+Planned 12 October 2026, updated 15 October. **Request recovery, source/day freshness and an explicitly labelled application checklist are implemented on the branch. The checklist appears before generation and in a saved successful brief, separately from actual executive proposals. The model-assisted guided prototype passes replacement transfer on Qwen (6/6) but not the default model (3/6); it stays isolated. Independent-role usefulness and owner acceptance remain unresolved. No main merge or default-model change is claimed.** Work stays in AI Executive Team V2CHAT. The original folder and team.zip remain untouched.
 
 ## Goal
 
@@ -27,9 +27,9 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 | BE-59 | high | Produce a complete actionable owner plan | blocked | BE-55, BE-56 |
 | BE-60 | high | Separate independent proposals from attributed critique | partial | BE-56, BE-59 |
 | BE-61 | high | Handle short requests with reviewed context and few questions | review | BE-58, BE-59 |
-| BE-62 | high | Make normal startup and long-running decision review reliable | partial review | BE-55 |
-| BE-63 | high | Run final usefulness and owner end-to-end assessment | backlog | BE-56, BE-58, BE-59, BE-60, BE-61, BE-62 |
-| BE-64 | high | Audit integration, privacy and existing release dependencies | backlog | BE-58, BE-59, BE-60, BE-61, BE-62, BE-63 |
+| BE-62 | high | Make normal startup and long-running decision review reliable | review within documented limits | BE-55 |
+| BE-63 | high | Run final usefulness and owner end-to-end assessment | in progress; owner pending | BE-56, BE-58, BE-59, BE-60, BE-61, BE-62 |
+| BE-64 | high | Audit integration, privacy and existing release dependencies | in progress; release blockers open | BE-58, BE-59, BE-60, BE-61, BE-62, BE-63 |
 | BE-65 | medium | Owner review, retrospective and closure | backlog | BE-63, BE-64 |
 
 The owner authorized BE-57’s narrow read-only scope; its first run is recorded in [the shortlist](BE57_RESEARCH_SHORTLIST.md). Research is not an implementation blocker if no suitable reuse is found; document the decision. Future source adoption must be explicit and scoped. Sprint 7 planning does not accept, merge or erase Sprint 6 failures.

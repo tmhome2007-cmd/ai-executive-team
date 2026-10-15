@@ -13,7 +13,8 @@
     "acceptance_criteria": "Freeze a rubric, model identity/settings, protocol and sample counts before implementation tuning. Treat the owner example and contact variants as development/regression data. Reserve at least two newly authored transfer tasks for final assessment; disclose author exposure and do not call them blind. Assess structure, grounding, authority, responsiveness to changed facts and owner usefulness separately. Freeze five runs for the independent-proposal comparison and explain deterministic-setting limits. Retain failed, repaired, incomplete and error samples; any assessment case used for a fix becomes development data.",
     "assignee": "owner",
     "priority": "high",
-    "status": "review"
+    "status": "review",
+    "review_scope": "Reserved replacement guided transfer completed: Qwen6/6 practical analyst passes, default3/6; original transfer failures preserved/promoted. Author-exposed fictional cases, not blind. Independent/full-team/owner acceptance separate."
   },
   {
     "title": "BE-57 · Review reusable GitHub projects and primary documentation",
@@ -39,7 +40,8 @@
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
-    "blocked_reason": "Guided v11 development passes 9/9 on unchanged default model. App integration, reserved transfer assessment and owner/full-team acceptance still pending; prior failed model samples preserved."
+    "blocked_reason": "Application checklist implemented in intake and saved brief, distinct from actual executive proposals. Guided prototype remains isolated; independent executive reasoning and owner usefulness not accepted.",
+    "review_scope": "Application checklist implemented in intake and saved brief, distinct from actual executive proposals. Guided prototype remains isolated; independent executive reasoning and owner usefulness not accepted."
   },
   {
     "title": "BE-60 · Separate independent proposals from attributed critique",
@@ -48,7 +50,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "in_progress",
-    "review_scope": "Wording normalization active; compact independent proposal/review prototype tested. Initial local comparison stopped after repeated timeouts; five-pair v2 evaluation pending, no rollout."
+    "review_scope": "Five-pair v2 failed usefulness; v3 default0/10valid under stricter text contract. Installed Qwen five-pair v3 completing, no rollout; wording normalization active."
   },
   {
     "title": "BE-61 · Handle short requests with reviewed context and few questions",
@@ -57,7 +59,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Bounded first-user intake UI/API and confirmation checks passed full local audit. General intent handling and persistent defaults are not claimed. Model plan delivery remains blocked; no owner acceptance or merge."
+    "review_scope": "First-user intake v3 binds displayed checklist and brief to typed answers, source versions and review day. At most3 questions/skips; no assumed time. Checklist available before generation; general intents/default persistence not claimed."
   },
   {
     "title": "BE-62 · Make normal startup and long-running decision review reliable",
@@ -65,8 +67,8 @@
     "acceptance_criteria": "Exercise ./company doctor, ./company start and ./company key in an explicitly isolated review installation with disposable data and owner-controlled local configuration. Preserve existing credentials/database; do not silently copy original company data or weaken path/approval guards. Verify long generation, interrupted browser connections, errors, refresh and saved-history recovery. A network timeout must not imply the team failed or invite duplicate submissions: retain request identity and provide an inspectable status/recovery route. Model validation failures have useful safe guidance without exposing raw private samples. Owner instructions use the normal launcher and own browser; no temporary /private/tmp script is the product entry point. Verify effective settings, local provider and scheduler behavior rather than assuming sandbox disables scheduling.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog",
-    "review_scope": "Durable hash-bound requests, reload/status/closure, startup reconciliation and freshness checked in disposable tests and production browser audit; owner normal-startup/scheduler acceptance pending."
+    "status": "review",
+    "review_scope": "Durable request recovery and source/day checks implemented. Real scheduler dispatches stub startup research and accelerated delayed follow-up in disposable test, cleanup verified; actual company jobs/clipboard/owner acceptance separate."
   },
   {
     "title": "BE-63 · Run final usefulness and owner end-to-end assessment",
@@ -74,7 +76,8 @@
     "acceptance_criteria": "Run the frozen development comparisons and separately the reserved transfer assessment on the final candidate. Report denominators, first attempts, repairs, errors, latency, model identities and owner usefulness separately; no blanket competence percentage. Evaluate changed-fact sensitivity and short-request intake, complete plans and actor constraints. The owner uses normal terminal/browser startup, enters a short request, answers or skips questions, reviews actual team output and checks history after refresh. Record whether they understand and would use the next step, with reasons; an analyst rewrite never replaces a failed team answer or counts as owner acceptance.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "in_progress",
+    "review_scope": "Analyst development/transfer results retained; final paired-role assessment and owner normal-browser usefulness review pending."
   },
   {
     "title": "BE-64 · Audit integration, privacy and existing release dependencies",
@@ -82,7 +85,8 @@
     "acceptance_criteria": "Run appropriate targeted checks and a complete final audit on the exact implementation with disposable data: backend/API/database, production browser, recovery, approvals, raw-sample retention, evidence provenance and local-provider boundaries. Preserve failures and report exact commit/counts/skips. Carry Sprint 6 active-CI approval/credential dependency and known Chroma findings explicitly; do not claim them resolved or edit active shared CI without authorization. Investigate any adopted dependency only after a specific reuse decision, with license/security/compatibility review. No deployment clearance follows from a local pass.",
     "assignee": "owner",
     "priority": "high",
-    "status": "backlog"
+    "status": "in_progress",
+    "review_scope": "411 backend tests with realDocker pass before additional real-scheduler test. Final complete audit pending. Four known Chroma findings remain; specific active-CI approval requested, no shared CI edit."
   },
   {
     "title": "BE-65 · Owner review, retrospective and closure",
