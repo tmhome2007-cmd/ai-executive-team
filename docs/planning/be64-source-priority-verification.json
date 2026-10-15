@@ -1,0 +1,38 @@
+{
+  "implementation_commit": "b95404c7e649698fa482a7c7cc812ce5c06e7060",
+  "report": "audit-results/20261015-133218/summary.json",
+  "report_sha256": "3946faf832250dc429b8ff67c7522219d268bebca0ac01a496443b99b8435bf3",
+  "counts": {
+    "PASS": 33,
+    "FAIL": 0,
+    "UPSTREAM": 1
+  },
+  "backend": {
+    "passed": 413,
+    "skipped": 0,
+    "docker": "real pinned worker image"
+  },
+  "foundation_passed": 150,
+  "production_browser_features_passed": 15,
+  "source_hashes": {
+    "main.py": "12ad1677dab0fa13b3c4e5b02c5c762caa846483f56cf28b2827004301b54864",
+    "workflows/decision_intake.py": "f4f0361f52e64346206a05c0997697a3a016c1b08987a7376b1211e159ca38ba",
+    "workflows/first_user_checklist.py": "eb735c56bb3a22f29bae1f8f11962cefa39144b892c3aa7c5a8f4fbadc9ea1e2",
+    "workflows/independent_decision.py": "7c266604efcea316af07ba96edb7f13cdb9900108615d2cd698c5921a1ea7bb9",
+    "scripts/manual_checks/test_first_user_api.py": "2ff03494068ac8faf853506a915e279f8cf60b5af401baa9957e89fe7f8565aa",
+    ".github/workflows/security.yml": "670624d4c56b6c04c5ccef9f0a168d2f756f37504e34388c880dbaf219a89662",
+    "executive-dashboard/app/components/ai-report.tsx": "09fa03c46efdeac656555c8ec5cfa3fbdf1f29d71c515a2ac68f6611bdddf8a5",
+    "executive-dashboard/app/components/decision-intake.tsx": "e38bb39b09d692121224b38e2f77db344034e1a9bab09ed20af7e7b6c4d0c6f4"
+  },
+  "real_default_model_api": "docs/planning/be63-live-api-verification.json",
+  "independent_candidate": "docs/planning/be60-priority-verification.json; fails current-fact gate, not adopted",
+  "ci": "Owner-approved exact proposal active locally; no push or remote CI result.",
+  "upstream": "Four known Chroma vulnerabilities remain; dependency scan not clean, no deployment clearance.",
+  "scope": "Final local integration checks use disposable data and synthetic browser/model fixtures plus one real tool-free greeting. Separate real API run is one fictional case with3first attempts/0repairs and saved replay, not owner/full-team usefulness acceptance. Checklistv2/intakev4 are deterministic rules and do not inherit prototype model scores.",
+  "prior_complete_pass": "audit-results/20261015-123511/summary.json ondc88081,412backend",
+  "retained_failed_checks": [
+    "audit-results/20261015-123057",
+    "audit-results/be37-4972f52142e147f3927c75334ca271ee",
+    "audit-results/sprint7-reasoning/run-dd08da63232841ce808e8d051111bf54"
+  ]
+}

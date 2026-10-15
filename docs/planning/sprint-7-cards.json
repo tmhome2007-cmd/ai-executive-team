@@ -31,7 +31,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Source-version/freshness and local review-day checks implemented and tested; conditional guided helper remains experimental and owner usefulness pending."
+    "review_scope": "Atomic source/day guards plus once-only selected history before current correction verified through API/SQLite regressions. No testing offer inferred merely from silence; intakev4 requires re-review of changed confirmation."
   },
   {
     "title": "BE-59 · Produce a complete actionable owner plan",
@@ -40,8 +40,8 @@
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
-    "blocked_reason": "Application checklist implemented in intake and saved brief, distinct from actual executive proposals. Guided prototype remains isolated; independent executive reasoning and owner usefulness not accepted.",
-    "review_scope": "Application checklist implemented in intake and saved brief, distinct from actual executive proposals. Guided prototype remains isolated; independent executive reasoning and owner usefulness not accepted."
+    "blocked_reason": "Checklistv2 in actual app: bounded owner steps, conditional safe example/unsent draft, one pivotal unknown and anchored stop. Real default-model API returns200 and correct broad route, but unnecessary interest assumptions/known pivotal fact mean complete executive usefulness remains unaccepted.",
+    "review_scope": "Checklistv2 in actual app: bounded owner steps, conditional safe example/unsent draft, one pivotal unknown and anchored stop. Real default-model API returns200 and correct broad route, but unnecessary interest assumptions/known pivotal fact mean complete executive usefulness remains unaccepted."
   },
   {
     "title": "BE-60 · Separate independent proposals from attributed critique",
@@ -50,8 +50,8 @@
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
-    "review_scope": "Both v3 installed-model comparisons complete; raw failures and partial usefulness retained. Independent mechanics stay experimental; owner usefulness not accepted.",
-    "blocked_reason": "Frozen Qwen v3 five-pair run completes10/10valid,45raw, but0/5complete candidate gates; known silent-contact facts are relabelled unknown. No evidence candidate is better, so no API adoption/default change. Partial useful eligibility reasoning retained."
+    "review_scope": "V4 source-priority comparison complete10/10valid,45raw,3unique/arm,zero repairs; candidate CFO repeats known silence as unknown in meetings3/5. Partial improvements retained; gate fails and prototype stays isolated.",
+    "blocked_reason": "V4 source-priority comparison complete10/10valid,45raw,3unique/arm,zero repairs; candidate CFO repeats known silence as unknown in meetings3/5. Partial improvements retained; gate fails and prototype stays isolated."
   },
   {
     "title": "BE-61 · Handle short requests with reviewed context and few questions",
@@ -60,7 +60,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "First-user intake v3 binds displayed checklist and brief to typed answers, source versions and review day. At most3 questions/skips; no assumed time. Checklist available before generation; general intents/default persistence not claimed."
+    "review_scope": "Intakev4/checklistv2: at most3questions, skip/unknown path, reviewed historical context, correction last, no inferred offer; complete audit and production browser pass. General intents/persistent defaults not claimed."
   },
   {
     "title": "BE-62 · Make normal startup and long-running decision review reliable",
@@ -69,7 +69,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Durable request recovery and source/day checks implemented. Real scheduler dispatches stub startup research and accelerated delayed follow-up in disposable test, cleanup verified; actual company jobs/clipboard/owner acceptance separate."
+    "review_scope": "Durable recovery, atomic input/source/day guards and4scheduler tests pass. Actual default-model API saved pending result and same-ID replay200 without new generation/artifact/notification. Owner normal-launch/clipboard/actual-job review separate."
   },
   {
     "title": "BE-63 · Run final usefulness and owner end-to-end assessment",
@@ -78,7 +78,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Development/transfer and five-pair analyst assessments complete; independent candidate fails quality gate and stays isolated. Owner normal-terminal/browser usefulness review pending; no substituted app checklist counted as executive success."
+    "review_scope": "Analyst comparisons complete; one real default API case200 in~91seconds,3native first attempts/0repairs, saved replay passes. Executive semantic issues preserved, owner usefulness still pending."
   },
   {
     "title": "BE-64 · Audit integration, privacy and existing release dependencies",
@@ -87,8 +87,8 @@
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
-    "review_scope": "Complete local integration/privacy/recovery audit passed; upstream release gate and owner/remote review remain separate.",
-    "blocked_reason": "Final local audit ondc88081:33PASS/0FAIL/1UPSTREAM,412backend realDocker/no skips,150foundation,15browser. Local CI edit approved/applied; four known Chroma findings remain, no remote CI/production clearance."
+    "review_scope": "Final audit b95404c:33PASS/0FAIL/1UPSTREAM,413backend realDocker/no skips,150foundation,15browser. Approved local CI active; four Chroma findings and remote/production clearance remain open.",
+    "blocked_reason": "Final audit b95404c:33PASS/0FAIL/1UPSTREAM,413backend realDocker/no skips,150foundation,15browser. Approved local CI active; four Chroma findings and remote/production clearance remain open."
   },
   {
     "title": "BE-65 · Owner review, retrospective and closure",

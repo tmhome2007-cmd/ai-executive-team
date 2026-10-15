@@ -1,6 +1,6 @@
 # Remaining release dependencies — 14 October 2026
 
-15 October final local audit on `dc88081`: 33 PASS, zero FAIL, one UPSTREAM; 412 backend tests with real Docker/no skips, 150 foundation and 15 browser features pass. [Verification](docs/planning/be64-final-local-verification.json). Known Chroma findings remain; no remote CI or deployment clearance.
+15 October final local audit on `b95404c`: 33 PASS, zero FAIL, one UPSTREAM; 413 backend tests with real Docker/no skips, 150 foundation and 15 browser features pass. [Verification](docs/planning/be64-source-priority-verification.json). Known Chroma findings remain; no remote CI or deployment clearance.
 
 Read-only recheck of one problem: whether a released dependency update resolves the four recorded Chroma advisories. Five primary pages reviewed; no cloning, installation, external code execution or private search text. The local lock remains chromadb 1.5.9; the complete local audit recorded four findings with no fix versions.
 

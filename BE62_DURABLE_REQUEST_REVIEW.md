@@ -2,7 +2,7 @@
 
 14 October 2026. Implementation on the Sprint 7 branch, owner acceptance pending. Existing credentials, approval gates, databases in the original folder and application model defaults are preserved. Verification uses disposable data.
 
-Final update 15 October: all four scheduler tests are included in the complete audit on `dc88081`: 412 backend/no skips, 150 foundation, 15 browser features; 33 PASS/0 FAIL/1 UPSTREAM. [Verification](docs/planning/be64-final-local-verification.json). The limits below still apply; no actual company jobs or owner acceptance are inferred.
+Final update 15 October: all four scheduler tests are included in the complete audit on `b95404c`: 413 backend/no skips, 150 foundation, 15 browser features; 33 PASS/0 FAIL/1 UPSTREAM. [Verification](docs/planning/be64-source-priority-verification.json). A separate [real API run](docs/planning/be63-live-api-verification.json) saved a pending default-model result and replayed it without new artifacts/notification. The limits below still apply; no actual company jobs or owner acceptance are inferred.
 
 The dashboard records a random request reference before submission. A reload keeps that reference, without adding the request body or API key to its recovery storage. Check Request Status distinguishes queued/running, saved, failed and interrupted work. History refresh never starts another meeting. Close Recovery refuses running work; an unstarted request receives a durable closure marker so late delivery cannot start it. No cancellation or automatic replay is claimed.
 

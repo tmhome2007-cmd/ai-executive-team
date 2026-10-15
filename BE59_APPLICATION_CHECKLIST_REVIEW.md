@@ -1,6 +1,6 @@
 # First-user checklist in the application
 
-Final verification 15 October: complete audit on `dc88081` passes 33 project checks, 412 backend/no Docker skips, 150 foundation and 15 browser features; one separate upstream finding remains. [Verification](docs/planning/be64-final-local-verification.json). Owner usefulness is still unaccepted.
+Final verification 15 October: complete audit on `b95404c` passes 33 project checks, 413 backend/no Docker skips, 150 foundation and 15 browser features; one separate upstream finding remains. [Verification](docs/planning/be64-source-priority-verification.json). Owner usefulness is still unaccepted.
 
 15 October 2026. Branch implementation, not owner acceptance or a claim that the experimental executive workflow passed.
 
@@ -10,7 +10,7 @@ The checklist uses typed contact status, today's tool status and the supplied ti
 
 The standard draft includes privacy guidance and three feedback questions. Only a unique plain address from selected records/correction is suggested; missing or ambiguous links remain placeholders requiring owner verification. Records are not fetched. The full correction is preserved verbatim, and conflicts with typed answers are explicitly left for review. Seven days is a disclosed application-proposed review window anchored to private-review start or the owner's later sending date, not a forecast of responses.
 
-Intake version v3 hashes both the model brief and the displayed checklist. An older or edited confirmation must be reviewed again. Existing decision-request hashing and saved-result recovery remain in place; no new model-selection or authority field is introduced. The app's default model stays unchanged. This deterministic fallback is different from the model-assisted guided prototype and the independent-role prototype; their evaluation scores must not be applied to this checklist.
+Intake version v4 hashes the model brief, displayed checklist and checklist version. An older or edited confirmation must be reviewed again. A silent-contact answer does not infer a testing offer. Checklist v2 adds a safe fictional notice only for a compatible documented format and one selected pivotal unknown with yes/no consequences. Existing decision-request hashing and saved-result recovery remain; no new model-selection or authority field is introduced. The default model stays unchanged. This fallback differs from the model-assisted guided and independent-role prototypes; their scores must not be applied to it.
 
 Verification in progress: four checklist tests cover skipped answers, route changes, outage precedence, every integer budget 1–60, correction preservation, missing-link handling and changed review identity. Nine intake/API tests pass, including actual database persistence of the checklist with the original generated proposal preserved. Updated production-browser and complete audit results will be recorded separately. No company data/configuration, dependency, default model or shared CI was changed by this implementation.
 

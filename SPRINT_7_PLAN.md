@@ -28,9 +28,9 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 | BE-60 | high | Separate independent proposals from attributed critique | blocked on model reasoning; prototype not adopted | BE-56, BE-59 |
 | BE-61 | high | Handle short requests with reviewed context and few questions | review | BE-58, BE-59 |
 | BE-62 | high | Make normal startup and long-running decision review reliable | review within documented limits | BE-55 |
-| BE-63 | high | Run final usefulness and owner end-to-end assessment | in progress; owner pending | BE-56, BE-58, BE-59, BE-60, BE-61, BE-62 |
-| BE-64 | high | Audit integration, privacy and existing release dependencies | in progress; release blockers open | BE-58, BE-59, BE-60, BE-61, BE-62, BE-63 |
-| BE-65 | medium | Owner review, retrospective and closure | backlog | BE-63, BE-64 |
+| BE-63 | high | Run final usefulness and owner end-to-end assessment | analyst review complete; owner pending | BE-56, BE-58, BE-59, BE-60, BE-61, BE-62 |
+| BE-64 | high | Audit integration, privacy and existing release dependencies | local audit passed; upstream release gate open | BE-58, BE-59, BE-60, BE-61, BE-62, BE-63 |
+| BE-65 | medium | Owner review, retrospective and closure | review prepared; acceptance/closure pending | BE-63, BE-64 |
 
 The owner authorized BE-57’s narrow read-only scope; its first run is recorded in [the shortlist](BE57_RESEARCH_SHORTLIST.md). Research is not an implementation blocker if no suitable reuse is found; document the decision. Future source adoption must be explicit and scoped. Sprint 7 planning does not accept, merge or erase Sprint 6 failures.
 
