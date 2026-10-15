@@ -10,8 +10,17 @@ from workflows.plan_delivery import quotation_choices
 from workflows.output_quality import assess_output, verify_evidence_quotes
 from workflows.quality_benchmark import local_request
 
-VERSION = "independent-proposals-experiment-v3"
+VERSION = "independent-proposals-experiment-v4"
 OPTIONS = {**sd.OPTIONS, "num_predict": 400}
+
+
+def current_evidence_last(sources):
+    """Retain all source bytes, with explicit owner updates after older records."""
+    current = ("owner-correction", "owner-current")
+    return {
+        **{key: value for key, value in sources.items() if key not in current},
+        **{key: sources[key] for key in current if key in sources},
+    }
 
 
 class Proposal(BaseModel):
@@ -40,12 +49,12 @@ def proposal_payload(model, question, sources, role, personality, unknowns, prio
     schema["properties"]["fact"] = {"anyOf": choices}
     schema["properties"]["unknown"]["enum"] = list(unknowns)
     context = {
-        "question": question,
-        "sources": sources,
         "role": role,
         "personality": personality,
         "prior_proposals_not_evidence": prior or {},
+        "question": question,
         "provided_unresolved_questions": list(unknowns),
+        "sources": current_evidence_last(sources),
     }
     return {
         "model": model,
@@ -56,13 +65,17 @@ unknown. Label any assumption, or null. Propose only what the human owner should
 review next, never assign contact/execution to AI roles or infer permission.
 Explain why this step follows from the evidence. Choose unknown exclusively among
 provided_unresolved_questions; do not ask for supplied current facts again.
+The final owner-correction/owner-current sources update older records: a supplied
+current fact is settled for this review, not an unknown because history differs.
+Explain the concrete evidence/prerequisite and time constraint, not your job title
+or a generic financial/strategic preference. Explicitly surface unresolved conflicts.
 Use complete sentences ending in punctuation. Keep recommendation under 18 words
 and reason/assumption under 12 words; stop early, character maxima are not targets.
 Use JSON null for no assumption, never the strings 'None' or 'null'.
 Other roles' statements do not establish facts or agreement. No forced diversity.
 Return only proposal JSON.
 Input:\n"""
-        + json.dumps(context, ensure_ascii=False, sort_keys=True),
+        + json.dumps(context, ensure_ascii=False),
         "format": schema,
         "stream": False,
         "keep_alive": 0,
@@ -129,13 +142,13 @@ def review_payload(model, question, sources, role, personality, first):
             "items": {"type": "null"},
         }
     context = {
-        "question": question,
-        "sources": sources,
         "role": role,
         "personality": personality,
         "first_proposals_not_evidence": {
             key: value.model_dump() for key, value in first.items()
         },
+        "question": question,
+        "sources": current_evidence_last(sources),
     }
     return {
         "model": model,
@@ -152,8 +165,13 @@ sources, never from an executive role. Do not relabel supplied current facts unk
 If the first recommendations converge, explain why no distinct alternative is
 supported in no_alternative_reason; otherwise null is allowed. Do not invent
 facts, consent, completed work, tools or team contact. Return only review JSON.
+The final owner-correction/owner-current sources update older records. If a first
+proposal calls a supplied current fact unknown, object explicitly and select a
+proposal that respects the update if one exists. Explain the actual evidence or
+missing prerequisite, not a role label or simply that everyone agrees. Convergence
+needs an evidence-grounded reason that another route is unsupported.
 Input:\n"""
-        + json.dumps(context, ensure_ascii=False, sort_keys=True),
+        + json.dumps(context, ensure_ascii=False),
         "format": schema,
         "stream": False,
         "keep_alive": 0,
