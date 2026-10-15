@@ -1,5 +1,7 @@
 # First-user checklist in the application
 
+Final verification 15 October: complete audit on `dc88081` passes 33 project checks, 412 backend/no Docker skips, 150 foundation and 15 browser features; one separate upstream finding remains. [Verification](docs/planning/be64-final-local-verification.json). Owner usefulness is still unaccepted.
+
 15 October 2026. Branch implementation, not owner acceptance or a claim that the experimental executive workflow passed.
 
 The first-user intake now returns an actionable checklist alongside its reviewed model brief. It is available before a meeting, including when generation later fails. The dashboard labels it **application guidance, not an executive recommendation**. Current role outputs remain unchanged and attributed to their actual authors; after successful generation the same reviewed checklist is saved ahead of the separate executive proposals. Conflicts require owner review, not an inferred reconciliation.

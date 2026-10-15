@@ -1,0 +1,36 @@
+{
+  "implementation_commit": "dc88081ed2956432e4811c40e6b6afff9963b02d",
+  "report": "audit-results/20261015-123511/summary.json",
+  "report_sha256": "899ca7ec20125aab2d78206809327636c9806a109e175b8e1de4e3a8aaf69126",
+  "counts": {
+    "PASS": 33,
+    "FAIL": 0,
+    "UPSTREAM": 1
+  },
+  "backend": {
+    "passed": 412,
+    "docker": "real pinned worker image",
+    "skipped": 0
+  },
+  "foundation_passed": 150,
+  "production_browser_features_passed": 15,
+  "source_hashes": {
+    ".github/workflows/security.yml": "670624d4c56b6c04c5ccef9f0a168d2f756f37504e34388c880dbaf219a89662",
+    "main.py": "42af0fcd8bfb28e29fcc5f441bc175c56a44f78d26834ad506b6f08867d248e6",
+    "workflows/decision_intake.py": "7acf18468fdd58b5e99648305de1d15170cfb54b0ec901072a68def0053ec8b7",
+    "workflows/first_user_checklist.py": "628fada4f2c684eba3e108f4b821cdfbfd7c85172c60ca6498d79c8a84cbae5f",
+    "executive-dashboard/app/components/decision-intake.tsx": "e38bb39b09d692121224b38e2f77db344034e1a9bab09ed20af7e7b6c4d0c6f4",
+    "executive-dashboard/app/components/ai-report.tsx": "09fa03c46efdeac656555c8ec5cfa3fbdf1f29d71c515a2ac68f6611bdddf8a5",
+    "scripts/review_smoke.py": "8f0a01cc6f4acb33c221024734de10a43788035b97b5b356d4f88bbe31bbf48b",
+    "tests/test_first_user_checklist.py": "c010a13fdf29eedc302fe59c0a7af77b5456a741da57271c9af704dfe963817d",
+    "tests/test_startup_scheduler.py": "b9e3c77d6a608a705ad311a155ebd813dafa7ee034c493e8f5b9bdc3febdccd0"
+  },
+  "ci": "Exact proposal specifically approved by owner15October and applied locally; no push/remote CI result.",
+  "retained_failures": [
+    "audit-results/20261015-123057",
+    "audit-results/be37-4972f52142e147f3927c75334ca271ee"
+  ],
+  "targeted_browser_pass": "audit-results/be37-61698a1d83204ce6ac9a5eed70033ea9",
+  "upstream": "Four known unpatched Chroma findings remain; not a clean dependency scan or deployment clearance.",
+  "scope": "Disposable data, real Docker, production frontend with synthetic model/browser records and one real tool-free local greeting. No owner usefulness acceptance, independent-team quality pass, default-model change or merge."
+}

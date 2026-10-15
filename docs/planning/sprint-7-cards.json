@@ -86,8 +86,9 @@
     "acceptance_criteria": "Run appropriate targeted checks and a complete final audit on the exact implementation with disposable data: backend/API/database, production browser, recovery, approvals, raw-sample retention, evidence provenance and local-provider boundaries. Preserve failures and report exact commit/counts/skips. Carry Sprint 6 active-CI approval/credential dependency and known Chroma findings explicitly; do not claim them resolved or edit active shared CI without authorization. Investigate any adopted dependency only after a specific reuse decision, with license/security/compatibility review. No deployment clearance follows from a local pass.",
     "assignee": "owner",
     "priority": "high",
-    "status": "in_progress",
-    "review_scope": "Owner explicitly approved CI proposal15October; active local workflow now matches reviewed proposal, YAML parsed; no push/remote CI claim. Full local audit pending. Four known Chroma findings remain."
+    "status": "blocked",
+    "review_scope": "Complete local integration/privacy/recovery audit passed; upstream release gate and owner/remote review remain separate.",
+    "blocked_reason": "Final local audit ondc88081:33PASS/0FAIL/1UPSTREAM,412backend realDocker/no skips,150foundation,15browser. Local CI edit approved/applied; four known Chroma findings remain, no remote CI/production clearance."
   },
   {
     "title": "BE-65 · Owner review, retrospective and closure",
@@ -95,6 +96,7 @@
     "acceptance_criteria": "Provide concise own-terminal/browser instructions and short test inputs, actual outputs, remaining limitations and a reviewable PR scope. Record owner acceptance separately from technical success. No Done state or merge until owner acceptance and authorized actual merge; reconcile Sprint 6 pending work before deciding stacked versus separate delivery. Archive only closed narratives. Record research decisions, model limits and deferred work honestly; no invented customer outcome, delivery date or velocity.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "backlog"
+    "status": "review",
+    "review_scope": "Final review/lessons and own-terminal/browser guide prepared. Owner acceptance, unresolved executive reasoning/upstream release gates and authorized actual merge still required; no closure."
   }
 ]

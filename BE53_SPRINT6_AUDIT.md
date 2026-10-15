@@ -1,5 +1,7 @@
 # BE-53 — final local audit and CI dependency
 
+Update 15 October: explicit owner approval resolved the local CI-edit block. The approved proposal is now in the active local workflow, with final local checks recorded in [the current release review](BE64_RELEASE_RECHECK.md). Historical audit counts and earlier rejection remain below; no push/remote CI result or deployment clearance is claimed.
+
 11 October 2026. Local checks complete; the active CI update remains blocked pending explicit approval and a workflow-authorized credential. Not Done or production clearance.
 
 Audited implementation: 2d17f72 on codex/sprint-6-maintenance. [Verification metadata](docs/planning/be53-verification.json) records the full SHA, source hashes and report hash. Complete report: audit-results/20261011-215918/summary.json, owner-private.

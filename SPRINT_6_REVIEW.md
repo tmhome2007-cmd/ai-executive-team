@@ -21,6 +21,8 @@ No new input is required while the maintenance/evaluation work proceeds. Owner f
 
 ## CI approval dependency
 
+Update 15 October: the owner explicitly approved this exact proposal. It is applied in the active local workflow on the Sprint 7 branch. The previous rejection below is historical, not an outstanding local-edit permission block. No push or remote CI result is claimed; see [current verification](BE64_RELEASE_RECHECK.md).
+
 Automatic approval review rejected editing the active GitHub security workflow: shared CI configuration was not specifically authorized and workflow permissions were an explicit dependency. The existing reviewed proposal at [docs/ci/security.yml](docs/ci/security.yml) includes API coverage and the safe test runner. Compare it with .github/workflows/security.yml before applying it with explicit approval and a workflow-authorized credential. The risk is changing persistent CI test/security coverage. Local checks continue independently; no new remote CI result is claimed.
 
 The four known unpatched Chroma advisories remain a separate release gate. A successful local audit does not clear deployment or establish general model competence.
