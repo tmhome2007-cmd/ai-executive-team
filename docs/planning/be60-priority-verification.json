@@ -1,0 +1,160 @@
+{
+  "source_commit": "796a6b604b7ba7e6e381618acc21351a64114acb",
+  "run": "audit-results/sprint7-independent/run-1d67ce2bcf8c40888d405d8937d77378",
+  "reviewer": "Codex analyst, not owner acceptance",
+  "model_digest": "7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6",
+  "meetings": [
+    {
+      "meeting": 1,
+      "mode": "baseline",
+      "valid": true,
+      "stage_responses": 3,
+      "requested_stages": 3,
+      "first_wording_count": 2,
+      "seconds": 69.65,
+      "sample_hash": "d486cdc0b4928a3fbe39432d163bce4371f1baade5fd15df0dff5d984fa2197f",
+      "case": "A_as_tested",
+      "known_fact_relabelled_unknown_roles": [],
+      "notes": "Partly distinct private checks, but weak citation relevance (historical group size) and role-labelled review. Review misreads a proposed private status check as an inaccurate supplied status. No complete usefulness acceptance."
+    },
+    {
+      "meeting": 1,
+      "mode": "candidate",
+      "valid": true,
+      "stage_responses": 6,
+      "requested_stages": 6,
+      "first_wording_count": 3,
+      "seconds": 210.4,
+      "sample_hash": "98c6105557b2a45996f2d2d5816c81d6030f88fd6d3674b4b2f20eb6131f48b1",
+      "case": "A_as_tested",
+      "known_fact_relabelled_unknown_roles": [],
+      "notes": "Partly distinct private checks, but weak citation relevance (historical group size) and role-labelled review. Review misreads a proposed private status check as an inaccurate supplied status. No complete usefulness acceptance."
+    },
+    {
+      "meeting": 2,
+      "mode": "baseline",
+      "valid": true,
+      "stage_responses": 3,
+      "requested_stages": 3,
+      "first_wording_count": 3,
+      "seconds": 93.59,
+      "sample_hash": "843bcddf83e95793f86d37e8e29014494c6bc97f6926e2aaf903045c1e3e85eb",
+      "case": "B_replied",
+      "known_fact_relabelled_unknown_roles": [],
+      "notes": "Eligibility remains correctly unresolved; recent willingness/reply is not asked again. Review still invents financial-analysis merit absent from the actual proposal and mostly restates convergence. Partial useful first steps, weak critique."
+    },
+    {
+      "meeting": 2,
+      "mode": "candidate",
+      "valid": true,
+      "stage_responses": 6,
+      "requested_stages": 6,
+      "first_wording_count": 2,
+      "seconds": 230.18,
+      "sample_hash": "c1ef1dbd4ef6701e6bcd81a67cfb8d11269c020959ac047e2afa709a91947a92",
+      "case": "B_replied",
+      "known_fact_relabelled_unknown_roles": [],
+      "notes": "Eligibility remains correctly unresolved; recent willingness/reply is not asked again. Review still invents financial-analysis merit absent from the actual proposal and mostly restates convergence. Partial useful first steps, weak critique."
+    },
+    {
+      "meeting": 3,
+      "mode": "baseline",
+      "valid": true,
+      "stage_responses": 3,
+      "requested_stages": 3,
+      "first_wording_count": 2,
+      "seconds": 95.46,
+      "sample_hash": "acd2779f82ee91d9c4439b1d9a3d64f6c1d5a613626190478fab3c993254abc0",
+      "case": "C_silent",
+      "known_fact_relabelled_unknown_roles": [],
+      "notes": "Baseline now preserves non-response/non-testing and prioritizes unknown tool readiness; CEO private re-engagement review remains questionable. Candidate CSO/CEO preserve the failed follow-through, but CFO explicitly relabels the known response status unknown and reviewers fail to correct it. CEO dismisses fictional functionality checking without supplied support. Current-fact gate fails."
+    },
+    {
+      "meeting": 3,
+      "mode": "candidate",
+      "valid": true,
+      "stage_responses": 6,
+      "requested_stages": 6,
+      "first_wording_count": 3,
+      "seconds": 259.04,
+      "sample_hash": "7aa216bb974abdfad011bf3d3b804c0e1ad43ab2f745d5bb5bbe1530ee841de6",
+      "case": "C_silent",
+      "known_fact_relabelled_unknown_roles": [
+        "cfo"
+      ],
+      "notes": "Baseline now preserves non-response/non-testing and prioritizes unknown tool readiness; CEO private re-engagement review remains questionable. Candidate CSO/CEO preserve the failed follow-through, but CFO explicitly relabels the known response status unknown and reviewers fail to correct it. CEO dismisses fictional functionality checking without supplied support. Current-fact gate fails."
+    },
+    {
+      "meeting": 4,
+      "mode": "baseline",
+      "valid": true,
+      "stage_responses": 3,
+      "requested_stages": 3,
+      "first_wording_count": 2,
+      "seconds": 69.21,
+      "sample_hash": "7c56bafccf0e9769e3bfef6d34aa5a745ad33fba5b4d00bcff3cde68b3ceba95",
+      "case": "A_as_tested",
+      "known_fact_relabelled_unknown_roles": [],
+      "notes": "Partly distinct private checks, but weak citation relevance (historical group size) and role-labelled review. Review misreads a proposed private status check as an inaccurate supplied status. No complete usefulness acceptance."
+    },
+    {
+      "meeting": 4,
+      "mode": "candidate",
+      "valid": true,
+      "stage_responses": 6,
+      "requested_stages": 6,
+      "first_wording_count": 3,
+      "seconds": 203.74,
+      "sample_hash": "b44dfafc9c59358e446e59e0d4a7c158059ca3974cc44eee68c9124b9a312472",
+      "case": "A_as_tested",
+      "known_fact_relabelled_unknown_roles": [],
+      "notes": "Partly distinct private checks, but weak citation relevance (historical group size) and role-labelled review. Review misreads a proposed private status check as an inaccurate supplied status. No complete usefulness acceptance."
+    },
+    {
+      "meeting": 5,
+      "mode": "baseline",
+      "valid": true,
+      "stage_responses": 3,
+      "requested_stages": 3,
+      "first_wording_count": 2,
+      "seconds": 86.69,
+      "sample_hash": "504e948da281b11fabe01af6e7a3c58a590136e706499b61cd8031f8b1cfb29a",
+      "case": "C_silent",
+      "known_fact_relabelled_unknown_roles": [],
+      "notes": "Baseline now preserves non-response/non-testing and prioritizes unknown tool readiness; CEO private re-engagement review remains questionable. Candidate CSO/CEO preserve the failed follow-through, but CFO explicitly relabels the known response status unknown and reviewers fail to correct it. CEO dismisses fictional functionality checking without supplied support. Current-fact gate fails."
+    },
+    {
+      "meeting": 5,
+      "mode": "candidate",
+      "valid": true,
+      "stage_responses": 6,
+      "requested_stages": 6,
+      "first_wording_count": 3,
+      "seconds": 222.21,
+      "sample_hash": "40326530fea8a7d012d2b9cb5050ac03af1130f6cc7066c01b153d6f148a1ec5",
+      "case": "C_silent",
+      "known_fact_relabelled_unknown_roles": [
+        "cfo"
+      ],
+      "notes": "Baseline now preserves non-response/non-testing and prioritizes unknown tool readiness; CEO private re-engagement review remains questionable. Candidate CSO/CEO preserve the failed follow-through, but CFO explicitly relabels the known response status unknown and reviewers fail to correct it. CEO dismisses fictional functionality checking without supplied support. Current-fact gate fails."
+    }
+  ],
+  "validated_arms": 10,
+  "scheduled_arms": 10,
+  "raw_stages": 45,
+  "repairs": 0,
+  "source_unchanged": true,
+  "identity_unchanged": true,
+  "unique_outputs_by_mode": {
+    "baseline": 3,
+    "candidate": 3
+  },
+  "candidate_known_fact_failure_meetings": [
+    3,
+    5
+  ],
+  "baseline_known_fact_failure_meetings": [],
+  "gate_passed": false,
+  "adoption": "Keep prototype isolated. Partial current-fact improvement does not justify app adoption or model-default change.",
+  "scope": "Five paired development meetings on three same-setting cases, no retries. Prompt/source-order intervention combined; not an ordering-only causal result or held-out/full API evaluation. Native validity and spelling diversity do not imply usefulness. Preserve partial improvements and failed current-fact gate; no overall usefulness percentage inferred. Candidate6calls versus baseline3; timings descriptive on a shared machine."
+}

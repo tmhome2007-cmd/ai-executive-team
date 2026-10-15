@@ -1,6 +1,7 @@
 """Opt-in local API generation using retained development inputs and disposable data."""
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -8,17 +9,20 @@ import subprocess
 import sys
 import time
 import uuid
+from unittest.mock import patch
 
 
 def run_check(root, source_run):
     from scripts.run_tests import disposable_environment
 
-    with disposable_environment():
+    with (
+        disposable_environment() as temporary,
+        patch("pathlib.Path.home", return_value=temporary / "test-home"),
+    ):
         from config import config
         from fastapi.testclient import TestClient
         from memory.database import init_db, get_decision_by_id
         from memory.evidence import create_source, review_source
-        from unittest.mock import patch
         from workflows.structured_decision import private_save
         import main
 
@@ -31,10 +35,14 @@ def run_check(root, source_run):
         for number, record in enumerate(old["intake"]["records"], 1):
             source = create_source(
                 source_key=f"fictional-api-{number}",
-                title=record["title"],
+                title="Historical fixture copy: " + record["title"][:170],
                 reference="Retained fictional development record, never fetched",
-                summary=record["summary"],
-                observed_at=record["observed_at"],
+                summary=(
+                    "Historical fixture; no business facts reverified today. "
+                    f"Original date label: {record['observed_at']}\n{record['summary']}"
+                ),
+                observed_at=datetime.now(timezone.utc).isoformat(),
+                source_kind="document",
             )
             review_source(source["id"], source["version"], "owner_confirmed")
             ids.append(source["id"])
@@ -66,7 +74,7 @@ def run_check(root, source_run):
                 ).hexdigest(),
                 "source_run": str(source_run),
                 "model": config.OLLAMA_MODEL,
-                "scope": "One real default-model API request plus saved-result replay if successful; fictional development data, not owner acceptance or held-out comparison. Sources registered in disposable database; absent expiry stays unknown. Lifespan/scheduler omitted, notifications stubbed. Existing structured path permits one repair per role; retain every raw attempt. No application default changed.",
+                "scope": "One real default-model API request plus saved-result replay if successful; fictional development data, not owner acceptance or held-out comparison. Registry observation is the fixture-copy registration time, not the original business-event date; original date label retained verbatim and no business facts reverified. Absent expiry stays unknown. Lifespan/scheduler omitted, notifications stubbed; framework home isolated. Existing structured path permits one repair per role; retain every raw attempt. No application default changed.",
             },
         )
         private_save(directory, "input.json", {"request": request, "preview": preview})
