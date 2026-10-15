@@ -76,6 +76,27 @@ def main():
                 ),
             ]
         )
+        from workflows.decision_intake import IntakeInput, build_intake
+
+        fixture_intake = build_intake(
+            IntakeInput(
+                request="Find a first tester for a fictional tool",
+                lead_status="recent_reply",
+                tool_status="working",
+                owner_minutes=30,
+            ),
+            lambda _: None,
+        )
+        cases.append(
+            (
+                "Checklist with separate executive proposal",
+                fixture_intake["checklist"]
+                + "\n\nExecutive proposals — generated separately\n\n"
+                + render_brief(
+                    {"ceo": Contribution(**{**contribution, "objections": []})}
+                ),
+            )
+        )
         for title, text in cases:
             ids.append(
                 log_decision(
@@ -207,9 +228,11 @@ def main():
             )
             assert task.input_value() == ""
             intake.get_by_role("button", name="Review brief with these answers").click()
-            intake.get_by_label("Intake brief preview").get_by_text(
-                "Do not assume the silent contact", exact=False
-            ).wait_for()
+            intake.get_by_label("Intake brief preview").wait_for()
+            assert (
+                "Do not assume the silent contact"
+                in intake.get_by_label("Intake brief preview").inner_text()
+            )
             assert "Draft message" not in checklist.inner_text()
             assert "different" in checklist.inner_text()
             intake.get_by_role(
@@ -225,7 +248,14 @@ def main():
             briefs = page.locator(
                 'section[aria-label="Structured decision brief"]:visible'
             )
-            assert briefs.count() == 2
+            assert briefs.count() == 3
+            saved_checklist = briefs.filter(
+                has_text="Application checklist — not an executive recommendation"
+            )
+            assert saved_checklist.count() == 1
+            assert "Draft message — NOT SENT" in saved_checklist.inner_text()
+            assert "1. Owner — 5 minutes" in saved_checklist.inner_text()
+            assert "CEO proposal:" in saved_checklist.inner_text()
             page.get_by_text(
                 "CFO objection: The original ledger may be unavailable.", exact=True
             ).wait_for()
