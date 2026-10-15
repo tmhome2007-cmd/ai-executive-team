@@ -1,0 +1,142 @@
+{
+  "source_commit": "6993747",
+  "run": "audit-results/sprint7-transfer/run-0153b596c850405ba9b8c6766e02f812",
+  "reviewer": "Codex analyst, not owner acceptance",
+  "samples": [
+    {
+      "case": "transfer-03",
+      "mode": "baseline",
+      "repetition": 1,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "178755b95d5cd2e7af5f81157072c5f61085bfe266514e97171752015971d21b",
+      "notes": "Conservative fail: explanation presupposes contact eligibility even though current source/unknowns correctly say it is unconfirmed. Other plan sections retain the prerequisite. No action or permission was executed."
+    },
+    {
+      "case": "transfer-03",
+      "mode": "candidate",
+      "repetition": 1,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "7a98ccea4aefc2772a609532f6ae2138b91a32ccb819a8d1081b3600c97c2430",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    },
+    {
+      "case": "transfer-03",
+      "mode": "baseline",
+      "repetition": 2,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "88727ea7d9e619e32b37c85886264f7d25a240c24eed65e3c3e71624fb58560b",
+      "notes": "Conservative fail: explanation presupposes contact eligibility even though current source/unknowns correctly say it is unconfirmed. Other plan sections retain the prerequisite. No action or permission was executed."
+    },
+    {
+      "case": "transfer-03",
+      "mode": "candidate",
+      "repetition": 2,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "3225e66f566773f6d978ea8a2e6531bee253eb203935525f3a12bfc0aeaf8a4b",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    },
+    {
+      "case": "transfer-03",
+      "mode": "baseline",
+      "repetition": 3,
+      "validated": true,
+      "complete_usefulness": false,
+      "sample_sha256": "e60a34fcbaa7080782255b7a3e3b8d4c85d2e359544d28993b40b238cb617d40",
+      "notes": "Conservative fail: explanation presupposes contact eligibility even though current source/unknowns correctly say it is unconfirmed. Other plan sections retain the prerequisite. No action or permission was executed."
+    },
+    {
+      "case": "transfer-03",
+      "mode": "candidate",
+      "repetition": 3,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "eb29c2457ad85f82d3c752b823dae55816fa877f14766ea4ef86725c8ee67a73",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    },
+    {
+      "case": "transfer-04",
+      "mode": "baseline",
+      "repetition": 1,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "95894a67a423f890eaf323ba3896ed6c8e5a2d7fa66f45d6ed20129dec3adb7d",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    },
+    {
+      "case": "transfer-04",
+      "mode": "candidate",
+      "repetition": 1,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "06fc2c44c64dec39da6e69cc40906ac1b864ee6965520e6916c08340e44143a1",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    },
+    {
+      "case": "transfer-04",
+      "mode": "baseline",
+      "repetition": 2,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "3ab20e364bf7620258565b7a9780787e40b21eaa4a1c62ecbc4817549790b32e",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    },
+    {
+      "case": "transfer-04",
+      "mode": "candidate",
+      "repetition": 2,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "93d6caee68685de7158508ad9816c1bc961738411a2d8ef40fe529c5d3ba6a8b",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    },
+    {
+      "case": "transfer-04",
+      "mode": "baseline",
+      "repetition": 3,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "70f790ded1aaa709dd82ff91cc10fc682f22320dbd211850af8269d1c61733db",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    },
+    {
+      "case": "transfer-04",
+      "mode": "candidate",
+      "repetition": 3,
+      "validated": true,
+      "complete_usefulness": true,
+      "sample_sha256": "10148975e5f20a3cc71c5efd002ef8d4d1b5e9c15dc53290fa8736ebafc6bbee",
+      "notes": "Seven frozen practical axes pass for a disclosed guided application workflow: current state, permitted-input eligibility or outage blocker, bounded owner steps, appropriate unsent draft/no draft, anchored stop, provided comparison/pivotal conditions. Generic/redundant selected evidence and standard message remain; not independent model planning."
+    }
+  ],
+  "models": {
+    "baseline": {
+      "validated": 6,
+      "complete_usefulness": 3,
+      "denominator": 6,
+      "per_case": {
+        "transfer-03": 0,
+        "transfer-04": 3
+      },
+      "gate_passed": false
+    },
+    "candidate": {
+      "validated": 6,
+      "complete_usefulness": 6,
+      "denominator": 6,
+      "per_case": {
+        "transfer-03": 3,
+        "transfer-04": 3
+      },
+      "gate_passed": true
+    }
+  },
+  "source_and_models_unchanged": true,
+  "raw_stages": 12,
+  "repairs": 0,
+  "unique_plans": 4,
+  "scope": "Two fresh fictional replacement tasks, author-exposed not blind; six same-setting samples/model are not independent variance. Same app-composed workflow, steps/comparisons/draft supplied by application. This does not establish general model superiority, full-team usefulness, owner acceptance or app-model change authority. No replacement transfer output used for code tuning."
+}

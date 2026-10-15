@@ -172,6 +172,10 @@ def main():
             intake.get_by_role("button", name="Clarify my request").click()
             intake.get_by_label("Intake brief preview").wait_for()
             assert intake.locator("select").count() == 3
+            checklist = intake.get_by_label("Application owner checklist")
+            assert "Time budget unknown" in checklist.inner_text()
+            assert "1. Owner" in checklist.inner_text()
+            assert "Draft message" not in checklist.inner_text()
             assert (
                 "Available owner minutes this week: unknown"
                 in intake.get_by_label("Intake brief preview").inner_text()
@@ -187,6 +191,9 @@ def main():
             intake.get_by_text(
                 "Reuse a current working confirmation", exact=False
             ).wait_for()
+            assert "Draft message — NOT SENT" in checklist.inner_text()
+            assert "never paste credentials" in checklist.inner_text()
+            assert "Record today's owner confirmation" in checklist.inner_text()
             intake.get_by_role(
                 "button", name="Confirm brief and fill decision form"
             ).click()
@@ -200,9 +207,11 @@ def main():
             )
             assert task.input_value() == ""
             intake.get_by_role("button", name="Review brief with these answers").click()
-            intake.get_by_text(
+            intake.get_by_label("Intake brief preview").get_by_text(
                 "Do not assume the silent contact", exact=False
             ).wait_for()
+            assert "Draft message" not in checklist.inner_text()
+            assert "different" in checklist.inner_text()
             intake.get_by_role(
                 "button", name="Confirm brief and fill decision form"
             ).click()

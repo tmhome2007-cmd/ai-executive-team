@@ -26,6 +26,7 @@ interface Question {
 interface Preview {
   questions: Question[];
   brief: string;
+  checklist: string;
   review_hash: string;
   conditions: string[];
   records: {
@@ -249,6 +250,17 @@ export default function DecisionIntake({
               Not verified current.
             </p>
           ))}
+          <details open>
+            <summary className="cursor-pointer text-sm font-medium">
+              Practical owner checklist (application guidance)
+            </summary>
+            <div
+              aria-label="Application owner checklist"
+              className="whitespace-pre-wrap text-sm bg-gray-950 p-3 rounded mt-2"
+            >
+              {preview.checklist}
+            </div>
+          </details>
           <div
             aria-label="Intake brief preview"
             className="whitespace-pre-wrap text-sm bg-gray-950 p-3 rounded"

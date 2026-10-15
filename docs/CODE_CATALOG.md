@@ -163,6 +163,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_executive_skills.py](../tests/test_executive_skills.py) | Real SQLite proof of review-bound skill reuse and revocation boundaries. |
 | [tests/test_executor_observability.py](../tests/test_executor_observability.py) | Safe failure events and durable uncertainty under notification/persistence faults. |
 | [tests/test_experiments.py](../tests/test_experiments.py) | Disposable experiments: evidence, risk enforcement, approval binding and honest gaps. |
+| [tests/test_first_user_checklist.py](../tests/test_first_user_checklist.py) | Check useful fallbacks without model calls, inferred facts or execution. |
 | [tests/test_independent_decision.py](../tests/test_independent_decision.py) | First proposals stay independent; critique cannot invent role attribution. |
 | [tests/test_local_model_identity.py](../tests/test_local_model_identity.py) | Deterministic identity checks; all daemon responses and inference are synthetic. |
 | [tests/test_local_model_smoke.py](../tests/test_local_model_smoke.py) | The final audit cannot implicitly pull a missing model or follow redirects. |
@@ -225,6 +226,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [workflows/execution_lock.py](../workflows/execution_lock.py) | Cross-process locking for action execution claims. |
 | [workflows/executive_planning.py](../workflows/executive_planning.py) | Tool-free planning and durable, dependency-aware recommendation dispatch. |
 | [workflows/executive_skills.py](../workflows/executive_skills.py) | Local CSO drafting of proposed procedures from exact reviewed examples. |
+| [workflows/first_user_checklist.py](../workflows/first_user_checklist.py) | Disclosed application guidance from typed intake; no model call or action. |
 | [workflows/independent_decision.py](../workflows/independent_decision.py) | Experimental independent proposals and attributed review; no API or tools. |
 | [workflows/instance_lock.py](../workflows/instance_lock.py) | Keep startup reconciliation from changing another live server's claims. |
 | [workflows/local_model_identity.py](../workflows/local_model_identity.py) | Read-only, bounded local Ollama identity resolution; no pull or fallback. |

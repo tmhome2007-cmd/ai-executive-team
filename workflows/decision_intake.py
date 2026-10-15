@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-VERSION = "first-user-intake-v2"
+VERSION = "first-user-intake-v3"
 
 
 def review_day(timezone):
@@ -181,6 +181,9 @@ def build_intake(value: IntakeInput, get_source):
         raise ValueError(
             "Selected context is too long; choose fewer or shorter records"
         )
+    from workflows.first_user_checklist import build_checklist
+
+    checklist = build_checklist(value, records)
     digest = hashlib.sha256(
         json.dumps(
             {
@@ -189,6 +192,7 @@ def build_intake(value: IntakeInput, get_source):
                 "input": value.model_dump(),
                 "records": records,
                 "brief": brief,
+                "checklist": checklist,
             },
             sort_keys=True,
             ensure_ascii=False,
@@ -202,6 +206,7 @@ def build_intake(value: IntakeInput, get_source):
         "route": route,
         "conditions": conditions,
         "brief": brief,
+        "checklist": checklist,
         "review_hash": digest,
         "confirmed": False,
     }

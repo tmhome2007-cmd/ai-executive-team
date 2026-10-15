@@ -258,6 +258,12 @@ class DecisionIntakeApiTests(unittest.TestCase):
             record = get_decision_by_id(response.json()["database_id"])
             self.assertEqual(record["approval_status"], "pending")
             self.assertEqual(record["task_description"], preview["brief"])
+            self.assertTrue(record["decision_outcome"].startswith(preview["checklist"]))
+            self.assertTrue(
+                record["decision_outcome"].endswith("Findings\nPrivate proposal.")
+            )
+            self.assertEqual(response.json()["participants"], ["ceo"])
+            self.assertIn("application_checklist", response.json()["quality_warnings"])
             self.assertIn(
                 "different existing permitted conversation",
                 run.call_args.kwargs["question"],

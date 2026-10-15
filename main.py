@@ -1122,6 +1122,17 @@ def _generate_ad_hoc_decision(request: DecisionRequest):
         ) from None
 
     final_decision = meeting_result.get("final_decision", "")
+    if request.intake_confirmation is not None:
+        # This fallback is reviewed and hash-bound at intake. Preserve actual
+        # role outputs verbatim and disclose that concrete steps come from rules.
+        final_decision = (
+            intake["checklist"]
+            + "\n\nExecutive proposals — generated separately; review for conflicts with the checklist\n\n"
+            + final_decision
+        )
+        meeting_result.setdefault("quality_warnings", {})[
+            "application_checklist"
+        ] = "first-user-checklist-v1; not an executive recommendation"
     participants = meeting_result.get("participants", [])
 
     from memory.evidence import SourceContextChanged
