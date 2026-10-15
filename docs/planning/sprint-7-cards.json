@@ -49,8 +49,9 @@
     "acceptance_criteria": "Generate first proposals without access to other first proposals, then provide bounded context for actual critique and synthesis. Preserve canonical identities and attribution; no tools or authority expansion. Compare five frozen runs before/after using the same permitted inputs and settings where possible. Meaningful alternatives or evidence-based explanations of convergence must be visible; do not force diversity or invent objections. A trailing period, case or whitespace difference is normalized for wording matches without treating different meanings as agreement. Bound calls, context size and repairs, retain failures, and disclose latency/cost implications.",
     "assignee": "owner",
     "priority": "high",
-    "status": "in_progress",
-    "review_scope": "Five-pair v2 failed usefulness; v3 default0/10valid under stricter text contract. Installed Qwen five-pair v3 completing, no rollout; wording normalization active."
+    "status": "blocked",
+    "review_scope": "Both v3 installed-model comparisons complete; raw failures and partial usefulness retained. Independent mechanics stay experimental; owner usefulness not accepted.",
+    "blocked_reason": "Frozen Qwen v3 five-pair run completes10/10valid,45raw, but0/5complete candidate gates; known silent-contact facts are relabelled unknown. No evidence candidate is better, so no API adoption/default change. Partial useful eligibility reasoning retained."
   },
   {
     "title": "BE-61 · Handle short requests with reviewed context and few questions",
@@ -76,8 +77,8 @@
     "acceptance_criteria": "Run the frozen development comparisons and separately the reserved transfer assessment on the final candidate. Report denominators, first attempts, repairs, errors, latency, model identities and owner usefulness separately; no blanket competence percentage. Evaluate changed-fact sensitivity and short-request intake, complete plans and actor constraints. The owner uses normal terminal/browser startup, enters a short request, answers or skips questions, reviews actual team output and checks history after refresh. Record whether they understand and would use the next step, with reasons; an analyst rewrite never replaces a failed team answer or counts as owner acceptance.",
     "assignee": "owner",
     "priority": "high",
-    "status": "in_progress",
-    "review_scope": "Analyst development/transfer results retained; final paired-role assessment and owner normal-browser usefulness review pending."
+    "status": "review",
+    "review_scope": "Development/transfer and five-pair analyst assessments complete; independent candidate fails quality gate and stays isolated. Owner normal-terminal/browser usefulness review pending; no substituted app checklist counted as executive success."
   },
   {
     "title": "BE-64 · Audit integration, privacy and existing release dependencies",

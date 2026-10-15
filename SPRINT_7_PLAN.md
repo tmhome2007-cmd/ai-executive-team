@@ -25,7 +25,7 @@ Diagnose the real failure, then freeze the evaluation before tuning. Discuss the
 | BE-57 | medium | Review reusable GitHub projects and primary documentation | review | None |
 | BE-58 | high | Make clarifications and freshness affect recommendations | partial review | BE-55, BE-56 |
 | BE-59 | high | Produce a complete actionable owner plan | blocked | BE-55, BE-56 |
-| BE-60 | high | Separate independent proposals from attributed critique | partial | BE-56, BE-59 |
+| BE-60 | high | Separate independent proposals from attributed critique | blocked on model reasoning; prototype not adopted | BE-56, BE-59 |
 | BE-61 | high | Handle short requests with reviewed context and few questions | review | BE-58, BE-59 |
 | BE-62 | high | Make normal startup and long-running decision review reliable | review within documented limits | BE-55 |
 | BE-63 | high | Run final usefulness and owner end-to-end assessment | in progress; owner pending | BE-56, BE-58, BE-59, BE-60, BE-61, BE-62 |

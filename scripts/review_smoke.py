@@ -234,7 +234,10 @@ def main():
                 in intake.get_by_label("Intake brief preview").inner_text()
             )
             assert "Draft message" not in checklist.inner_text()
-            assert "different" in checklist.inner_text()
+            assert (
+                "Do not assume the silent contact is uninterested"
+                in checklist.inner_text()
+            )
             intake.get_by_role(
                 "button", name="Confirm brief and fill decision form"
             ).click()
