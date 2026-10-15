@@ -27,6 +27,12 @@ class DecisionRequestTests(unittest.TestCase):
         )
 
         def generate(**kwargs):
+            question = kwargs["question"]
+            self.assertEqual(question.count(source["summary"]), 1)
+            self.assertTrue(question.endswith("Review the supplied ledger"))
+            self.assertLess(
+                question.index(source["summary"]), question.index("CURRENT OWNER TASK:")
+            )
             review_source(source["id"], source["version"], "disputed")
             return {
                 "final_decision": "Private pending proposal.",

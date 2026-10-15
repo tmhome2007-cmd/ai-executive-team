@@ -215,6 +215,7 @@ class DecisionIntakeApiTests(unittest.TestCase):
         from fastapi.testclient import TestClient
         from config import config
         from memory.database import init_db, get_decision_by_id
+        from memory.evidence import create_source, review_source
         import main
 
         with (
@@ -227,10 +228,21 @@ class DecisionIntakeApiTests(unittest.TestCase):
             patch.object(main, "send_notification"),
         ):
             init_db()
+            historical = create_source(
+                source_key="disposable-intake-history",
+                title="Historical offer",
+                reference="Private fictional test record",
+                summary="A contact offered to test. Their later reply status was unknown.",
+                observed_at="2020-01-01T00:00:00Z",
+                expires_at="2020-01-02T00:00:00Z",
+            )
+            review_source(historical["id"], historical["version"], "owner_confirmed")
             client = TestClient(main.app)
             headers = {"X-API-Key": config.API_SECRET_KEY}
             value = {
                 "request": "Help me get my first user",
+                "source_ids": [historical["id"]],
+                "correction": "The contact never tested the tool and did not reply afterward.",
                 "lead_status": "silent",
                 "tool_status": "working",
                 "owner_minutes": 30,
@@ -250,6 +262,7 @@ class DecisionIntakeApiTests(unittest.TestCase):
                     "topic": "Short request",
                     "task_description": preview["brief"],
                     "output_mode": "structured",
+                    "source_ids": value["source_ids"],
                     "intake_confirmation": confirmation,
                 },
                 headers=headers,
@@ -267,4 +280,10 @@ class DecisionIntakeApiTests(unittest.TestCase):
             self.assertIn(
                 "different existing permitted conversation",
                 run.call_args.kwargs["question"],
+            )
+            question = run.call_args.kwargs["question"]
+            self.assertEqual(question.count(historical["summary"]), 1)
+            self.assertGreater(
+                question.index(value["correction"]),
+                question.index(historical["summary"]),
             )

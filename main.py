@@ -1072,10 +1072,14 @@ def _generate_ad_hoc_decision(request: DecisionRequest):
             "Do not claim the goal is complete; goal completion remains an owner decision."
         )
 
-    if registered_context:
-        meeting_task += (
-            "\nREGISTERED SOURCES (preserve freshness/review labels):\n"
+    if registered_context and request.intake_confirmation is None:
+        # Confirmed intake already contains these exact reviewed records before
+        # the current correction. Do not duplicate stale history after it.
+        meeting_task = (
+            "REGISTERED SOURCES (preserve freshness/review labels):\n"
             + registered_context
+            + "\n\nCURRENT OWNER TASK:\n"
+            + meeting_task
         )
     try:
         if request.output_mode == "structured":
