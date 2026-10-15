@@ -112,6 +112,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/manual_checks/test_config.py](../scripts/manual_checks/test_config.py) | Inspect configuration without printing credential values. Importing this manual check never initializes the app. |
 | [scripts/manual_checks/test_crew.py](../scripts/manual_checks/test_crew.py) | Run a local CEO/CFO demo against disposable records, with notifications disabled. Importing this manual check never initializes the app. |
 | [scripts/manual_checks/test_cso_tool.py](../scripts/manual_checks/test_cso_tool.py) | Run a local CSO demo that reads the fixed public Wikipedia page. Requires explicit web opt-in. Importing this manual check never initializes |
+| [scripts/manual_checks/test_first_user_api.py](../scripts/manual_checks/test_first_user_api.py) | Opt-in local API generation using retained development inputs and disposable data. |
 | [scripts/operating_smoke.py](../scripts/operating_smoke.py) | Operations dashboard -> owner API -> disposable SQLite, with browser privacy checks. |
 | [scripts/organizational_smoke.py](../scripts/organizational_smoke.py) | Owner review UI -> authenticated API -> disposable SQLite. No company runtime writes. |
 | [scripts/people_smoke.py](../scripts/people_smoke.py) | People dashboard/owner API smoke on disposable SQLite; speech is stubbed, never transmitted. |
