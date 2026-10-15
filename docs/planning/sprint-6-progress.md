@@ -14,7 +14,7 @@
 | BE-50 | Review | Attributed proposals/objections and production-browser review passed. [Review](../../BE50_ATTRIBUTED_BRIEF.md). |
 | BE-51 | Review | Eight archived narratives and compact reproducible catalog. [Review](../../BE51_DOCUMENTATION_CLEANUP.md). |
 | BE-52 | Review | Two-model private exercise completed with rubric gaps recorded; separate corrected analyst proposal and owner feedback pending. [Review](../../BE52_REAL_PROJECT_EVALUATION.md). |
-| BE-53 | Blocked on CI approval | Final local audit passed: 337 backend, 150 foundation, 15 browser; active CI proposal awaits approval/credential. [Audit](../../BE53_SPRINT6_AUDIT.md). |
+| BE-53 | Local CI edit approved; release review pending | Original audit: 337 backend, 150 foundation, 15 browser. Owner approved the exact CI proposal on15October; active local workflow updated, no remote run/push. Known Chroma release findings remain. [Current recheck](../../BE64_RELEASE_RECHECK.md). |
 | BE-54 | Review | [Review bundle](../../SPRINT_6_REVIEW.md) and [retrospective](../../SPRINT_6_RETROSPECTIVE.md); owner acceptance and merge pending. |
 
 Latest audited implementation: 2d17f7292d01c6ad5b6c552c48241cf32fc32e84. Local complete audit: **33 PASS, zero FAIL, one UPSTREAM**. It includes 337 backend checks with real Docker and no skips, 150 foundation checks and 15 production browser feature checks. Known Chroma advisories remain a release finding.

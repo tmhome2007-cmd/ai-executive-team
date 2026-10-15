@@ -86,7 +86,7 @@
     "assignee": "owner",
     "priority": "high",
     "status": "in_progress",
-    "review_scope": "411 backend tests with realDocker pass before additional real-scheduler test. Final complete audit pending. Four known Chroma findings remain; specific active-CI approval requested, no shared CI edit."
+    "review_scope": "Owner explicitly approved CI proposal15October; active local workflow now matches reviewed proposal, YAML parsed; no push/remote CI claim. Full local audit pending. Four known Chroma findings remain."
   },
   {
     "title": "BE-65 · Owner review, retrospective and closure",

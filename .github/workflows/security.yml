@@ -28,10 +28,10 @@ jobs:
 
       - name: Compile Python sources
         run: |
-          python -m compileall -q agents config.py logging_config.py main.py foundation_api.py memory notifications system_checks.py tools workflows privacy_bootstrap.py
+          python -m compileall -q api agents config.py logging_config.py main.py foundation_api.py memory notifications system_checks.py tools workflows privacy_bootstrap.py
 
       - name: Container boundary unit tests
-        run: python -m unittest discover -s tests -p 'test_*.py' -v
+        run: python scripts/run_tests.py
 
       - name: Pre-pull verified worker image for live isolation tests
         run: docker pull alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
@@ -39,7 +39,7 @@ jobs:
       - name: Test live Docker worker network and filesystem boundary
         env:
           RUN_DOCKER_INTEGRATION: "1"
-        run: python -m unittest discover -s tests -p 'test_container_runtime.py' -v
+        run: python scripts/run_tests.py --docker --pattern test_container_runtime.py
 
       - name: System regression verification
         if: ${{ always() }}
@@ -53,7 +53,7 @@ jobs:
 
       - name: Bandit medium/high findings
         if: ${{ always() }}
-        run: bandit -r agents memory notifications tools workflows main.py foundation_api.py config.py system_checks.py -ll
+        run: bandit -r api agents memory notifications tools workflows main.py foundation_api.py config.py system_checks.py -ll
 
       - name: Audit Python dependencies
         if: ${{ always() }}
