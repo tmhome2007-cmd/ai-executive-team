@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-12",
+  "candidate_commit": "f61570fc4264554aebe8c2f38d1662b3a708751e",
+  "frozen_assets": {
+    "workflows/plan_delivery.py": "06b8ccd74182d46faaefc4c2aebe340caf748a6f5ab9eb76ffd753b7a790c170",
+    "workflows/actionable_plan.py": "191d27880a3d10973e7588b82b0f34e3d84671aeb337928fab40acd36363c361",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "workflows/structured_decision.py": "d2770fdba45fe8524edd3287324d2f9a9624c6a05ebebdf1f38951031b26d37f",
+    "scripts/sprint7_delivery_experiment.py": "c7dc21758887f7fa5e4bb9183182154779577cc45eb7c408e98c8794b322d0bd"
+  },
+  "model": {
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+    "configuration": {
+      "temperature": 0,
+      "max_tokens": 1200,
+      "timeout": 120,
+      "provider": "ollama",
+      "tag": "llama3.1",
+      "resolved_tag": "llama3.1:latest",
+      "endpoint": "http://127.0.0.1:11434",
+      "response_mode": "False",
+      "other_options": "SDK and Ollama defaults; not a deterministic generation guarantee"
+    }
+  },
+  "options": {
+    "temperature": 0,
+    "num_predict": 1200,
+    "num_ctx": 4096,
+    "seed": 47
+  },
+  "counts": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 9,
+    "stage_responses": 12,
+    "errors": 0,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "Completed separately in immutable semantic-assessment.json; original summary retained",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "analyst_assessment": {
+    "reviewer": "Codex analyst; not owner acceptance",
+    "unique_raw_sequences": 3,
+    "complete_usefulness": 0,
+    "denominator": 9,
+    "draft_required": 3,
+    "draft_delivered": 3,
+    "private_only": 6,
+    "no_unrequested_draft": 6,
+    "merge_gate_passed": false,
+    "comparison_limit": "Same-setting development repetitions and trusted routing; no independent variance, held-out or full-team claims."
+  },
+  "technical_checks": {
+    "backend_tests": 360,
+    "docker": true,
+    "skips": 0,
+    "result": "PASS",
+    "log_sha256": "f13128546b5d9c410645c039482e19c03febfc7c86bcd89c560bb1fafaeb7e69",
+    "targeted_tests": 33,
+    "format_catalog": "PASS",
+    "targeted_bandit_medium_high": "PASS",
+    "full_audit_rerun": false,
+    "frontend_unchanged": true
+  },
+  "prior_intake_counts": {
+    "validated": 0,
+    "denominator": 9,
+    "complete_usefulness": 0
+  },
+  "private_run": "audit-results/sprint7-delivery/run-980c032facc04df4a9677e23e5081910",
+  "freeze_sha256": "a32e0710f013a23f51107b9fe4f5b10cf2276e78f41765504490c8d318d6731b",
+  "assessment_sha256": "b2d7b158cc4a752f52b0adfef70468ffdbbe7fc46ffb4942e4985d7142716e68",
+  "integration": "Experimental only; existing production structured meeting unchanged",
+  "remote_status": "Fresh git ls-remote failed DNS in sandbox; no current PR state claimed or merge attempted",
+  "merge": false,
+  "owner_accepted": false,
+  "new_experiment_retention": "Ignored owner-only records; automatic retention selector coverage still required before production integration."
+}

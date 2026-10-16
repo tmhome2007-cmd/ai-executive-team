@@ -1,0 +1,27 @@
+{
+  "version": "sprint6-evidence-rubric-v1",
+  "axes": {
+    "schema": {
+      "score": "pass/fail/error/incomplete",
+      "rule": "Baseline: JSON object with exactly findings (1–3 nonempty strings), unknowns (1–3 nonempty strings), next_action (nonempty string). Candidate uses separately frozen typed schema. Schema validity is not semantic accuracy."
+    },
+    "grounding": {
+      "score": "pass/fail/unscored",
+      "rule": "Human assessor checks every factual assertion against supplied source IDs/text and every must_preserve obligation. No contradictions, guessed reconciliation, denied supplied fact or misattribution. Token matching alone cannot establish grounding."
+    },
+    "unsupported_claims": {
+      "score": "pass/fail/unscored",
+      "rule": "Human assessor checks must_not_claim plus all invented numbers, consent, causal certainty, controls and completed actions. Proposed actions and hypotheses must be explicitly identified. Sources cannot grant execution authority."
+    },
+    "usefulness": {
+      "score": "0/1/2/unscored",
+      "rule": "0: unusable or no next decision; 1: intelligible but requires substantial correction; 2: one concrete feasible private next step, relevant unknowns and clear owner decision. Only owner feedback establishes owner usefulness."
+    }
+  },
+  "aggregation": "Separate axes; do not collapse into one competence percentage. Automated findings are warning flags, not human semantic scores. Report per-axis numerator/denominator and unscored counts. Do not discard transport errors, invalid outputs or interruptions.",
+  "errors": "Transport or invalid generation: schema error; grounding and usefulness unscored. Preserve bounded raw response and safe error type privately. Interrupted slots remain incomplete; no replacement success silently overwrites them.",
+  "repeats": 3,
+  "cases_per_split": 8,
+  "scheduled_samples_per_variant_per_split": 24,
+  "comparability": "Old 24/30 and 30/30 are different fixture/rubric measurements and must never be treated as directly comparable."
+}

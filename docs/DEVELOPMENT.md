@@ -21,6 +21,8 @@ flowchart TD
 | `main.py` | Application lifecycle, auth, scheduler and core company API | Startup, owner login or core decisions/actions/goals change |
 | `foundation_api.py` | Planning/operating routes and feature-router assembly | Planning, capability inventory, observation jobs or activity streams change |
 | `api/common.py` | Strict request base, API error mapping and private response headers | Shared request/response behavior changes |
+| `api/decisions.py` | Approved-decision preparation HTTP schemas and error mapping | Preparation request or response contracts change |
+| `workflows/decision_preparation.py` | Preparation claims, bounded proposals, provenance and recovery | Approved direction becomes pending proposals |
 | `api/business.py` | Business research/practice HTTP contracts | Business form fields or endpoints change |
 | `api/people.py` | Characters, departments, employees and fictional simulation HTTP contracts | People/organization endpoints change |
 | `api/conversation_audio.py` | Published contribution speech HTTP contracts | Audio load/read/cancel/delete endpoints change |
@@ -38,7 +40,7 @@ Keep route handlers thin: validate input, call the owning module, return a resul
 
 ## Following a feature
 
-For spoken contributions: dashboard `conversation-voice.tsx` → `api/conversation_audio.py` → `workflows/conversation_audio.py` → isolated `scripts/synthesize_conversation.py`. Source text comes from the published contribution/discussion records; no new model reasoning is generated. Read [BE23_LOCAL_CONVERSATIONS.md](../BE23_LOCAL_CONVERSATIONS.md) for limits and cache behavior.
+For spoken contributions: dashboard `conversation-voice.tsx` → `api/conversation_audio.py` → `workflows/conversation_audio.py` → isolated `scripts/synthesize_conversation.py`. Source text comes from the published contribution/discussion records; no new model reasoning is generated. Read [BE23_LOCAL_CONVERSATIONS.md](guides/BE23_LOCAL_CONVERSATIONS.md) for limits and cache behavior.
 
 For business practice: dashboard `business-discovery.tsx` → `api/business.py` → `workflows/business_discovery.py` → `memory/business_discovery.py`, `memory/practice_quality.py` and `memory/business_practice_history.py`. Contracts under `workflows/` constrain deliverables; the owner's assessment is a separate record.
 
@@ -89,7 +91,7 @@ rg -n 'def approve_action|def execute_action' main.py memory workflows
 rg -n 'FAIL|ERROR|UPSTREAM' audit-results/<report-directory>
 ```
 
-The backend terminal shows requests and runtime errors. Audit reports contain individual check logs. Log retention/redaction and backup handling are described in [PRIVACY_OPERATIONS.md](../PRIVACY_OPERATIONS.md). Do not import the app just to generate docs: initialization can configure logging/framework state.
+The backend terminal shows requests and runtime errors. Audit reports contain individual check logs. Log retention/redaction and backup handling are described in [PRIVACY_OPERATIONS.md](guides/PRIVACY_OPERATIONS.md). Do not import the app just to generate docs: initialization can configure logging/framework state.
 
 ## Database and reliability rules
 
@@ -112,3 +114,17 @@ The current GitHub credential cannot push workflow changes. Local maintenance ch
 ## Cleanup verification (10 October 2026)
 
 Full disposable audit `audit-results/20261010-195208`: 188 backend tests, 150 foundation checks, all nine browser flows, Docker isolation, Bandit, frontend lint/build/audit, voice dependencies and local Ollama inference passed. Maintenance formatting and catalog checks passed. Syntax comparison confirmed unchanged executable code in 111 formatted Python files and every extracted API function/request model; launcher/audit wiring changes were reviewed separately. Existing four Chroma advisories remain reported, with no additional Python dependency findings. These checks establish regression coverage, not proof that all future faults are impossible.
+
+## Backend test entry point
+
+Use `./company test` for backend regressions. It discovers only tests/, overrides company paths and credentials with temporary values before imports, disables Telegram/cloud/raw shell, and cleans temporary records after exit. `./company test --list` discovers without running cases; `./company test --pattern test_decision_preparation.py` narrows the filename pattern. `./company test --docker` explicitly includes the real Docker boundary check using the existing pinned image; it never pulls an image. Skips remain visible.
+
+`verify_system.py` remains the separate foundation checker and `./company audit` remains the complete integration/security/browser check. Frontend `npm test` and vendor self-tests stay in their package directories. Opt-in examples now live under scripts/manual_checks/; see its README. They are not automatically run.
+
+Decision preparation now follows dashboard → api/decisions.py → workflows/decision_preparation.py → memory/database.py. main.py binds explicit callbacks per request, so owner auth and existing patch seams remain stable. The workflow has no application import and grants no execution/access authority.
+
+## Sprint 6 evaluation and source lookup
+
+Use `.venv/bin/python scripts/evaluation_protocol.py` to verify the frozen fictional split without inference. Read [the protocol](research/BE47_EVALUATION_PROTOCOL.md) before running an evaluation. The structured strategy option preserves individual proposals and objections; generated quotes pass membership checks, while semantic and owner usefulness review remain separate.
+
+Refresh the compact catalog with `.venv/bin/python scripts/code_catalog.py`; verify it with `--check`, or print a scoped index with `--scope backend`, `--scope frontend` or `--scope tests`. Individual symbol lookup uses `rg`. Closed sprint narratives are in [the archive](../README.md#development-status); compatibility links preserve old paths.

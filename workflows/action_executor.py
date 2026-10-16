@@ -3,7 +3,7 @@
 Module voor het veilig uitvoeren van goedgekeurde acties uit de action_queue.
 Ondersteunt patrooncontroles voor gevaarlijke commando's, een echte confinement-
 check die elk pad-achtig token in het commando herleidt tot een absoluut pad en
-blokkeert als dat buiten WORKSPACE_ROOT valt, een live-uitvoering via subprocess,
+blokkeert als dat buiten WORKSPACE_ROOT valt, een geïsoleerde Docker worker,
 en een veilige dry-run modus.
 """
 
@@ -18,12 +18,6 @@ import socket
 import subprocess
 import tempfile
 
-try:
-    import resource  # Unix-only (macOS/Linux) — niet beschikbaar op Windows
-
-    _RESOURCE_MODULE_AVAILABLE = True
-except ImportError:
-    _RESOURCE_MODULE_AVAILABLE = False
 from urllib.parse import urlparse
 from memory.database import (
     get_action_by_id,
@@ -39,6 +33,17 @@ from memory.database import (
 from notifications.telegram_bot import send_notification, escape_html
 from config import config
 from workflows.container_executor import ContainerTimeoutError
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
+def _log_failure(event_code: str, action_id: int, error: Exception) -> None:
+    """Log fixed event context, never exception text, payloads, prompts or URLs."""
+    logger.warning(
+        "%s action_id=%s error_type=%s", event_code, action_id, type(error).__name__
+    )
+
 
 # ------------------------------------------------------------------
 # WORKSPACE CONFINEMENT
@@ -53,26 +58,6 @@ from workflows.container_executor import ContainerTimeoutError
 
 # Shell metakarakters die het commando in losse deelcommando's opsplitsen
 _SHELL_CHAIN_SPLIT = re.compile(r"&&|\|\||;|\|")
-
-
-def _limit_subprocess_resources() -> None:
-    """
-    Wordt uitgevoerd IN het kindproces, vlak vóór het echte commando start
-    (via preexec_fn). Begrenst CPU-tijd en geheugen zodat een losgeslagen of
-    kwaadaardig commando (bijv. "yes", of iets dat /dev/zero leest) niet
-    onbeperkt CPU/RAM kan opslokken tijdens de 30 seconden wall-clock timeout
-    — die timeout stopt het proces pas AAN HET EIND van 30s, dit begrenst wat
-    het in de tussentijd kan verbruiken. Alleen actief op Unix (macOS/Linux).
-    """
-    if not _RESOURCE_MODULE_AVAILABLE:
-        return
-    try:
-        resource.setrlimit(resource.RLIMIT_CPU, (25, 25))  # max 25 CPU-seconden
-        resource.setrlimit(
-            resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024)
-        )  # max 512MB adresruimte
-    except Exception:
-        pass  # als het platform dit niet ondersteunt, ga gewoon door zonder limiet
 
 
 def _get_safe_subprocess_env() -> dict:
@@ -480,9 +465,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                 f"<b>Reason:</b> {_telegram_sensitive(confinement_reason)}"
             )
         except Exception as e:
-            print(
-                f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}"
-            )
+            _log_failure("file_block_notification_failed", action_id, e)
         return {
             "success": False,
             "action_id": action_id,
@@ -514,9 +497,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                 f"<b>Detail:</b> {_telegram_sensitive(preview)}"
             )
         except Exception as e:
-            print(
-                f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}"
-            )
+            _log_failure("file_dry_run_notification_failed", action_id, e)
         return {
             "success": True,
             "mode": "dry_run",
@@ -571,9 +552,8 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                         "<b>Content:</b> retained locally; not copied to Telegram."
                     )
                 except Exception as notify_err:
-                    print(
-                        f"Warning: Failed to send Telegram notification for "
-                        f"action #{action_id}: {notify_err}"
+                    _log_failure(
+                        "file_completion_notification_failed", action_id, notify_err
                     )
                 return {
                     "success": True,
@@ -675,9 +655,8 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                     f"<b>Bytes written:</b> {len(content)}"
                 )
             except Exception as notify_err:
-                print(
-                    f"Warning: Failed to send Telegram notification for "
-                    f"action #{action_id}: {notify_err}"
+                _log_failure(
+                    "file_completion_notification_failed", action_id, notify_err
                 )
             return {
                 "success": True,
@@ -689,6 +668,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
             os.close(parent_fd)
 
     except Exception as e:
+        _log_failure("file_operation_failed", action_id, e)
         update_action_status(action_id, "execution_failed")
         error_msg = f"File operation failed: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
@@ -700,9 +680,7 @@ def _execute_file_operation(action_id: int, action: dict) -> dict:
                 f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
-            print(
-                f"Warning: Failed to send Telegram notification for action #{action_id}: {notify_err}"
-            )
+            _log_failure("file_completion_notification_failed", action_id, notify_err)
         return {
             "success": False,
             "mode": "live",
@@ -768,9 +746,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 f"<b>Reason:</b> {_telegram_sensitive(url_block_reason)}"
             )
         except Exception as e:
-            print(
-                f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}"
-            )
+            _log_failure("browser_block_notification_failed", action_id, e)
         return {
             "success": False,
             "action_id": action_id,
@@ -794,9 +770,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 f"<b>Detail:</b> {_telegram_sensitive(preview)}"
             )
         except Exception as e:
-            print(
-                f"Warning: Failed to send Telegram dry-run notification for action #{action_id}: {e}"
-            )
+            _log_failure("browser_dry_run_notification_failed", action_id, e)
         return {
             "success": True,
             "mode": "dry_run",
@@ -886,9 +860,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 f"<b>Screenshot saved:</b> {_telegram_sensitive(screenshot_path, code=True)}"
             )
         except Exception as e:
-            print(
-                f"Warning: Failed to send Telegram notification for action #{action_id}: {e}"
-            )
+            _log_failure("browser_completion_notification_failed", action_id, e)
 
         return {
             "success": True,
@@ -899,6 +871,7 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
         }
 
     except Exception as e:
+        _log_failure("browser_action_failed", action_id, e)
         update_action_status(action_id, "execution_failed")
         error_msg = f"Browser action failed: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
@@ -910,8 +883,8 @@ def _execute_browser_action(action_id: int, action: dict) -> dict:
                 f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
-            print(
-                f"Warning: Failed to send Telegram notification for action #{action_id}: {notify_err}"
+            _log_failure(
+                "browser_completion_notification_failed", action_id, notify_err
             )
         return {
             "success": False,
@@ -977,7 +950,8 @@ def execute_action(action_id: int) -> dict:
             raise RuntimeError(
                 "Execution checkpoint already exists; manual review required"
             )
-    except Exception:
+    except Exception as execution_error:
+        _log_failure("execution_checkpoint_unavailable", action_id, execution_error)
         update_action_status(action_id, "execution_failed")
         mark_action_outcome_execution_uncertain(
             action_id,
@@ -1013,9 +987,10 @@ def execute_action(action_id: int) -> dict:
         if not finish_step(run_id, step_id, terminal):
             raise RuntimeError("Checkpoint completion could not be confirmed")
         return result
-    except Exception:
+    except Exception as execution_error:
         # Includes failure to persist a result after an effect. Never claim
         # certainty or replay just because a handler raised an exception.
+        _log_failure("execution_result_unconfirmed", action_id, execution_error)
         finish_step(run_id, step_id, "inconclusive")
         update_action_status(action_id, "execution_failed")
         mark_action_outcome_execution_uncertain(
@@ -1076,9 +1051,7 @@ def _execute_claimed_action(action_id: int, action: dict) -> dict:
             )
             send_notification(notification_text)
         except Exception as e:
-            print(
-                f"Warning: Failed to send Telegram block notification for action #{action_id}: {e}"
-            )
+            _log_failure("shell_block_notification_failed", action_id, e)
 
         return {
             "success": False,
@@ -1112,7 +1085,7 @@ def _execute_claimed_action(action_id: int, action: dict) -> dict:
             )
             send_notification(notification_text)
         except Exception as e:
-            print(f"Warning: Failed to send Telegram dry-run notification: {e}")
+            _log_failure("shell_dry_run_notification_failed", action_id, e)
 
         return {
             "success": True,
@@ -1146,8 +1119,10 @@ def _execute_claimed_action(action_id: int, action: dict) -> dict:
                 f"<b>Action ID:</b> #{action_id}\n"
                 "Use the local dashboard for details."
             )
-        except Exception:
-            pass
+        except Exception as notification_error:
+            _log_failure(
+                "shell_block_notification_failed", action_id, notification_error
+            )
         return {
             "success": False,
             "action_id": action_id,
@@ -1183,9 +1158,7 @@ def _execute_claimed_action(action_id: int, action: dict) -> dict:
                 )
                 send_notification(notification_text)
             except Exception as e:
-                print(
-                    f"Warning: Failed to send Telegram success notification for action #{action_id}: {e}"
-                )
+                _log_failure("shell_success_notification_failed", action_id, e)
 
             return {
                 "success": True,
@@ -1220,9 +1193,7 @@ def _execute_claimed_action(action_id: int, action: dict) -> dict:
                 )
                 send_notification(notification_text)
             except Exception as e:
-                print(
-                    f"Warning: Failed to send Telegram failure notification for action #{action_id}: {e}"
-                )
+                _log_failure("shell_failure_notification_failed", action_id, e)
 
             return {
                 "success": False,
@@ -1247,9 +1218,7 @@ def _execute_claimed_action(action_id: int, action: dict) -> dict:
                 f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as e:
-            print(
-                f"Warning: Failed to send Telegram timeout notification for action #{action_id}: {e}"
-            )
+            _log_failure("shell_timeout_notification_failed", action_id, e)
 
         return {
             "success": False,
@@ -1259,6 +1228,7 @@ def _execute_claimed_action(action_id: int, action: dict) -> dict:
         }
 
     except Exception as e:
+        _log_failure("shell_execution_failed", action_id, e)
         update_action_status(action_id, "execution_failed")
         error_msg = f"Unexpected error during execution: {e}"
         record_execution_result(action_id, json.dumps({"error": error_msg}))
@@ -1272,9 +1242,7 @@ def _execute_claimed_action(action_id: int, action: dict) -> dict:
                 f"<b>Error:</b> {_telegram_sensitive(error_msg)}"
             )
         except Exception as notify_err:
-            print(
-                f"Warning: Failed to send Telegram error notification for action #{action_id}: {notify_err}"
-            )
+            _log_failure("shell_error_notification_failed", action_id, notify_err)
 
         return {
             "success": False,

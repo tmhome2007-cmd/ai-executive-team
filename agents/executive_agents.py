@@ -1,6 +1,6 @@
 """CrewAI executive definitions, role-specific tools and public profile metadata.
 
-Module die de LLM-instantie en alle 10 Executive Agenten definieert voor de CrewAI workflows.
+Module die de LLM-instantie en alle 11 Executive Agenten definieert voor de CrewAI workflows.
 Exposeert de 'EXECUTIVE_AGENTS' dictionary met sleutels voor elke bestuursrol.
 """
 
@@ -21,6 +21,8 @@ llm = LLM(
 )
 
 # 2. Definitie van de Bestuursagenten met specifieke roldifferentiatie
+# Every agent keeps max_iter=5 to bound reasoning/tool-call loops.
+# This cap follows the observed CFO runaway proposal loop; it grants no execution authority.
 
 # CEO — Kai Akira
 ceo_agent = Agent(
@@ -37,7 +39,7 @@ ceo_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[ProposeResourceRequestTool(role="CEO")],
 )
 
@@ -56,7 +58,7 @@ cfo_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[
         ProposeFileOperationTool(role="CFO"),
         ProposeResourceRequestTool(role="CFO"),
@@ -78,7 +80,7 @@ cso_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[ProposeResourceRequestTool(role="CSO")],
 )
 
@@ -97,7 +99,7 @@ chro_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[ProposeResourceRequestTool(role="CHRO")],
 )
 
@@ -116,7 +118,7 @@ general_counsel_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[
         ProposeFileOperationTool(role="General Counsel"),
         ProposeResourceRequestTool(role="General Counsel"),
@@ -138,7 +140,7 @@ coo_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[
         ProposeActionTool(role="COO"),
         ProposeFileOperationTool(role="COO"),
@@ -162,7 +164,7 @@ cmo_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[ProposeResourceRequestTool(role="CMO")],
 )
 
@@ -181,7 +183,7 @@ cpo_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[ProposeResourceRequestTool(role="CPO")],
 )
 
@@ -200,7 +202,7 @@ board_director_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[ProposeResourceRequestTool(role="Board Director")],
 )
 
@@ -219,7 +221,7 @@ chro_cco_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[ProposeResourceRequestTool(role="CCO")],
 )
 
@@ -237,7 +239,7 @@ cto_agent = Agent(
     llm=llm,
     verbose=False,
     allow_delegation=False,
-    max_iter=5,  # Harde stop tegen runaway tool-calling loops (zie incident: CFO riep propose_file_operation 13x aan)
+    max_iter=5,
     tools=[
         ProposeActionTool(role="CTO"),
         ProposeFileOperationTool(role="CTO"),
@@ -245,7 +247,7 @@ cto_agent = Agent(
     ],
 )
 
-# 3. Centrale Dictionary met alle 10 Executive Agenten
+# 3. Centrale Dictionary met alle 11 Executive Agenten
 EXECUTIVE_AGENTS = {
     "ceo": ceo_agent,
     "cfo": cfo_agent,

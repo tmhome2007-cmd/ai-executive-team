@@ -1,0 +1,16 @@
+{
+  "original_freeze_hash": "76fa4d899057396f6fb57411ab3a91bd024d78fb9db7fd2ffae440ea49cd5d10",
+  "original_assessment_commit": "74d0a5eff835fa3241da23835950e6128ea57dbe",
+  "current_case_status": {
+    "held-01": "assessed; not used for repair",
+    "held-02": "assessed; not used for repair",
+    "held-03": "assessed; not used for repair",
+    "held-04": "assessed; not used for repair",
+    "held-05": "assessed; not used for repair",
+    "held-06": "assessed; not used for repair",
+    "held-07": "assessed; not used for repair",
+    "held-08": "development; used for permission guard repair after original assessment"
+  },
+  "replacement": "replacement-01; separately frozen, new-case assessment only",
+  "limits": "Original frozen files and results are immutable historical evidence. They do not certify the revised checker; replacement counts are separate."
+}

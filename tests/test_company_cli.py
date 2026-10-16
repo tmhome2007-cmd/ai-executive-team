@@ -3,6 +3,8 @@
 import contextlib
 import io
 import signal
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 from scripts import company_cli as cli
@@ -161,3 +163,163 @@ class CompanyCliTests(unittest.TestCase):
             all(c.kwargs["start_new_session"] for c in spawn.call_args_list)
         )
         stop.assert_called_once_with([backend, frontend])
+
+    def test_explicit_fresh_setup_is_private_and_does_not_inherit_or_print_keys(self):
+        with tempfile.TemporaryDirectory(
+            dir=Path(tempfile.gettempdir()).resolve()
+        ) as tmp:
+            root = Path(tmp)
+            with (
+                patch.object(cli, "ROOT", root),
+                patch.dict(
+                    "os.environ",
+                    {"API_SECRET_KEY": "existing-parent-secret"},
+                    clear=True,
+                ),
+                patch.object(cli, "environment") as environment,
+                contextlib.redirect_stdout(io.StringIO()) as out,
+            ):
+                self.assertEqual(cli.main(["init-local"]), 0)
+                environment.assert_not_called()
+            from dotenv import dotenv_values
+
+            values = dotenv_values(root / ".env")
+            keys = [
+                values[name]
+                for name in [
+                    "API_SECRET_KEY",
+                    "SYNC_HMAC_KEY",
+                    "ACTION_APPROVAL_HMAC_KEY",
+                ]
+            ]
+            self.assertEqual(len(set(keys)), 3)
+            self.assertTrue(all(len(k) == 64 for k in keys))
+            self.assertTrue(all(k not in out.getvalue() for k in keys))
+            self.assertNotIn("existing-parent-secret", (root / ".env").read_text())
+            self.assertEqual((root / ".env").stat().st_mode & 0o777, 0o600)
+            self.assertEqual(values["ALLOW_REMOTE_LLM"], "false")
+            self.assertEqual(values["OLLAMA_MODEL"], "llama3.1")
+            self.assertFalse((root / "memory").exists())
+
+    def test_setup_refuses_existing_env_database_and_symlink_without_changes(self):
+        for existing in [
+            "env",
+            "database",
+            "symlink",
+            "workspace",
+            "inherited_database",
+            "legacy_database",
+            "workspace_symlink",
+        ]:
+            with (
+                self.subTest(existing=existing),
+                tempfile.TemporaryDirectory(
+                    dir=Path(tempfile.gettempdir()).resolve()
+                ) as tmp,
+            ):
+                root = Path(tmp)
+                if existing == "env":
+                    (root / ".env").write_text("API_SECRET_KEY=owner-kept-key")
+                elif existing == "database":
+                    (root / "memory").mkdir()
+                    (root / "memory/executive_team.db").write_bytes(b"owner database")
+                elif existing == "symlink":
+                    (root / ".env").symlink_to(root / "absent-owner-env")
+                elif existing == "workspace":
+                    (root / "workspace").mkdir()
+                    (root / "workspace/owner-report.txt").write_text("owner artifact")
+                elif existing == "inherited_database":
+                    (root / "another-company.db").write_bytes(b"owner database")
+                elif existing == "legacy_database":
+                    (root / "memory/vectors").mkdir(parents=True)
+                    (root / "memory/vectors/chroma.sqlite3").write_bytes(
+                        b"owner vectors"
+                    )
+                else:
+                    (root / "workspace").symlink_to(
+                        root / "absent-owner-workspace", target_is_directory=True
+                    )
+                with (
+                    patch.object(cli, "ROOT", root),
+                    patch.dict(
+                        "os.environ",
+                        (
+                            {"DATABASE_PATH": "another-company.db"}
+                            if existing == "inherited_database"
+                            else {}
+                        ),
+                        clear=True,
+                    ),
+                    self.assertRaises(RuntimeError),
+                ):
+                    cli.init_local()
+                if existing == "env":
+                    self.assertEqual(
+                        (root / ".env").read_text(), "API_SECRET_KEY=owner-kept-key"
+                    )
+                if existing == "database":
+                    self.assertEqual(
+                        (root / "memory/executive_team.db").read_bytes(),
+                        b"owner database",
+                    )
+                    self.assertFalse((root / ".env").exists())
+                if existing == "workspace":
+                    self.assertEqual(
+                        (root / "workspace/owner-report.txt").read_text(),
+                        "owner artifact",
+                    )
+                    self.assertFalse((root / ".env").exists())
+                if existing == "inherited_database":
+                    self.assertEqual(
+                        (root / "another-company.db").read_bytes(), b"owner database"
+                    )
+                    self.assertFalse((root / ".env").exists())
+                if existing in {"legacy_database", "workspace_symlink"}:
+                    self.assertFalse((root / ".env").exists())
+                if existing == "legacy_database":
+                    self.assertEqual(
+                        (root / "memory/vectors/chroma.sqlite3").read_bytes(),
+                        b"owner vectors",
+                    )
+                if existing == "workspace_symlink":
+                    self.assertTrue((root / "workspace").is_symlink())
+                    self.assertFalse((root / "absent-owner-workspace").exists())
+                if existing == "symlink":
+                    self.assertTrue((root / ".env").is_symlink())
+                    self.assertFalse((root / "absent-owner-env").exists())
+
+    def test_setup_collision_never_overwrites_and_placeholder_key_is_not_copied(self):
+        with tempfile.TemporaryDirectory(
+            dir=Path(tempfile.gettempdir()).resolve()
+        ) as tmp:
+            with (
+                patch.object(cli, "ROOT", Path(tmp)),
+                patch.dict("os.environ", {}, clear=True),
+                patch.object(cli.os, "open", side_effect=FileExistsError),
+                self.assertRaises(RuntimeError),
+            ):
+                cli.init_local()
+        self.assertFalse(
+            cli.configured_key({"API_SECRET_KEY": "generate_with_openssl_rand_hex_32"})
+        )
+        with (
+            patch.object(cli.subprocess, "run") as run,
+            self.assertRaises(RuntimeError),
+        ):
+            cli.copy_key({"API_SECRET_KEY": "generate_with_openssl_rand_hex_32"})
+        run.assert_not_called()
+
+    def test_port_probe_refuses_live_listener_but_accepts_closed_connection(self):
+        with cli.socket.socket() as listener:
+            listener.setsockopt(cli.socket.SOL_SOCKET, cli.socket.SO_REUSEADDR, 1)
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+            listener.listen(1)
+            self.assertFalse(cli.available(port))
+            with cli.socket.socket() as client:
+                client.settimeout(2)
+                client.connect(("127.0.0.1", port))
+                connection, _ = listener.accept()
+                connection.close()
+                self.assertEqual(client.recv(1), b"")
+        self.assertTrue(cli.available(port))

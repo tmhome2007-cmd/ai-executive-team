@@ -1,0 +1,12 @@
+{
+  "item": "BE-52",
+  "input_received_on": "2026-10-11",
+  "private_input_path": "audit-results/sprint6-reinstatly/evaluation-brief.json",
+  "sha256": "76ad3002f00c569d17329bd6f1d1e3e7a89124bffcc6e8870bae1756e240fc22",
+  "business_inputs_in_git": false,
+  "team_output_generated": true,
+  "owner_acceptance": false,
+  "dependencies_pending": [],
+  "status": "review",
+  "verification": "be52-verification.json"
+}

@@ -1,0 +1,67 @@
+{
+  "scope": [
+    "BE-43",
+    "BE-44"
+  ],
+  "planning_base": "8948485",
+  "status": "review",
+  "backend": {
+    "tests": 303,
+    "skips": 0,
+    "real_docker": true,
+    "passed": true
+  },
+  "foundation": {
+    "passed": 150,
+    "total": 150
+  },
+  "targeted_behavior_tests": 30,
+  "entrypoint_tests": 5,
+  "initial_failures_retained": true,
+  "owner_accepted": false,
+  "merged": false,
+  "remote_ci_run": null,
+  "known_upstream_release_findings_open": true,
+  "private_evidence": [
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-be43-first.log",
+      "sha256": "711ffe5bccfbf0e5271422461fbd59b93aa0ead2c33cdf15200bde97c81bc21a"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-be43-after.log",
+      "sha256": "4c2f13a86ef16b343d891e4c584614f929d8ba58fc61a08a906ace7c806170a2"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-be43-targeted.log",
+      "sha256": "ea9881099cd03edc35f32cf7814a2e28112f4a86a5bac0327b371906d7adb118"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-backend-tests.log",
+      "sha256": "d9102b8dde292fb3a6d1eaefedf8afdd2e1d65bf60b44900aa5fe56848f22c00"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-backend-tests-permitted.log",
+      "sha256": "0093450f05043acb72d614e933b346f152fb06fd557417ce4ede50ca49005a49"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-foundation.log",
+      "sha256": "866ab015bd18ced749ec1e9df5053dcbcac1551e560b39a1e04fcbfa9078f817"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-foundation-permitted.log",
+      "sha256": "fddaa36243276c5693b883405e3c564fcecb0d1136fc48828f9d61a6cd68c988"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-discovery.log",
+      "sha256": "3fba46615b8a57801c90686c48d842b34d594b6c2f379dabba3c32e9d9aa68cf"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-entrypoints-final.log",
+      "sha256": "e81a9cb65af57754a67aeba0176033962241cf1e7c8f53987b01443b69220e24"
+    },
+    {
+      "file": "audit-results/sprint6-be43-be44/sprint6-check-code.log",
+      "sha256": "cc3cda72e7a6692c99b15213fb32fa0fb9d53fff6dc3ff19088bb8b5d46da06c"
+    }
+  ]
+}

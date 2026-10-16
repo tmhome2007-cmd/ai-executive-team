@@ -115,3 +115,32 @@ assert.deepEqual(
   ["Find recent buyer requests."],
 );
 console.log("PASS: source proposal text stays outside action excerpts");
+
+// Application summaries must be anchored and complete; arbitrary AI markers are not trusted.
+const summaryFile = path.resolve(__dirname, "../app/lib/checklist-summary.ts");
+const summaryModule = new Module(summaryFile);
+summaryModule._compile(
+  ts.transpileModule(fs.readFileSync(summaryFile, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText,
+  summaryFile,
+);
+const { checklistSummary } = summaryModule.exports;
+const compact =
+  "Application checklist — not an executive recommendation\nOwner steps only.\nQuick answer — application guidance\nFirst step: Review another existing conversation.\nWhy: Reply status is already known.\nIf blocked: Compare unverified routes privately.\nEffort: 15 minutes.\nContext: No saved project records selected.\nEnd quick answer\nOriginal context remains below.";
+assert.equal(
+  checklistSummary(compact)["First step"],
+  "Review another existing conversation.",
+);
+assert.equal(checklistSummary("AI recommendation\n" + compact), null);
+assert.equal(checklistSummary(compact.replace("End quick answer", "")), null);
+assert.equal(
+  checklistSummary(compact.replace("Why: Reply status is already known.", "Why: ")),
+  null,
+);
+assert.equal(
+  checklistSummary(
+    compact.replace("End quick answer", "Why: Duplicate claim.\nEnd quick answer"),
+  ),
+  null,
+);

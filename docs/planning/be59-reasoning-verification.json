@@ -1,0 +1,137 @@
+{
+  "date": "2026-10-12",
+  "final_candidate_commit": "5ebec9525616d0e0208c3cb65be9e3a02cc77212",
+  "final_source_hashes": {
+    "workflows/plan_delivery.py": "b4c250db33dfcbcbf93ebe6c1ec4414192ce7fe11369bef72eaa256017c33e7c",
+    "workflows/actionable_plan.py": "38f9c7a274ee72b0f9920a18c7a18c1318401d8aa94be50e179673b1a48d280d",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "workflows/structured_decision.py": "d2770fdba45fe8524edd3287324d2f9a9624c6a05ebebdf1f38951031b26d37f",
+    "scripts/sprint7_delivery_experiment.py": "88351ca2e1a31fe78f9d5718df4062108c71cb6938d92805bec642878e36dbb5"
+  },
+  "model": {
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+    "configuration": {
+      "temperature": 0,
+      "max_tokens": 1200,
+      "timeout": 120,
+      "provider": "ollama",
+      "tag": "llama3.1",
+      "resolved_tag": "llama3.1:latest",
+      "endpoint": "http://127.0.0.1:11434",
+      "response_mode": "False",
+      "other_options": "SDK and Ollama defaults; not a deterministic generation guarantee"
+    }
+  },
+  "options": {
+    "temperature": 0,
+    "num_predict": 1200,
+    "num_ctx": 4096,
+    "seed": 47
+  },
+  "role_scope": "5ebec9525616d0e0208c3cb65be9e3a02cc77212 uses role-neutral explanation; canonical persona retained in metadata only; executive registrations unchanged",
+  "runs": [
+    {
+      "private_run": "audit-results/sprint7-reasoning/run-a581a684d7af40fe9871e84ff55f90f8",
+      "commit": "5c4833924ab50e599cbd0023073da1c1ed2e1308",
+      "counts": {
+        "scheduled": 9,
+        "completed": 9,
+        "validated": 6,
+        "stage_responses": 12,
+        "errors": 3,
+        "identity_unchanged": true,
+        "source_unchanged": true,
+        "semantic_review": "pending",
+        "merged": false,
+        "owner_accepted": false
+      },
+      "unique_raw_sequences": 3,
+      "freeze_sha256": "9f0ce3493360f70b7fb355e51511d33fdf38e3280b62254ec85467219026b57b",
+      "assessment_sha256": "599066405bf4af1fcfbfcec9c05463c2d40383f6acd599c3bd3f529b98a03857",
+      "complete_usefulness": 0,
+      "owner_accepted": false
+    },
+    {
+      "private_run": "audit-results/sprint7-reasoning/run-2ecddbb9a72e4283827764eb7c6336f5",
+      "commit": "005f45dcbb7d39a3c0a5d52488e57dccf120e698",
+      "counts": {
+        "scheduled": 9,
+        "completed": 9,
+        "validated": 9,
+        "stage_responses": 12,
+        "errors": 0,
+        "identity_unchanged": true,
+        "source_unchanged": true,
+        "semantic_review": "pending",
+        "merged": false,
+        "owner_accepted": false
+      },
+      "unique_raw_sequences": 3,
+      "freeze_sha256": "8140aa7750d7b4e152c93baa280f9b796da2a75742b0614e558f01701d3cb26c",
+      "assessment_sha256": "ea3001df2a0d461ef3ecd2c978c82c6aa3fe8848a9a7dd1ae6d7bcd54b020ce9",
+      "complete_usefulness": 0,
+      "owner_accepted": false
+    },
+    {
+      "private_run": "audit-results/sprint7-reasoning/run-9293af61d2704be7aca16801bdbcc530",
+      "commit": "a47d0a5e473574cbb0a5ea6205ac32f805d55c59",
+      "counts": {
+        "scheduled": 9,
+        "completed": 9,
+        "validated": 0,
+        "stage_responses": 9,
+        "errors": 9,
+        "identity_unchanged": true,
+        "source_unchanged": true,
+        "semantic_review": "pending",
+        "merged": false,
+        "owner_accepted": false
+      },
+      "unique_raw_sequences": 3,
+      "freeze_sha256": "e65d66876044cb66e9e75b9e303166fd466ccf480ef364d4fb4acd7210d25985",
+      "assessment_sha256": "4150163710b9d03d40ac6c396a0696b31a1d56c20e9302c09579e01bfaff0192",
+      "complete_usefulness": 0,
+      "owner_accepted": false
+    },
+    {
+      "private_run": "audit-results/sprint7-reasoning/run-7f48dcb659da476ea5e79e0d407733ad",
+      "commit": "5ebec9525616d0e0208c3cb65be9e3a02cc77212",
+      "counts": {
+        "scheduled": 9,
+        "completed": 9,
+        "validated": 6,
+        "stage_responses": 12,
+        "errors": 3,
+        "identity_unchanged": true,
+        "source_unchanged": true,
+        "semantic_review": "pending",
+        "merged": false,
+        "owner_accepted": false
+      },
+      "unique_raw_sequences": 3,
+      "freeze_sha256": "cf49edca5204b1aeb441d5785454bd1c0bf248755150b6dff7f18a4ba07d91a7",
+      "assessment_sha256": "34e10ca08cbbf9769a64ac6c5c494ce7cbe69ad8f1d04019b669dbfc6f953f69",
+      "complete_usefulness": 0,
+      "owner_accepted": false
+    }
+  ],
+  "total_samples": 36,
+  "total_stage_responses": 45,
+  "technical_checks": {
+    "backend_tests": 366,
+    "docker": true,
+    "skips": 0,
+    "result": "PASS",
+    "source_commit": "5ebec9525616d0e0208c3cb65be9e3a02cc77212",
+    "original_log_sha256": "9e08d552a3a16d5d4f6173815bdaf2b9364bdb9777531001549f5cc32dcc742a",
+    "targeted_checks": 22,
+    "format_catalog": "PASS",
+    "targeted_bandit": "PASS",
+    "full_audit": false,
+    "frontend_changed": false
+  },
+  "decision": "Unmerged, experimental only, model interpretation/usefulness remains blocked",
+  "current_remote_pr_status": "Not verified in this task; no PR or merge attempted",
+  "retention": "Owner-only ignored files; new experiment folders not yet covered by automatic selector",
+  "installed_models": "llama3:latest and llama3.1:latest, both 8B. Read-only inventory, no download or new-model inference."
+}

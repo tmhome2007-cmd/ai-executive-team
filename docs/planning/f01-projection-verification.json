@@ -1,0 +1,89 @@
+{
+  "experiment": "F01 explicit supersession probe",
+  "run": "audit-results/sprint7-reasoning/run-4eb5a374d1094823bc3bb4536c70a3dc",
+  "reviewer": "Codex analyst, not owner acceptance",
+  "source_commit": "58b99923b1a47763d2ee670bb779eee0ce7f22b8",
+  "source_hashes": {
+    "workflows/reviewed_evidence.py": "f3a6a2fb0b8fa62d6263950b1af1a43ca471873397e6fe4315feb0f456bad755",
+    "workflows/independent_decision.py": "7c266604efcea316af07ba96edb7f13cdb9900108615d2cd698c5921a1ea7bb9",
+    "workflows/structured_decision.py": "7157dd60cd837eda334f19327ea136523af563619c2b6d9487853096cf3f6833",
+    "workflows/plan_delivery.py": "c1ca43ed8b4323f5c08e36be6ea61d10370eb0c45ef9e44e057db8203a86c8fc",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "workflows/quality_benchmark.py": "c177a2b3b438b45b84edb690aff5968db5884f1dc624ed47f3ca634ead342672",
+    "workflows/local_model_identity.py": "cbb0c91531012f25b72106092984540daee15568e19a2de4628543b1da958ac0",
+    "agents/executive_agents.py": "47476cd8007ea162b6d16a10c47bc40f736e6ad0789c21ac62fd1311179905dd",
+    "scripts/sprint7_schema_experiment.py": "b22b89dfe4472b2855a7a9374f09097fffcf28d83ed67660e87ef6fe4f494cab",
+    "scripts/sprint7_independent_experiment.py": "08976ee1bf2cc8b06d957dd85acd6695ad3aa4f6e5e235aa90e76f10a4caa28d",
+    "scripts/sprint7_fact_projection_experiment.py": "e482ea2452c76e0d29fafb5e36c4725dfa5d9445ace3ded7e906804fcde1106a"
+  },
+  "model_digest": "7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6",
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 24.98,
+      "sample_hash": "931d07416b06b5ad3c86bd3655cae41f3d629e3f9707e33bf4be3f5181763c36",
+      "F01_pass": true,
+      "notes": "Preserves unresolved founder/CEO identity and founder status. Generic reason; no full usefulness claim."
+    },
+    {
+      "case": "A_as_tested",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 22.9,
+      "sample_hash": "3f23f5089abd3bf041e8e2f241c0c4394a8fee8f794d5b36f8339220f2cae006",
+      "F01_pass": true,
+      "notes": "Identical payload/proposal to baseline; no reviewed supersession. Unknown identity preserved."
+    },
+    {
+      "case": "B_replied",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 21.19,
+      "sample_hash": "73be71bb306668b3943e2269d80266d44ce5261715b34a0c62acc05c701bea58",
+      "F01_pass": true,
+      "notes": "Does not reopen confirmed reply; asks whether own current live case exists, with relevant quote."
+    },
+    {
+      "case": "B_replied",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 23.79,
+      "sample_hash": "292d508d77485117e8b7501ddff5f02d88b19941ec9b8fc1112b2538a2396c31",
+      "F01_pass": true,
+      "notes": "Same proposal as baseline. No semantic improvement; reply respected."
+    },
+    {
+      "case": "C_silent",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 25.14,
+      "sample_hash": "50b00c341dd939f7ecee7cacc9065c71260499e1ce0e2af5a21380946fdcf4d3",
+      "F01_pass": true,
+      "notes": "Reviews another permitted conversation. Historical group-size quote is weak support (F04). Earlier full v4 CFO failure not reproduced in this isolated baseline."
+    },
+    {
+      "case": "C_silent",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 26.8,
+      "sample_hash": "ab0c3f7dca0cf27d0398139becf6fb0bc80693cecd0da780f7ad45051e5bf0e8",
+      "F01_pass": false,
+      "notes": "Quotes confirmed non-testing/non-response, then recommends reviewing that same reply status. Reopens settled fact; selected unknown concerns another route. F01/action relevance regression despite improved quotation relevance."
+    }
+  ],
+  "validated_samples": 6,
+  "repairs": 0,
+  "source_unchanged": true,
+  "model_unchanged": true,
+  "gate_passed": false,
+  "decision": "Reject app adoption. Retain isolated prototype and failed evidence; no default-model change.",
+  "limits": "Six single-CFO development samples, not full meeting/held-out/stable success rate. Baseline uses v4 first-proposal builder without run_rounds independent-round suffix or other role/review calls; not a replay of the full earlier failing run. Projection and explicit metadata changed together; no isolated causal claim or complete-usefulness percentage.",
+  "verification": {
+    "targeted_tests_passed": 16,
+    "bandit_medium_high_findings": 0,
+    "format_check": "pass",
+    "new_dependencies": 0
+  }
+}

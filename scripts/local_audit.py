@@ -28,7 +28,9 @@ def main():
     branch = subprocess.check_output(
         ["git", "branch", "--show-current"], cwd=ROOT, text=True
     ).strip()
-    if not branch.startswith(("codex/sprint-4-", "codex/sprint-5-")) and branch not in {
+    if not branch.startswith(
+        ("codex/sprint-4-", "codex/sprint-5-", "codex/sprint-6-", "codex/sprint-7-")
+    ) and branch not in {
         "chatgpt/foundation-hardening",
         "main",
         "codex/operating-foundation-sprint",
@@ -132,7 +134,7 @@ def main():
             )
         run(
             "security-tests",
-            [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+            [sys.executable, str(ROOT / "scripts/run_tests.py"), "--docker"],
         )
         run("foundation-150", [sys.executable, "verify_system.py"])
         run(

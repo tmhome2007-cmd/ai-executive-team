@@ -1,0 +1,84 @@
+{
+  "source_commit": "114fe52",
+  "run": "audit-results/sprint7-reasoning/run-7ac313cdb0eb4fe1b17713f6d0da43db",
+  "technical": {
+    "scheduled": 9,
+    "completed": 9,
+    "validated": 9,
+    "stage_responses": 12,
+    "errors": 0,
+    "identity_unchanged": true,
+    "source_unchanged": true,
+    "semantic_review": "pending",
+    "merged": false,
+    "owner_accepted": false
+  },
+  "complete_usefulness": 6,
+  "denominator": 9,
+  "development_gate_passed": false,
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "repetition": 1,
+      "sample_sha256": "d3253cfdb725c7d6b2469fbb00c2e30c85abd4ab4a9cb93228f1da66253eab3e",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 2,
+      "sample_sha256": "f00e4e6f0848198b06474e2f45724048798b33262f4c528ef8165e72336cc4f7",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "A_as_tested",
+      "repetition": 3,
+      "sample_sha256": "0c5702bcee7c1068fc71a95b90b4738e7b147193260ae6c3fab6cb5469adda0c",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "B_replied",
+      "repetition": 1,
+      "sample_sha256": "f5c78cfbba87c1bad66a3bdea5a16f392a5f15d3757b501d4b578e0e48a4339b",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 2,
+      "sample_sha256": "cec71bbb9e0b07c8b3e4321e69deb20654ece399c28dc9cacacc6bfb0b674db7",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "B_replied",
+      "repetition": 3,
+      "sample_sha256": "5505c4c69e31aa517163022a08bf0759361df78563e6d9ce46603f8a959ac7a8",
+      "validated": true,
+      "complete_usefulness": false
+    },
+    {
+      "case": "C_silent",
+      "repetition": 1,
+      "sample_sha256": "e6734638fa54b658a818bbf02bb09e03cc4c61c820993c8dd6ba184470e6806f",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "C_silent",
+      "repetition": 2,
+      "sample_sha256": "854f4acb9d07dd275f75aeeaff38f46594acccb460ac1f6c981e72cb239df2ba",
+      "validated": true,
+      "complete_usefulness": true
+    },
+    {
+      "case": "C_silent",
+      "repetition": 3,
+      "sample_sha256": "5583f43549bd2875ea359c0d522e2cd587f746b0dc2435ad73becfeff8a913e6",
+      "validated": true,
+      "complete_usefulness": true
+    }
+  ]
+}

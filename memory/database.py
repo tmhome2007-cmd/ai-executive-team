@@ -844,6 +844,9 @@ def init_db() -> None:
     init_characters(cursor)
     init_organization(cursor)
     init_simulation(cursor)
+    from memory.decision_requests import init_decision_requests
+
+    init_decision_requests(cursor)
     conn.commit()
     init_activity(conn)
     conn.close()
@@ -1812,6 +1815,8 @@ def log_decision(
     executive_profiles: dict | None = None,
     source_ids: list[int] | None = None,
     discussion_messages: list[dict] | None = None,
+    expected_source_snapshot: dict | None = None,
+    expected_intake_day: tuple[str, str] | None = None,
 ) -> int:
     """
     Slaat een nieuwe beslissing op in de database en geeft de nieuwe rij-ID terug.
@@ -1831,6 +1836,19 @@ def log_decision(
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("BEGIN IMMEDIATE")
+        if expected_intake_day is not None:
+            from workflows.decision_intake import review_day
+            from memory.evidence import SourceContextChanged
+
+            timezone, day = expected_intake_day
+            if review_day(timezone) != day:
+                raise SourceContextChanged(
+                    "Current owner answers require a new daily review"
+                )
+        if expected_source_snapshot is not None:
+            from memory.evidence import require_source_snapshot
+
+            require_source_snapshot(cursor, source_ids, expected_source_snapshot)
         if workflow_key is not None:
             if not isinstance(workflow_key, str) or not 1 <= len(workflow_key) <= 128:
                 raise ValueError("Invalid decision workflow key")

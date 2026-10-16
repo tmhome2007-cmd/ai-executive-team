@@ -12,6 +12,14 @@ import json
 from contextlib import contextmanager
 
 
+def preparation_contract_sources():
+    """Read the router and owning workflow where preparation contracts now live."""
+    with open("api/decisions.py", encoding="utf-8") as router:
+        boundary = router.read()
+    with open("workflows/decision_preparation.py", encoding="utf-8") as workflow:
+        return boundary + "\n" + workflow.read()
+
+
 @contextmanager
 def suppress_executor_notifications():
     """
@@ -590,14 +598,20 @@ except Exception as e:
 # CHECK 17: STATIC CHECK — subprocess has resource limits beyond the timeout
 # -------------------------------------------------------------------
 try:
-    if "preexec_fn" in exec_content and "RLIMIT" in exec_content:
+    if (
+        all(
+            flag in worker_source_16
+            for flag in ('"--memory=256m"', '"--cpus=1"', '"--pids-limit=64"')
+        )
+        and "run_in_container(action_detail, _get_workspace_root())" in exec_content
+    ):
         log_pass(
-            "subprocess execution has CPU/memory resource limits (RLIMIT) beyond the wall-clock timeout"
+            "live execution delegates to a worker with fixed CPU, memory and process limits beyond its timeout"
         )
     else:
         log_fail(
             "Subprocess resource limit check",
-            "No RLIMIT/preexec_fn found — a runaway command could consume unlimited CPU/memory until the timeout fires.",
+            "Active worker must enforce fixed CPU, memory and process limits; an unused host helper is not evidence.",
         )
 except Exception as e:
     log_fail("Subprocess resource limit check crashed", str(e))
@@ -1425,7 +1439,7 @@ except Exception as e:
 # CHECK 48: STATIC CHECK — config test never prints Telegram token characters
 # -------------------------------------------------------------------
 try:
-    with open("test_config.py", "r", encoding="utf-8") as f:
+    with open("scripts/manual_checks/test_config.py", "r", encoding="utf-8") as f:
         test_config_content_48 = f.read()
     if "TELEGRAM_BOT_TOKEN[:10]" not in test_config_content_48:
         log_pass("test_config.py does not print any Telegram token prefix")
@@ -1920,16 +1934,17 @@ try:
         main_content_65,
         re.DOTALL,
     )
-    preparation_match = re.search(
-        r"def prepare_approved_decision.*?(?=\n\n@app\.|\Z)",
-        main_content_65,
-        re.DOTALL,
-    )
     reasoning_block = reasoning_match.group(0) if reasoning_match else ""
-    preparation_block = preparation_match.group(0) if preparation_match else ""
+    preparation_block = preparation_contract_sources()
 
     reasoning_safe = "agents_source=EXECUTIVE_AGENTS_NO_TOOLS" in reasoning_block
-    preparation_capable = "agents_source=EXECUTIVE_AGENTS" in preparation_block
+    preparation_capable = (
+        "agents=EXECUTIVE_AGENTS" in main_content_65
+        and "agents_source=self.dependencies.agents" in preparation_block
+        and "build_decision_preparation_router(verify_api_key, _preparation_dependencies)"
+        in main_content_65
+        and "dependencies=[Depends(verify_api_key)]" in preparation_block
+    )
     preserves_evidence = (
         'evidence_text=decision["task_description"]' in preparation_block
     )
@@ -1953,6 +1968,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_66 = f.read()
+    main_content_66 += "\n" + preparation_contract_sources()
 
     has_approve = '"/decisions/{decision_id}/approve"' in main_content_66
     has_reject = '"/decisions/{decision_id}/reject"' in main_content_66
@@ -2142,6 +2158,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_71 = f.read()
+    main_content_71 += "\n" + preparation_contract_sources()
 
     required = [
         'meeting_result.get("proposed_action_ids", [])',
@@ -2883,6 +2900,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_85 = f.read()
+    main_content_85 += "\n" + preparation_contract_sources()
     with open("workflows/meeting.py", "r", encoding="utf-8") as f:
         meeting_content_85 = f.read()
 
@@ -3333,6 +3351,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_93 = f.read()
+    main_content_93 += "\n" + preparation_contract_sources()
     with open("workflows/meeting.py", "r", encoding="utf-8") as f:
         meeting_content_93 = f.read()
 
@@ -3398,13 +3417,14 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_95 = f.read()
+    main_content_95 += "\n" + preparation_contract_sources()
     with open("tools/resource_request_tool.py", "r", encoding="utf-8") as f:
         resource_tool_content_95 = f.read()
 
     required_main = [
         "COMPATIBILITY RETRY — YOUR PREVIOUS RESPONSE WAS INVALID",
         "Invoke propose_resource_request NOW",
-        "Printed JSON is never",
+        "self._run_preparation_meeting(retry_prompt)",
         "retry_action_mismatch",
         "retry_resource_mismatch",
         "pseudo_resource_call",
@@ -3436,6 +3456,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_96 = f.read()
+    main_content_96 += "\n" + preparation_contract_sources()
 
     required = [
         "def _extract_resource_request_payloads",
@@ -3443,7 +3464,7 @@ try:
         'value.get("name") != "propose_resource_request"',
         "allowed_params = {",
         "propose_resource_request(",
-        "with action_provenance_scope(",
+        "with self.dependencies.action_provenance_scope(",
         "materialized_resource_ids",
         "pseudo_resource_call = False",
     ]
@@ -4322,6 +4343,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_109 = f.read()
+    main_content_109 += "\n" + preparation_contract_sources()
     with open("memory/database.py", "r", encoding="utf-8") as f:
         db_content_109 = f.read()
     with open("executive-dashboard/app/page.tsx", "r", encoding="utf-8") as f:
@@ -4431,6 +4453,7 @@ try:
         browser_tool_content_110 = f.read()
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_110 = f.read()
+    main_content_110 += "\n" + preparation_contract_sources()
     with open("workflows/meeting.py", "r", encoding="utf-8") as f:
         meeting_content_110 = f.read()
 
@@ -5590,6 +5613,7 @@ except Exception as e:
 try:
     with open("main.py", "r", encoding="utf-8") as f:
         main_content_128 = f.read()
+    main_content_128 += "\n" + preparation_contract_sources()
     with open("workflows/autonomous_followup.py", "r", encoding="utf-8") as f:
         followup_content_128 = f.read()
     with open("workflows/daily_research.py", "r", encoding="utf-8") as f:

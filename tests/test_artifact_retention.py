@@ -66,6 +66,8 @@ class ArtifactRetentionTests(unittest.TestCase):
                 self.assertEqual(
                     prune_generated_artifacts(now=now),
                     {
+                        "structured_decisions": 0,
+                        "evaluation_samples": 0,
                         "conversation_audio": 0,
                         "practice_artifacts": 0,
                         "logs": 1,

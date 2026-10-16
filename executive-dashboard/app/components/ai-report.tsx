@@ -1,7 +1,15 @@
 /** Compact report excerpts with access to full text; excerpts do not verify claims. */
 "use client";
 import { reviewSummary } from "../lib/review-summary";
+import DecisionBrief from "./decision-brief";
 export default function AiReport({ text }: { text: string }) {
+  const checklistWithProposals =
+    text.startsWith("Application checklist — not an executive recommendation\n") &&
+    text.includes("\n\nExecutive proposals — generated separately") &&
+    text.includes("\nFindings\nRecommended proposal (");
+  if (text.startsWith("Findings\nRecommended proposal (") || checklistWithProposals) {
+    return <DecisionBrief text={text} />;
+  }
   const report = reviewSummary(text);
   const sections = [
     [

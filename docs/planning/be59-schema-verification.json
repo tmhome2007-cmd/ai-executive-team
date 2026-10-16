@@ -1,0 +1,96 @@
+{
+  "source_commit": "81559e76042038f023f2c3fd25a3e08006c1639b",
+  "branch": "codex/sprint-7-actionable-schema",
+  "run_path": "audit-results/sprint7-schema/run-e6f751bc73c34102ba5b08091ca7e6ef",
+  "freeze_sha256": "771be8bebb00f5392ae54cfc2bf2a475c49c55c166f37cad51b6efd50a96bb7a",
+  "summary_sha256": "cf6bc19b1707409ae44e22c9138f81f2f7177246dce9867d5103d4e56c4de1c6",
+  "assessment_sha256": "f1c845138ba8f9dd00a7cbdbdc9c2e011dba7ffa6c38006d0ac83b4d214f03f6",
+  "source_hashes": {
+    "workflows/actionable_plan.py": "191d27880a3d10973e7588b82b0f34e3d84671aeb337928fab40acd36363c361",
+    "workflows/structured_decision.py": "d2770fdba45fe8524edd3287324d2f9a9624c6a05ebebdf1f38951031b26d37f",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "agents/executive_agents.py": "47476cd8007ea162b6d16a10c47bc40f736e6ad0789c21ac62fd1311179905dd",
+    "scripts/sprint7_schema_experiment.py": "789ee246b41d44846451598144b4ea9240e4688129232cc977aca1d1c622bfc6"
+  },
+  "model_digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+  "options": {
+    "temperature": 0,
+    "num_predict": 1200,
+    "num_ctx": 4096,
+    "seed": 47
+  },
+  "scope": "isolated canonical CEO; no prior speeches; not full three-role meetings",
+  "repetitions": 3,
+  "repairs": 0,
+  "counts": {
+    "baseline": {
+      "schema_valid": 9,
+      "validated": 9,
+      "errors": 0
+    },
+    "candidate": {
+      "schema_valid": 9,
+      "validated": 9,
+      "errors": 0
+    }
+  },
+  "denominator_per_variant": 9,
+  "per_case": {
+    "A_as_tested": {
+      "baseline": {
+        "schema_valid": 3,
+        "validated": 3,
+        "complete_usefulness": 0
+      },
+      "candidate": {
+        "schema_valid": 3,
+        "validated": 3,
+        "complete_usefulness": 0
+      }
+    },
+    "B_replied": {
+      "baseline": {
+        "schema_valid": 3,
+        "validated": 3,
+        "complete_usefulness": 0
+      },
+      "candidate": {
+        "schema_valid": 3,
+        "validated": 3,
+        "complete_usefulness": 0
+      }
+    },
+    "C_silent": {
+      "baseline": {
+        "schema_valid": 3,
+        "validated": 3,
+        "complete_usefulness": 0
+      },
+      "candidate": {
+        "schema_valid": 3,
+        "validated": 3,
+        "complete_usefulness": 0
+      }
+    }
+  },
+  "unique_outputs_per_variant": 3,
+  "complete_usefulness_passes": {
+    "baseline": 0,
+    "candidate": 0
+  },
+  "median_seconds": {
+    "baseline": 47.43,
+    "candidate": 67.43
+  },
+  "merge_eligible": false,
+  "merged": false,
+  "owner_accepted": false,
+  "held_out": false,
+  "production_integrated": false,
+  "tests": {
+    "new_contract": 6,
+    "experiment_integrity": 3,
+    "existing_structured": 10
+  },
+  "bandit_medium_high": 0
+}

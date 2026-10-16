@@ -1,0 +1,122 @@
+[
+  {
+    "function": "_limit_subprocess_resources",
+    "original_line": 74,
+    "category": "unused optional resource helper"
+  },
+  {
+    "function": "check_url_safety",
+    "original_line": 226,
+    "category": "expected rejection"
+  },
+  {
+    "function": "_open_workspace_parent_fd",
+    "original_line": 404,
+    "category": "cleanup and rethrow"
+  },
+  {
+    "function": "_execute_file_operation",
+    "original_line": 482,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_file_operation",
+    "original_line": 516,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_file_operation",
+    "original_line": 573,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_file_operation",
+    "original_line": 677,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_file_operation",
+    "original_line": 691,
+    "category": "persisted failure or uncertainty"
+  },
+  {
+    "function": "_execute_file_operation",
+    "original_line": 702,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_browser_action",
+    "original_line": 770,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_browser_action",
+    "original_line": 796,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_browser_action",
+    "original_line": 888,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_browser_action",
+    "original_line": 901,
+    "category": "persisted failure or uncertainty"
+  },
+  {
+    "function": "_execute_browser_action",
+    "original_line": 912,
+    "category": "notification fallback"
+  },
+  {
+    "function": "execute_action",
+    "original_line": 980,
+    "category": "persisted failure or uncertainty"
+  },
+  {
+    "function": "execute_action",
+    "original_line": 1016,
+    "category": "persisted failure or uncertainty"
+  },
+  {
+    "function": "_execute_claimed_action",
+    "original_line": 1078,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_claimed_action",
+    "original_line": 1114,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_claimed_action",
+    "original_line": 1149,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_claimed_action",
+    "original_line": 1185,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_claimed_action",
+    "original_line": 1222,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_claimed_action",
+    "original_line": 1249,
+    "category": "notification fallback"
+  },
+  {
+    "function": "_execute_claimed_action",
+    "original_line": 1261,
+    "category": "persisted failure or uncertainty"
+  },
+  {
+    "function": "_execute_claimed_action",
+    "original_line": 1274,
+    "category": "notification fallback"
+  }
+]

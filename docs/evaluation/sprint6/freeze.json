@@ -1,0 +1,41 @@
+{
+  "version": "sprint6-evaluation-freeze-v1",
+  "frozen_on": "2026-10-11",
+  "source_commit": "25bd893",
+  "files": {
+    "development-cases.json": "0408eac0d6b1e7a3467daece59b0e11ea72b3fd629833dbd619f00ec0d881245",
+    "held-out-cases.json": "80ca60a02be3cc129d12f58190f07f732a8cbfd45253dff2424327a197458fdc",
+    "rubric.json": "27002a78e0bedb2d3fa932b664e5e4f9a49f1ad3a7b8a40053bc8014e9786da7",
+    "baseline-prompt.txt": "a41c3c6b95a33532164f1797b6e10c519d2f9c23329c1480e6934e1447925099",
+    "legacy-output-quality-v2.txt": "1dac978ff25ddd3459458ebc59cb8b3814a287c6e7c5f6728af48086e1852b4c",
+    "legacy-quality-benchmark-v1.txt": "3a3d9b5b145b6b937be34bfefc4449a192535e71e6f56ac6270d3d5f524ca7dd"
+  },
+  "model": {
+    "tag": "llama3.1:latest",
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+    "endpoint": "http://localhost:11434",
+    "verified_using": "GET /api/tags only; no generation"
+  },
+  "generation": {
+    "transport": "Ollama loopback /api/generate; no proxy or redirects",
+    "baseline_format": "json",
+    "options": {
+      "temperature": 0,
+      "num_predict": 1200,
+      "num_ctx": 4096,
+      "seed": 47
+    },
+    "timeout_seconds": 120,
+    "stream": false,
+    "keep_alive": 0,
+    "other_options": "Ollama defaults remain; identity and explicit options do not guarantee deterministic outputs."
+  },
+  "input_serialization": "Prompt bytes followed by newline and json.dumps({id, question, sources, allowed_next_step}, ensure_ascii=False, sort_keys=True). Do not send evidence_contract, rubric, expected answers or unrelated memory to the model.",
+  "schedule": "Ascending case IDs, repetitions 1, 2, 3 per case; baseline then candidate for each scheduled slot. No tools, retrieval, company database or network outside loopback.",
+  "candidate_state": "Not implemented or frozen. BE-49 must freeze candidate prompt, JSON schema, adapter/checker source hashes and complete request settings after development tuning and before any held-out generation. No held-out run authorized by this manifest alone.",
+  "baseline_state": "Prompt and settings frozen; zero outputs generated.",
+  "held_out_state": "Zero generations or repairs. Authored and visible to implementer; not a blind external benchmark.",
+  "contamination_rule": "Record all inspected generation IDs and repair use in an append-only private ledger. A held-out case used for repair moves to development; never rewrite this freeze. Create a new version with genuinely new replacement cases and disclose contamination. Freeze successor before running. All old results remain.",
+  "run_gate": "Validate hashes and disjoint splits; re-resolve installed model digest before and after generation; freeze run Git SHA and candidate assets before held-out. Reject or label changed identity/configuration, changed assets, missing freeze or prior repair use. Retain aborted partial runs.",
+  "retention": "Raw outputs/errors and owner comments: ignored owner-only audit-results, 30-day retention under existing policy. Durable non-sensitive provenance, hashes and aggregate counts remain. No public business input, remote inference, downloads or spending."
+}

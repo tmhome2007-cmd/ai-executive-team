@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-14",
+  "input_freeze_commit": "8709035d397e09a0caa2424b1c0463cd14cc6e40",
+  "private_directory": "audit-results/sprint7-transfer/freeze-209e816162bd4347b5a1ecb39628cd14",
+  "case_ids": [
+    "transfer-03",
+    "transfer-04"
+  ],
+  "cases_sha256": "37fa5b874835273e83ffb31b9577b3f966baf4b4d2e43e4cda23f8c9b9720f8b",
+  "protocol_sha256": "abcd2536a1d64abc7301368f7ca281e66ea30e7f5001a181213effe02a6df897",
+  "model_outputs": 0,
+  "authorship_limit": "New fictional replacement tasks authored after the v12 code freeze and prior transfer failures. Author has seen the tasks; not blind external evaluation. No model outputs or further tuning from these replacements.",
+  "scope": "Replacement reserved first-user transfer; not independent executive planning",
+  "status": "Reserved after original cases promoted; model freeze/inference pending."
+}

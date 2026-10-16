@@ -1,7 +1,7 @@
 [
   {
     "title": "BE-24 · AI quality benchmarks and prompt versions",
-    "description": "Sprint 4. Dependencies: Existing practice contracts and feedback (BE-20–22). Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: Existing practice contracts and feedback (BE-20–22). Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Version prompts, model/configuration and rubric. Run ten fixed fictional fixtures three times each locally; show failures and denominators, preserve reports, distinguish deterministic checks from unverified model judgements. Compare only matching rubrics; allow prompt rollback.",
     "assignee": "owner",
     "priority": "high",
@@ -9,7 +9,7 @@
   },
   {
     "title": "BE-25 · Versioned reusable executive skills",
-    "description": "Sprint 4. Dependencies: BE-24. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: BE-24. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Record procedure versions, prerequisites, permitted task types, limitations and source sample/review IDs. Owner accepts a version after two reviewed examples; test reuse on a third unfamiliar fictional example. Revocation prevents future selection. A skill never grants tools, spending or launch authority.",
     "assignee": "owner",
     "priority": "high",
@@ -17,7 +17,7 @@
   },
   {
     "title": "BE-26 · Private deliverable workspaces",
-    "description": "Sprint 4. Dependencies: BE-24 and BE-31 artifact rules. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: BE-24 and BE-31 artifact rules. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Create owner-only text/Markdown artifacts with hashes, versions and source/rubric links. Download and compare revisions. Reject traversal, symlink escapes and unsafe active content; never execute generated code. Apply 30-day generated-file retention while preserving durable review metadata and reporting expired content honestly.",
     "assignee": "owner",
     "priority": "high",
@@ -25,7 +25,7 @@
   },
   {
     "title": "BE-27 · Run inspector and guarded continuation",
-    "description": "Sprint 4. Dependencies: Existing checkpoints/activity ledger; BE-24 version metadata. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: Existing checkpoints/activity ledger; BE-24 version metadata. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Show step status, duration, error category, pending input and prompt/model version without exposing secrets or raw private prompts by default. Stop and resume disposable local generation without duplicate results. Unknown external outcomes require reconciliation, never automatic replay. Explain laptop sleep and interrupted runs.",
     "assignee": "owner",
     "priority": "high",
@@ -33,7 +33,7 @@
   },
   {
     "title": "BE-28 · Reviewed workflow templates and research queue",
-    "description": "Sprint 4. Dependencies: BE-25–27. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: BE-25–27. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Provide one evidence-to-private-practice template with explicit inputs, outputs and gates. Queue proposed sources separately from fetched records; distinguish buyer evidence from platform documentation. Validate dependencies, reject cycles and unsupported capabilities; retries preserve approvals. No paid search, publishing or customer contact.",
     "assignee": "owner",
     "priority": "medium",
@@ -41,7 +41,7 @@
   },
   {
     "title": "BE-29 · Evidence-linked company knowledge view",
-    "description": "Sprint 4. Dependencies: Existing reconciled memory/source registry; BE-25. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: Existing reconciled memory/source registry; BE-25. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Use existing SQLite records to navigate goals, decisions, actions, outcomes, lessons and skills. Explain retrieved sources and timestamps; surface conflicts, expiry and corrections. Generated relationships remain unverified until reviewed. Corrected facts stop influencing current retrieval while historical provenance remains visible.",
     "assignee": "owner",
     "priority": "medium",
@@ -49,7 +49,7 @@
   },
   {
     "title": "BE-30 · 3D office first floor prototype",
-    "description": "Sprint 4. Dependencies: Existing identity profiles and activity stream; BE-31 asset review. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: Existing identity profiles and activity stream; BE-31 asset review. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Render one floor and one existing executive with recorded activity and clear idle/unknown states. Preserve Kai’s specified appearance and approved identities. Pause when hidden; retain accessible 2D fallback. Measure responsiveness on the owner’s Mac. Animation is fictional presentation, never proof of work; full office, all employees and personal-life simulation expansion are later increments.",
     "assignee": "owner",
     "priority": "low",
@@ -57,7 +57,7 @@
   },
   {
     "title": "BE-31 · Sprint contracts, privacy and reuse review",
-    "description": "Sprint 4. Dependencies: None; begins Sprint 4. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: None; begins Sprint 4. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Map new entities and use cases to existing approvals, memory and checkpoints; avoid duplicate authority ledgers. Define artifact retention and recovery, skill revocation and evaluation comparability. Before copying code/assets or adding dependencies record source commit, license, attribution and vulnerability review. Keep €0 budget and local processing; obtain explicit approval for any cloud or paid change.",
     "assignee": "owner",
     "priority": "high",
@@ -65,7 +65,7 @@
   },
   {
     "title": "BE-32 · Sprint integration audit and simple owner review",
-    "description": "Sprint 4. Dependencies: BE-24–31 completed or explicitly deferred by owner. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: BE-24–31 completed or explicitly deferred by owner. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Audit fixable conceptual, security, privacy and bug issues across the final changes using disposable data. Test authentication, artifact boundaries, recovery, repeated generation and revoked skills; show actual output examples. Provide short ./company instructions. Fix project findings; list upstream limitations separately. Owner review precedes merge.",
     "assignee": "owner",
     "priority": "high",
@@ -73,7 +73,7 @@
   },
   {
     "title": "BE-33 · Sprint 4 retrospective and next-sprint planning",
-    "description": "Sprint 4. Dependencies: BE-32 and owner feedback. Planning only; no business execution authority. See SPRINT_4_PLAN.md.",
+    "description": "Sprint 4. Dependencies: BE-32 and owner feedback. Planning only; no business execution authority. See README.md#development-status.",
     "acceptance_criteria": "Record intended versus delivered scope, actual test evidence, confusing owner steps, quality failures and improvements. Agree concrete next-sprint actions; never label backlog or prototypes fully complete. Update README and board statuses with review/merge evidence.",
     "assignee": "owner",
     "priority": "medium",

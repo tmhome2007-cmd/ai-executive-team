@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-13",
+  "input_freeze_commit": "50237251fd35be88375dd32f9fbec229845866e3",
+  "private_directory": "/Users/alpha/Ai village/AI Executive Team V2CHAT/audit-results/sprint7-transfer/freeze-cb14d0207b074585a66285a57e0cc932",
+  "case_ids": [
+    "transfer-01",
+    "transfer-02"
+  ],
+  "cases_sha256": "f19b6bb04f66b6ea56fa42980f4cc420aef25553bb2f067c51bb552a59d24af0",
+  "protocol_sha256": "7276bb076bbb7cacdd18938949db75998d6cfcb84f69d50b17352732ed2bd35a",
+  "model_outputs": 0,
+  "authorship_limit": "Codex author has seen the cases; not blind or independent external assessment. Cases have not been shown to either model or used for code/prompt tuning.",
+  "scope": "first-user helper transfer, not generic all-domain decisions",
+  "status": "Reserved; candidate/model freeze and evaluation remain pending."
+}

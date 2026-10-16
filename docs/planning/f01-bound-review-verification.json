@@ -1,0 +1,96 @@
+{
+  "experiment": "F01 bound unresolved target and workflow owner check",
+  "run": "audit-results/sprint7-reasoning/run-88e04a7489ae4a45b5465437509440c9",
+  "source_commit": "58b99923b1a47763d2ee670bb779eee0ce7f22b8",
+  "source_hashes": {
+    "workflows/bound_review.py": "e6f5e1087864e4fa02d34bd20ab38cec09555becee213073c6dfa76b6ba2d59f",
+    "workflows/independent_decision.py": "7c266604efcea316af07ba96edb7f13cdb9900108615d2cd698c5921a1ea7bb9",
+    "workflows/structured_decision.py": "7157dd60cd837eda334f19327ea136523af563619c2b6d9487853096cf3f6833",
+    "workflows/plan_delivery.py": "c1ca43ed8b4323f5c08e36be6ea61d10370eb0c45ef9e44e057db8203a86c8fc",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "workflows/quality_benchmark.py": "c177a2b3b438b45b84edb690aff5968db5884f1dc624ed47f3ca634ead342672",
+    "workflows/local_model_identity.py": "cbb0c91531012f25b72106092984540daee15568e19a2de4628543b1da958ac0",
+    "scripts/sprint7_schema_experiment.py": "b22b89dfe4472b2855a7a9374f09097fffcf28d83ed67660e87ef6fe4f494cab",
+    "scripts/sprint7_bound_review_experiment.py": "e729fb8222829ba8a6ae369174e6ea9033d703075d00c419be9c28e158ade747"
+  },
+  "model_digest": "7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6",
+  "reviewer": "Codex analyst, not owner acceptance",
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 23.84,
+      "sample_hash": "18be260b7d46d70824718d7b068bc28873bb674443061a96d44dc7b79daa8616",
+      "F01_observed_pass": true,
+      "citation_relevance": "relevant-to-identity-uncertainty",
+      "notes": "Keeps founder/CEO identity unresolved; private contact-status review. Generic reason but correction quote concerns the identity/status uncertainty."
+    },
+    {
+      "case": "A_as_tested",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 19.55,
+      "sample_hash": "e6c4b39f18e902a0226c80a1018b17634109e7e8c56f975303e21bea0d59e406",
+      "F01_observed_pass": true,
+      "citation_relevance": "weak",
+      "notes": "Correct unresolved contact-status ID and paired owner review. No identity invention or known-fact reopening. Historical group-size quote does not support current responsiveness; citation relevance regresses versus baseline."
+    },
+    {
+      "case": "B_replied",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 21.38,
+      "sample_hash": "e4ec5ee46102f675c4743ebab32f12a808ca2dd5334da0beecfdadc6a5a326ef",
+      "F01_observed_pass": true,
+      "citation_relevance": "relevant",
+      "notes": "Recent reply remains settled; asks about own current case, with matching correction quote."
+    },
+    {
+      "case": "B_replied",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 20.98,
+      "sample_hash": "876898f8401d6a1db1dbd7566480664e54ae42370c8900af382689c5dbee0010",
+      "F01_observed_pass": true,
+      "citation_relevance": "relevant",
+      "notes": "Chooses own-current-case ID with relevant quote and coherent reason. Detailed private step is supplied by catalog, not independently generated. No semantic gain over baseline demonstrated."
+    },
+    {
+      "case": "C_silent",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 22.7,
+      "sample_hash": "7ae088cf5674b72c8b381810740bd9191db476f6ccea2cf930bbf25ad3dcb30f",
+      "F01_observed_pass": true,
+      "citation_relevance": "weak",
+      "notes": "Reviews another permitted conversation rather than settled reply status. Historical group-size citation is weak support. Earlier full v4 CFO failure not reproduced in this isolated baseline."
+    },
+    {
+      "case": "C_silent",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 22.01,
+      "sample_hash": "b3515234ca0717613cd2d23aad59d89502c7eefd5e04ba2023d191f534ac327d",
+      "F01_observed_pass": true,
+      "citation_relevance": "weak",
+      "notes": "Chooses alternative-route ID and matching private check, preserving known non-response and no-contact boundary. Generic efficacy wording is weaker than the required real-case feedback objective. Group-size quote does not support current permitted/eligible contacts. No complete usefulness pass."
+    }
+  ],
+  "validated_samples": 6,
+  "raw_samples": 6,
+  "repairs": 0,
+  "source_unchanged": true,
+  "model_unchanged": true,
+  "candidate_binding_passed": true,
+  "candidate_semantically_better_than_baseline": false,
+  "adoption_gate_passed": false,
+  "decision": "Retain isolated prototype; no app adoption. Bound checks work by construction with supplied correct state, and three candidate free reasons do not reopen known facts. Baseline also preserves these facts. Citation relevance still weak and regresses in A.",
+  "verification": {
+    "targeted_tests_passed": 21,
+    "format": "pass",
+    "bandit_medium_high_findings": 0,
+    "new_dependencies": 0
+  },
+  "limits": "Three exposed development cases, one CFO proposal/arm, same-setting single attempts. Not full team, held-out, stable success rates or owner acceptance. Application supplies unresolved list and step wording; model chooses ID/reason/citation/assumption. Changed prompt and schema together. No complete-usefulness percentage. Free reasons can still violate facts, as demonstrated by an offline boundary test."
+}

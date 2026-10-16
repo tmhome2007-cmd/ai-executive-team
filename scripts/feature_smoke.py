@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import socket
 import subprocess
@@ -39,6 +40,15 @@ def main(argv=None):
     report.mkdir(mode=0o700, parents=True)
     results = []
     with tempfile.TemporaryDirectory(prefix="early-browser-") as raw:
+        dashboard = Path(raw).resolve() / "dashboard"
+        shutil.copytree(
+            ROOT / "executive-dashboard",
+            dashboard,
+            ignore=shutil.ignore_patterns("node_modules", ".next", ".git", ".env*"),
+        )
+        (dashboard / "node_modules").symlink_to(
+            ROOT / "executive-dashboard/node_modules", target_is_directory=True
+        )
         env = dict(os.environ)
         env.update(
             NEXT_PUBLIC_API_BASE="http://127.0.0.1:8001",
@@ -86,7 +96,7 @@ def main(argv=None):
             if not run(
                 "production-build",
                 ["npm", "run", "build", "--", "--webpack"],
-                ROOT / "executive-dashboard",
+                dashboard,
             ):
                 return 1
             with socket.socket() as reserved:
@@ -106,7 +116,7 @@ def main(argv=None):
                         "--port",
                         str(port),
                     ],
-                    cwd=ROOT / "executive-dashboard",
+                    cwd=dashboard,
                     env=env,
                     stdout=log,
                     stderr=subprocess.STDOUT,

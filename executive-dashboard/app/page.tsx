@@ -12,6 +12,10 @@ import Experiments from "./components/experiments";
 import OrganizationalWork from "./components/organizational-work";
 import CompanyKnowledge from "./components/company-knowledge";
 import CompanyRecords, { type ExecutiveProfile } from "./components/company-records";
+import DecisionIntake, { type ConfirmedIntake } from "./components/decision-intake";
+import DecisionRequestRecovery, {
+  useDecisionRequestRecovery,
+} from "./components/decision-request-recovery";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(
   /\/$/,
@@ -1668,6 +1672,8 @@ export default function DashboardPage() {
   // --- Ad-hoc decision form state ---
   const [topic, setTopic] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
+  const [structuredDecision, setStructuredDecision] = useState(false);
+  const [confirmedIntake, setConfirmedIntake] = useState<ConfirmedIntake | null>(null);
   const [selectedAgents, setSelectedAgents] = useState<string[]>(["cso", "cfo", "ceo"]);
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [selectedMeetingType, setSelectedMeetingType] = useState("strategy");
@@ -1676,6 +1682,12 @@ export default function DashboardPage() {
   );
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DecisionResponse | null>(null);
+  const [decisionRequestUncertain, setDecisionRequestUncertain] = useState(false);
+  const requestRecovery = useDecisionRequestRecovery(
+    API_BASE,
+    apiKey,
+    handleAuthFailure,
+  );
   const [error, setError] = useState<string | null>(null);
 
   const toggleAgent = (key: string) => {
@@ -1696,9 +1708,24 @@ export default function DashboardPage() {
       return;
     }
 
+    if (requestRecovery.requestId) {
+      setError(
+        "Check the current request and close recovery before starting another decision.",
+      );
+      return;
+    }
+    const submittedRequest = requestRecovery.begin();
+    if (!submittedRequest) {
+      setError(
+        "Another request is active. Check its status before starting a new decision.",
+      );
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
+    setDecisionRequestUncertain(false);
+    let outcomeUncertain = true;
 
     try {
       const response = await fetch(`${API_BASE}/decisions/trigger`, {
@@ -1708,26 +1735,48 @@ export default function DashboardPage() {
           "X-API-Key": apiKey || "",
         },
         body: JSON.stringify({
+          workflow_run_id: submittedRequest,
           topic,
+          intake_confirmation: confirmedIntake,
+          source_ids: confirmedIntake?.source_ids || [],
           task_description: taskDescription,
+          output_mode:
+            structuredDecision && selectedMeetingType === "strategy"
+              ? "structured"
+              : "legacy",
           meeting_type: selectedMeetingType,
           agent_keys: selectedAgents,
           goal_id: selectedGoalId ? Number(selectedGoalId) : null,
         }),
       });
 
+      if (!requestRecovery.isActive(submittedRequest)) return;
       if (response.status === 401) {
         handleAuthFailure();
         setError("Invalid key — please try again.");
         return;
       }
 
+      if (response.status === 202) {
+        const state = await response.json();
+        if (!requestRecovery.isActive(submittedRequest)) return;
+        requestRecovery.accept(state);
+        setDecisionRequestUncertain(true);
+        fetchDashboardData();
+        return;
+      }
       if (!response.ok) {
+        outcomeUncertain =
+          response.status >= 500 || response.status === 408 || response.status === 409;
         const detail = await response.json().catch(() => null);
         throw new Error(detail?.detail || `Error: ${response.statusText}`);
       }
 
       const data: DecisionResponse = await response.json();
+      if (!requestRecovery.isActive(submittedRequest)) return;
+      outcomeUncertain = false;
+      setLoading(false);
+      requestRecovery.clear();
       setResult(data);
       fetchDashboardData();
       if (apiKey) {
@@ -1735,9 +1784,15 @@ export default function DashboardPage() {
         fetchActionHistory(apiKey);
       }
     } catch (err: unknown) {
+      if (!requestRecovery.isActive(submittedRequest)) return;
+      if (!outcomeUncertain) {
+        setLoading(false);
+        requestRecovery.clear();
+      }
+      setDecisionRequestUncertain(outcomeUncertain);
       setError(errorMessage(err) || "An unknown error occurred.");
     } finally {
-      setLoading(false);
+      if (requestRecovery.isActive(submittedRequest)) setLoading(false);
     }
   };
 
@@ -2965,6 +3020,26 @@ export default function DashboardPage() {
         {/* Ad-hoc decision trigger form */}
         <section hidden={view !== "decisions"} className="space-y-6">
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4">
+            <DecisionIntake
+              apiBase={API_BASE}
+              apiKey={apiKey || ""}
+              onInvalidate={() => {
+                if (confirmedIntake) {
+                  setConfirmedIntake(null);
+                  setTaskDescription("");
+                }
+              }}
+              onConfirmed={(value, brief) => {
+                setTopic(value.request.slice(0, 200));
+                setTaskDescription(brief);
+                setConfirmedIntake(value);
+                setSelectedMeetingType("strategy");
+                setStructuredDecision(true);
+                setSelectedAgents(["cso", "cfo", "ceo"]);
+                setSelectedGoalId("");
+                setError(null);
+              }}
+            />
             <h2 className="text-lg font-semibold">Start New Ad-Hoc Decision</h2>
 
             {result && (
@@ -3054,6 +3129,24 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {(decisionRequestUncertain || requestRecovery.requestId) && (
+              <DecisionRequestRecovery
+                recovery={requestRecovery}
+                onRefreshHistory={() => {
+                  fetchDashboardData();
+                  document
+                    .getElementById("decision-history")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                onClosed={() => {
+                  setDecisionRequestUncertain(false);
+                  setError(null);
+                  setLoading(false);
+                  fetchDashboardData();
+                }}
+              />
+            )}
+
             <form onSubmit={handleTriggerDecision} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">
@@ -3110,11 +3203,25 @@ export default function DashboardPage() {
                 </label>
                 <textarea
                   value={taskDescription}
-                  onChange={(e) => setTaskDescription(e.target.value)}
+                  onChange={(e) => {
+                    setTaskDescription(e.target.value);
+                    setConfirmedIntake(null);
+                  }}
                   rows={3}
                   placeholder="Provide a detailed explanation of the situation and question..."
                   className="w-full rounded-md border border-gray-700 bg-gray-800 text-gray-100 p-2 placeholder-gray-500"
                 />
+                {selectedMeetingType === "strategy" && (
+                  <label className="flex items-center gap-2 text-sm text-gray-300 mt-3">
+                    <input
+                      type="checkbox"
+                      checked={structuredDecision}
+                      onChange={(event) => setStructuredDecision(event.target.checked)}
+                    />
+                    Structured private brief (up to four roles; preserves proposals and
+                    objections)
+                  </label>
+                )}
               </div>
 
               <div>
@@ -3164,7 +3271,7 @@ export default function DashboardPage() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || Boolean(requestRecovery.requestId)}
                 className="w-full sm:w-auto px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
                 {loading
@@ -3176,7 +3283,7 @@ export default function DashboardPage() {
         </section>
         {/* Decision history */}
         <section hidden={view !== "decisions"} className="space-y-6">
-          <div>
+          <div id="decision-history">
             <h2 className="text-xl font-bold mb-4">Decision History</h2>
             <div className="space-y-4">
               {history.length === 0 && (

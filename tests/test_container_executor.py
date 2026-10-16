@@ -43,6 +43,8 @@ class ContainerWorkerTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0)
                 args = mocked.call_args.args[0]
                 self.assertEqual(args[0], "/usr/bin/docker")
+                for limit in ["--memory=256m", "--cpus=1", "--pids-limit=64"]:
+                    self.assertIn(limit, args)
                 self.assertIn("--network=none", args)
                 self.assertIn("--read-only", args)
                 self.assertIn("--cap-drop=ALL", args)

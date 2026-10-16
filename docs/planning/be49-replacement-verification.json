@@ -1,0 +1,22 @@
+{
+  "source_commit": "2d17f72",
+  "private_run_path": "audit-results/sprint6-evaluation/held_out-f55f62309bc8433f865430bf7bb7ed17",
+  "case_hash": "0714de080acad4b65c97b5c6adf4065b20cdef4b9e89d9f02d4d4897b7fbc7b9",
+  "freeze_hash": "c433be17d28b21b3400cf0b6e065e208e71ad9b1d61aa1000a4a36c6481ad5b0",
+  "denominator_per_variant": 3,
+  "variants": {
+    "baseline": {
+      "schema_pass": 3,
+      "validated_contract": 3,
+      "errors": 0
+    },
+    "candidate": {
+      "schema_pass": 3,
+      "validated_contract": 3,
+      "errors": 0
+    }
+  },
+  "no_repairs": true,
+  "limit": "One fresh authored scenario, not blind external validation or a new eight-case benchmark. No relabelling the original failed assessment or comparing different checker scores.",
+  "owner_usefulness": "unscored"
+}
