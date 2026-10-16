@@ -24,6 +24,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [config.py](../config.py) | Environment configuration and startup validation; never log credential values. |
 | [executive-dashboard/app/components/agile-board.tsx](../executive-dashboard/app/components/agile-board.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/ai-report.tsx](../executive-dashboard/app/components/ai-report.tsx) | Dashboard component, library or style; see filename and source. |
+| [executive-dashboard/app/components/application-answer.tsx](../executive-dashboard/app/components/application-answer.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/business-discovery.tsx](../executive-dashboard/app/components/business-discovery.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/business-source-context.tsx](../executive-dashboard/app/components/business-source-context.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/components/character-avatar.tsx](../executive-dashboard/app/components/character-avatar.tsx) | Dashboard component, library or style; see filename and source. |
@@ -49,6 +50,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [executive-dashboard/app/globals.css](../executive-dashboard/app/globals.css) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/layout.tsx](../executive-dashboard/app/layout.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/lib/business-proposals.ts](../executive-dashboard/app/lib/business-proposals.ts) | Dashboard component, library or style; see filename and source. |
+| [executive-dashboard/app/lib/checklist-summary.ts](../executive-dashboard/app/lib/checklist-summary.ts) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/lib/review-summary.ts](../executive-dashboard/app/lib/review-summary.ts) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/app/page.tsx](../executive-dashboard/app/page.tsx) | Dashboard component, library or style; see filename and source. |
 | [executive-dashboard/eslint.config.mjs](../executive-dashboard/eslint.config.mjs) | Dashboard component, library or style; see filename and source. |
@@ -126,7 +128,10 @@ See [the developer guide](DEVELOPMENT.md).
 | [scripts/sprint3_practice_smoke.py](../scripts/sprint3_practice_smoke.py) | Optional real local-model examples on disposable data; never owner acceptance. |
 | [scripts/sprint5_private_examples.py](../scripts/sprint5_private_examples.py) | Tool-free local BE-35 drafts for owner review; no company database writes. |
 | [scripts/sprint6_evaluation.py](../scripts/sprint6_evaluation.py) | Explicit local-only evaluation with immutable freezes and retained failed slots. |
+| [scripts/sprint7_bound_review_experiment.py](../scripts/sprint7_bound_review_experiment.py) | Opt-in single-CFO comparison of free recommendations and bound unknown checks. |
 | [scripts/sprint7_delivery_experiment.py](../scripts/sprint7_delivery_experiment.py) | Freeze a two-stage delivery candidate against the retained intake variants. |
+| [scripts/sprint7_evidence_review_experiment.py](../scripts/sprint7_evidence_review_experiment.py) | Opt-in paired F04 development probe; no framework install or model judging. |
+| [scripts/sprint7_fact_projection_experiment.py](../scripts/sprint7_fact_projection_experiment.py) | Opt-in local F01 comparison; explicit reviewed spans, no API integration. |
 | [scripts/sprint7_independent_experiment.py](../scripts/sprint7_independent_experiment.py) | Freeze five paired sequential/independent meetings on development inputs. |
 | [scripts/sprint7_intake_experiment.py](../scripts/sprint7_intake_experiment.py) | Freeze and assess the same contact variants after deterministic owner intake. |
 | [scripts/sprint7_schema_experiment.py](../scripts/sprint7_schema_experiment.py) | Freeze and run one explicit local-only three-variant schema comparison. |
@@ -143,6 +148,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_artifact_retention.py](../tests/test_artifact_retention.py) | Regression checks for artifact retention. |
 | [tests/test_atomic_action_claim.py](../tests/test_atomic_action_claim.py) | Exercise real SQLite contention at the owner-approval execution gate. |
 | [tests/test_backup_recovery.py](../tests/test_backup_recovery.py) | Verify SQLite backup recovery, retention and unsafe path rejection. |
+| [tests/test_bound_review.py](../tests/test_bound_review.py) | Wrong action/unknown links fail without regex-based semantic claims. |
 | [tests/test_business_discovery.py](../tests/test_business_discovery.py) | Disposable owner-controlled discovery; no inference/network or real execution. |
 | [tests/test_business_guidance.py](../tests/test_business_guidance.py) | Owner next steps reflect current source, assessment and permission gates. |
 | [tests/test_capabilities.py](../tests/test_capabilities.py) | Synthetic provider probes and real SQLite approval/claim scope gates. |
@@ -161,6 +167,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_encrypted_backup.py](../tests/test_encrypted_backup.py) | Regression checks for encrypted backup. |
 | [tests/test_evaluation_protocol.py](../tests/test_evaluation_protocol.py) | Freeze integrity and assessment-input isolation, without model calls. |
 | [tests/test_evidence.py](../tests/test_evidence.py) | Regression checks for evidence. |
+| [tests/test_evidence_review.py](../tests/test_evidence_review.py) | Evidence gaps are honest outputs; exact quotes are not semantic certification. |
 | [tests/test_executive_skills.py](../tests/test_executive_skills.py) | Real SQLite proof of review-bound skill reuse and revocation boundaries. |
 | [tests/test_executor_observability.py](../tests/test_executor_observability.py) | Safe failure events and durable uncertainty under notification/persistence faults. |
 | [tests/test_experiments.py](../tests/test_experiments.py) | Disposable experiments: evidence, risk enforcement, approval binding and honest gaps. |
@@ -180,6 +187,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [tests/test_quality_benchmark.py](../tests/test_quality_benchmark.py) | Regression coverage for benchmark comparability, failures and private snapshots. |
 | [tests/test_research_encoding.py](../tests/test_research_encoding.py) | Real byte decoding with mocked transport; no external requests. |
 | [tests/test_review_demo.py](../tests/test_review_demo.py) | Demo shutdown reaps only its children and clears only its own runtime record. |
+| [tests/test_reviewed_evidence.py](../tests/test_reviewed_evidence.py) | Explicit supersession must not erase unrelated evidence or guess identity. |
 | [tests/test_run_inspector.py](../tests/test_run_inspector.py) | Private stop/continue fencing, cached recovery and metadata privacy. |
 | [tests/test_sprint3_practice_evidence.py](../tests/test_sprint3_practice_evidence.py) | Fixed rubrics, exact source attribution and representative useful deliverables. |
 | [tests/test_sprint4_integration.py](../tests/test_sprint4_integration.py) | Combined Sprint 4 privacy and recovery checks using disposable company data. |
@@ -211,6 +219,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [workflows/action_executor.py](../workflows/action_executor.py) | Claimed action execution with constrained file, browser and process boundaries. |
 | [workflows/actionable_plan.py](../workflows/actionable_plan.py) | Small experimental owner-plan contract; no action execution or API integration. |
 | [workflows/autonomous_followup.py](../workflows/autonomous_followup.py) | Scheduled outcome follow-ups using persisted company records. |
+| [workflows/bound_review.py](../workflows/bound_review.py) | Experimental model selection of a review target; no free-form action execution. |
 | [workflows/business_discovery.py](../workflows/business_discovery.py) | Explicit owner-run local inference, without tools, browsing or task execution. |
 | [workflows/business_research_contract.py](../workflows/business_research_contract.py) | Bounded service hypotheses and source-exact quotes; no inferred market facts. |
 | [workflows/business_revision_contract.py](../workflows/business_revision_contract.py) | Revision formatting and bounded checks; owner assessment remains separate. |
@@ -224,6 +233,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [workflows/discussion_contracts.py](../workflows/discussion_contracts.py) | Fixed, phase-specific published discussion contracts, separate from strategy meetings. |
 | [workflows/discussion_rounds.py](../workflows/discussion_rounds.py) | Opt-in proposal -> critique -> revision -> CEO synthesis, with durable role steps. |
 | [workflows/durable_task.py](../workflows/durable_task.py) | CrewAI task persistence without replaying an interrupted tool invocation. |
+| [workflows/evidence_review.py](../workflows/evidence_review.py) | Experimental explicit premise/citation and separate decision rationale. |
 | [workflows/execution_lock.py](../workflows/execution_lock.py) | Cross-process locking for action execution claims. |
 | [workflows/executive_planning.py](../workflows/executive_planning.py) | Tool-free planning and durable, dependency-aware recommendation dispatch. |
 | [workflows/executive_skills.py](../workflows/executive_skills.py) | Local CSO drafting of proposed procedures from exact reviewed examples. |
@@ -239,6 +249,7 @@ See [the developer guide](DEVELOPMENT.md).
 | [workflows/practice_deliverables.py](../workflows/practice_deliverables.py) | Small representative contract checks, not a universal AI truth evaluator. |
 | [workflows/quality_benchmark.py](../workflows/quality_benchmark.py) | Fictional local-model contract measurements, never approval or truth certification. |
 | [workflows/research_queue.py](../workflows/research_queue.py) | Explicit owner public reads with durable payload recovery and atomic evidence linking. |
+| [workflows/reviewed_evidence.py](../workflows/reviewed_evidence.py) | Experimental explicit supersession of source excerpts; no automatic fact extraction. |
 | [workflows/step_checkpoints.py](../workflows/step_checkpoints.py) | Crash-safe step claim ledger. |
 | [workflows/structured_decision.py](../workflows/structured_decision.py) | Tool-free local schema-constrained decision contributions and attributed briefs. |
 | [workflows/task_guide_contract.py](../workflows/task_guide_contract.py) | Render only approved task functions; model drafts example text and FAQs. |

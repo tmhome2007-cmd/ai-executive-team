@@ -78,12 +78,35 @@ class FirstUserChecklistTests(unittest.TestCase):
                     self.assertIn(f"Owner step — {minutes} minutes", text)
                     self.assertNotIn("1. Owner", text)
                 else:
-                    self.assertIn("Record today's owner confirmation", text)
+                    self.assertIn("Tool readiness: already confirmed by you", text)
+                    self.assertNotIn("Record today's owner confirmation", text)
                     self.assertNotIn("Use a safe fictional example", text)
                     self.assertEqual("Draft message" in text, minutes >= 30)
                     estimates = re.findall(r"Owner — (\d+) minutes", text)
                     self.assertGreaterEqual(len(estimates), 2)
                     self.assertLessEqual(sum(map(int, estimates)), minutes)
+
+    def test_short_answer_has_no_invented_context_or_interest_and_a_private_fallback(
+        self,
+    ):
+        text = preview(lead_status="silent", tool_status="working", owner_minutes=30)[
+            "checklist"
+        ]
+        short = text.split("Quick answer — application guidance\n", 1)[1].split(
+            "\nEnd quick answer", 1
+        )[0]
+        self.assertIn(
+            "First step: Review existing messages for another possible tester", short
+        )
+        self.assertIn("does not establish their interest", short)
+        self.assertIn("Neither access nor permission is established", short)
+        self.assertIn("No saved project records selected", short)
+        self.assertIn("15 minutes", short)
+        self.assertNotIn("Record today's owner confirmation", short)
+        outage = preview(
+            lead_status="recent_reply", tool_status="unavailable", owner_minutes=30
+        )["checklist"]
+        self.assertIn("First step: Keep invitations paused", outage)
 
     def test_full_correction_is_bound_to_review_and_missing_link_is_not_invented(self):
         correction = "The contact never tested the tool and never replied afterward."

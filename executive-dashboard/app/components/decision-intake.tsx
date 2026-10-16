@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ApplicationAnswer from "./application-answer";
 
 export interface IntakeValue {
   intent: "first_user";
@@ -159,9 +160,14 @@ export default function DecisionIntake({
           className="block w-full bg-gray-800 rounded p-2 mt-1"
         />
       </label>
+      <p className="text-sm text-amber-200">
+        {sourceIds.length
+          ? `${sourceIds.length} project record(s) selected.`
+          : "No saved project records selected. Add relevant facts below so the team can consider what your product does and what you have already tried."}
+      </p>
       <details>
         <summary className="cursor-pointer text-sm">
-          Use reviewed project context or add a correction (optional)
+          Add project facts or choose reviewed records
         </summary>
         <button
           type="button"
@@ -194,10 +200,11 @@ export default function DecisionIntake({
           </label>
         ))}
         <label className="block text-sm mt-2">
-          Correction or missing context
+          Project facts or corrections
           <textarea
             value={correction}
             maxLength={1200}
+            placeholder="Briefly: what the product does, who it helps, what you tried, and any corrections. Leave unconfirmed details unknown."
             onChange={(e) => {
               setCorrection(e.target.value);
               changed();
@@ -250,7 +257,8 @@ export default function DecisionIntake({
               Not verified current.
             </p>
           ))}
-          <details open>
+          <ApplicationAnswer text={preview.checklist} />
+          <details>
             <summary className="cursor-pointer text-sm font-medium">
               Practical owner checklist (application guidance)
             </summary>
@@ -261,12 +269,17 @@ export default function DecisionIntake({
               {preview.checklist}
             </div>
           </details>
-          <div
-            aria-label="Intake brief preview"
-            className="whitespace-pre-wrap text-sm bg-gray-950 p-3 rounded"
-          >
-            {preview.brief}
-          </div>
+          <details>
+            <summary className="cursor-pointer text-sm font-medium">
+              Full context and instructions sent to the team
+            </summary>
+            <div
+              aria-label="Intake brief preview"
+              className="whitespace-pre-wrap text-sm bg-gray-950 p-3 rounded"
+            >
+              {preview.brief}
+            </div>
+          </details>
           <button
             type="button"
             disabled={busy || used}

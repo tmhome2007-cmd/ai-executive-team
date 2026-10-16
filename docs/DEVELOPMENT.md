@@ -40,7 +40,7 @@ Keep route handlers thin: validate input, call the owning module, return a resul
 
 ## Following a feature
 
-For spoken contributions: dashboard `conversation-voice.tsx` → `api/conversation_audio.py` → `workflows/conversation_audio.py` → isolated `scripts/synthesize_conversation.py`. Source text comes from the published contribution/discussion records; no new model reasoning is generated. Read [BE23_LOCAL_CONVERSATIONS.md](../BE23_LOCAL_CONVERSATIONS.md) for limits and cache behavior.
+For spoken contributions: dashboard `conversation-voice.tsx` → `api/conversation_audio.py` → `workflows/conversation_audio.py` → isolated `scripts/synthesize_conversation.py`. Source text comes from the published contribution/discussion records; no new model reasoning is generated. Read [BE23_LOCAL_CONVERSATIONS.md](guides/BE23_LOCAL_CONVERSATIONS.md) for limits and cache behavior.
 
 For business practice: dashboard `business-discovery.tsx` → `api/business.py` → `workflows/business_discovery.py` → `memory/business_discovery.py`, `memory/practice_quality.py` and `memory/business_practice_history.py`. Contracts under `workflows/` constrain deliverables; the owner's assessment is a separate record.
 
@@ -91,7 +91,7 @@ rg -n 'def approve_action|def execute_action' main.py memory workflows
 rg -n 'FAIL|ERROR|UPSTREAM' audit-results/<report-directory>
 ```
 
-The backend terminal shows requests and runtime errors. Audit reports contain individual check logs. Log retention/redaction and backup handling are described in [PRIVACY_OPERATIONS.md](../PRIVACY_OPERATIONS.md). Do not import the app just to generate docs: initialization can configure logging/framework state.
+The backend terminal shows requests and runtime errors. Audit reports contain individual check logs. Log retention/redaction and backup handling are described in [PRIVACY_OPERATIONS.md](guides/PRIVACY_OPERATIONS.md). Do not import the app just to generate docs: initialization can configure logging/framework state.
 
 ## Database and reliability rules
 
@@ -125,6 +125,6 @@ Decision preparation now follows dashboard → api/decisions.py → workflows/de
 
 ## Sprint 6 evaluation and source lookup
 
-Use `.venv/bin/python scripts/evaluation_protocol.py` to verify the frozen fictional split without inference. Read [the protocol](../BE47_EVALUATION_PROTOCOL.md) before running an evaluation. The structured strategy option preserves individual proposals and objections; generated quotes pass membership checks, while semantic and owner usefulness review remain separate.
+Use `.venv/bin/python scripts/evaluation_protocol.py` to verify the frozen fictional split without inference. Read [the protocol](research/BE47_EVALUATION_PROTOCOL.md) before running an evaluation. The structured strategy option preserves individual proposals and objections; generated quotes pass membership checks, while semantic and owner usefulness review remain separate.
 
-Refresh the compact catalog with `.venv/bin/python scripts/code_catalog.py`; verify it with `--check`, or print a scoped index with `--scope backend`, `--scope frontend` or `--scope tests`. Individual symbol lookup uses `rg`. Closed sprint narratives are in [the archive](archive/sprints/README.md); compatibility links preserve old paths.
+Refresh the compact catalog with `.venv/bin/python scripts/code_catalog.py`; verify it with `--check`, or print a scoped index with `--scope backend`, `--scope frontend` or `--scope tests`. Individual symbol lookup uses `rg`. Closed sprint narratives are in [the archive](../README.md#development-status); compatibility links preserve old paths.

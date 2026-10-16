@@ -1,0 +1,197 @@
+{
+  "experiment": "F04 explicit premise/citation + separate gap and rationale",
+  "run": "audit-results/sprint7-reasoning/run-54d124a5e6c94b9e9c0d4ef1979f365b",
+  "reviewer": "Codex analyst, not owner acceptance",
+  "source_hashes": {
+    "workflows/bound_review.py": "e6f5e1087864e4fa02d34bd20ab38cec09555becee213073c6dfa76b6ba2d59f",
+    "workflows/independent_decision.py": "7c266604efcea316af07ba96edb7f13cdb9900108615d2cd698c5921a1ea7bb9",
+    "workflows/structured_decision.py": "7157dd60cd837eda334f19327ea136523af563619c2b6d9487853096cf3f6833",
+    "workflows/plan_delivery.py": "c1ca43ed8b4323f5c08e36be6ea61d10370eb0c45ef9e44e057db8203a86c8fc",
+    "workflows/output_quality.py": "7dacdf94ec5c279444178e1ec790abcb938e49b64fd7b060f61106342eb7da87",
+    "workflows/quality_benchmark.py": "c177a2b3b438b45b84edb690aff5968db5884f1dc624ed47f3ca634ead342672",
+    "workflows/local_model_identity.py": "cbb0c91531012f25b72106092984540daee15568e19a2de4628543b1da958ac0",
+    "scripts/sprint7_schema_experiment.py": "b22b89dfe4472b2855a7a9374f09097fffcf28d83ed67660e87ef6fe4f494cab",
+    "scripts/sprint7_bound_review_experiment.py": "e729fb8222829ba8a6ae369174e6ea9033d703075d00c419be9c28e158ade747",
+    "workflows/evidence_review.py": "42b5c039b08b68d670c9930aa9f79c081feff7c42b342b65cfd36da4a7bacd4b",
+    "scripts/sprint7_evidence_review_experiment.py": "0f07c75fe3fe2ea1ec9ddecac76bf18e8311f57238faabe5cc1d410724982b12"
+  },
+  "model_digest": "7cdf5a0187d5c58cc5d369b255592f7841d1c4696d45a8c8a9489440385b22f6",
+  "samples": [
+    {
+      "case": "A_as_tested",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 22.57,
+      "filename": "A_as_tested-1-baseline.json",
+      "sample_hash": "c8d736cbd8740b2f204f878b4209f242ae6301cbe9695d813503274453ee80b1",
+      "premise_support_label": "not_applicable_baseline_has_no_explicit_premise",
+      "notes": "True group-size quotation does not support responsiveness. Unknown identity not falsely resolved."
+    },
+    {
+      "case": "A_as_tested",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 23.25,
+      "filename": "A_as_tested-1-candidate.json",
+      "sample_hash": "aa0f3ffdac043b83250aeb5d15edbe551571849333bbc470e97eda0fca05ada4",
+      "premise_support_label": "not_applicable_no_premise",
+      "notes": "No decorative quote, but both gap and rationale presuppose a most-recently responsive contact without confirmation; ambiguity/unsupported presupposition fails conservative facts/usefulness gate."
+    },
+    {
+      "case": "B_replied",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 20.62,
+      "filename": "B_replied-1-baseline.json",
+      "sample_hash": "a7061c3da77aa4a6d9d5f3942dad83e33edb5a2b197f3b7ca4e132ce6e2ef9c9",
+      "premise_support_label": "not_applicable_baseline_has_no_explicit_premise",
+      "notes": "Relevant quote identifies unconfirmed own current case; no known reply reopened."
+    },
+    {
+      "case": "B_replied",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 23.64,
+      "filename": "B_replied-1-candidate.json",
+      "sample_hash": "9890b7717b545087c4f7d31b9fa0530c6404691779a71a37d251d4039cfb042b",
+      "premise_support_label": "not_applicable_no_premise",
+      "notes": "Honest eligibility gap and private check. Omits available relevant correction rather than demonstrating a premise/citation relationship; rationale adds generic urgency framing."
+    },
+    {
+      "case": "C_silent",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 21.81,
+      "filename": "C_silent-1-baseline.json",
+      "sample_hash": "0645aab0c46df5f5e7b3f7e774d12e1e677f26bee5fcf37147fc796900d830c9",
+      "premise_support_label": "not_applicable_baseline_has_no_explicit_premise",
+      "notes": "Alternative-route check stays private but group-size quote is weak; efficacy wording is generic."
+    },
+    {
+      "case": "C_silent",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 23.48,
+      "filename": "C_silent-1-candidate.json",
+      "sample_hash": "f817ad10d04c31d1fabe216bf6d10a24b4f0a387b6c8c4869ae6880d01efe0dc",
+      "premise_support_label": "not_applicable_no_premise",
+      "notes": "Honest supplied-record gap about another permitted route. Does not infer disinterest or claim another tester exists. Rationale is generic; no generated premise/citation pair."
+    },
+    {
+      "case": "missing",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 17.25,
+      "filename": "meeting-01-baseline.json",
+      "sample_hash": "91c138371a6bb91d5a9dce2124ca90149ee7cfd772a38f54fc40c29a35ac655d",
+      "premise_support_label": "not_applicable_baseline_has_no_explicit_premise",
+      "notes": "Forced true group-size citation is irrelevant to intended contact eligibility."
+    },
+    {
+      "case": "missing",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 20.76,
+      "filename": "meeting-01-candidate.json",
+      "sample_hash": "a047e4f12bd650d0f1b20cba73bca85b771d4a79d726498febd9b53611c38dd1",
+      "premise_support_label": "not_applicable_no_premise",
+      "notes": "Honest record-scoped evidence gap, but rationale invents financial-data framing and role criteria unrelated to the task. Narrow abstention gain, material rationale regression."
+    },
+    {
+      "case": "wrong_person",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 17.23,
+      "filename": "meeting-02-baseline.json",
+      "sample_hash": "4a2c344fec0c28385f37a6c344b55743ba3a741d94f076654d48dd1af660e976",
+      "premise_support_label": "not_applicable_baseline_has_no_explicit_premise",
+      "notes": "Mixed-person quote includes intended identity but does not establish eligibility. No explicit transfer of the other person eligibility is asserted."
+    },
+    {
+      "case": "wrong_person",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 19.87,
+      "filename": "meeting-02-candidate.json",
+      "sample_hash": "b7d7730c22d00652288870a86f82b61d3464eb2b8013359736fd226349a942c5",
+      "premise_support_label": "not_applicable_no_premise",
+      "notes": "Honest intended-person gap and useful private check; does not borrow another person status. No premise/citation relationship generated."
+    },
+    {
+      "case": "outdated",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 17.69,
+      "filename": "meeting-03-baseline.json",
+      "sample_hash": "5694ae7f3cc2b81f0197664c2f4b8629a18e9e63a2a4453e979f746c535a1e9e",
+      "premise_support_label": "not_applicable_baseline_has_no_explicit_premise",
+      "notes": "Relevant current correction preserved over older positive case status."
+    },
+    {
+      "case": "outdated",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 21.17,
+      "filename": "meeting-03-candidate.json",
+      "sample_hash": "5c253078d12bf10b408ad4b07ab5e3b27839600c62ad77da66d73de374438485",
+      "premise_support_label": "not_applicable_no_premise",
+      "notes": "Current uncertainty preserved, but available relevant correction is uncited and rationale invokes CFO criteria rather than actual case-specific evidence."
+    },
+    {
+      "case": "partial",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 18.96,
+      "filename": "meeting-04-baseline.json",
+      "sample_hash": "e162b2cf53a012bcf75e5b8b9678c1eb929ce97819a2239cb39910337164f973",
+      "premise_support_label": "not_applicable_baseline_has_no_explicit_premise",
+      "notes": "Quote correctly says reply occurred while own case/willingness remain unknown; no invented positive compound claim."
+    },
+    {
+      "case": "partial",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 21.05,
+      "filename": "meeting-04-candidate.json",
+      "sample_hash": "5f0cd3132b3fb1134b02820fcd102ac0eab8bd2d12811f0a2ff16d6ecbfc52bf",
+      "premise_support_label": "not_applicable_no_premise",
+      "notes": "Accurate scoped gap; useful check remains. No compound premise emitted, so this does not test successful detection of partial entailment."
+    },
+    {
+      "case": "multiple",
+      "mode": "baseline",
+      "valid": true,
+      "seconds": 18.13,
+      "filename": "meeting-05-baseline.json",
+      "sample_hash": "b026334aa310eebdb1d9b158319baa7fe30c32d2bfb0eb5b6030c174259423ae",
+      "premise_support_label": "not_applicable_baseline_has_no_explicit_premise",
+      "notes": "Current eligibility-uncertainty quote is relevant; no forced use of every source needed."
+    },
+    {
+      "case": "multiple",
+      "mode": "candidate",
+      "valid": true,
+      "seconds": 23.97,
+      "filename": "meeting-05-candidate.json",
+      "sample_hash": "d3fe75415be3e318d5725676a265d121af4097e5a04f754720224257757e07f2",
+      "premise_support_label": "not_applicable_no_premise",
+      "notes": "Accurate eligibility gap but available relevant evidence is uncited; financial-role justification returns. Does not exercise support from multiple citations."
+    }
+  ],
+  "validated_samples": 16,
+  "raw_responses": 16,
+  "repairs": 0,
+  "candidate_null_premises": 8,
+  "candidate_generated_premise_citation_pairs": 0,
+  "source_unchanged": true,
+  "model_unchanged": true,
+  "adoption_gate_passed": false,
+  "conclusion": "Candidate removes decorative quotes by using evidence gaps in every case, but does not demonstrate improved premise/citation support. Partial abstention improvement, unsupported responsive-contact presupposition and irrelevant financial-role rationale remain. Keep isolated; F04 not resolved.",
+  "verification": {
+    "targeted_tests_passed": 25,
+    "black": "pass",
+    "bandit_medium_high_findings": 0,
+    "new_dependencies": 0
+  },
+  "limits": "Eight maker-exposed development cases, single CFO/same-setting attempt per arm, not independent success rates, blind held-out, full team or owner review. All tasks have unresolved target eligibility/contact status; null premise can be honest, so absence of citation is not automatically a failure. Positive factual support behavior was not demonstrated. No citation correctness percentage with zero candidate citations. Both arms600token cap vs400in previous runs; prompt/schema combined intervention; steps supplied by workflow, not model. No automatic semantic checker or overall usefulness percentage."
+}

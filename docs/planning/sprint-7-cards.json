@@ -1,102 +1,204 @@
 [
   {
     "title": "BE-55 · Trace owner-test failures from raw output to saved brief",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: None. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: None. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "Inspect the exact structured path, raw role samples, schema, renderer and saved decision from the owner test without regeneration. Map each requested deliverable to generated, stored and rendered fields. Verify prior-context visibility and critique/revision behavior from this path rather than assuming the legacy meeting code applies. Record observed omissions, incorrect proposed actor, unsupported stop rule, duplicate wording and historical-source handling separately from hypotheses. Preserve original inputs/results privately with hashes; inspect launcher path and timeout failures separately from model quality.",
     "assignee": "owner",
     "priority": "high",
-    "status": "review"
+    "status": "review",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-66"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-56 · Freeze usefulness evaluation and untouched transfer cases",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor. Protocol/input freeze on 13 October 2026: two new private fictional transfer tasks, author exposure disclosed; no model outputs, candidate/model freeze and assessment pending. See BE56_TRANSFER_PROTOCOL.md.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor. Protocol/input freeze on 13 October 2026: two new private fictional transfer tasks, author exposure disclosed; no model outputs, candidate/model freeze and assessment pending. See docs/research/BE56_TRANSFER_PROTOCOL.md.",
     "acceptance_criteria": "Freeze a rubric, model identity/settings, protocol and sample counts before implementation tuning. Treat the owner example and contact variants as development/regression data. Reserve at least two newly authored transfer tasks for final assessment; disclose author exposure and do not call them blind. Assess structure, grounding, authority, responsiveness to changed facts and owner usefulness separately. Freeze five runs for the independent-proposal comparison and explain deterministic-setting limits. Retain failed, repaired, incomplete and error samples; any assessment case used for a fix becomes development data.",
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Reserved replacement guided transfer completed: Qwen6/6 practical analyst passes, default3/6; original transfer failures preserved/promoted. Author-exposed fictional cases, not blind. Independent/full-team/owner acceptance separate."
+    "review_scope": "Reserved replacement guided transfer completed: Qwen6/6 practical analyst passes, default3/6; original transfer failures preserved/promoted. Author-exposed fictional cases, not blind. Independent/full-team/owner acceptance separate.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-72"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-57 · Review reusable GitHub projects and primary documentation",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: None. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: None. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "Research only after the planned owner discussion. Compare a small shortlist against diagnosed problems and the frozen rubric: structured plans, bounded clarification, independent proposals and evaluation. Record exact repository/version, license, maintenance evidence, local-provider compatibility, dependencies, privacy/cost implications and concrete reuse scope. Prefer primary documentation and source; disclose uncertainties. Recommend adopt, adapt or reject with reasons. Search generic problem descriptions without transmitting private briefs. No installation, copied code, external inference or dependency adoption follows automatically from a research recommendation.",
     "assignee": "owner",
     "priority": "medium",
-    "status": "review"
+    "status": "review",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-68"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-58 · Make clarifications and freshness affect recommendations",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55, BE-56. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55, BE-56. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "Represent owner clarifications with attributable evidence and preserve freshness/conflicts. Exercise three development variants: unknown relationship as originally supplied; distinct contact with recent reply; same contact already silent after an offer. Recent and silent variants must change the recommendation or explicit conditions and rationale; silence must be represented as risk rather than assumed interest. Unknown identity/date stays unknown. Explain why the chosen path beats relevant alternatives without fabricated response rates or success probabilities. Do not require the same recommendation to change when the changed fact is immaterial.",
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Atomic source/day guards plus once-only selected history before current correction verified through API/SQLite regressions. No testing offer inferred merely from silence; intakev4 requires re-review of changed confirmation."
+    "review_scope": "Atomic source/day guards plus once-only selected history before current correction verified through API/SQLite regressions. No testing offer inferred merely from silence; intakev4 requires re-review of changed confirmation.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-71"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-59 · Produce a complete actionable owner plan",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55, BE-56. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor. Delivery update: frozen separated-stage prototype validates 9/9, with actual unsent drafts 3/3 where required; complete analyst usefulness remains 0/9. See BE59_DRAFT_DELIVERY_REPAIR.md. Experimental only; unmerged.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55, BE-56. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor. Delivery update: frozen separated-stage prototype validates 9/9, with actual unsent drafts 3/3 where required; complete analyst usefulness remains 0/9. See docs/research/BE59_DRAFT_DELIVERY_REPAIR.md. Experimental only; unmerged.",
     "acceptance_criteria": "Add typed steps with actors, durations, prerequisites, deliverables and conditional paths where needed. Outreach recommendations require an unsent draft, an eligibility check and a stop condition with a bounded time window. A multi-step owner task has at least two meaningful steps; estimated effort sums to the confirmed owner limit or is explicitly blocked. Require a current tool-availability check before inviting use when availability is unknown; the check remains a proposed owner step. Every real-world action is assigned to the human owner, never an AI executive. Drafting is distinct from sending. Required deliverables survive schema validation, storage/API and rendering; no empty filler fields or invented approvals. Schema completeness and semantic usefulness have separate checks.",
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
     "blocked_reason": "Checklistv2 in actual app: bounded owner steps, conditional safe example/unsent draft, one pivotal unknown and anchored stop. Real default-model API returns200 and correct broad route, but unnecessary interest assumptions/known pivotal fact mean complete executive usefulness remains unaccepted.",
-    "review_scope": "Checklistv2 in actual app: bounded owner steps, conditional safe example/unsent draft, one pivotal unknown and anchored stop. Real default-model API returns200 and correct broad route, but unnecessary interest assumptions/known pivotal fact mean complete executive usefulness remains unaccepted."
+    "review_scope": "Checklistv2 in actual app: bounded owner steps, conditional safe example/unsent draft, one pivotal unknown and anchored stop. Real default-model API returns200 and correct broad route, but unnecessary interest assumptions/known pivotal fact mean complete executive usefulness remains unaccepted.",
+    "completion_review": "Later F01/F04 isolated probes do not resolve original quality criteria. Final F04 candidate emits zero premise/citation pairs and has rationale gaps. No adoption or automatic deferral; see README.md#development-status.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-67",
+        "BE-70",
+        "BE-71",
+        "BE-76"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-60 · Separate independent proposals from attributed critique",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-56, BE-59. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-56, BE-59. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "Generate first proposals without access to other first proposals, then provide bounded context for actual critique and synthesis. Preserve canonical identities and attribution; no tools or authority expansion. Compare five frozen runs before/after using the same permitted inputs and settings where possible. Meaningful alternatives or evidence-based explanations of convergence must be visible; do not force diversity or invent objections. A trailing period, case or whitespace difference is normalized for wording matches without treating different meanings as agreement. Bound calls, context size and repairs, retain failures, and disclose latency/cost implications.",
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
     "review_scope": "V4 source-priority comparison complete10/10valid,45raw,3unique/arm,zero repairs; candidate CFO repeats known silence as unknown in meetings3/5. Partial improvements retained; gate fails and prototype stays isolated.",
-    "blocked_reason": "V4 source-priority comparison complete10/10valid,45raw,3unique/arm,zero repairs; candidate CFO repeats known silence as unknown in meetings3/5. Partial improvements retained; gate fails and prototype stays isolated."
+    "blocked_reason": "V4 source-priority comparison complete10/10valid,45raw,3unique/arm,zero repairs; candidate CFO repeats known silence as unknown in meetings3/5. Partial improvements retained; gate fails and prototype stays isolated.",
+    "completion_review": "Later F01/F04 isolated probes do not resolve original quality criteria. Final F04 candidate emits zero premise/citation pairs and has rationale gaps. No adoption or automatic deferral; see README.md#development-status.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-73"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-61 · Handle short requests with reviewed context and few questions",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-58, BE-59. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-58, BE-59. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "A short natural request can start the workflow without a manually authored long prompt. Show relevant reviewed stored facts as last recorded, not verified; disclose which context is used and allow correction. Reuse explicitly confirmed stable limits instead of asking again, while surfacing freshness and scope. Ask at most three decision-changing questions with quick answers and a skip path. Do not invent a factual plan when essential context is missing: produce a bounded conditional plan or explicit blocker. The owner can review the assembled brief before generation. Changed answers to selected questions must affect the relevant plan conditions; ask no questions whose answers cannot change the plan. Do not assume stored data exists in a fresh installation or retrieve unrelated company/private context.",
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Intakev4/checklistv2: at most3questions, skip/unknown path, reviewed historical context, correction last, no inferred offer; complete audit and production browser pass. General intents/persistent defaults not claimed."
+    "review_scope": "Intakev4/checklistv2: at most3questions, skip/unknown path, reviewed historical context, correction last, no inferred offer; complete audit and production browser pass. General intents/persistent defaults not claimed.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-70",
+        "BE-71",
+        "BE-76"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-62 · Make normal startup and long-running decision review reliable",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-55. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "Exercise ./company doctor, ./company start and ./company key in an explicitly isolated review installation with disposable data and owner-controlled local configuration. Preserve existing credentials/database; do not silently copy original company data or weaken path/approval guards. Verify long generation, interrupted browser connections, errors, refresh and saved-history recovery. A network timeout must not imply the team failed or invite duplicate submissions: retain request identity and provide an inspectable status/recovery route. Model validation failures have useful safe guidance without exposing raw private samples. Owner instructions use the normal launcher and own browser; no temporary /private/tmp script is the product entry point. Verify effective settings, local provider and scheduler behavior rather than assuming sandbox disables scheduling.",
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Durable recovery, atomic input/source/day guards and4scheduler tests pass. Actual default-model API saved pending result and same-ID replay200 without new generation/artifact/notification. Owner normal-launch/clipboard/actual-job review separate."
+    "review_scope": "Durable recovery, atomic input/source/day guards and4scheduler tests pass. Actual default-model API saved pending result and same-ID replay200 without new generation/artifact/notification. Owner normal-launch/clipboard/actual-job review separate.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-76",
+        "BE-77"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-63 · Run final usefulness and owner end-to-end assessment",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-56, BE-58, BE-59, BE-60, BE-61, BE-62. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-56, BE-58, BE-59, BE-60, BE-61, BE-62. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "Run the frozen development comparisons and separately the reserved transfer assessment on the final candidate. Report denominators, first attempts, repairs, errors, latency, model identities and owner usefulness separately; no blanket competence percentage. Evaluate changed-fact sensitivity and short-request intake, complete plans and actor constraints. The owner uses normal terminal/browser startup, enters a short request, answers or skips questions, reviews actual team output and checks history after refresh. Record whether they understand and would use the next step, with reasons; an analyst rewrite never replaces a failed team answer or counts as owner acceptance.",
     "assignee": "owner",
     "priority": "high",
     "status": "review",
-    "review_scope": "Analyst comparisons complete; one real default API case200 in~91seconds,3native first attempts/0repairs, saved replay passes. Executive semantic issues preserved, owner usefulness still pending."
+    "review_scope": "Owner retested and supplied a saved result with the compact top panel. Executive reasoning still includes unsupported interest, supplied details called unknown, a known pivotal fact and arbitrary stop; competing effort estimates remain. No owner usefulness acceptance inferred.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-66",
+        "BE-67",
+        "BE-72",
+        "BE-76"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-64 · Audit integration, privacy and existing release dependencies",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-58, BE-59, BE-60, BE-61, BE-62, BE-63. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-58, BE-59, BE-60, BE-61, BE-62, BE-63. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "Run appropriate targeted checks and a complete final audit on the exact implementation with disposable data: backend/API/database, production browser, recovery, approvals, raw-sample retention, evidence provenance and local-provider boundaries. Preserve failures and report exact commit/counts/skips. Carry Sprint 6 active-CI approval/credential dependency and known Chroma findings explicitly; do not claim them resolved or edit active shared CI without authorization. Investigate any adopted dependency only after a specific reuse decision, with license/security/compatibility review. No deployment clearance follows from a local pass.",
     "assignee": "owner",
     "priority": "high",
     "status": "blocked",
-    "review_scope": "Final audit b95404c:33PASS/0FAIL/1UPSTREAM,413backend realDocker/no skips,150foundation,15browser. Approved local CI active; four Chroma findings and remote/production clearance remain open.",
-    "blocked_reason": "Final audit b95404c:33PASS/0FAIL/1UPSTREAM,413backend realDocker/no skips,150foundation,15browser. Approved local CI active; four Chroma findings and remote/production clearance remain open."
+    "review_scope": "16 October full working-tree audit: 33 PASS / 1 FAIL, 429 backend tests with real Docker and zero skips, 150 foundation checks and 15 browser features pass. Dependency scan fails on four Chroma findings plus MCP GHSA-84m7-p3x7-pcfv. MCP 1.30.0 conflicts with the current and checked permitted CrewAI 1.15 patch requirements; no override or suppression. See sprint-7-completion-verification.json.",
+    "blocked_reason": "16 October full working-tree audit: 33 PASS / 1 FAIL, 429 backend tests with real Docker and zero skips, 150 foundation checks and 15 browser features pass. Dependency scan fails on four Chroma findings plus MCP GHSA-84m7-p3x7-pcfv. MCP 1.30.0 conflicts with the current and checked permitted CrewAI 1.15 patch requirements; no override or suppression. See sprint-7-completion-verification.json.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-69",
+        "BE-77",
+        "BE-78"
+      ],
+      "review": "../../README.md#development-status"
+    }
   },
   {
     "title": "BE-65 · Owner review, retrospective and closure",
-    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-63, BE-64. See SPRINT_7_PLAN.md. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
+    "description": "Sprint 7 usefulness and short requests. Dependencies: BE-63, BE-64. See README.md#development-status. Planning only; no execution authority. Owner assignment is accountability, not an AI action actor.",
     "acceptance_criteria": "Provide concise own-terminal/browser instructions and short test inputs, actual outputs, remaining limitations and a reviewable PR scope. Record owner acceptance separately from technical success. No Done state or merge until owner acceptance and authorized actual merge; reconcile Sprint 6 pending work before deciding stacked versus separate delivery. Archive only closed narratives. Record research decisions, model limits and deferred work honestly; no invented customer outcome, delivery date or velocity.",
     "assignee": "owner",
     "priority": "medium",
     "status": "review",
-    "review_scope": "Final review/lessons and own-terminal/browser guide prepared. Owner acceptance, unresolved executive reasoning/upstream release gates and authorized actual merge still required; no closure."
+    "review_scope": "Owner requested closeout and a new four-sprint method. Planning period closed with incomplete scope explicitly carried forward. Original acceptance/actual authorized merge and release criteria remain unmet; no Done state.",
+    "sprint_disposition": {
+      "period_closed_on": "2026-10-16",
+      "outcome": "Review evidence retained; unmet criteria carried forward, not Done or merged",
+      "carryover_to": [
+        "BE-77",
+        "BE-79"
+      ],
+      "review": "../../README.md#development-status"
+    }
   }
 ]

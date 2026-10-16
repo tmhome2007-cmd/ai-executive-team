@@ -191,7 +191,15 @@ def main():
                 "Help me get the first real user for my tool"
             ).fill("Help me find a first real user for a fictional tool")
             intake.get_by_role("button", name="Clarify my request").click()
+            intake.get_by_role("region", name="Your next step").wait_for()
+            assert not intake.get_by_label("Intake brief preview").is_visible()
+            intake.get_by_text(
+                "Full context and instructions sent to the team", exact=True
+            ).click()
             intake.get_by_label("Intake brief preview").wait_for()
+            intake.get_by_text(
+                "Practical owner checklist (application guidance)", exact=True
+            ).click()
             assert intake.locator("select").count() == 3
             checklist = intake.get_by_label("Application owner checklist")
             assert "Time budget unknown" in checklist.inner_text()
@@ -209,12 +217,18 @@ def main():
             )
             intake.get_by_label("How many minutes", exact=False).select_option("30")
             intake.get_by_role("button", name="Review brief with these answers").click()
+            intake.get_by_role("region", name="Your next step").wait_for()
+            assert (
+                "Reuse a current working confirmation"
+                in intake.get_by_label("Intake brief preview").text_content()
+            )
             intake.get_by_text(
-                "Reuse a current working confirmation", exact=False
-            ).wait_for()
+                "Practical owner checklist (application guidance)", exact=True
+            ).click()
             assert "Draft message — NOT SENT" in checklist.inner_text()
             assert "never paste credentials" in checklist.inner_text()
-            assert "Record today's owner confirmation" in checklist.inner_text()
+            assert "Tool readiness: already confirmed by you" in checklist.inner_text()
+            assert "Record today's owner confirmation" not in checklist.inner_text()
             intake.get_by_role(
                 "button", name="Confirm brief and fill decision form"
             ).click()
@@ -228,10 +242,13 @@ def main():
             )
             assert task.input_value() == ""
             intake.get_by_role("button", name="Review brief with these answers").click()
-            intake.get_by_label("Intake brief preview").wait_for()
+            intake.get_by_role("region", name="Your next step").wait_for()
+            intake.get_by_text(
+                "Practical owner checklist (application guidance)", exact=True
+            ).click()
             assert (
                 "Do not assume the silent contact"
-                in intake.get_by_label("Intake brief preview").inner_text()
+                in intake.get_by_label("Intake brief preview").text_content()
             )
             assert "Draft message" not in checklist.inner_text()
             assert (
@@ -256,8 +273,33 @@ def main():
                 has_text="Application checklist — not an executive recommendation"
             )
             assert saved_checklist.count() == 1
+            saved_checklist.get_by_role("region", name="Your next step").wait_for()
+            saved_checklist.screenshot(
+                path="/private/tmp/sprint7-compact-answer-desktop.png"
+            )
+            page.set_viewport_size({"width": 390, "height": 844})
+            saved_checklist.screenshot(
+                path="/private/tmp/sprint7-compact-answer-mobile.png"
+            )
+            assert page.evaluate(
+                "document.documentElement.scrollWidth<=window.innerWidth+1"
+            )
+            page.set_viewport_size({"width": 1440, "height": 1000})
+            assert not saved_checklist.get_by_text(
+                "CEO proposal:", exact=False
+            ).is_visible()
+            assert not saved_checklist.get_by_text(
+                "Draft message — NOT SENT", exact=False
+            ).is_visible()
+            saved_checklist.get_by_text(
+                "Full application checklist and entered context", exact=True
+            ).click()
             assert "Draft message — NOT SENT" in saved_checklist.inner_text()
             assert "1. Owner — 5 minutes" in saved_checklist.inner_text()
+            for index in range(briefs.count()):
+                briefs.nth(index).get_by_text(
+                    "AI proposals, objections and evidence — unverified", exact=True
+                ).click()
             assert "CEO proposal:" in saved_checklist.inner_text()
             page.get_by_text(
                 "CFO objection: The original ledger may be unavailable.", exact=True

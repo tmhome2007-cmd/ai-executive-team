@@ -1,5 +1,7 @@
 # Security release gate — 2026-10-08
 
+**Latest recorded state, 16 October 2026:** release is not cleared. The full working-tree audit has 33 PASS / 1 FAIL and five dependency findings: four Chroma findings plus MCP GHSA-84m7-p3x7-pcfv. The checked MCP fix conflicts with the permitted CrewAI dependency range. Later 430-test/UI checks do not clear this gate. See [current status](README.md#development-status) and [compatibility investigation](docs/guides/BE64_RELEASE_RECHECK.md). Earlier dated findings below remain historical.
+
 **Production status: NOT CLEARED. Dependency remediation and deployment confinement remain. On 9 October the owner requested merging the verified work into main as the development baseline; that authorization does not enable production execution or certify AI answers. Historical audit evidence below remains scoped to its dated commits.**
 
 ## Implemented and locally verified
@@ -253,7 +255,7 @@ Chroma advisories. The dependency gate remains visibly unclean.
 
 ## Pre-Sprint 3 audit — 10 October 2026
 
-See [PRE_SPRINT_3_AUDIT.md](PRE_SPRINT_3_AUDIT.md) for baseline, fixes and limits. The post-fix local audit in `audit-results/20261010-145734` passed 167 backend tests with real Docker, 150 foundation checks, Bandit medium/high, clean frontend installation/tests/lint/build/npm audit, eight application browser suites including actual audio playback, Chromium and local Ollama inference. Audit logging is now disposable; malformed owner headers fail closed; research/practice completion checks claim versions; public reads close responses and withhold raw transport errors. Four unpatched Chroma dependency advisories remain visible and production release remains uncleared. Sprint 3 has not started; fixes await PR review.
+See [PRE_SPRINT_3_AUDIT.md](README.md#development-status) for baseline, fixes and limits. The post-fix local audit in `audit-results/20261010-145734` passed 167 backend tests with real Docker, 150 foundation checks, Bandit medium/high, clean frontend installation/tests/lint/build/npm audit, eight application browser suites including actual audio playback, Chromium and local Ollama inference. Audit logging is now disposable; malformed owner headers fail closed; research/practice completion checks claim versions; public reads close responses and withhold raw transport errors. Four unpatched Chroma dependency advisories remain visible and production release remains uncleared. Sprint 3 has not started; fixes await PR review.
 
 ## Sprint 4 integration audit — 11 October 2026
 

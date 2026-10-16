@@ -1,0 +1,186 @@
+{
+  "cycle": 1,
+  "created": "2026-10-16",
+  "status": "planned",
+  "sprints": [
+    8,
+    9,
+    10,
+    11
+  ],
+  "duration": "Two weeks proposed per sprint; dates unset until kickoff",
+  "scope": "Local planning only; no live board write, training, integration or release implied",
+  "items": [
+    {
+      "id": "BE-66",
+      "title": "Review the owner baseline and existing delivery boundary",
+      "sprint": 8,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [],
+      "acceptance_criteria": "Preserve actual owner feedback separately from analyst judgments; reference the existing result without copying private text into public planning. Inventory uncommitted Sprint 7 and pending Sprint 6 delivery scope. Define a bounded feedback flow, representative development cases and before/after usefulness criteria before code changes."
+    },
+    {
+      "id": "BE-67",
+      "title": "Give feedback and review a revised answer",
+      "sprint": 8,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-66"
+      ],
+      "acceptance_criteria": "Result-level English feedback control; distinguish fact corrections from preferences. Explicit revision action, original/revision lineage, attributable inputs, safe reload and duplicate handling. No implicit approval, contact, training or permanent memory. Define private retention/withdrawal before storage; verify backend and desktop/mobile flow and obtain owner usefulness review."
+    },
+    {
+      "id": "BE-68",
+      "title": "Research published learning methods for our errors",
+      "sprint": 8,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "medium",
+      "depends_on": [
+        "BE-66"
+      ],
+      "acceptance_criteria": "At most five primary pages/candidates per read-only run, generic queries and brief conclusions. Compare OpenAI example-based optimization, Anthropic published critique/preference methods and local open-model methods against retrieval and workflow changes. State proprietary-method gaps, current-service limits, licenses/dependencies unknown until checked, and applicability limits. No clone/install/cloud inference/training."
+    },
+    {
+      "id": "BE-69",
+      "title": "Assess security findings and compatible remediation",
+      "sprint": 8,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [],
+      "acceptance_criteria": "Recheck four Chroma findings and MCP GHSA-84m7-p3x7-pcfv, current advisories and installed constraints. Document actual exposure evidence and supported options. Do not suppress findings, infer safety from a code grep or force incompatible upgrades. Implement only scoped compatible repairs with relevant checks; retain unresolved release blockers."
+    },
+    {
+      "id": "BE-70",
+      "title": "Reuse only reviewed relevant lessons",
+      "sprint": 9,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-67"
+      ],
+      "acceptance_criteria": "Explicitly propose a lesson for owner review; separate preferences from dated project facts and limit scope. Show which approved lessons were retrieved. Support withdrawal/expiry and conflicts without rewriting history or changing authority. Define retention and versioning before storage. Test no matching lesson, irrelevant lesson, revoked lesson and a correction used on a different task. Retrieval is not weight training."
+    },
+    {
+      "id": "BE-71",
+      "title": "Preserve known facts and decision-changing unknowns",
+      "sprint": 9,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-66"
+      ],
+      "acceptance_criteria": "Cover F01-04/F11 with frozen development variants: unknown/recent/silent contact, supplied product detail, eligibility, current tool state and budget. Do not infer interest from silence or make known facts unknown. A pivotal unknown has consequential alternative answers; citations support the specific claim. Cross-section reasoning, plans and drafts share the same facts. Report quality failures separately from valid schema."
+    },
+    {
+      "id": "BE-72",
+      "title": "Build evaluation and reviewed-example foundations",
+      "sprint": 9,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-66",
+        "BE-67"
+      ],
+      "acceptance_criteria": "Separate development, validation and unused final assessment cases with provenance; never tune against final cases without promoting them. Include applicable Reinstatly regression plus new unrelated tasks, no-feedback baseline, feedback-on and irrelevant-feedback comparisons. Record input/model/settings, first attempts, errors, latency, independent human judgments and failures. Approved corrected examples/preference pairs have privacy and retention controls, no automatic training exports."
+    },
+    {
+      "id": "BE-73",
+      "title": "Assess alternatives critique and synthesis",
+      "sprint": 10,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-71",
+        "BE-72"
+      ],
+      "acceptance_criteria": "Carry BE-60/F05-08/F10: compare independent first proposals with later attributed critique under bounded calls. Do not invent strengths/objections or force diversity. Explain convergence when warranted, preserve meaningful disagreement and evaluate proposal selection against evidence rather than CEO title. Use frozen comparisons; rejected prototypes stay isolated."
+    },
+    {
+      "id": "BE-74",
+      "title": "Compare model and workflow choices on usefulness",
+      "sprint": 10,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-72"
+      ],
+      "acceptance_criteria": "Compare existing permitted installed local models with the same source snapshots, tasks and rubric; report correctness, usefulness, errors and latency separately. Freeze candidates/settings before final assessment. No default change based only on JSON validity or known-case improvement; no new download/cloud inference without authorization. A no-change recommendation is valid."
+    },
+    {
+      "id": "BE-75",
+      "title": "Decide whether a local training pilot is justified",
+      "sprint": 10,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "medium",
+      "depends_on": [
+        "BE-68",
+        "BE-72",
+        "BE-74"
+      ],
+      "acceptance_criteria": "Assess reviewed dataset sufficiency/diversity, existing model/adaptor licenses, local hardware/memory, runtime, retention/deletion limits of weight training, evaluation and rollback. Compare retrieval, corrected-example training and preference training to baseline. Produce a concrete go/no-go pilot proposal with resource limits. No guaranteed frontier-model equivalence or pilot execution implied."
+    },
+    {
+      "id": "BE-76",
+      "title": "Present one coherent answer and usable feedback history",
+      "sprint": 11,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-67",
+        "BE-70",
+        "BE-71"
+      ],
+      "acceptance_criteria": "Resolve competing application/model effort estimates and unclear authority of recommendations. Show one clearly attributed primary answer and concise rationale, retain disagreement and full details. Test short requests, missing context, working/outage state, silent/recent/no lead and constrained time. Validate owner navigation/readability and usefulness; do not count application-authored steps as model reasoning."
+    },
+    {
+      "id": "BE-77",
+      "title": "Prepare coherent integration and operational review",
+      "sprint": 11,
+      "phase": "sprint",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-69",
+        "BE-76"
+      ],
+      "acceptance_criteria": "Reconcile pending Sprint 6/7 and later changes into reviewable delivery scope; preserve existing files/credentials/company data. Verify request/revision replay, interruption, storage/retention, normal launcher and affected operational/clipboard behavior with suitable isolation and owner checks. Verify Git/PR state. Prepare review evidence; no push/merge or Done without separate authorization and actual integration."
+    },
+    {
+      "id": "BE-78",
+      "title": "Run the broad audit after four sprints",
+      "sprint": null,
+      "phase": "after_sprint_11",
+      "status": "planned",
+      "priority": "high",
+      "depends_on": [
+        "BE-77"
+      ],
+      "acceptance_criteria": "Audit the actual frozen implementation and integration across agents/API/database/dashboard/executor/worker/privacy/approvals/CI/dependencies and recovery using disposable data. Preserve failed evidence; report exact source scope, counts/skips, security findings and model-quality limits. Recheck affected boundaries sooner during each sprint; this audit does not retroactively clear failures or authorize release."
+    },
+    {
+      "id": "BE-79",
+      "title": "Review the cycle and plan the next four sprints",
+      "sprint": null,
+      "phase": "after_sprint_11",
+      "status": "planned",
+      "priority": "medium",
+      "depends_on": [
+        "BE-78"
+      ],
+      "acceptance_criteria": "Compare intended versus delivered outcomes, owner usefulness and unresolved failures without inventing time/velocity or acceptance. Record accepted scope, actual authorized integration and carryover separately. Review whether feedback/learning improved unseen tasks. Select next-cycle goals; do not create endless follow-on training work from a failed experiment."
+    }
+  ]
+}
