@@ -64,4 +64,3 @@ This is the part worth understanding before flipping to Live mode:
   Remote approved/executing actions do not import as local execution
   authority, and remote active reservations do not import as local spending
   authority.
-
